@@ -1,0 +1,12 @@
+.git
+target/
+*.jar
+*.war
+*.ear
+.env
+docker-compose.yml
+Dockerfile
+**/node_modules/
+**/__pycache__/
+**/*.log
+**/.DS_Store
