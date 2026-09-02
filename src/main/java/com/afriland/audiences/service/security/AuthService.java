@@ -12,7 +12,8 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-@Service
+// Désactivé : l'authentification est gérée par Keycloak
+// @Service
 @RequiredArgsConstructor
 public class AuthService {
 

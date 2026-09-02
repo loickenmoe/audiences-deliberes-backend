@@ -1,9 +1,12 @@
 package com.afriland.audiences.model.security;
 
-/**
- * Enum representing the different user roles in the application.
- */
 public enum Role {
-    ADMIN,
-    USER,
+    ROLE_JURISTE,
+    ROLE_DJ,
+    ROLE_DJA,
+    ROLE_ASSISTANTE,
+    ROLE_SH,
+    ROLE_AVOCAT,
+    ROLE_GFC,
+    ROLE_CONSULTATION
 }

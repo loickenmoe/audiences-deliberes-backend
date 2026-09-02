@@ -1,120 +1,89 @@
 package com.afriland.audiences.config;
 
-
-import com.afriland.audiences.service.security.UserDetailsServiceImpl;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod; // Import HttpMethod
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.config.core.GrantedAuthorityDefaults;
-import org.springframework.security.authentication.AuthenticationProvider;
-import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
-import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.http.HttpMethod;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity; // Import for method security
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer; // For CSRF disabling
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.web.cors.CorsConfiguration; // Import CORS config
-import org.springframework.web.cors.CorsConfigurationSource; // Import CORS source
-import org.springframework.web.cors.UrlBasedCorsConfigurationSource; // Import CORS source implementation
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import java.util.Arrays; // Import Arrays for list creation
-import java.util.List; // Import List
+import java.util.Arrays;
+import java.util.List;
 
-import static org.springframework.security.config.http.SessionCreationPolicy.STATELESS; // For JWT
+import static org.springframework.security.config.http.SessionCreationPolicy.STATELESS;
 
 @Configuration
 @EnableWebSecurity
-@EnableMethodSecurity // Enable method-level security (for @PreAuthorize)
-@RequiredArgsConstructor
+@EnableMethodSecurity
 public class SecurityConfig {
 
-    private final UserDetailsServiceImpl userDetailsService;
-    private final JwtAuthenticationFilter jwtAuthFilter; // Inject the JWT filter
-
-    // Define constants for Swagger paths
-    private static final String[] SWAGGER_WHITELIST = {
-            "/v3/api-docs/**",
-            "/swagger-ui/**",
-            "/swagger-ui.html"
+    private static final String[] PUBLIC_PATHS = {
+            "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html",
+            "/ws/**", "/actuator/health"
     };
+
+    @Value("${cors.allowed-origins:http://localhost:3000,http://localhost:4200}")
+    private String allowedOrigins;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .cors(cors -> cors.configurationSource(corsConfigurationSource())) // Enable and configure CORS
-                .csrf(AbstractHttpConfigurer::disable) // Disable CSRF (common for stateless APIs)
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/v1/auth/**").permitAll() // Allow auth endpoints
-                        .requestMatchers(SWAGGER_WHITELIST).permitAll()
-                        .requestMatchers("/ws/**").permitAll() // Allow WebSocket handshake/SockJS endpoint
+                        .requestMatchers(PUBLIC_PATHS).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        // Explicitly allow ADMIN access to user endpoints here for diagnostics (Can be removed if @PreAuthorize works)
-                        .requestMatchers(HttpMethod.POST, "/api/v1/admin/users/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.PUT, "/api/v1/admin/users/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.DELETE, "/api/v1/admin/users/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.GET, "/api/v1/admin/users/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.GET, "/api/v1/prescriptions/**").hasRole("USER")
-                        .requestMatchers(HttpMethod.PUT, "/api/v1/prescriptions/**").hasRole("USER")
-                        .requestMatchers(HttpMethod.POST, "/api/v1/prescriptions/**").hasRole("USER")
-                        .requestMatchers(HttpMethod.GET, "/api/v1/prescriptions").hasRole("USER")
-                        .anyRequest().authenticated() // Require authentication for all other requests
+                        .anyRequest().authenticated()
                 )
-                .sessionManagement(session -> session.sessionCreationPolicy(STATELESS)) // Use stateless sessions for JWT
-                .authenticationProvider(authenticationProvider()) // Set the custom authentication provider
-                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class); // Add JWT filter before standard auth filter
+                .sessionManagement(session -> session.sessionCreationPolicy(STATELESS))
+                .oauth2ResourceServer(oauth2 -> oauth2
+                        .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
+                );
 
         return http.build();
     }
 
+    /**
+     * Extrait les rôles depuis le claim "roles" du token Keycloak.
+     * Le préfixe ROLE_ est déjà inclus dans les noms de rôles Keycloak (ex: ROLE_JURISTE).
+     */
     @Bean
-    public AuthenticationProvider authenticationProvider() {
-        DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
-        authProvider.setUserDetailsService(userDetailsService); // Set the custom user details service
-        authProvider.setPasswordEncoder(passwordEncoder()); // Set the password encoder
-        return authProvider;
-    }
+    public JwtAuthenticationConverter jwtAuthenticationConverter() {
+        JwtGrantedAuthoritiesConverter authoritiesConverter = new JwtGrantedAuthoritiesConverter();
+        authoritiesConverter.setAuthoritiesClaimName("roles");
+        authoritiesConverter.setAuthorityPrefix(""); // Les rôles Keycloak ont déjà le préfixe ROLE_
 
-    @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
-        return config.getAuthenticationManager(); // Standard way to get the AuthenticationManager
+        JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
+        converter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
+        return converter;
     }
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder(); // Use BCrypt for password hashing
+        return new BCryptPasswordEncoder();
     }
 
-    // --- CORS Configuration Bean ---
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration configuration = new CorsConfiguration();
-        // Allow requests from the Angular frontend origin
-        configuration.setAllowedOrigins(List.of("http://localhost:4200", "http://127.0.0.1:55235"));
-        // Allow common HTTP methods
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
-        // Allow common headers
-        configuration.setAllowedHeaders(Arrays.asList("Authorization", "Cache-Control", "Content-Type"));
-        // Allow credentials (like cookies or auth tokens)
-        configuration.setAllowCredentials(true);
+        CorsConfiguration config = new CorsConfiguration();
+        config.setAllowedOrigins(Arrays.asList(allowedOrigins.split(",")));
+        config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
+        config.setAllowedHeaders(Arrays.asList("Authorization", "Cache-Control", "Content-Type"));
+        config.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        // Apply this configuration to all paths
-        source.registerCorsConfiguration("/**", configuration);
+        source.registerCorsConfiguration("/**", config);
         return source;
     }
-
-    // --- Bean to remove the default ROLE_ prefix for hasRole checks (optional, for troubleshooting) ---
-    // Re-commented as User model provides ROLE_ prefix correctly.
-    /*
-    @Bean
-    public GrantedAuthorityDefaults grantedAuthorityDefaults() {
-        return new GrantedAuthorityDefaults(""); // Remove the ROLE_ prefix
-    }
-    */
 }
