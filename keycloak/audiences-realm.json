@@ -16,7 +16,6 @@
       { "name": "ROLE_ASSISTANTE",   "description": "Assistante juridique" },
       { "name": "ROLE_SH",           "description": "Supérieur Hiérarchique (Chef de département)" },
       { "name": "ROLE_AVOCAT",       "description": "Avocat partenaire externe" },
-      { "name": "ROLE_GFC",          "description": "Gestion Financière et Comptable" },
       { "name": "ROLE_CONSULTATION", "description": "Lecture seule - tous profils habilités" }
     ]
   },
@@ -104,15 +103,6 @@
       "enabled": true,
       "credentials": [{ "type": "password", "value": "Password1!", "temporary": false }],
       "realmRoles": ["ROLE_AVOCAT"]
-    },
-    {
-      "username": "gfc.test",
-      "email": "gfc@afriland.cm",
-      "firstName": "Alain",
-      "lastName": "Comptable",
-      "enabled": true,
-      "credentials": [{ "type": "password", "value": "Password1!", "temporary": false }],
-      "realmRoles": ["ROLE_GFC"]
     }
   ]
 }

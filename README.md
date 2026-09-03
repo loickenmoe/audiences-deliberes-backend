@@ -87,7 +87,6 @@ curl -H "Authorization: Bearer <token>" http://localhost:8888/api/v1/...
 | `assistante.test` | `ROLE_ASSISTANTE`, `ROLE_CONSULTATION` | `Password1!` |
 | `sh.test` | `ROLE_SH`, `ROLE_CONSULTATION` | `Password1!` |
 | `avocat.test` | `ROLE_AVOCAT` | `Password1!` |
-| `gfc.test` | `ROLE_GFC`, `ROLE_CONSULTATION` | `Password1!` |
 
 ## 🐳 Docker Compose — services disponibles
 

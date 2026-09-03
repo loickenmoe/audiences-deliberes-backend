@@ -7,6 +7,5 @@ public enum Role {
     ROLE_ASSISTANTE,
     ROLE_SH,
     ROLE_AVOCAT,
-    ROLE_GFC,
     ROLE_CONSULTATION
 }
