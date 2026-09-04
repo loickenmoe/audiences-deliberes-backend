@@ -2,7 +2,7 @@
 
 > Feuille de route séquentielle du backend. Un jalon = un objectif, un périmètre fermé,
 > une validation manuelle par le porteur du projet avant passage au suivant.
-> Dernière mise à jour : 2026-09-04 (M1 et M2 terminés et validés — M3 en attente d'autorisation).
+> Dernière mise à jour : 2026-09-04 (M1, M2, M3 terminés et validés — M4 en attente d'autorisation).
 
 ---
 
@@ -26,8 +26,8 @@
 | **M0** | Audit et contexte projet | — | ✅ **Terminé** (2026-09-04) |
 | **M1** | Assainissement du socle et sécurisation | R-01→R-05, Q-08, Q-16 | ✅ **Terminé et validé manuellement** (2026-09-04, commits `3025c46`, `e33f668`) |
 | **M2** | Schéma de base et référentiels | Q-00 ✅, Q-01 ✅, Q-02 ✅, Q-03 ✅, Q-04 ✅, Q-05 ✅, Q-06 ✅, Q-07 ✅, Q-22 ✅, Q-26 ✅, Q-27 ✅, Q-29 ✅ | ✅ **Terminé et validé** (2026-09-04, commit `ceb0e77`) |
-| **M3** | Socle transversal (erreurs, historique, utilisateur, pagination) | Q-08 ✅ | ⏸️ **prêt à démarrer, en attente d'autorisation explicite** |
-| **M4** | Module Dossiers | Q-10, Q-11, Q-12, Q-23, Q-26, Q-28 | ⏸️ |
+| **M3** | Socle transversal (erreurs, historique, utilisateur, pagination) | Q-08 ✅ | ✅ **Terminé et validé** (2026-09-04, commit `57e75c3`) |
+| **M4** | Module Dossiers | Q-10, Q-11, Q-12, Q-23, Q-26, Q-28 | ⏸️ **prêt à démarrer, en attente d'autorisation explicite** |
 | **M5** | Module Alertes (moteur + notifications) | Q-22, Q-32 | ⏸️ |
 | **M6** | Module Audiences + Alarmes | Q-04, Q-13 | ⏸️ |
 | **M7** | Module Délibérés | Q-17, Q-18, Q-19, Q-13 | ⏸️ |
@@ -154,18 +154,43 @@ frais, GED, alertes, publications, décisions) viendront module par module sur c
 
 ---
 
-## M3 — Socle transversal
+## M3 — Socle transversal ✅ **Terminé**
 
 **Objectif.** Fournir aux modules métier les briques dont ils dépendent tous.
 
-Contenu : `GlobalExceptionHandler` produisant `{code, message, details}` avec les codes
-`ERR-001`…`ERR-009` ; `ApiException` typée ; `CurrentUserService` (résolution du jeton Keycloak →
-ligne `utilisateur`, provisioning à la première requête) ; `HistoriqueActionService` ;
-utilitaires de pagination et d'export (PDF/Excel/CSV) ; configuration `@EnableScheduling` ;
-tests unitaires du socle.
+### Réalisé
+- `common/error` : `ApiException`, `ErrorCodes` (`ERR-001`…`ERR-009` du contrat + codes
+  génériques), `ErrorResponse`, `GlobalExceptionHandler` (`@RestControllerAdvice`).
+- `SecurityConfig` : `AuthenticationEntryPoint`/`AccessDeniedHandler` custom pour que les 401/403
+  déclenchés au niveau du filtre (avant tout contrôleur) suivent aussi le format du contrat ;
+  suppression d'un bean `PasswordEncoder` mort, reliquat de M1.
+- `common/security/CurrentUserService` : résolution + provisioning de l'utilisateur à partir du
+  jeton Keycloak, profil déterminé depuis le rôle métier (rôles transverses `ROLE_SAISIE`/
+  `ROLE_CONSULTATION` ignorés dans le choix du profil).
+- `common/audit` : entité `HistoriqueAction` (JSONB natif Hibernate 6) + `HistoriqueActionService`.
+- `common/web/PageResponse<T>` : enveloppe de pagination conforme au contrat.
+- `common/config/SchedulingConfig` : `@EnableScheduling`.
 
-**Validation manuelle** : un appel invalide renvoie le format d'erreur du contrat ; un premier
-appel d'un utilisateur Keycloak crée sa ligne `utilisateur` avec le bon `profil_id`.
+### Écart au plan initial
+Les **utilitaires d'export PDF/Excel/CSV** initialement prévus dans ce jalon ont été
+**volontairement écartés** : sans rapport concret à exporter (aucun module métier n'existe
+encore), toute utilité générique serait spéculative et non testable. Reportés au module qui en
+aura effectivement besoin (M6 calendrier d'audiences, ou M13 reporting).
+
+### Validation manuelle — adaptée à l'absence de contrôleur
+M3 n'introduit aucun endpoint : contrairement à M1/M2, aucun appel HTTP manuel n'était possible.
+Validation reposant sur des tests automatisés réels, confirmés par le porteur du projet :
+**20/20 tests verts** — 16 tests unitaires (Mockito) sur `GlobalExceptionHandler`,
+`CurrentUserService`, `HistoriqueActionService` ; 1 test d'intégration **Testcontainers**
+(`CurrentUserServiceIntegrationTest`, PostgreSQL réel migré par Flyway — provisioning,
+idempotence, seed des 7 profils vérifiés) ; `contextLoads` toujours vert (aucune régression).
+
+### Commit
+`57e75c3` `feat(common): transversal socle — error handling, current user, audit trail (M3)`
+
+### Restant
+Rien côté socle transversal. Chaque module métier (M4+) consommera `ApiException`,
+`CurrentUserService`, `HistoriqueActionService`, `PageResponse`.
 
 ---
 

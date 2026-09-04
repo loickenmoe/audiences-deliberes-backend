@@ -155,12 +155,13 @@ sauf besoin de vérification ponctuelle.**
 - **Ne pas ajouter de ligne `Co-Authored-By: Claude ...` aux messages de commit** (préférence
   utilisateur explicite, 2026-09-04) — déroge à la convention par défaut de l'outil.
 
-## 9. État actuel (2026-09-04, après le jalon M2)
+## 9. État actuel (2026-09-04, après le jalon M3)
 
 - **Documentation** : complète et validée en amont (8 documents).
-- **Code métier** : **0 %** — aucun endpoint, aucun service métier. Le schéma de données et les
-  référentiels sont posés (M2) ; les modules fonctionnels (dossiers, audiences, délibérés, frais,
-  GED, alertes, décisions définitives, reporting) restent entièrement à construire à partir de M3/M4.
+- **Code métier** : **0 %** — aucun endpoint, aucun contrôleur. Le schéma de données, les
+  référentiels et le socle transversal sont posés (M2, M3) ; les modules fonctionnels (dossiers,
+  audiences, délibérés, frais, GED, alertes, décisions définitives, reporting) restent
+  entièrement à construire à partir de M4.
 - **Socle technique** : ✅ assaini au jalon **M1** (commits `3025c46` / `e33f668`) :
   - squelette générique hors domaine et authentification héritée (HS256 maison) supprimés ;
   - authentification exclusivement via Keycloak (OAuth2 Resource Server), y compris WebSocket ;
@@ -174,8 +175,15 @@ sauf besoin de vérification ponctuelle.**
   réel — migrations idempotentes, correspondance Hibernate/schéma confirmée.
 - **Module `referentiel`** : entités JPA + repositories pour `Profil`, `Utilisateur`, `Client`,
   `ConfigurationSysteme`, `TypeClientSensible`, `NatureDossier`, `Intervenant`/`Avocat`/
-  `AutrePrestataire`. Aucun service, aucun contrôleur — prévu module par module à partir de M3/M4.
-- **Tests** : 1 test `contextLoads()`, désormais vert contre le schéma complet et la base réelle.
+  `AutrePrestataire`. Aucun service, aucun contrôleur.
+- **Socle transversal** : ✅ posé au jalon **M3** (commit `57e75c3`) : `common/error`
+  (`ApiException`, `GlobalExceptionHandler`, format `{code, message, details}` uniforme y
+  compris au niveau du filtre de sécurité), `common/security/CurrentUserService` (provisioning
+  utilisateur depuis Keycloak), `common/audit/HistoriqueActionService`,
+  `common/web/PageResponse<T>`, `common/config/SchedulingConfig`. Prêt à être consommé par les
+  modules métier à partir de M4.
+- **Tests** : `contextLoads()` toujours vert. 20 tests au total après M3 (16 unitaires Mockito +
+  1 test d'intégration Testcontainers vérifiant le provisioning contre un vrai PostgreSQL migré).
   Aucun test métier (normal, aucune fonctionnalité métier n'existe encore).
 - **Risques** : voir `DECISIONS_AND_OPEN_QUESTIONS.md` §Risques — R-01 (secrets exposés)
   résolu dans les fichiers versionnés, mais la rotation des secrets déjà exposés côté

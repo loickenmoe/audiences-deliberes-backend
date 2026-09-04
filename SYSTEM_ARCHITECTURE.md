@@ -65,9 +65,10 @@ Internet → HTTPS:443 → nginx (DMZ, terminaison TLS)
 ## 2. Architecture réellement implémentée (B)
 
 > Mise à jour après les jalons **M1 — Assainissement du socle et sécurisation** (validé le
-> 2026-09-04, commits `3025c46` et `e33f668`) et **M2 — Schéma de base et référentiels**
-> (validé le 2026-09-04, commit `ceb0e77`). Voir `DEVELOPMENT_ROADMAP.md` pour le détail des
-> jalons et `DECISIONS_AND_OPEN_QUESTIONS.md` pour le suivi des risques R-01 à R-05.
+> 2026-09-04, commits `3025c46` et `e33f668`), **M2 — Schéma de base et référentiels**
+> (validé le 2026-09-04, commit `ceb0e77`) et **M3 — Socle transversal** (validé le 2026-09-04,
+> commit `57e75c3`). Voir `DEVELOPMENT_ROADMAP.md` pour le détail des jalons et
+> `DECISIONS_AND_OPEN_QUESTIONS.md` pour le suivi des risques R-01 à R-05.
 
 ### 2.1 Ce qui existe
 
@@ -75,31 +76,43 @@ Internet → HTTPS:443 → nginx (DMZ, terminaison TLS)
 src/main/java/com/afriland/audiences/
 ├── AudiencesApplication.java
 ├── config/
-│   ├── SecurityConfig.java          ✅ OAuth2 Resource Server Keycloak, @EnableMethodSecurity
+│   ├── SecurityConfig.java          ✅ OAuth2 Resource Server Keycloak, @EnableMethodSecurity,
+│   │                                    AuthenticationEntryPoint/AccessDeniedHandler (M3) —
+│   │                                    401/403 filtre suivent le format {code,message,details}
 │   ├── OpenApiConfig.java           ✅ springdoc, schéma bearerAuth global
 │   ├── WebSocketConfig.java         ✅ STOMP + SockJS, endpoint /ws
 │   └── WebSocketAuthInterceptor.java ✅ valide les JWT Keycloak (JwtDecoder), rejette les
 │                                        connexions/trames non authentifiées
-└── referentiel/                     ✅ module M2 — schéma + données de référence uniquement
-    ├── domain/                      Profil, Utilisateur, Client, ConfigurationSysteme,
-    │                                TypeClientSensible, NatureDossier, Intervenant (JOINED)
-    │                                → Avocat, AutrePrestataire
-    └── repository/                  un JpaRepository par entité ci-dessus (8 au total)
+├── referentiel/                     ✅ module M2 — schéma + données de référence uniquement
+│   ├── domain/                      Profil, Utilisateur, Client, ConfigurationSysteme,
+│   │                                TypeClientSensible, NatureDossier, Intervenant (JOINED)
+│   │                                → Avocat, AutrePrestataire
+│   └── repository/                  un JpaRepository par entité ci-dessus (8 au total)
+└── common/                          ✅ module M3 — socle transversal, sans consommateur métier
+    ├── error/                       ApiException, ErrorCodes (ERR-001..009 + génériques),
+    │                                ErrorResponse, GlobalExceptionHandler (@RestControllerAdvice)
+    ├── security/                    CurrentUserService — résolution/provisioning utilisateur
+    │                                depuis le jeton Keycloak
+    ├── audit/                       HistoriqueAction (entité, JSONB natif Hibernate 6),
+    │                                HistoriqueActionRepository, HistoriqueActionService
+    ├── web/                         PageResponse<T> — enveloppe de pagination du contrat
+    └── config/                      SchedulingConfig (@EnableScheduling)
 
 src/main/resources/db/migration/
 ├── V1__schema_initial.sql           ✅ 32 tables, contraintes CHECK, FK, index
 └── V2__donnees_reference.sql        ✅ profils, configuration_systeme, taxonomie
 ```
 
-Aucun autre package applicatif (`controller`, `service`, `dto`) n'existe encore : le socle
-générique hors domaine et le chemin d'authentification hérité (HS256 maison) ont été
-intégralement supprimés en M1 ; M2 n'a posé que le schéma et les entités des référentiels,
-sans aucune logique métier ni endpoint.
+Aucun package `controller`/`dto` n'existe encore : le socle générique hors domaine et le chemin
+d'authentification hérité (HS256 maison) ont été intégralement supprimés en M1 ; M2 a posé le
+schéma et les entités des référentiels ; M3 a posé les briques transversales (erreurs,
+utilisateur courant, historisation, pagination) — sans qu'aucune n'ait encore de consommateur,
+faute de contrôleur.
 
-**Verdict : le schéma de données complet existe et est validé (Hibernate `ddl-auto=validate`
-confirme la correspondance exacte), mais aucun endpoint du domaine métier n'est implémenté
-(0 des ~52 endpoints du contrat d'API).** Le développement des modules fonctionnels (M3+)
-n'a pas commencé.
+**Verdict : le schéma de données et le socle transversal sont complets et validés
+(Hibernate `ddl-auto=validate` + 20 tests automatisés dont un test d'intégration Testcontainers),
+mais aucun endpoint du domaine métier n'est implémenté (0 des ~52 endpoints du contrat d'API).**
+Le développement des modules fonctionnels (M4+) n'a pas commencé.
 
 ### 2.2 Infrastructure réellement configurée
 
