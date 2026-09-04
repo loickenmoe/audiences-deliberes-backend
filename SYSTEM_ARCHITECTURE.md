@@ -64,6 +64,10 @@ Internet → HTTPS:443 → nginx (DMZ, terminaison TLS)
 
 ## 2. Architecture réellement implémentée (B)
 
+> Mise à jour après le jalon **M1 — Assainissement du socle et sécurisation** (validé le
+> 2026-09-04, commits `3025c46` et `e33f668`). Voir `DEVELOPMENT_ROADMAP.md` pour le détail du
+> jalon et `DECISIONS_AND_OPEN_QUESTIONS.md` pour le suivi des risques R-01 à R-05.
+
 ### 2.1 Ce qui existe
 
 ```
@@ -71,71 +75,59 @@ src/main/java/com/afriland/audiences/
 ├── AudiencesApplication.java
 ├── config/
 │   ├── SecurityConfig.java          ✅ OAuth2 Resource Server Keycloak, @EnableMethodSecurity
-│   ├── CorsConfig.java              ⚠️ doublon CORS avec SecurityConfig, origines divergentes
 │   ├── OpenApiConfig.java           ✅ springdoc, schéma bearerAuth global
-│   ├── JwtAuthenticationFilter.java ⚠️ filtre JWT HS256 hérité, toujours enregistré sur /*
-│   ├── WebSocketConfig.java         ⚠️ STOMP + SockJS, endpoint /ws, origines `*`
-│   └── WebSocketAuthInterceptor.java ⚠️ valide des JWT HS256 maison, pas les jetons Keycloak
-├── controller/
-│   ├── AdminUserController.java     ❌ hors domaine — CRUD utilisateurs SANS @PreAuthorize
-│   ├── AdminDashboardController.java ❌ vide, @PreAuthorize("hasRole('ADMIN')")
-│   ├── UserDashboardController.java ❌ vide, @PreAuthorize("hasRole('USER')")
-│   ├── StaffController.java         ❌ hors domaine, rôles ADMIN/USER inexistants
-│   ├── auth/AuthController.java     ❌ désactivé (@RestController commenté)
-│   ├── chat/ChatController.java     ❌ hors domaine (chat STOMP)
-│   └── core/TemplateController.java ❌ squelette, renvoie des String
-├── dto/auth/ + dto/core/            ❌ squelette
-├── event/WebSocketEventListener.java ❌ hors domaine
-├── model/
-│   ├── security/User.java           ❌ entité `_user` avec mot de passe — CONTREDIT REF-05 §1.3
-│   ├── security/Role.java           ✅ enum aligné sur les 7 rôles Keycloak
-│   ├── core/Template.java           ❌ entité vide
-│   └── chat/ChatMessage.java        ❌ hors domaine
-├── repository/                      ❌ UserRepository + TemplateRepository seulement
-└── service/
-    ├── UserService(Impl)            ❌ CRUD utilisateur avec encodage BCrypt
-    ├── DashboardService(Impl)       ❌ interface et impl **vides**
-    ├── core/TemplateService(Impl)   ❌ impl renvoie null / List.of(), non annotée @Service
-    └── security/
-        ├── JwtService.java          ⚠️ génération/validation JWT HS256 maison
-        ├── AuthService.java         ❌ désactivé
-        └── UserDetailsServiceImpl.java ⚠️ actif, charge User depuis la base
+│   ├── WebSocketConfig.java         ✅ STOMP + SockJS, endpoint /ws
+│   └── WebSocketAuthInterceptor.java ✅ valide les JWT Keycloak (JwtDecoder), rejette les
+│                                        connexions/trames non authentifiées
 ```
 
+Aucun autre package (`controller`, `model`, `repository`, `service`, `dto`) n'existe : le socle
+générique hors domaine et le chemin d'authentification hérité (HS256 maison) ont été
+intégralement supprimés en M1. Il ne reste que la configuration transversale ci-dessus.
+
 **Verdict : aucune entité, aucun repository, aucun service, aucun endpoint du domaine métier
-n'est implémenté (0 des ~50 endpoints du contrat d'API).** Le dépôt est un starter générique
-sur lequel la migration Keycloak a été greffée.
+n'est implémenté (0 des ~52 endpoints du contrat d'API).** Le socle technique est propre et
+sécurisé ; le développement métier (M2+) n'a pas commencé.
 
 ### 2.2 Infrastructure réellement configurée
 
 | Élément | Documenté (A) | Implémenté (B) | Écart |
 |---|---|---|---|
-| Port backend | 8080 | **8888** | ⚠️ contredit la base URL du contrat d'API |
-| Port Keycloak | 8081 | **8080** | ⚠️ inversion |
-| Version Keycloak | 26.6.4 | **24.0** | ⚠️ |
-| PostgreSQL applicatif | conteneur local :5432 | **Neon Cloud (AWS us-east-2)** | 🔴 majeur |
-| Stockage GED | MinIO conteneur local | **iDrive e2 (cloud, `b5l0.or.idrivee2-33.com`)** | 🔴 majeur |
-| PostgreSQL conteneur | base applicative | sert **uniquement à Keycloak** | 🔴 |
-| nginx / TLS | obligatoire (RSK-06) | **absent** | 🔴 |
+| Port backend | 8080 | **8080** | ✅ aligné (M1) |
+| Port Keycloak | 8081 | **8081** | ✅ aligné (M1) |
+| Version Keycloak | 26.6.4 | 24.0 | 🟡 non traité en M1 (Q-15, P2, hors périmètre du jalon) |
+| PostgreSQL applicatif | conteneur local | **conteneur local** (`audiences_app`, port hôte 5433 — cf. note ci-dessous) | ✅ aligné (M1) |
+| Stockage GED | MinIO conteneur local | **MinIO conteneur local** | ✅ aligné (M1) |
+| PostgreSQL conteneur | base applicative | héberge **`audiences_db`** (Keycloak) et **`audiences_app`** (API) | ✅ aligné (M1) |
+| nginx / TLS | obligatoire (RSK-06) | absent | 🟡 non traité en M1, hors périmètre local de développement |
 | Frontend | service compose | absent (normal — backend seul) | ok |
-| Schéma DB | script SQL versionné | `ddl-auto=update`, **aucune migration** | 🔴 |
-| Realm Keycloak | — | `audiences-realm`, 7 rôles, 6 users, client `audiences-api` | ✅ |
-| Claim des rôles | — | claim `roles` (mapper realm-roles), préfixe déjà `ROLE_` | ✅ cohérent avec `SecurityConfig` |
+| Schéma DB | script SQL versionné | `ddl-auto=update`, **aucune migration** | 🔴 reste à traiter en **M2** |
+| Realm Keycloak | — | `audiences-realm`, 8 rôles (dont `ROLE_SAISIE` composite, Q-08), 6 users, client `audiences-api` | ✅ |
+| Claim des rôles | — | claim `roles` (mapper realm-roles), préfixe déjà `ROLE_` — vérifié en conditions réelles (jeton `juriste.test` contient `ROLE_JURISTE, ROLE_SAISIE, ROLE_CONSULTATION`) | ✅ |
 
-### 2.3 Constats de sécurité (code actuel)
+**Note port PostgreSQL** : le port hôte par défaut est **5433** et non 5432, pour éviter un
+conflit avec une installation PostgreSQL native fréquente sur les postes Windows (constaté sur
+le poste de développement : service `postgresql-x64-17`). Le port interne au réseau Docker
+(utilisé par Keycloak) reste 5432, inchangé. Configurable via `POSTGRES_PORT`. Voir `README.md`.
 
-| # | Constat | Gravité |
+### 2.3 Constats de sécurité — état après M1
+
+| # | Constat initial (audit) | Statut après M1 |
 |---|---|---|
-| S-1 | `env.template` **versionné** contient des identifiants réels : mot de passe PostgreSQL Neon, access key + secret key iDrive e2, secret JWT. Présents dans l'historique git (`6436048`, `898b453`). | 🔴 Critique |
-| S-2 | Données juridiques d'une banque hébergées sur **Neon Cloud (US)** et **iDrive e2** — contredit « développement intégralement en environnement local » (REF-02 §5.2) et le zonage réseau (REF-05 §8.2). | 🔴 Critique |
-| S-3 | `AdminUserController` (`/api/v1/admin/users`) : `@PreAuthorize` **commenté** → tout utilisateur authentifié peut créer/modifier/supprimer des utilisateurs. | 🔴 |
-| S-4 | `/ws/**` en `permitAll` ; `WebSocketAuthInterceptor` **laisse passer** les connexions non authentifiées (`// let it proceed unauthenticated`) et valide des jetons HS256 signés avec le secret exposé en S-1. | 🔴 |
-| S-5 | `JwtAuthenticationFilter` (`@Component`) enregistré sur `/*` (confirmé dans les logs : `order=2147483647`). Chemin d'authentification parallèle, requête base à chaque appel. À supprimer. | 🟠 |
-| S-6 | `User.getAuthorities()` renvoie `"ROLE_" + role.name()` alors que `role.name()` vaut déjà `ROLE_JURISTE` → autorité `ROLE_ROLE_JURISTE`. Bug fonctionnel du chemin hérité. | 🟠 |
-| S-7 | `StaffController` / dashboards exigent `hasRole('ADMIN')` / `hasRole('USER')` — rôles **inexistants** dans le realm → endpoints inaccessibles (échec silencieux). | 🟡 |
-| S-8 | Deux configurations CORS concurrentes (`SecurityConfig` : 3000+4200 ; `CorsConfig` : 4200 uniquement). | 🟡 |
-| S-9 | Aucun `@ControllerAdvice` : les exceptions remontent en 500 sans le format d'erreur `{code,message,details}` du contrat. | 🟠 |
-| S-10 | Aucun rate limiting, aucun journal d'audit applicatif (exigé : « toute action utilisateur est journalisée »). | 🟠 |
+| S-1 | `env.template` versionné contenait des identifiants cloud réels (Neon, iDrive e2, JWT) | ✅ **Résolu dans les fichiers versionnés** — `env.template`/`.env` ne contiennent plus que des valeurs locales. ⚠️ **Reste à faire par l'utilisateur** : faire tourner les secrets déjà exposés côté Neon/iDrive e2, et statuer sur une purge de l'historique git (cf. R-01 dans `DECISIONS_AND_OPEN_QUESTIONS.md`) |
+| S-2 | Données hébergées sur Neon Cloud / iDrive e2 | ✅ Résolu — infrastructure 100 % locale (Postgres + MinIO conteneurisés) |
+| S-3 | `AdminUserController` sans `@PreAuthorize` | ✅ Résolu — contrôleur supprimé (hors domaine) |
+| S-4 | `/ws/**` laissait passer des connexions non authentifiées | ✅ Résolu — `WebSocketAuthInterceptor` réécrit sur le `JwtDecoder` Keycloak, rejette toute trame STOMP sans jeton valide |
+| S-5 | `JwtAuthenticationFilter` HS256 enregistré sur `/*` | ✅ Résolu — supprimé, authentification exclusivement via le Resource Server OAuth2 |
+| S-6 | Bug `ROLE_ROLE_JURISTE` dans `User.getAuthorities()` | ✅ Résolu — entité `User` et chemin d'authentification hérité supprimés |
+| S-7 | Rôles `ADMIN`/`USER` inexistants dans le realm | ✅ Résolu — contrôleurs concernés supprimés |
+| S-8 | Deux configurations CORS concurrentes | ✅ Résolu — `CorsConfig` supprimé, une seule source (`SecurityConfig`) |
+| S-9 | Aucun `@ControllerAdvice` | 🔴 **Non traité** — prévu en **M3** (socle transversal) |
+| S-10 | Aucun journal d'audit applicatif | 🔴 **Non traité** — prévu en **M3/M4** (`HistoriqueActionService`) |
+
+**Découverte additionnelle en validation M1** : le healthcheck Docker de Keycloak levait une
+`NullPointerException` (requête HTTP/1.0 sans en-tête `Host`), le conteneur restait `unhealthy`
+en permanence bien que fonctionnel — corrigé dans `docker-compose.yml`.
 
 ---
 

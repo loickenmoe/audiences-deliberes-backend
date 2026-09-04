@@ -2,7 +2,7 @@
 
 > Contradictions documentaires, ambiguïtés et lacunes nécessitant un **arbitrage explicite**.
 > Aucune de ces questions n'a été tranchée silencieusement.
-> Dernière mise à jour : 2026-09-04 (audit initial).
+> Dernière mise à jour : 2026-09-04 (après jalon M1 — voir statuts R-01 à R-05 ci-dessous).
 
 **Convention de lecture de chaque fiche :**
 - **A — Ce que la documentation exige** (avec la source exacte)
@@ -14,9 +14,9 @@
 
 ---
 
-## RISQUES OUVERTS — à traiter en priorité absolue
+## RISQUES — statut après le jalon M1 (2026-09-04)
 
-### R-01 🔴 Identifiants réels committés dans le dépôt git — `P0`
+### R-01 🟡 Identifiants réels committés dans le dépôt git — partiellement résolu
 
 **Constat.** `env.template` est **versionné** et contient des secrets de production réels :
 
@@ -34,16 +34,21 @@ quiconque a accès au dépôt ou à son historique. En contexte bancaire, incide
 
 **C — Recommandation** (à valider) :
 1. **Révoquer et faire tourner immédiatement** les trois secrets, côté Neon et iDrive e2 ;
-2. remplacer les valeurs de `env.template` par des **placeholders** ;
+2. remplacer les valeurs de `env.template` par des **placeholders** ; ✅ **fait (M1)**
 3. purger l'historique (`git filter-repo` / BFG) **ou**, si le dépôt n'a jamais été poussé
    hors du poste, réécrire l'historique — à confirmer avec la DSI ;
 4. signaler l'incident selon la procédure interne AFB.
 
-**Décision attendue :** …
+**Statut (2026-09-04, M1)** : point 2 fait — `env.template`/`.env` ne contiennent plus que des
+valeurs locales, aucune fonctionnalité du code ne dépend plus de ces secrets. **Points 1, 3, 4
+restent des actions du porteur du projet**, hors du périmètre d'un dépôt de code — les secrets
+déjà exposés avant M1 doivent être considérés compromis tant qu'ils n'ont pas été révoqués.
+
+**Décision attendue :** confirmation de la rotation effective + choix sur la purge d'historique.
 
 ---
 
-### R-02 🔴 Base de données et stockage hébergés hors du périmètre local prévu — `P0`
+### R-02 ✅ Base de données et stockage hébergés hors du périmètre local prévu — résolu (M1)
 
 **A.** REF-02 §5.2 : « le développement et les tests sont conduits **intégralement en environnement
 local** ». REF-05 §8.2 : PostgreSQL en réseau de données interne, accessible **uniquement** depuis
@@ -61,11 +66,14 @@ frontalement le zonage réseau et l'hypothèse de conception validée le 28/07/2
 locaux du `docker-compose.yml` ; conserver Neon/iDrive uniquement, si nécessaire, pour une
 démonstration sur données **fictives**, et le documenter explicitement.
 
-**Décision attendue :** …
+**Statut (2026-09-04, M1)** : fait et validé manuellement de bout en bout — base applicative
+`audiences_app` et MinIO conteneurisés en local, plus aucune dépendance à un service cloud.
+nginx/TLS restent absents (non requis pour le développement local, à traiter avant un
+déploiement pilote/production).
 
 ---
 
-### R-03 🔴 Chemin d'authentification parallèle non sécurisé — `P0`
+### R-03 ✅ Chemin d'authentification parallèle non sécurisé — résolu (M1)
 
 **B.** Le code conserve un dispositif JWT HS256 maison (`JwtService`, `JwtAuthenticationFilter`,
 `UserDetailsServiceImpl`, entité `User` avec mot de passe BCrypt) en parallèle du Resource Server
@@ -82,25 +90,31 @@ Keycloak** ; l'application Spring Boot **n'implémente aucune gestion de credent
 `auth/`, et les dépendances `jjwt`. Réécrire `WebSocketAuthInterceptor` sur le `JwtDecoder`
 Keycloak et **refuser** les connexions anonymes.
 
-**Décision attendue :** …
+**Statut (2026-09-04, M1)** : fait. Tout le chemin hérité supprimé ; `WebSocketAuthInterceptor`
+réécrit sur `JwtDecoder`/`JwtAuthenticationConverter` Keycloak, refuse toute trame STOMP sans
+session authentifiée. Vérifié en conditions réelles (authentification requise, jetons Keycloak
+valides acceptés).
 
 ---
 
-### R-04 🟠 `AdminUserController` non protégé — `P0`
+### R-04 ✅ `AdminUserController` non protégé — résolu (M1)
 
-`@PreAuthorize("hasRole('ADMIN')")` est **commenté** (l. 16). Tout utilisateur authentifié —
-y compris un **avocat externe** — peut lister, créer, modifier et supprimer des utilisateurs.
-Traité par la suppression du squelette (R-03 / jalon M1).
+`@PreAuthorize("hasRole('ADMIN')")` était **commenté** (l. 16). Tout utilisateur authentifié —
+y compris un **avocat externe** — pouvait lister, créer, modifier et supprimer des utilisateurs.
+**Statut** : résolu par la suppression du contrôleur (hors domaine, cf. R-03 / jalon M1).
 
 ---
 
-### R-05 🟠 Aucun schéma de base versionné — `P0`
+### R-05 🔴 Aucun schéma de base versionné — reporté à `M2`
 
 `spring.jpa.hibernate.ddl-auto=update`. REF-05 §12.1 fournit un script SQL complet avec
 contraintes `CHECK` et index que Hibernate ne générera pas. **Recommandation** : Flyway +
 `ddl-auto=validate`. Le script de REF-05 §12.1 comporte par ailleurs deux défauts à corriger
 au moment de la transcription : un `);` surnuméraire après `CREATE TABLE dossier`, et l'absence
 de la colonne `document.chemin_stockage` pourtant exigée par le dictionnaire (**Q-07**).
+
+**Statut (2026-09-04)** : non traité en M1 (hors périmètre — aucune entité n'existe encore) ;
+objet du jalon **M2 — Schéma de base et référentiels**.
 
 ---
 
@@ -237,7 +251,7 @@ impose une migration. Elle conditionne aussi le module `alerte`, dépendance de 
 
 ---
 
-### Q-08 — Rôles `ROLE_SAISIE` et `ROLE_CONSULTATION` : modèle RBAC à trancher — `P0`
+### Q-08 ✅ Rôles `ROLE_SAISIE` et `ROLE_CONSULTATION` : modèle RBAC — tranché et appliqué (M1)
 
 **A.** REF-07 §5 attribue `ROLE_SAISIE` (« Juriste, DJ, DJA, Assistante, SH ») à
 `POST /dossiers`, `POST /ged/documents`, `DELETE /ged/documents/{id}`,
@@ -252,7 +266,9 @@ JURISTE, DJ, DJA, ASSISTANTE, SH — le contrat d'API reste applicable tel quel 
 `@PreAuthorize` restent lisibles. Alternative : remplacer partout `ROLE_SAISIE` par
 `hasAnyRole('JURISTE','DJ','DJA','ASSISTANTE','SH')`.
 
-**Décision attendue :** …
+**Statut (2026-09-04, M1)** : recommandation appliquée — `ROLE_SAISIE` ajouté au realm comme
+rôle composite. Vérifié en conditions réelles : un jeton émis pour `juriste.test` contient bien
+`realm_access.roles: [ROLE_JURISTE, ROLE_SAISIE, ROLE_CONSULTATION]`.
 
 ---
 
@@ -378,11 +394,11 @@ de la lettre. Comment un avocat peut-il être affecté avant sa constitution val
 validée par le SH) — ou rendre `avocatsAffectes` facultatif à la création.
 **Décision attendue :** …
 
-### Q-16 — Ports : contrat `8080`, code `8888` — `P1`
+### Q-16 ✅ Ports — tranché et appliqué (M1)
 REF-07 : `http://localhost:8080/api/v1` ; REF-05 §8.1 : backend 8080, Keycloak 8081.
-Le code : backend **8888**, Keycloak **8080**. Le frontend, développé sur la base du contrat,
-appellerait le mauvais port. **C** : aligner sur la documentation (backend 8080, Keycloak 8081).
-**Décision attendue :** …
+Le code utilisait auparavant backend 8888, Keycloak 8080. **C** : aligner sur la documentation.
+**Statut (2026-09-04, M1)** : appliqué — backend 8080, Keycloak 8081, vérifié en conditions
+réelles (démarrage de l'application, obtention de jetons, appels API).
 
 ### Q-23 — Aucun endpoint de création de client — `P1`
 `dossier.client_id` est `NOT NULL` et `GET /clients` existe, mais **aucun `POST /clients`**.

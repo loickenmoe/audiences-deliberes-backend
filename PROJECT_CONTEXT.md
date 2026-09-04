@@ -135,7 +135,7 @@ sauf besoin de vérification ponctuelle.**
 - `TIMESTAMP` pour l'historique, `DATE` pour les dates métier.
 
 ### API (REF-07 §1.3)
-- Base locale : `http://localhost:8080/api/v1` — **le code utilise le port `8888`** (cf. Q-16).
+- Base locale : `http://localhost:8080/api/v1` — le code est aligné sur ce port depuis M1 (Q-16).
 - JSON `camelCase`, dates ISO `YYYY-MM-DD`, UTF-8.
 - Auth : `Authorization: Bearer <JWT Keycloak>` sur **tous** les endpoints sauf health checks.
 - Erreurs : HTTP standard + corps `{code, message, details}` avec codes `ERR-0xx`.
@@ -150,20 +150,33 @@ sauf besoin de vérification ponctuelle.**
 
 ### Git
 - Convention observée : **Conventional Commits** avec scope
-  (`feat(config):`, `fix(keycloak):`). À conserver.
+  (`feat(config):`, `fix(keycloak):`, `chore(cleanup):`). À conserver.
 - Ne jamais committer sans demande explicite.
+- **Ne pas ajouter de ligne `Co-Authored-By: Claude ...` aux messages de commit** (préférence
+  utilisateur explicite, 2026-09-04) — déroge à la convention par défaut de l'outil.
 
-## 9. État actuel (2026-09-04)
+## 9. État actuel (2026-09-04, après le jalon M1)
 
 - **Documentation** : complète et validée en amont (8 documents).
-- **Code métier** : **0 %**. Le dépôt contient un squelette Spring Boot générique
-  (users/chat/dashboard/templates) hérité d'un starter, sans lien avec le domaine.
-- **Socle technique** : Spring Boot + Keycloak OAuth2 Resource Server opérationnel,
-  Docker Compose (Postgres + Keycloak + MinIO), realm Keycloak avec 7 rôles et 6 utilisateurs de test.
-- **Base de données** : aucune table métier ; `spring.jpa.hibernate.ddl-auto=update`, aucune migration versionnée.
-- **Tests** : 1 test `contextLoads()` (nom de classe non conforme, non exécuté par Surefire).
-- **Risques ouverts majeurs** : secrets réels committés dans `env.template` ; base et stockage
-  hébergés hors du périmètre local prévu. Voir `DECISIONS_AND_OPEN_QUESTIONS.md` §Risques.
+- **Code métier** : **0 %**. Aucune fonctionnalité du domaine (dossiers, audiences, délibérés,
+  frais, GED, alertes, décisions définitives, reporting) n'est implémentée — reste entièrement
+  à faire à partir de M2.
+- **Socle technique** : ✅ assaini au jalon **M1** (validé manuellement de bout en bout,
+  commits `3025c46` / `e33f668`) :
+  - squelette générique hors domaine et authentification héritée (HS256 maison) supprimés ;
+  - authentification exclusivement via Keycloak (OAuth2 Resource Server), y compris WebSocket ;
+  - infrastructure 100 % locale (PostgreSQL + MinIO conteneurisés, plus aucune dépendance cloud) ;
+  - ports alignés sur le contrat d'API (backend 8080, Keycloak 8081) ;
+  - `ROLE_SAISIE` ajouté comme rôle composite Keycloak (Q-08) ;
+  - `pom.xml` nettoyé (doublons, licence AGPL retirée, MapStruct câblé).
+- **Base de données** : toujours aucune table métier ; `spring.jpa.hibernate.ddl-auto=update`,
+  aucune migration versionnée — prévu au jalon **M2**.
+- **Tests** : 1 test `contextLoads()`, classe renommée en conformité Java. Aucun test métier
+  (normal, aucune fonctionnalité métier n'existe encore).
+- **Risques** : voir `DECISIONS_AND_OPEN_QUESTIONS.md` §Risques — R-01 (secrets exposés)
+  résolu dans les fichiers versionnés, mais la rotation des secrets déjà exposés côté
+  Neon/iDrive e2 reste une action utilisateur en attente ; R-02, R-03, R-04 résolus par M1 ;
+  R-05 (schéma non versionné) reste ouvert, prévu en M2.
 
 ## 10. Où aller ensuite
 
