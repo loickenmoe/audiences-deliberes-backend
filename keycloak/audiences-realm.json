@@ -10,13 +10,39 @@
   "refreshTokenMaxReuse": 0,
   "roles": {
     "realm": [
-      { "name": "ROLE_JURISTE",      "description": "Juriste - gestion des dossiers" },
-      { "name": "ROLE_DJ",           "description": "Directeur Juridique" },
-      { "name": "ROLE_DJA",          "description": "Directeur Juridique Adjoint" },
-      { "name": "ROLE_ASSISTANTE",   "description": "Assistante juridique" },
-      { "name": "ROLE_SH",           "description": "Supérieur Hiérarchique (Chef de département)" },
+      {
+        "name": "ROLE_JURISTE",
+        "description": "Juriste - gestion des dossiers",
+        "composite": true,
+        "composites": { "realm": ["ROLE_SAISIE"] }
+      },
+      {
+        "name": "ROLE_DJ",
+        "description": "Directeur Juridique",
+        "composite": true,
+        "composites": { "realm": ["ROLE_SAISIE"] }
+      },
+      {
+        "name": "ROLE_DJA",
+        "description": "Directeur Juridique Adjoint",
+        "composite": true,
+        "composites": { "realm": ["ROLE_SAISIE"] }
+      },
+      {
+        "name": "ROLE_ASSISTANTE",
+        "description": "Assistante juridique",
+        "composite": true,
+        "composites": { "realm": ["ROLE_SAISIE"] }
+      },
+      {
+        "name": "ROLE_SH",
+        "description": "Supérieur Hiérarchique (Chef de département)",
+        "composite": true,
+        "composites": { "realm": ["ROLE_SAISIE"] }
+      },
       { "name": "ROLE_AVOCAT",       "description": "Avocat partenaire externe" },
-      { "name": "ROLE_CONSULTATION", "description": "Lecture seule - tous profils habilités" }
+      { "name": "ROLE_CONSULTATION", "description": "Lecture seule - tous profils habilités" },
+      { "name": "ROLE_SAISIE",       "description": "Saisie - implicite pour Juriste, DJ, DJA, Assistante, SH (rôle composite, cf. DECISIONS_AND_OPEN_QUESTIONS.md Q-08)" }
     ]
   },
   "clients": [
@@ -29,8 +55,8 @@
       "directAccessGrantsEnabled": true,
       "serviceAccountsEnabled": true,
       "secret": "audiences-api-secret",
-      "redirectUris": ["http://localhost:3000/*", "http://localhost:8888/*"],
-      "webOrigins": ["http://localhost:3000", "http://localhost:8888"],
+      "redirectUris": ["http://localhost:3000/*", "http://localhost:8080/*"],
+      "webOrigins": ["http://localhost:3000", "http://localhost:8080"],
       "protocolMappers": [
         {
           "name": "realm-roles-mapper",
