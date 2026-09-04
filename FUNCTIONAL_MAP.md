@@ -208,13 +208,20 @@ rapport journalier vide.
 
 | FR | US | UC | RG | Entités | Endpoint | Comportement attendu | Statut |
 |---|---|---|---|---|---|---|---|
-| FR-ALR-01 | 7.1 | UC-ALR-01 | RG-ALR-02 | `configuration_systeme` | `PUT /alertes/seuils` | `ROLE_DJ` ; `type = CHARGE_MAX_AVOCAT`, `seuil` entier positif ; alerte déclenchée quand un avocat atteint le seuil | ❌ |
-| — | — | UC-ALR-01 | — | `configuration_systeme` | `GET /configurations`, `PUT /configurations/{cle}` | Lecture : `ROLE_CONSULTATION`. Écriture : `ROLE_DJ`. Clés au minimum : `SEUIL_MONTANT_DEFAUT`, `SEUIL_PROROGATIONS`, `CANAUX_NOTIFICATION_DEFAUT`, `DELAI_VALIDATION_CONJOINTE`, `TAILLE_MAX_GED`, `FORMATS_GED` (CONF01…CONF07) | ❌ |
-| FR-ALR-02 | 7.2 | UC-ALR-02 | RG-ALR-01, RG-ALR-03 | `alerte` | *(déclenchement interne : `@Scheduled` + événements)* | Détecte la condition → identifie les destinataires → enregistre `DECLENCHEE` → diffuse (applicatif obligatoire, Outlook et Teams optionnels) **< 1 minute**, délivrance > 99 % | ❌ |
-| FR-ALR-02 | 7.3 | UC-ALR-02 | RG-ALR-03 | `alerte` | `GET /alertes/mes-notifications` | Alertes de l'utilisateur, filtre `statut`, paginé | ❌ |
-| — | 7.4 | UC-ALR-02 | RG-ALR-01 | `alerte`, `historique_action` | `PATCH /alertes/{id}/traiter` **(à proposer)** | Seul le destinataire (403 sinon) ; `TRAITEE` + `date_traitement` | ❌ |
+| FR-ALR-01 | 7.1 | UC-ALR-01 | RG-ALR-02 | `configuration_systeme` | `PUT /alertes/seuils` | `ROLE_DJ` ; `type = CHARGE_MAX_AVOCAT`, `seuil` entier positif ; alerte déclenchée quand un avocat atteint le seuil | ✅ |
+| — | — | UC-ALR-01 | — | `configuration_systeme` | `GET /configurations`, `PUT /configurations/{cle}` | Lecture : `ROLE_CONSULTATION`. Écriture : `ROLE_DJ`. Clés au minimum : `SEUIL_MONTANT_DEFAUT`, `SEUIL_PROROGATIONS`, `CANAUX_NOTIFICATION_DEFAUT`, `DELAI_VALIDATION_CONJOINTE`, `TAILLE_MAX_GED`, `FORMATS_GED` (CONF01…CONF07) | ✅ |
+| FR-ALR-02 | 7.2 | UC-ALR-02 | RG-ALR-01, RG-ALR-03 | `alerte` | *(déclenchement interne : `@Scheduled` + événements)* | Détecte la condition → identifie les destinataires → enregistre `DECLENCHEE` → diffuse (applicatif obligatoire, Outlook et Teams optionnels) **< 1 minute**, délivrance > 99 % | 🟡 |
+| FR-ALR-02 | 7.3 | UC-ALR-02 | RG-ALR-03 | `alerte` | `GET /alertes/mes-notifications` | Alertes de l'utilisateur, filtre `statut`, paginé | ✅ |
+| — | 7.4 | UC-ALR-02 | RG-ALR-01 | `alerte`, `historique_action` | `PATCH /alertes/{id}/traiter` **(à proposer)** | Seul le destinataire (403 sinon) ; `TRAITEE` + `date_traitement` | ✅ |
 
-### Types d'alerte — **contradiction majeure (Q-22)**
+> **FR-ALR-02 : 🟡 partiel.** Le mécanisme de déclenchement générique (`AlerteService.declencher`,
+> canal applicatif, push WebSocket + repli HTTP) est livré et utilisé par deux déclencheurs
+> concrets en M5 (`CHARGE_MAX_AVOCAT` planifié, `DOUBLON_AFFECTATION` sur confirmation M4). Les
+> déclencheurs qui dépendent de données d'autres modules pas encore construits (rappels J-7/J-3/J-1
+> d'audience, délai de recours, relance 72 h GED, etc.) seront ajoutés au fil de M6+, en réutilisant
+> ce même point d'entrée — cf. `DECISIONS_AND_OPEN_QUESTIONS.md` Q-36/Q-37/Q-38.
+
+### Types d'alerte — ✅ tranché et implémenté (Q-22, M2/M5)
 
 | Source | Types énumérés |
 |---|---|
@@ -223,7 +230,8 @@ rapport journalier vide.
 | REF-04 §10 (besoins non fonctionnels) | + dossier incomplet, frais à payer, délibéré attendu, charge à confier à un avocat, lettre de constitution non envoyée |
 | REF-01 (cahier des charges) | + « Dossier incomplet », « Frais à payer », « Délibéré attendu », « Charge avocat » |
 
-→ **L'énumération à implémenter doit être arrêtée avant tout développement du module.**
+→ Liste réunie (17 valeurs, `ALARME` incluse) retenue et implémentée — cf. `TypeAlerte` (M5) et
+`DECISIONS_AND_OPEN_QUESTIONS.md` Q-22.
 
 **Tests attendus** : programmation J-7/J-3/J-1, déclenchement à la date, chaque type d'alerte,
 canal applicatif, marquage `TRAITEE` par un non-destinataire (403), seuil configuré par le DJ
@@ -284,6 +292,6 @@ vue client sans dossier, client inexistant.
 | 4 — Frais | 6 | 5 | 1 | 5 | 0 |
 | 5 — Publications & constitutions | 8 | 6 | 2 | 8 | 0 |
 | 6 — GED | 6 | 5 | 1 | 5 | 0 |
-| 7 — Alertes | 4 | 2 | 2 | 5 | 0 |
+| 7 — Alertes | 4 | 2 | 2 | 5 | **✅ 5** (M5, 🟡 déclencheurs futurs) |
 | 8 — Décisions & reporting | 6 | 4 | 2 | 8 | 0 |
-| **Total** | **49** | **39** | **10** | **~54** | **14** |
+| **Total** | **49** | **39** | **10** | **~54** | **19** |

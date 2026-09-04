@@ -155,12 +155,20 @@ sauf besoin de vérification ponctuelle.**
 - **Ne pas ajouter de ligne `Co-Authored-By: Claude ...` aux messages de commit** (préférence
   utilisateur explicite, 2026-09-04) — déroge à la convention par défaut de l'outil.
 
-## 9. État actuel (2026-09-04, après le jalon M4)
+## 9. État actuel (2026-09-04, après le jalon M5)
 
 - **Documentation** : complète et validée en amont (8 documents).
-- **Code métier** : module **Dossiers + Clients** livré (M4, 13 endpoints — Épic 1 complet).
-  Les autres modules fonctionnels (audiences, délibérés, frais, GED, alertes, décisions
-  définitives, reporting) restent entièrement à construire à partir de M5.
+- **Code métier** : modules **Dossiers + Clients** (M4, Épic 1) et **Alertes + Configurations**
+  (M5, Épic 7) livrés. Les autres modules fonctionnels (audiences, délibérés, frais, GED,
+  décisions définitives, reporting) restent entièrement à construire à partir de M6.
+- **Module `alerte`** : ✅ posé au jalon **M5** : entité `Alerte` (référence `dossierId` libre,
+  sans dépendance vers `dossier` — même principe que `HistoriqueAction`), `AlerteService`
+  (déclenchement, consultation, traitement, anti-doublon, push WebSocket best-effort avec repli
+  garanti sur `GET /alertes/mes-notifications`), `ChargeMaxAvocatScheduler` (placé dans le module
+  `dossier`, qui dépend de `alerte` — jamais l'inverse), `ConfigurationService`/`Controller`
+  (CONF01-07). 5 endpoints du contrat (#44-48). Validé de bout en bout (curl + JWT Keycloak réels,
+  déclenchement planifié observé avec anti-doublon) et par 15 tests automatisés dédiés. Voir
+  `DEVELOPMENT_ROADMAP.md` §M5 et `DECISIONS_AND_OPEN_QUESTIONS.md` (Q-22, Q-32, Q-36, Q-37, Q-38).
 - **Module `dossier`** : ✅ posé au jalon **M4** (commit `955aa4c`, PR #2 mergée dans `dev`) :
   entités (`Dossier`, `EtapeProcedure`, affectations juriste/avocat, `AuditSeuilDossier`),
   machine à états des étapes (`EtapeTransitionValidator`), `DossierService`
@@ -187,11 +195,12 @@ sauf besoin de vérification ponctuelle.**
   (`ApiException`, `GlobalExceptionHandler`, format `{code, message, details}` uniforme y
   compris au niveau du filtre de sécurité), `common/security/CurrentUserService` (provisioning
   utilisateur depuis Keycloak), `common/audit/HistoriqueActionService`,
-  `common/web/PageResponse<T>`, `common/config/SchedulingConfig`. Consommé par le module
-  `dossier` depuis M4 ; prêt pour les modules métier suivants.
-- **Tests** : `contextLoads()` toujours vert. **51 tests au total après M4** (20 socle M1-M3 +
-  31 nouveaux M4 : `TypeEtapeTest`, `EtapeTransitionValidatorTest`, `DossierServiceTest`),
-  aucune régression.
+  `common/web/PageResponse<T>`, `common/config/SchedulingConfig` (dont l'usage `@Scheduled`
+  effectif depuis M5, `ChargeMaxAvocatScheduler`). Consommé par les modules `dossier` (M4) et
+  `alerte` (M5).
+- **Tests** : `contextLoads()` toujours vert. **67 tests au total après M5** (20 socle M1-M3 +
+  31 M4 + 15 nouveaux M5 : `AlerteServiceTest`, `ChargeMaxAvocatSchedulerTest`,
+  `ConfigurationServiceTest`), aucune régression.
 - **Risques** : voir `DECISIONS_AND_OPEN_QUESTIONS.md` §Risques — R-01 (secrets exposés)
   résolu dans les fichiers versionnés, mais la rotation des secrets déjà exposés côté
   Neon/iDrive e2 reste une action utilisateur en attente ; R-02, R-03, R-04 résolus par M1 ;

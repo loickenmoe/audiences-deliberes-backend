@@ -1,5 +1,7 @@
 package com.afriland.audiences.dossier.service;
 
+import com.afriland.audiences.alerte.domain.TypeAlerte;
+import com.afriland.audiences.alerte.service.AlerteService;
 import com.afriland.audiences.common.audit.HistoriqueAction;
 import com.afriland.audiences.common.audit.HistoriqueActionRepository;
 import com.afriland.audiences.common.audit.HistoriqueActionService;
@@ -65,6 +67,7 @@ class DossierServiceTest {
     @Mock private NatureDossierRepository natureDossierRepository;
     @Mock private HistoriqueActionService historiqueActionService;
     @Mock private CurrentUserService currentUserService;
+    @Mock private AlerteService alerteService;
 
     private final EtapeTransitionValidator transitionValidator = new EtapeTransitionValidator();
     private final DossierMapper dossierMapper = new DossierMapper();
@@ -82,7 +85,8 @@ class DossierServiceTest {
         service = new DossierService(dossierRepository, etapeProcedureRepository, dossierJuristeRepository,
                 dossierAvocatRepository, auditSeuilDossierRepository, historiqueActionRepository, clientRepository,
                 utilisateurRepository, avocatRepository, natureDossierRepository, transitionValidator, dossierMapper,
-                etapeProcedureMapper, auditSeuilMapper, historiqueActionMapper, historiqueActionService, currentUserService);
+                etapeProcedureMapper, auditSeuilMapper, historiqueActionMapper, historiqueActionService, currentUserService,
+                alerteService);
 
         client = Client.builder().id(1L).reference("CLI-1").nom("Client Test").build();
         juriste = Utilisateur.builder().id(10L).nom("Juriste").build();
@@ -250,6 +254,28 @@ class DossierServiceTest {
                 new ModifierAffectationRequest(List.of(), List.of(7L)), false))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("déjà affecté");
+    }
+
+    @Test
+    void modifierAffectation_confirmedDuplicateAlertsEachActiveDj() {
+        Dossier dossier = Dossier.builder().id(1L).reference("DOS-2026-001").build();
+        Utilisateur dj = Utilisateur.builder().id(20L).nom("DJ").build();
+        when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
+        when(dossierJuristeRepository.findByDossierId(1L)).thenReturn(List.of());
+        when(dossierAvocatRepository.findByDossierId(1L))
+                .thenReturn(List.of(com.afriland.audiences.dossier.domain.DossierAvocat.builder()
+                        .avocat(com.afriland.audiences.referentiel.domain.Avocat.builder().id(7L).build())
+                        .build()));
+        when(avocatRepository.findById(7L))
+                .thenReturn(Optional.of(com.afriland.audiences.referentiel.domain.Avocat.builder().id(7L).build()));
+        when(utilisateurRepository.findByProfilCodeAndActifTrue("DJ")).thenReturn(List.of(dj));
+
+        service.modifierAffectation(1L, new ModifierAffectationRequest(List.of(), List.of(7L)), true);
+
+        org.mockito.Mockito.verify(alerteService)
+                .declencher(org.mockito.ArgumentMatchers.eq(TypeAlerte.DOUBLON_AFFECTATION),
+                        org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.eq(dj),
+                        org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test

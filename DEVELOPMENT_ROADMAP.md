@@ -2,7 +2,7 @@
 
 > Feuille de route séquentielle du backend. Un jalon = un objectif, un périmètre fermé,
 > une validation manuelle par le porteur du projet avant passage au suivant.
-> Dernière mise à jour : 2026-09-04 (M1 à M4 terminés et validés — M5 en attente d'autorisation).
+> Dernière mise à jour : 2026-09-04 (M1 à M5 terminés et validés — M6 en attente d'autorisation).
 
 ---
 
@@ -28,8 +28,8 @@
 | **M2** | Schéma de base et référentiels | Q-00 ✅, Q-01 ✅, Q-02 ✅, Q-03 ✅, Q-04 ✅, Q-05 ✅, Q-06 ✅, Q-07 ✅, Q-22 ✅, Q-26 ✅, Q-27 ✅, Q-29 ✅ | ✅ **Terminé et validé** (2026-09-04, commit `ceb0e77`) |
 | **M3** | Socle transversal (erreurs, historique, utilisateur, pagination) | Q-08 ✅ | ✅ **Terminé et validé** (2026-09-04, commit `57e75c3`) |
 | **M4** | Module Dossiers | Q-10, Q-11, Q-12, Q-23, Q-26, Q-28 | ✅ **Terminé et validé manuellement** (2026-09-04, commit `955aa4c`, PR #2 mergée dans `dev`) |
-| **M5** | Module Alertes (moteur + notifications) | Q-22, Q-32 | ⏸️ **prêt à démarrer, en attente d'autorisation explicite** |
-| **M6** | Module Audiences + Alarmes | Q-04, Q-13 | ⏸️ |
+| **M5** | Module Alertes (moteur + notifications) | Q-22 ✅, Q-32 ✅, Q-36 ✅, Q-37 ✅, Q-38 ✅ | ✅ **Terminé et validé manuellement** (2026-09-04) |
+| **M6** | Module Audiences + Alarmes | Q-04, Q-13 | ⏸️ **prêt à démarrer, en attente d'autorisation explicite** |
 | **M7** | Module Délibérés | Q-17, Q-18, Q-19, Q-13 | ⏸️ |
 | **M8** | Module GED | Q-02, Q-07, Q-24, R-02 | ⏸️ |
 | **M9** | Module Intervenants (avocats, répertoire, constitutions) | Q-03, Q-28 | ⏸️ |
@@ -238,14 +238,51 @@ audience du doublon (Q-12) différé au module M6.
 
 ---
 
-## M5 — Module Alertes
+## M5 — Module Alertes ✅ **Terminé**
 
 **Objectif.** Épic 7. Moteur de déclenchement (`@Scheduled` + événements Spring), énumération
 arrêtée en Q-22, canaux applicatif (obligatoire) / SMTP / Teams (webhook), configuration des seuils.
 Placé avant les modules qui en dépendent (audiences, délibérés, GED, frais, publications).
 
-**Validation manuelle** : création d'une alerte de test, réception sur le canal applicatif < 1 min,
-`GET /alertes/mes-notifications`, marquage `TRAITEE` par un non-destinataire → 403.
+### Réalisé
+- Module `alerte` : entité `Alerte` (référence `dossierId` libre, sans dépendance vers `dossier` —
+  même principe que `HistoriqueAction`, cf. M3), enums `TypeAlerte` (17 valeurs, Q-22),
+  `CanalAlerte`, `StatutAlerte`.
+- `AlerteService` : point d'entrée unique de déclenchement (`declencher`, sur le modèle de
+  `HistoriqueActionService`), consultation paginée (`mesNotifications`), traitement avec
+  vérification du destinataire (`traiter`), anti-doublon (`estDejaSignalee`), push WebSocket
+  best-effort (Q-32) avec repli garanti sur `GET /alertes/mes-notifications`.
+- `ChargeMaxAvocatScheduler` : vérification planifiée du seuil `CHARGE_MAX_AVOCAT` — placé dans le
+  module `dossier` (et non `alerte`) pour ne jamais faire dépendre le socle transversal d'un
+  module métier (Q-38).
+- `ConfigurationService`/`ConfigurationController` (CONF01-07) : `GET /configurations`,
+  `PUT /configurations/{cle}`.
+- 5 endpoints du contrat (#44-48).
+- Intégration M4→M5 : le doublon d'affectation confirmé (`forcer=true`, Q-12) déclenche désormais
+  une alerte `DOUBLON_AFFECTATION` vers les DJ actifs (Q-36).
+
+### Décisions prises en implémentation (documentées dans `DECISIONS_AND_OPEN_QUESTIONS.md`)
+Q-22 (liste des types), Q-32 (WebSocket + repli), Q-36 (destinataire du doublon d'affectation),
+Q-37 (canal `APPLICATIF` uniquement — Outlook/Teams différés, aucune infrastructure SMTP/webhook
+fournie au projet), Q-38 (destinataire et placement du calcul planifié `CHARGE_MAX_AVOCAT`).
+
+### Validation manuelle — réalisée et confirmée par le porteur du projet (2026-09-04)
+67/67 tests automatisés verts (`mvn test`, dont 15 nouveaux pour M5, aucune régression M1-M4) ;
+validation manuelle de bout en bout (curl + JWT Keycloak réels) : restriction de rôle sur
+`GET/PUT /configurations`, rejet 400 de `PUT /alertes/seuils` sur un type non supporté,
+déclenchement planifié réel de `CHARGE_MAX_AVOCAT` (intervalle réduit à 5 s pour le test) avec
+anti-doublon confirmé (une seule alerte tant que non traitée, nouvelle alerte après traitement),
+`PATCH /alertes/{id}/traiter` (403 non-destinataire / 200 destinataire), doublon d'affectation
+confirmé déclenchant bien une alerte visible côté DJ.
+
+### Commit
+Module livré en un seul commit (docs de contexte incluses, à la demande du porteur du projet).
+
+### Restant
+Canaux Outlook/Teams (Q-37, aucune infrastructure fournie) ; alarmes libres (table `alarme`,
+prévues M6, Q-04) ; push WebSocket non testé avec un client STOMP réel dans cette session (couvert
+par 2 tests unitaires dédiés — succès et échec du push — le repli HTTP est lui testé en conditions
+réelles).
 
 ---
 

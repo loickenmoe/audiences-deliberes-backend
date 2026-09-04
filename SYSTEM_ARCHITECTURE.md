@@ -108,12 +108,14 @@ intégralement supprimés en M1 ; M2 a posé le schéma et les entités des réf
 les briques transversales (erreurs, utilisateur courant, historisation, pagination) ; M4 a livré
 le premier module fonctionnel — `dossier/{domain,repository,service,web,mapper}` et
 `referentiel/{service,web,mapper}` (contrôleur `ClientController`) — consommant l'ensemble des
-briques M3.
+briques M3 ; M5 a livré le module `alerte/{domain,repository,service,web,mapper}` (socle
+transversal, dépendance des modules M6+) ainsi que `referentiel/{service,web}/Configuration*`, et
+a introduit le premier traitement planifié effectif (`dossier/service/ChargeMaxAvocatScheduler`).
 
-**Verdict : le schéma de données et le socle transversal sont complets et validés, et le module
-Dossiers/Clients (M4) est livré et testé — 13 des ~53 endpoints du contrat d'API sont
-implémentés** (51 tests automatisés, dont un test d'intégration Testcontainers). Les autres
-modules fonctionnels (M5+) n'ont pas commencé.
+**Verdict : le schéma de données et le socle transversal sont complets et validés, et les modules
+Dossiers/Clients (M4) et Alertes/Configurations (M5) sont livrés et testés — 18 des ~53 endpoints
+du contrat d'API sont implémentés** (67 tests automatisés, dont un test d'intégration
+Testcontainers). Les autres modules fonctionnels (M6+) n'ont pas commencé.
 
 ### 2.2 Infrastructure réellement configurée
 

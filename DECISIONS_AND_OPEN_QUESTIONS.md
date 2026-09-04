@@ -2,7 +2,7 @@
 
 > Contradictions documentaires, ambiguïtés et lacunes nécessitant un **arbitrage explicite**.
 > Aucune de ces questions n'a été tranchée silencieusement.
-> Dernière mise à jour : 2026-09-04 (après jalon M4 — voir statuts R-01 à R-05, Q-01/10/11/12/23/26/34/35).
+> Dernière mise à jour : 2026-09-04 (après jalon M5 — voir statuts R-01 à R-05, Q-01/10/11/12/22/23/26/32/34/35/36/37/38).
 
 **Convention de lecture de chaque fiche :**
 - **A — Ce que la documentation exige** (avec la source exacte)
@@ -251,7 +251,7 @@ contrat §2 confirment une ressource distincte.
 
 ---
 
-### Q-22 — Énumération des types d'alerte : quatre sources divergentes — `P0`
+### Q-22 ✅ Énumération des types d'alerte : quatre sources divergentes — tranché et implémenté (M2/M5)
 
 | Source | Types |
 |---|---|
@@ -270,7 +270,9 @@ impose une migration. Elle conditionne aussi le module `alerte`, dépendance de 
 `CHARGE_MAX_AVOCAT`, `DELIBERE_ATTENDU`, `DOSSIER_INCOMPLET`.
 *(Le type unique `DOUBLON` du dictionnaire est trop imprécis pour router une notification.)*
 
-**Décision attendue :** liste définitive à arrêter.
+**Statut (2026-09-04, M2/M5)** : liste réunie (17 valeurs, `ALARME` incluse pour Q-04) appliquée
+à la contrainte `chk_alerte_type` dès M2 (`V1__schema_initial.sql`) ; l'énumération Java
+`TypeAlerte` correspondante et son usage effectif (déclenchement, filtrage) livrés en M5.
 
 ---
 
@@ -511,6 +513,52 @@ autorisée par l'endpoint générique M4, avec ouverture automatique de l'étape
 aucune duplication, aucune entrée d'historique parasite ; étape suivante absente : création
 automatique tracée).
 
+### Q-36 ✅ Destinataire de l'alerte `DOUBLON_AFFECTATION` — tranché (M5)
+Q-12 (M4) a implémenté la confirmation d'un doublon d'affectation (`forcer=true`) et prévu qu'elle
+« crée une alerte `DOUBLON_*` », sans que RG-DOS-07/US 2.6 ne précisent le **destinataire** de
+cette alerte (le juriste qui vient de confirmer, ou un profil de supervision distinct ?).
+**C — Recommandation** : destinataire = utilisateurs de profil **DJ** actifs — c'est une alerte de
+supervision d'un contournement de règle, pas une confirmation adressée à son propre auteur.
+**Statut (2026-09-04, M5)** : appliqué — `DossierService.signalerDoublonAffectation` déclenche une
+alerte `DOUBLON_AFFECTATION` vers chaque DJ actif (`UtilisateurRepository
+.findByProfilCodeAndActifTrue("DJ")`) dès qu'une affectation en doublon est confirmée. Vérifié en
+conditions réelles (`PUT /dossiers/{id}/affectation?forcer=true` → alerte visible dans `GET
+/alertes/mes-notifications` du DJ).
+
+### Q-37 ✅ Canaux Outlook/Teams de l'alerte : hors périmètre M5, aucune infrastructure fournie — tranché (M5)
+RG-ALR-03 / `configuration_systeme.CANAUX_NOTIFICATION_DEFAUT` évoquent plusieurs canaux
+(`APPLICATIF,OUTLOOK`) pour une même alerte, mais la colonne `alerte.canal` ne porte qu'**une**
+valeur par ligne (contrainte `chk_alerte_canal`) — aucune des deux tables ne permet de savoir si
+« plusieurs canaux » signifie plusieurs lignes `alerte` ou plusieurs envois d'une même ligne.
+Par ailleurs, aucune configuration SMTP ni webhook Teams n'a jamais été fournie au projet (le
+bloc Javamail d'`application.properties` est resté commenté depuis l'audit initial).
+**C — Recommandation** : traiter `alerte` comme la représentation du canal applicatif uniquement
+(seul canal réellement obligatoire, NF-ALR-02) ; Outlook/Teams sont des canaux de délivrance
+**supplémentaires** d'un même événement, pas des lignes `alerte` distinctes — à implémenter
+seulement si une infrastructure SMTP/webhook est un jour fournie par la DSI.
+**Statut (2026-09-04, M5)** : appliqué — `AlerteService.declencher` persiste toujours
+`canal = APPLICATIF` ; `CANAUX_NOTIFICATION_DEFAUT` reste consultable/modifiable via
+`GET/PUT /configurations` (CONF01-07) mais n'est pas encore consommé pour déclencher un envoi
+Outlook/Teams réel — documenté explicitement dans le Javadoc d'`AlerteService`, pas une omission
+silencieuse.
+
+### Q-38 ✅ Destinataire et propriétaire du calcul de l'alerte `CHARGE_MAX_AVOCAT` — tranché (M5)
+RG-ALR-02/FR-ALR-01 (US 7.1) définissent le seuil configurable et l'endpoint `PUT /alertes/seuils`
+(réservé au DJ) mais ne précisent ni le destinataire de l'alerte déclenchée, ni quel module la
+calcule (elle dépend de `dossier_avocat`, propriété du module `dossier`, alors que `alerte` doit
+rester un socle transversal sans dépendance vers les modules métier — cf. Javadoc `Alerte`).
+**C — Recommandation** : (a) destinataire = DJ actifs, par cohérence avec `PUT /alertes/seuils` et
+Q-36 ; (b) le calcul planifié vit dans le module `dossier` (qui a besoin de
+`DossierAvocatRepository`) et appelle `AlerteService.declencher` en sens unique, plutôt que
+l'inverse.
+**Statut (2026-09-04, M5)** : appliqué — `dossier/service/ChargeMaxAvocatScheduler`
+(`@Scheduled(fixedDelayString = "${alerte.charge-max-avocat.interval-ms:3600000}")`) compte les
+dossiers par avocat, compare au seuil `CHARGE_MAX_AVOCAT`, et déclenche une alerte par DJ actif —
+avec anti-doublon tant qu'une alerte du même avocat reste `DECLENCHEE`
+(`AlerteService.estDejaSignalee`). Vérifié en conditions réelles avec un intervalle de test réduit
+(5 s) : alerte créée une seule fois malgré plusieurs cycles tant qu'elle n'est pas traitée, puis
+une nouvelle alerte générée après traitement de la précédente.
+
 ### Q-27 ✅ `dossier.parties` défini deux fois — tranché (M2)
 Le dictionnaire REF-06 §2.1.2 déclare `parties JSONB` **deux fois**, avec deux structures
 différentes : `{demandeur, defendeur}` et `{demandeur, defendeur, client}`. Le contrat d'API et
@@ -556,11 +604,17 @@ Juridique ». **C** : hors périmètre V1 des états ; prévoir un champ libre d
 valider avec la DSI. `pdfbox 3.0.2` (Apache 2.0) est également présent.
 **C** : ne garder que **PDFBox** et retirer iText.
 
-### Q-32 — Notifications applicatives : WebSocket ou polling ? — `P2`
+### Q-32 ✅ Notifications applicatives : WebSocket ou polling ? — tranché et implémenté (M5)
 NF-ALR-02 fait du canal applicatif le canal **obligatoire**, avec délai < 1 min. Le code contient
 un socle STOMP/SockJS (utilisé pour un chat hors périmètre).
 **C** : conserver l'infrastructure WebSocket pour le push de notifications (sécurisée par Keycloak),
-avec `GET /alertes/mes-notifications` comme repli. **Décision attendue :** …
+avec `GET /alertes/mes-notifications` comme repli.
+
+**Statut (2026-09-04, M5)** : appliqué. `AlerteService.declencher` persiste systématiquement
+l'alerte puis tente un push best-effort via `SimpMessagingTemplate.convertAndSendToUser` (session
+STOMP authentifiée par `keycloakId`, cf. M1) ; un échec de push (destinataire hors ligne, broker
+indisponible) est journalisé mais ne fait jamais échouer le déclenchement — l'alerte reste dans
+tous les cas récupérable via `GET /alertes/mes-notifications`. Voir aussi Q-37 (canal).
 
 ### Q-33 — Périmètre du dépôt : backend seul, ou monorepo ? — `P2`
 REF-05 §12.2 décrit un `docker-compose.yml` avec `build: ./backend` et `build: ./frontend`,
@@ -607,6 +661,11 @@ une formation des utilisateurs clés a été réalisée ; les données historiqu
 | 2026-09-04 | Q-23 | `POST /clients` créé (🆕, hors contrat) ; `PUT /clients/{id}` non retenu, aucun besoin identifié à ce stade | Implémenté M4 |
 | 2026-09-04 | Q-34 | Nouvel endpoint 🆕 `POST /dossiers/{id}/etapes` pour le positionnement direct d'une étape sans antécédents, avec création automatique des étapes intermédiaires manquantes | Implémenté M4 |
 | 2026-09-04 | Q-35 | Les transitions `EN_DELIBERE→DELIBERE_VIDE` et `EN_DELIBERE→EN_COURS` sont exclues de l'endpoint générique de statut et réservées à des endpoints dédiés du module Délibérés | Prévu M7 |
+| 2026-09-04 | Q-22 | Liste réunie des 17 types d'alerte (incl. `ALARME`) appliquée à la contrainte `chk_alerte_type` et à l'énumération `TypeAlerte` | Implémenté M2 (schéma) / M5 (usage) |
+| 2026-09-04 | Q-32 | Push WebSocket best-effort (`convertAndSendToUser`) à chaque déclenchement, avec `GET /alertes/mes-notifications` comme repli garanti | Implémenté M5 |
+| 2026-09-04 | Q-36 | Destinataire de l'alerte `DOUBLON_AFFECTATION` = DJ actifs (supervision) | Implémenté M5 |
+| 2026-09-04 | Q-37 | `alerte.canal` reste `APPLICATIF` uniquement en M5 ; Outlook/Teams différés (aucune infrastructure SMTP/webhook fournie au projet) | Implémenté M5, réévaluer si infra fournie |
+| 2026-09-04 | Q-38 | Alerte `CHARGE_MAX_AVOCAT` : destinataire = DJ actifs ; calcul planifié placé dans le module `dossier` (dépendance vers `alerte`, jamais l'inverse) | Implémenté M5 |
 
 Les autres questions (P1/P2) restent ouvertes et seront tranchées au fil des jalons concernés,
 au plus tard avant le module qui en dépend (cf. tableau des prérequis dans `DEVELOPMENT_ROADMAP.md`).
