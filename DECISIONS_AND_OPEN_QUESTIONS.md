@@ -2,7 +2,7 @@
 
 > Contradictions documentaires, ambiguïtés et lacunes nécessitant un **arbitrage explicite**.
 > Aucune de ces questions n'a été tranchée silencieusement.
-> Dernière mise à jour : 2026-09-04 (après jalon M1 — voir statuts R-01 à R-05 ci-dessous).
+> Dernière mise à jour : 2026-09-04 (après jalon M4 — voir statuts R-01 à R-05, Q-01/10/11/12/23/26/34/35).
 
 **Convention de lecture de chaque fiche :**
 - **A — Ce que la documentation exige** (avec la source exacte)
@@ -129,7 +129,7 @@ technique. → À confirmer, car toutes les autres questions en dépendent.
 
 ---
 
-### Q-10 — Circuit de validation de la sensibilité d'un dossier : totalement non modélisé — `P0`
+### Q-10 ✅ Circuit de validation de la sensibilité d'un dossier — tranché et implémenté (M4)
 
 **A.** RG-DOS-09 (REF-04, version affinée) et UC-DOS-01 alt. 6-a : le juriste **propose** la
 sensibilité ; la proposition est **automatiquement soumise à la validation du DJ ou du DJA**, qui
@@ -154,11 +154,19 @@ en attente ; conditionne `estSensible`, donc tout le circuit de validation des f
 | **C** | Pas de circuit de validation : `estSensible` est effectif à la saisie | contredit RG-DOS-09 et UC-DOS-01 — à écarter sauf décision explicite |
 
 **C — Recommandation** : **option A**.
-**Décision attendue :** …
+
+**Statut (2026-09-04, M4)** : option A implémentée. `audit_seuil_dossier` sert de file d'attente
+**unique** de propositions en attente, partagée avec Q-26 (voir plus bas) : `POST /dossiers` avec
+`estSensible=true` crée une ligne `audit_seuil_dossier` (`statut=EN_ATTENTE`) portant la
+proposition de seuil/type de client, sans jamais écrire directement `dossier.seuil_montant` ni
+`dossier.type_client_sensible`. `POST /dossiers/{id}/sensibilite/validation` (endpoint #8, DJ/DJA
+uniquement) approuve (renseigne alors ces colonnes + `sensibilite_statut=VALIDEE`) ou rejette
+(`sensibilite_statut=REJETEE`, motif obligatoire, `est_sensible` repassé à `false`). Vérifié de
+bout en bout par appels HTTP réels (dossier 3 : seuil `null` → `80 000 000` après validation).
 
 ---
 
-### Q-26 — Contrainte SQL `chk_seuil_coherence` incompatible avec RG-DOS-09 — `P0`
+### Q-26 ✅ Contrainte SQL `chk_seuil_coherence` incompatible avec RG-DOS-09 — tranché et implémenté (M4)
 
 **A.** REF-05 §12.1 :
 ```sql
@@ -178,11 +186,22 @@ sens (`estSensible: true`, `seuilMontant: null`, `seuilOrigine: "GLOBAL"`).
 signifie « **un seuil applicable doit être déterminé** », satisfait par la valeur globale.
 Le formulaire pré-remplit le seuil par défaut (UC-DOS-01 alt. 6-a) sans le persister.
 
+**Statut (2026-09-04, M4)** : appliqué. `dossier.seuil_montant`/`seuil_origine` restent
+`GLOBAL`/`null` jusqu'à validation d'une proposition (Q-10) **ou** d'une dérogation dédiée —
+`POST /dossiers/{id}/seuil-derogation` (crée une nouvelle ligne `audit_seuil_dossier`) puis
+`PUT /dossiers/{id}/seuil-derogation/{auditId}` (DJ/DJA, approuve → `seuil_origine=DEROGATION` +
+`seuil_montant` renseigné, ou rejette). Les deux mécanismes (Q-10 et Q-26) partagent donc la même
+table de file d'attente `audit_seuil_dossier` — c'est la **seule** voie d'écriture de ces deux
+colonnes, jamais un accès direct depuis `POST /dossiers` ou un endpoint générique. Vérifié
+en conditions réelles : dossier 3, seuil `null` → `80 000 000` (validation sensibilité) →
+`100 000 000` (dérogation ultérieure), avec `ancienSeuil` capturant correctement la valeur
+précédente à chaque étape.
+
 **Décision attendue :** …
 
 ---
 
-### Q-01 — Tables d'affectation juristes/avocats absentes du modèle — `P0`
+### Q-01 ✅ Tables d'affectation juristes/avocats absentes du modèle — créées et implémentées (M2/M4)
 
 **A.** RG-DOS-03 : « un dossier est affecté à **un ou plusieurs juristes** et à **un ou plusieurs
 avocats** ». `POST /dossiers` exige `juristesAffectes[]` et `avocatsAffectes[]`.
@@ -195,7 +214,11 @@ table d'association**. Le module dossier est inconstruisible en l'état.
 affecte_par)` et `dossier_avocat (dossier_id, avocat_id, date_affectation, affecte_par)`,
 PK composite, l'historique étant porté par `historique_action`.
 
-**Décision attendue :** …
+**Statut (2026-09-04, M2/M4)** : tables créées telles quelles en M2 (`@EmbeddedId`/`@MapsId`).
+Endpoints d'affectation implémentés en M4 : `juristesAffectes`/`avocatsAffectes` à la création
+(`POST /dossiers`), `PUT /dossiers/{id}/affectation` pour les modifications ultérieures (voir
+Q-12 pour la gestion du doublon). Chaque affectation/désaffectation génère une entrée
+`historique_action` dédiée.
 
 ---
 
@@ -272,7 +295,7 @@ rôle composite. Vérifié en conditions réelles : un jeton émis pour `juriste
 
 ---
 
-### Q-11 — Champs conditionnels par catégorie : `ET` ou `OU` ? et catégorie saisie ou déduite ? — `P0`
+### Q-11 ✅ Champs conditionnels par catégorie : `ET` ou `OU` ? et catégorie saisie ou déduite ? — tranché et implémenté (M4)
 
 **Contradiction 1 — cardinalité.**
 - US 1.1 critères 2-3 et US 1.5 : pour `RECOUVREMENT`, `dossierCreditOrigine` **et** `pvTransfert`
@@ -293,6 +316,17 @@ rôle composite. Vérifié en conditions réelles : un jeton émis pour `juriste
 réalisation) et durcir la contrainte SQL en `AND` ; (b) **déduire** la catégorie de la nature via
 un référentiel de taxonomie (Annexe A, CONF02), et exposer `categorie` en lecture seule dans la
 réponse.
+
+**Statut (2026-09-04, M4)** : (a) et (b) appliqués, avec une nuance sur (a) — la validation `ET`
+est appliquée à la **couche service** (`DossierService.validerChampsConditionnels`, plus stricte
+que le contrat OpenAPI qui ne liste pas ces champs en `required`), tandis que la contrainte SQL
+`chk_categorie_coherence` (M2, en `OR`) est **conservée telle quelle** comme filet de sécurité de
+dernier recours au niveau base — un choix de validation en couches, non une incohérence non
+résolue : le service métier porte la règle stricte, la base garantit un minimum même en cas de
+contournement de la couche service. (b) `nature_dossier` (M2) porte la catégorie associée à
+chaque nature ; `DossierService.resoudreCategorie` la dérive via
+`NatureDossierRepository.findByLibelleIgnoreCase` et rejette (400) toute incohérence si le client
+envoie malgré tout un champ `categorie` divergent.
 
 **Décision attendue :** …
 
@@ -388,11 +422,19 @@ US 3.5 critère 1 : « **When** je soumets une `dateEcheance` **via GET** `/deli
 `POST /dossiers/{id}/alarmes` (Q-04) avec un type `DELAI_RECOURS`.
 **Décision attendue :** …
 
-### Q-12 — « 409 avec possibilité de confirmer ou annuler » : mécanisme non spécifié — `P1`
+### Q-12 ✅ « 409 avec possibilité de confirmer ou annuler » : mécanisme non spécifié — tranché et implémenté (M4, volet dossier)
 RG-DOS-07 et RG-AUD-06 : le doublon d'affectation / d'audience **n'est pas bloquant** — le juriste
 peut confirmer (UC-DOS-01 alt. 7-a, UC-DOS-02 alt. 7-a, UC-AUD-01 alt. 7-a). Un `409` seul ne
 permet pas de confirmer. **C** : paramètre `?forcer=true` (ou champ `confirmerDoublon: true`) ;
 la confirmation crée une alerte `DOUBLON_*` et une entrée d'historique (US 2.6 critère 2).
+
+**Statut (2026-09-04, M4)** : appliqué pour le volet dossier — `ModifierAffectationRequest.forcer`
+(booléen, défaut `false`). `DossierService.modifierAffectation` renvoie `409` sur une affectation
+déjà existante sauf si `forcer=true`, auquel cas elle est acceptée et une entrée `historique_action`
+la trace explicitement comme doublon confirmé. La génération d'une alerte `DOUBLON_AFFECTATION`
+(référentiel de types Q-22) reste à câbler en M5 (module Alertes, pas encore implémenté) — le
+mécanisme de confirmation lui-même est complet et testé. Le volet audience (RG-AUD-06) reste
+ouvert, prévu au module M6.
 **Décision attendue :** …
 
 ### Q-28 — `avocatsAffectes` obligatoire à la création vs circuit de constitution — `P1`
@@ -409,11 +451,17 @@ Le code utilisait auparavant backend 8888, Keycloak 8080. **C** : aligner sur la
 **Statut (2026-09-04, M1)** : appliqué — backend 8080, Keycloak 8081, vérifié en conditions
 réelles (démarrage de l'application, obtention de jetons, appels API).
 
-### Q-23 — Aucun endpoint de création de client — `P1`
+### Q-23 ✅ Aucun endpoint de création de client — créé et implémenté (M4)
 `dossier.client_id` est `NOT NULL` et `GET /clients` existe, mais **aucun `POST /clients`**.
 US §11.3 (INT-05) : « les données clients peuvent provenir d'un référentiel externe **ou être
 saisies manuellement** ». Sans création, aucun dossier n'est créable. **C** : ajouter
-`POST /clients` et `PUT /clients/{id}` (`ROLE_SAISIE`). **Décision attendue :** …
+`POST /clients` et `PUT /clients/{id}` (`ROLE_SAISIE`).
+
+**Statut (2026-09-04, M4)** : `POST /clients` implémenté et marqué 🆕 (hors contrat OpenAPI
+formel) dans `ClientController`/`API_IMPLEMENTATION_STATUS.md`, `ROLE_SAISIE` requis, vérifié en
+conditions réelles. `PUT /clients/{id}` **non implémenté** — aucune US ni cas d'usage M4 ne
+l'exigeait explicitement (seule la création bloquait `POST /dossiers`) ; à réévaluer si un besoin
+de modification client émerge dans un module ultérieur.
 
 ### Q-24 — Files de travail (listes) non spécifiées — `P1`
 UC-INT-02/03/04, UC-GED-03, UC-INT-06/10 supposent tous des **listes d'éléments en attente**
@@ -431,6 +479,37 @@ mais **jamais définis** dans `components/schemas`. Contrat incomplet.
 Le schéma `AuditSeuil` (REF-07) expose `statut ∈ {EN_ATTENTE, VALIDEE, REJETEE}` ; la table
 (REF-06 et REF-05 §12.1) **n'a pas cette colonne**. **C** : l'ajouter.
 **Statut (2026-09-04, M2)** : appliqué — colonne ajoutée à `V1__schema_initial.sql`.
+
+### Q-34 ✅ Positionnement direct d'une étape sans antécédents (UC-DOS-04 alt. 3-b) — endpoint 🆕 créé (M4)
+UC-DOS-04 alt. 3-b permet de positionner directement une étape (ex. `RECOURS_2`) sans que les
+étapes intermédiaires (`RECOURS_1`) aient été créées au préalable. Le contrat d'API ne prévoit
+que `PATCH /dossiers/{id}/etapes/{etapeId}/statut`, qui exige structurellement un `etapeId`
+**existant** — il ne peut donc pas créer une étape qui n'existe pas encore.
+**C — Recommandation** : ajouter un nouvel endpoint, hors des 12 endpoints du contrat formel
+(`API_IMPLEMENTATION_STATUS.md` §1), clairement marqué 🆕.
+**Statut (2026-09-04, M4)** : implémenté — `POST /dossiers/{id}/etapes`
+(`CreerEtapeRequest{type, statutCycleVie}`, `ROLE_SAISIE`). `DossierService.creerEtape` crée
+automatiquement, à `OUVERTURE`, toute étape intermédiaire manquante entre `INSTANCE` et l'étape
+demandée (ex. demander directement `RECOURS_2` crée aussi `RECOURS_1` si absente), chacune tracée
+dans l'historique. Vérifié en conditions réelles (dossier 4 : positionnement direct sur
+`RECOURS_2`, `RECOURS_1` créée automatiquement avec le statut `OUVERTURE`).
+
+### Q-35 ✅ Frontière entre transitions génériques (M4) et transitions dédiées délibéré/rabattement (M7) — tranché (M4)
+`EtapeTransitionValidator` (M4) doit couvrir les transitions génériques de cycle de vie d'une
+étape, mais certaines transitions (`EN_DELIBERE→DELIBERE_VIDE`, l'enregistrement d'un délibéré ;
+`EN_DELIBERE→EN_COURS`, un rabattement) nécessitent de collecter des données métier
+supplémentaires (résultat du délibéré, motif de rabattement) que l'endpoint générique
+`PATCH .../etapes/{etapeId}/statut` ne reçoit pas — ni le contrat d'API ni le dictionnaire ne
+précisaient explicitement cette frontière.
+**C — Recommandation** : exclure ces deux transitions de la table `TRANSITIONS_AUTORISEES` de M4
+et les réserver à des endpoints dédiés du module Délibérés (M7).
+**Statut (2026-09-04, M4)** : appliqué — `EtapeTransitionValidator.TRANSITIONS_AUTORISEES` exclut
+explicitement les deux transitions (commentées dans le code et testées négativement, cf.
+`EtapeTransitionValidatorTest`). Seule `DELIBERE_VIDE→EN_COURS` (exercice d'un recours) reste
+autorisée par l'endpoint générique M4, avec ouverture automatique de l'étape suivante si absente
+(cf. Q-34) — vérifié en conditions réelles dans les deux cas (étape suivante déjà existante :
+aucune duplication, aucune entrée d'historique parasite ; étape suivante absente : création
+automatique tracée).
 
 ### Q-27 ✅ `dossier.parties` défini deux fois — tranché (M2)
 Le dictionnaire REF-06 §2.1.2 déclare `parties JSONB` **deux fois**, avec deux structures
@@ -523,6 +602,11 @@ une formation des utilisateurs clés a été réalisée ; les données historiqu
 | 2026-09-04 | Q-18 | Le seuil se déclenche quand `compteur > seuilProrogations` (11e prorogation avec le défaut 10), une seule fois | Prévu M7 |
 | 2026-09-04 | Q-22 | Liste réunie des 16 types d'alerte retenue (cf. recommandation Q-22) | Prévu M2 (contrainte CHECK) et M5 |
 | 2026-09-04 | Q-26 | La logique de la conception/contrat prévaut sur celle de RG-DOS-09 au sens strict : `seuil_montant` reste `NULL` par défaut (seuil global applicable), renseigné uniquement en cas de dérogation validée | Prévu M2 (contrainte SQL), M4 |
+| 2026-09-04 | Q-11 | Validation `ET` des champs conditionnels appliquée en couche service (contrainte SQL `OR` conservée comme filet de sécurité) ; catégorie déduite de la nature via `nature_dossier` | Implémenté M4 |
+| 2026-09-04 | Q-12 | `forcer=true` sur `PUT /dossiers/{id}/affectation` pour confirmer un doublon d'affectation (volet dossier uniquement — le volet audience reste ouvert, M6) | Implémenté M4 |
+| 2026-09-04 | Q-23 | `POST /clients` créé (🆕, hors contrat) ; `PUT /clients/{id}` non retenu, aucun besoin identifié à ce stade | Implémenté M4 |
+| 2026-09-04 | Q-34 | Nouvel endpoint 🆕 `POST /dossiers/{id}/etapes` pour le positionnement direct d'une étape sans antécédents, avec création automatique des étapes intermédiaires manquantes | Implémenté M4 |
+| 2026-09-04 | Q-35 | Les transitions `EN_DELIBERE→DELIBERE_VIDE` et `EN_DELIBERE→EN_COURS` sont exclues de l'endpoint générique de statut et réservées à des endpoints dédiés du module Délibérés | Prévu M7 |
 
 Les autres questions (P1/P2) restent ouvertes et seront tranchées au fil des jalons concernés,
 au plus tard avant le module qui en dépend (cf. tableau des prérequis dans `DEVELOPMENT_ROADMAP.md`).
