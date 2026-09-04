@@ -1,7 +1,7 @@
 # API_IMPLEMENTATION_STATUS
 
 > Inventaire exhaustif des endpoints et état d'implémentation.
-> Dernière mise à jour : 2026-09-04 (après jalon M4 — module Dossiers/Clients).
+> Dernière mise à jour : 2026-09-04 (après jalon M5 — module Alertes/Configurations).
 
 **Base URL** : `http://localhost:8080/api/v1` — aligné sur le contrat REF-07 depuis M1 (Q-16 résolue).
 **Authentification** : `Authorization: Bearer <JWT Keycloak>` sur tous les endpoints sauf health checks.
@@ -17,12 +17,12 @@
 
 | Catégorie | Nombre | Implémentés |
 |---|---|---|
-| 📋 Spécifiés dans l'OpenAPI | 37 | **11** (§1-2) |
+| 📋 Spécifiés dans l'OpenAPI | 37 | **16** (§1-2, §9 #44-48) |
 | 📄 Cités §2 mais absents de l'OpenAPI | 3 | 0 |
 | 💡 « À proposer » (user stories) | 10 | 0 |
 | 🆕 Manquants dans toute la documentation | 2 | 1 (`POST /clients`) |
 | 🆕 Ajoutés en cours d'implémentation (hors inventaire initial) | 1 | 1 (`POST /dossiers/{id}/etapes`, cf. Q-34) |
-| **Surface cible totale** | **~53** | **13 (≈25 %)** |
+| **Surface cible totale** | **~53** | **18 (≈34 %)** |
 
 Le squelette de starter hors périmètre (Template/Admin/Staff/Dashboard/Chat, auth JWT maison) a
 été intégralement supprimé en M1 (cf. `DECISIONS_AND_OPEN_QUESTIONS.md` R-03/R-04) — l'ancienne
@@ -146,13 +146,22 @@ Q-10, Q-11, Q-12, Q-26, Q-34, Q-35 pour le détail des arbitrages pris pendant l
 
 | # | Méthode | Endpoint | Rôle requis | FR / US | Src | Statut |
 |---|---|---|---|---|---|---|
-| 44 | PUT | `/alertes/seuils` | `ROLE_DJ` | FR-ALR-01 / US 7.1 | 📋 | ❌ |
-| 45 | GET | `/alertes/mes-notifications` | authentifié | FR-ALR-02 / US 7.3 | 📋 | ❌ |
-| 46 | PATCH | `/alertes/{id}/traiter` | destinataire | US 7.4 | 💡 | ❌ |
-| 47 | GET | `/configurations` | `ROLE_CONSULTATION` | CONF01-07 | 📋 | ❌ |
-| 48 | PUT | `/configurations/{cle}` | `ROLE_DJ` | CONF01-07 | 📋 | ❌ |
+| 44 | PUT | `/alertes/seuils` | `ROLE_DJ` | FR-ALR-01 / US 7.1 | 📋 | ✅ M5 |
+| 45 | GET | `/alertes/mes-notifications` | authentifié | FR-ALR-02 / US 7.3 | 📋 | ✅ M5 |
+| 46 | PATCH | `/alertes/{id}/traiter` | destinataire | US 7.4 | 💡 | ✅ M5 |
+| 47 | GET | `/configurations` | `ROLE_CONSULTATION` | CONF01-07 | 📋 | ✅ M5 |
+| 48 | PUT | `/configurations/{cle}` | `ROLE_DJ` | CONF01-07 | 📋 | ✅ M5 |
 | 49 | GET | `/rapports` | `ROLE_JURISTE` | FR-REP-01 / US 8.4 | 📋 | ❌ |
 | 50 | GET | `/tableau-de-bord` | `ROLE_DJ` | FR-REP-02 / US 8.5 | 📋 | ❌ |
+
+> **#44** : `type` doit valoir `CHARGE_MAX_AVOCAT` (400 sinon) — seul type d'alerte du contrat
+> adossé à un seuil configurable (RG-ALR-02) ; délègue à `PUT /configurations/{cle}` en interne.
+> Le déclenchement lui-même est planifié (`ChargeMaxAvocatScheduler`, module `dossier`, cf. Q-38),
+> pas un endpoint. **#46** : rôle « destinataire » vérifié en service (403 sinon), pas par
+> `@PreAuthorize` — cf. Q-36. Testé manuellement de bout en bout (déclenchement planifié avec
+> anti-doublon, doublon d'affectation M4→M5, traitement par le seul destinataire, push WebSocket
+> best-effort) + 15 tests automatisés (`AlerteServiceTest`, `ChargeMaxAvocatSchedulerTest`,
+> `ConfigurationServiceTest`). Voir Q-22, Q-32, Q-36, Q-37, Q-38.
 
 ## 10. Décisions définitives
 

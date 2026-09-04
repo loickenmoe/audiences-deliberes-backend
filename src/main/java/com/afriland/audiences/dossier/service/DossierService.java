@@ -1,5 +1,7 @@
 package com.afriland.audiences.dossier.service;
 
+import com.afriland.audiences.alerte.domain.TypeAlerte;
+import com.afriland.audiences.alerte.service.AlerteService;
 import com.afriland.audiences.common.audit.HistoriqueAction;
 import com.afriland.audiences.common.audit.HistoriqueActionRepository;
 import com.afriland.audiences.common.audit.HistoriqueActionService;
@@ -79,6 +81,7 @@ public class DossierService {
     private final HistoriqueActionMapper historiqueActionMapper;
     private final HistoriqueActionService historiqueActionService;
     private final CurrentUserService currentUserService;
+    private final AlerteService alerteService;
 
     // ------------------------------------------------------------------ Création
 
@@ -289,9 +292,15 @@ public class DossierService {
 
         boolean doublonJuriste = juristesDemandes.stream().anyMatch(juristesExistants::contains);
         boolean doublonAvocat = avocatsDemandes.stream().anyMatch(avocatsExistants::contains);
-        if ((doublonJuriste || doublonAvocat) && !forcer) {
+        boolean doublon = doublonJuriste || doublonAvocat;
+        if (doublon && !forcer) {
             throw ApiException.conflict(ErrorCodes.DOUBLON_AFFECTATION,
                     "Au moins un juriste ou avocat est déjà affecté à ce dossier ; ajoutez ?forcer=true pour confirmer (RG-DOS-07)");
+        }
+        if (doublon) {
+            // Q-12/Q-36 (DECISIONS_AND_OPEN_QUESTIONS.md) : doublon confirmé par le juriste —
+            // alerte de supervision au(x) DJ actif(s), en plus de l'historisation ci-dessous.
+            signalerDoublonAffectation(dossier);
         }
 
         dossierJuristeRepository.deleteByDossierId(dossierId);
@@ -304,6 +313,15 @@ public class DossierService {
 
         List<EtapeProcedure> etapes = etapeProcedureRepository.findByDossierIdOrderByTypeAsc(dossierId);
         return construireReponse(dossier, etapes, juristesAffectes, avocatsAffectes, List.of());
+    }
+
+    /** Q-36 : destinataires = utilisateurs de profil DJ (supervision des doublons confirmés). */
+    private void signalerDoublonAffectation(Dossier dossier) {
+        List<Utilisateur> destinataires = utilisateurRepository.findByProfilCodeAndActifTrue("DJ");
+        String declencheur = "Doublon d'affectation confirmé sur le dossier " + dossier.getReference()
+                + " (RG-DOS-07)";
+        destinataires.forEach(dj -> alerteService.declencher(TypeAlerte.DOUBLON_AFFECTATION,
+                dossier.getId(), dj, declencheur));
     }
 
     // ------------------------------------------------------------------ Cycle de vie des étapes
