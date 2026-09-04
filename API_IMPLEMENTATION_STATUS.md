@@ -1,9 +1,9 @@
 # API_IMPLEMENTATION_STATUS
 
 > Inventaire exhaustif des endpoints et état d'implémentation.
-> Dernière mise à jour : 2026-09-04 (audit initial).
+> Dernière mise à jour : 2026-09-04 (après jalon M4 — module Dossiers/Clients).
 
-**Base URL** : `http://localhost:8080/api/v1` (contrat REF-07) — **le code écoute sur `8888`** (Q-16).
+**Base URL** : `http://localhost:8080/api/v1` — aligné sur le contrat REF-07 depuis M1 (Q-16 résolue).
 **Authentification** : `Authorization: Bearer <JWT Keycloak>` sur tous les endpoints sauf health checks.
 
 **Légende** :
@@ -17,14 +17,16 @@
 
 | Catégorie | Nombre | Implémentés |
 |---|---|---|
-| 📋 Spécifiés dans l'OpenAPI | 37 | **0** |
+| 📋 Spécifiés dans l'OpenAPI | 37 | **11** (§1-2) |
 | 📄 Cités §2 mais absents de l'OpenAPI | 3 | 0 |
 | 💡 « À proposer » (user stories) | 10 | 0 |
-| 🆕 Manquants dans toute la documentation | 2 | 0 |
-| **Surface cible totale** | **~52** | **0 (0 %)** |
+| 🆕 Manquants dans toute la documentation | 2 | 1 (`POST /clients`) |
+| 🆕 Ajoutés en cours d'implémentation (hors inventaire initial) | 1 | 1 (`POST /dossiers/{id}/etapes`, cf. Q-34) |
+| **Surface cible totale** | **~53** | **13 (≈25 %)** |
 
-Endpoints **actuellement exposés** par le code : **12**, tous hors périmètre fonctionnel
-(squelette de starter) — voir §10.
+Le squelette de starter hors périmètre (Template/Admin/Staff/Dashboard/Chat, auth JWT maison) a
+été intégralement supprimé en M1 (cf. `DECISIONS_AND_OPEN_QUESTIONS.md` R-03/R-04) — l'ancienne
+§11 « endpoints actuellement exposés hors périmètre » n'a donc plus d'objet et a été retirée.
 
 ---
 
@@ -32,31 +34,42 @@ Endpoints **actuellement exposés** par le code : **12**, tous hors périmètre 
 
 | # | Méthode | Endpoint | Rôle requis | FR / US | Src | Statut |
 |---|---|---|---|---|---|---|
-| 1 | POST | `/dossiers` | `ROLE_SAISIE` | FR-DOS-01 / US 1.1 | 📋 | ❌ |
-| 2 | GET | `/dossiers` | `ROLE_CONSULTATION` | FR-DOS-03 / US 1.3 | 📋 | ❌ |
-| 3 | GET | `/dossiers/{id}` | `ROLE_CONSULTATION` | FR-DOS-03 / US 1.3 | 📋 | ❌ |
-| 4 | PUT | `/dossiers/{id}/affectation` | `ROLE_JURISTE`, `ROLE_DJ` | FR-DOS-02 / US 1.2 | 📋 | ❌ |
-| 5 | PATCH | `/dossiers/{id}/etapes/{etapeId}/statut` | `ROLE_JURISTE` | FR-DOS-04 / US 1.4 | 📋 | ❌ |
-| 6 | POST | `/dossiers/{id}/seuil-derogation` | `ROLE_SAISIE` | RG-DOS-09 | 📋 | ❌ |
-| 7 | PUT | `/dossiers/{id}/seuil-derogation/{auditId}` | `ROLE_DJ`, `ROLE_DJA` | RG-DOS-09 | 📋 | ❌ |
-| 8 | POST | `/dossiers/{id}/sensibilite/validation` | `ROLE_DJ`, `ROLE_DJA` | RG-DOS-09 / UC-DOS-01 alt. 6-a | 🆕 | ❌ |
+| 1 | POST | `/dossiers` | `ROLE_SAISIE` | FR-DOS-01 / US 1.1 | 📋 | ✅ M4 |
+| 2 | GET | `/dossiers` | `ROLE_CONSULTATION` | FR-DOS-03 / US 1.3 | 📋 | ✅ M4 |
+| 3 | GET | `/dossiers/{id}` | `ROLE_CONSULTATION` | FR-DOS-03 / US 1.3 | 📋 | ✅ M4 |
+| 4 | PUT | `/dossiers/{id}/affectation` | `ROLE_JURISTE`, `ROLE_DJ` | FR-DOS-02 / US 1.2 | 📋 | ✅ M4 |
+| 5 | PATCH | `/dossiers/{id}/etapes/{etapeId}/statut` | `ROLE_JURISTE` | FR-DOS-04 / US 1.4 | 📋 | ✅ M4 |
+| 6 | POST | `/dossiers/{id}/seuil-derogation` | `ROLE_SAISIE` | RG-DOS-09 | 📋 | ✅ M4 |
+| 7 | PUT | `/dossiers/{id}/seuil-derogation/{auditId}` | `ROLE_DJ`, `ROLE_DJA` | RG-DOS-09 | 📋 | ✅ M4 |
+| 8 | POST | `/dossiers/{id}/sensibilite/validation` | `ROLE_DJ`, `ROLE_DJA` | RG-DOS-09 / UC-DOS-01 alt. 6-a | 🆕 | ✅ M4 |
+| — | POST | `/dossiers/{id}/etapes` | `ROLE_SAISIE` | UC-DOS-04 alt. 3-b | 🆕 | ✅ M4 |
 
 > **#8** : RG-DOS-09 et UC-DOS-01 exigent que la proposition de sensibilité du juriste soit
 > **validée par le DJ ou le DJA** (approuver / rejeter avec motif / ajuster) avant enregistrement
-> définitif. **Aucun endpoint, aucune colonne de statut n'existe pour cela.** Cf. Q-10.
+> définitif. Implémenté via `audit_seuil_dossier` comme file de propositions en attente — cf. Q-10.
+>
+> **Endpoint additionnel non numéroté** : `POST /dossiers/{id}/etapes` (positionnement direct
+> d'une étape sans antécédents, UC-DOS-04 alt. 3-b), absent des 12 endpoints du contrat formel
+> mais nécessaire — cf. Q-34.
+
+Testé manuellement de bout en bout (curl + JWT Keycloak réels, DB Postgres locale) pour les 12
+endpoints du contrat + les 2 🆕, ainsi que via 51 tests automatisés (`DossierServiceTest`,
+`EtapeTransitionValidatorTest`, `TypeEtapeTest`). Voir `DECISIONS_AND_OPEN_QUESTIONS.md` Q-01,
+Q-10, Q-11, Q-12, Q-26, Q-34, Q-35 pour le détail des arbitrages pris pendant l'implémentation.
 
 ## 2. Clients
 
 | # | Méthode | Endpoint | Rôle requis | FR / US | Src | Statut |
 |---|---|---|---|---|---|---|
-| 9 | GET | `/clients` | `ROLE_CONSULTATION` | US 8.6 | 📋 | ❌ |
-| 10 | GET | `/clients/{id}` | `ROLE_CONSULTATION` | US 8.6 | 📋 | ❌ |
-| 11 | GET | `/clients/{clientId}/dossiers` | `ROLE_CONSULTATION` | FR-REP-03 / US 8.6 | 📋 | ❌ |
-| 12 | POST | `/clients` | à définir | INT-05 | 🆕 | ❌ |
+| 9 | GET | `/clients` | `ROLE_CONSULTATION` | US 8.6 | 📋 | ✅ M4 |
+| 10 | GET | `/clients/{id}` | `ROLE_CONSULTATION` | US 8.6 | 📋 | ✅ M4 |
+| 11 | GET | `/clients/{clientId}/dossiers` | `ROLE_CONSULTATION` | FR-REP-03 / US 8.6 | 📋 | ✅ M4 |
+| 12 | POST | `/clients` | `ROLE_SAISIE` | INT-05 | 🆕 | ✅ M4 |
 
 > **#12** : le contrat expose la lecture des clients mais **aucun endpoint de création**, alors que
 > `dossier.client_id` est `NOT NULL` et que « les données clients peuvent être saisies manuellement »
-> (US §11.3, INT-05). Sans création de client, aucun dossier n'est créable. Cf. Q-23.
+> (US §11.3, INT-05). Implémenté sous `ROLE_SAISIE` — cf. Q-23. `PUT /clients/{id}` non retenu,
+> aucun besoin identifié en M4.
 
 ## 3. Audiences
 
@@ -153,52 +166,26 @@ Endpoints **actuellement exposés** par le code : **12**, tous hors périmètre 
 
 ---
 
-## 11. Endpoints actuellement exposés par le code (hors périmètre)
+## 11. Codes d'erreur du contrat (à implémenter dans le `GlobalExceptionHandler`)
 
-| Méthode | Endpoint | Contrôleur | Sécurité effective | Verdict |
+| Code | HTTP | Description | Endpoint | Statut |
 |---|---|---|---|---|
-| GET | `/api/v1/templates` | `TemplateController` | authentifié | 🗑️ squelette — renvoie `"Liste des templates"` |
-| GET | `/api/v1/templates/{id}` | `TemplateController` | authentifié | 🗑️ squelette |
-| POST | `/api/v1/templates` | `TemplateController` | authentifié | 🗑️ squelette |
-| PUT | `/api/v1/templates/{id}` | `TemplateController` | authentifié | 🗑️ squelette |
-| DELETE | `/api/v1/templates/{id}` | `TemplateController` | authentifié | 🗑️ squelette |
-| GET | `/api/v1/admin/users` | `AdminUserController` | **authentifié seulement** | 🔴 `@PreAuthorize` commenté |
-| GET | `/api/v1/admin/users/{id}` | `AdminUserController` | **authentifié seulement** | 🔴 |
-| POST | `/api/v1/admin/users` | `AdminUserController` | **authentifié seulement** | 🔴 création d'utilisateur libre |
-| PUT | `/api/v1/admin/users/{id}` | `AdminUserController` | **authentifié seulement** | 🔴 |
-| DELETE | `/api/v1/admin/users/{id}` | `AdminUserController` | **authentifié seulement** | 🔴 |
-| GET | `/api/v1/staff` | `StaffController` | `hasAnyRole('ADMIN','USER')` | ⚠️ rôles inexistants → 403 systématique |
-| GET | `/api/v1/staff/{role}` | `StaffController` | `hasAnyRole('ADMIN','USER')` | ⚠️ idem |
-
-Contrôleurs déclarés **sans aucun endpoint** : `AdminDashboardController`, `UserDashboardController`.
-Contrôleur désactivé : `AuthController` (`@RestController` commenté).
-Endpoints STOMP hors périmètre : `/app/chat.public`, `/app/chat.private`, `/app/chat.join`, `/app/chat.leave`.
-
-**Recommandation** : supprimer l'intégralité de ce squelette au premier jalon
-(voir `DEVELOPMENT_ROADMAP.md`, jalon M1).
-
----
-
-## 12. Codes d'erreur du contrat (à implémenter dans le `GlobalExceptionHandler`)
-
-| Code | HTTP | Description | Endpoint |
-|---|---|---|---|
-| `ERR-001` | 400 | Métadonnées manquantes | `POST /dossiers` |
-| `ERR-002` | 409 | Référence de dossier déjà utilisée | `POST /dossiers` |
-| `ERR-003` | 409 | Doublon d'affectation | `PUT /dossiers/{id}/affectation` |
-| `ERR-004` | 400 | Transition non autorisée | `PATCH …/statut` |
-| `ERR-005` | 409 | Doublon d'audience | `POST /dossiers/{id}/audiences` |
-| `ERR-006` | 409 | Facture en double | `POST /frais/demandes` |
-| `ERR-007` | 409 / 422 / 201 ? | Plus de 10 prorogations | `POST /deliberes/{id}/prorogations` — **Q-17** |
-| `ERR-008` | 400 | Format ou poids du document non conforme | `POST /ged/documents` |
-| `ERR-009` | 403 | Accès restreint à la publication | `GET /publications/{id}` |
+| `ERR-001` | 400 | Métadonnées manquantes | `POST /dossiers` | ✅ M4 |
+| `ERR-002` | 409 | Référence de dossier déjà utilisée | `POST /dossiers` | ✅ M4 |
+| `ERR-003` | 409 | Doublon d'affectation | `PUT /dossiers/{id}/affectation` | ✅ M4 (`forcer` — Q-12) |
+| `ERR-004` | 400 | Transition non autorisée | `PATCH …/statut` | ✅ M4 |
+| `ERR-005` | 409 | Doublon d'audience | `POST /dossiers/{id}/audiences` | ❌ M6 |
+| `ERR-006` | 409 | Facture en double | `POST /frais/demandes` | ❌ M8 |
+| `ERR-007` | 409 / 422 / 201 ? | Plus de 10 prorogations | `POST /deliberes/{id}/prorogations` — **Q-17** | ❌ M7 |
+| `ERR-008` | 400 | Format ou poids du document non conforme | `POST /ged/documents` | ❌ M9 |
+| `ERR-009` | 403 | Accès restreint à la publication | `GET /publications/{id}` | ❌ M9 |
 
 Codes génériques : 400 requête invalide · 401 non authentifié · 403 droits insuffisants ·
 404 non trouvé · 409 conflit d'unicité · 422 règle métier violée.
 
 ---
 
-## 13. Hors périmètre V1 (REF-07 §6.2)
+## 12. Hors périmètre V1 (REF-07 §6.2)
 
 | Endpoint | Statut |
 |---|---|

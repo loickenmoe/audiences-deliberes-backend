@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface NatureDossierRepository extends JpaRepository<NatureDossier, Long> {
@@ -13,4 +14,6 @@ public interface NatureDossierRepository extends JpaRepository<NatureDossier, Lo
     List<NatureDossier> findByActifTrue();
 
     List<NatureDossier> findByCategorieAndActifTrue(CategorieDossier categorie);
+
+    Optional<NatureDossier> findByLibelleIgnoreCase(String libelle);
 }
