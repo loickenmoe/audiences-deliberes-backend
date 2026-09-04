@@ -2,7 +2,7 @@
 
 > Feuille de route séquentielle du backend. Un jalon = un objectif, un périmètre fermé,
 > une validation manuelle par le porteur du projet avant passage au suivant.
-> Dernière mise à jour : 2026-09-04 (M1, M2, M3 terminés et validés — M4 en attente d'autorisation).
+> Dernière mise à jour : 2026-09-04 (M1 à M4 terminés et validés — M5 en attente d'autorisation).
 
 ---
 
@@ -27,8 +27,8 @@
 | **M1** | Assainissement du socle et sécurisation | R-01→R-05, Q-08, Q-16 | ✅ **Terminé et validé manuellement** (2026-09-04, commits `3025c46`, `e33f668`) |
 | **M2** | Schéma de base et référentiels | Q-00 ✅, Q-01 ✅, Q-02 ✅, Q-03 ✅, Q-04 ✅, Q-05 ✅, Q-06 ✅, Q-07 ✅, Q-22 ✅, Q-26 ✅, Q-27 ✅, Q-29 ✅ | ✅ **Terminé et validé** (2026-09-04, commit `ceb0e77`) |
 | **M3** | Socle transversal (erreurs, historique, utilisateur, pagination) | Q-08 ✅ | ✅ **Terminé et validé** (2026-09-04, commit `57e75c3`) |
-| **M4** | Module Dossiers | Q-10, Q-11, Q-12, Q-23, Q-26, Q-28 | ⏸️ **prêt à démarrer, en attente d'autorisation explicite** |
-| **M5** | Module Alertes (moteur + notifications) | Q-22, Q-32 | ⏸️ |
+| **M4** | Module Dossiers | Q-10, Q-11, Q-12, Q-23, Q-26, Q-28 | ✅ **Terminé et validé manuellement** (2026-09-04, commit `955aa4c`, PR #2 mergée dans `dev`) |
+| **M5** | Module Alertes (moteur + notifications) | Q-22, Q-32 | ⏸️ **prêt à démarrer, en attente d'autorisation explicite** |
 | **M6** | Module Audiences + Alarmes | Q-04, Q-13 | ⏸️ |
 | **M7** | Module Délibérés | Q-17, Q-18, Q-19, Q-13 | ⏸️ |
 | **M8** | Module GED | Q-02, Q-07, Q-24, R-02 | ⏸️ |
@@ -194,15 +194,47 @@ Rien côté socle transversal. Chaque module métier (M4+) consommera `ApiExcept
 
 ---
 
-## M4 — Module Dossiers
+## M4 — Module Dossiers ✅ **Terminé**
 
 **Objectif.** Épic 1 complet (7 user stories) + clients.
 Endpoints #1 à #12 de `API_IMPLEMENTATION_STATUS.md`.
-Inclut : machine à états des étapes de procédure (transitions autorisées, création automatique des
-étapes intermédiaires, ouverture automatique d'un recours), affectations N:N avec détection de
-doublon et confirmation, circuit de sensibilité (Q-10), dérogation de seuil, historisation.
 
-**Validation manuelle** : les 6 critères Gherkin de US 1.1, plus US 1.2 à 1.7.
+### Réalisé
+- Domaine complet : `Dossier`, `EtapeProcedure`, `DossierJuriste`/`DossierAvocat` (clés
+  composites `@EmbeddedId`/`@MapsId`), `AuditSeuilDossier`, enums `TypeEtape`, `StatutCycleVie`,
+  `SeuilOrigine`, `StatutValidation`.
+- `EtapeTransitionValidator` : machine à états des transitions de cycle de vie d'une étape,
+  excluant explicitement `EN_DELIBERE→DELIBERE_VIDE`/`EN_COURS` (réservées au futur module
+  Délibérés — Q-35).
+- `DossierService` (orchestration) : création avec catégorie déduite de la nature et validation
+  `ET` des champs conditionnels (Q-11), affectations N:N avec détection de doublon et
+  confirmation via `forcer=true` (Q-12), positionnement direct d'une étape avec création
+  automatique des étapes intermédiaires manquantes et ouverture automatique idempotente de
+  l'étape suivante sur exercice d'un recours (Q-34), circuit de sensibilité et de dérogation de
+  seuil unifiés sur la table `audit_seuil_dossier` comme file de propositions en attente
+  (Q-10, Q-26).
+- 13 endpoints exposés : les 12 du contrat (`POST/GET /dossiers`, affectation, statut d'étape,
+  seuil-dérogation ×2, sensibilité/validation, `GET/POST /clients`, `GET /clients/{id}`,
+  `GET /clients/{clientId}/dossiers`) + `POST /dossiers/{id}/etapes` (🆕, Q-34).
+
+### Décisions prises en implémentation (documentées dans `DECISIONS_AND_OPEN_QUESTIONS.md`)
+Q-01 (affectations), Q-10 (circuit de sensibilité), Q-11 (validation `ET` en couche service),
+Q-12 (`forcer` sur doublon), Q-23 (`POST /clients`), Q-26 (dérogation de seuil, même mécanisme
+que Q-10), Q-34 (nouvel endpoint 🆕), Q-35 (frontière avec les endpoints dédiés M7).
+
+### Validation manuelle — réalisée et confirmée par le porteur du projet (2026-09-04)
+51/51 tests automatisés verts (`mvn test`, dont 31 nouveaux pour M4, aucune régression M1-M3) ;
+validation manuelle de bout en bout (curl + JWT Keycloak réels, DB Postgres locale) des 13
+endpoints, y compris les cas limites (doublon d'affectation, transitions bloquées, rollback
+transactionnel, ouverture automatique d'étape dans les deux cas — création et idempotence).
+
+### Commit
+`955aa4c` `feat(dossier): implement Dossiers and Clients module (M4)` — PR #2 mergée dans `dev`.
+
+### Restant
+`PUT /clients/{id}` non implémenté (aucun besoin identifié) ; génération effective d'alertes
+`DOUBLON_AFFECTATION` différée au module M5 (le mécanisme de confirmation est complet) ; volet
+audience du doublon (Q-12) différé au module M6.
 
 ---
 

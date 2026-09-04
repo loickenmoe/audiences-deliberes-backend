@@ -155,13 +155,20 @@ sauf besoin de vérification ponctuelle.**
 - **Ne pas ajouter de ligne `Co-Authored-By: Claude ...` aux messages de commit** (préférence
   utilisateur explicite, 2026-09-04) — déroge à la convention par défaut de l'outil.
 
-## 9. État actuel (2026-09-04, après le jalon M3)
+## 9. État actuel (2026-09-04, après le jalon M4)
 
 - **Documentation** : complète et validée en amont (8 documents).
-- **Code métier** : **0 %** — aucun endpoint, aucun contrôleur. Le schéma de données, les
-  référentiels et le socle transversal sont posés (M2, M3) ; les modules fonctionnels (dossiers,
-  audiences, délibérés, frais, GED, alertes, décisions définitives, reporting) restent
-  entièrement à construire à partir de M4.
+- **Code métier** : module **Dossiers + Clients** livré (M4, 13 endpoints — Épic 1 complet).
+  Les autres modules fonctionnels (audiences, délibérés, frais, GED, alertes, décisions
+  définitives, reporting) restent entièrement à construire à partir de M5.
+- **Module `dossier`** : ✅ posé au jalon **M4** (commit `955aa4c`, PR #2 mergée dans `dev`) :
+  entités (`Dossier`, `EtapeProcedure`, affectations juriste/avocat, `AuditSeuilDossier`),
+  machine à états des étapes (`EtapeTransitionValidator`), `DossierService`
+  (création/consultation/affectation/transitions/circuit de sensibilité et de dérogation de
+  seuil), `DossierController` (9 endpoints) + `ClientController` (4 endpoints, dont `POST
+  /clients` 🆕). Validé de bout en bout (curl + JWT Keycloak réels) et par 31 tests automatisés
+  dédiés. Voir `DEVELOPMENT_ROADMAP.md` §M4 et `DECISIONS_AND_OPEN_QUESTIONS.md`
+  (Q-01, Q-10, Q-11, Q-12, Q-23, Q-26, Q-34, Q-35) pour le détail des arbitrages.
 - **Socle technique** : ✅ assaini au jalon **M1** (commits `3025c46` / `e33f668`) :
   - squelette générique hors domaine et authentification héritée (HS256 maison) supprimés ;
   - authentification exclusivement via Keycloak (OAuth2 Resource Server), y compris WebSocket ;
@@ -180,11 +187,11 @@ sauf besoin de vérification ponctuelle.**
   (`ApiException`, `GlobalExceptionHandler`, format `{code, message, details}` uniforme y
   compris au niveau du filtre de sécurité), `common/security/CurrentUserService` (provisioning
   utilisateur depuis Keycloak), `common/audit/HistoriqueActionService`,
-  `common/web/PageResponse<T>`, `common/config/SchedulingConfig`. Prêt à être consommé par les
-  modules métier à partir de M4.
-- **Tests** : `contextLoads()` toujours vert. 20 tests au total après M3 (16 unitaires Mockito +
-  1 test d'intégration Testcontainers vérifiant le provisioning contre un vrai PostgreSQL migré).
-  Aucun test métier (normal, aucune fonctionnalité métier n'existe encore).
+  `common/web/PageResponse<T>`, `common/config/SchedulingConfig`. Consommé par le module
+  `dossier` depuis M4 ; prêt pour les modules métier suivants.
+- **Tests** : `contextLoads()` toujours vert. **51 tests au total après M4** (20 socle M1-M3 +
+  31 nouveaux M4 : `TypeEtapeTest`, `EtapeTransitionValidatorTest`, `DossierServiceTest`),
+  aucune régression.
 - **Risques** : voir `DECISIONS_AND_OPEN_QUESTIONS.md` §Risques — R-01 (secrets exposés)
   résolu dans les fichiers versionnés, mais la rotation des secrets déjà exposés côté
   Neon/iDrive e2 reste une action utilisateur en attente ; R-02, R-03, R-04 résolus par M1 ;

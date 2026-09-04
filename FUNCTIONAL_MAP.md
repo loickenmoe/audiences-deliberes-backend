@@ -2,10 +2,10 @@
 
 > Carte fonctionnelle complète : Exigence → User Story → Cas d'utilisation → Règles de gestion →
 > Domaine/Données → Module backend → Endpoint(s) → Comportement attendu → Tests.
-> Dernière mise à jour : 2026-09-04 (audit initial — **0 % implémenté**).
+> Dernière mise à jour : 2026-09-04 (après le jalon M4 — Épic 1 implémenté).
 
 **Légende statut** : ❌ non implémenté · 🟡 partiel · ✅ implémenté et testé
-**À ce jour, toutes les lignes sont ❌.**
+**Épic 1 (Gestion des dossiers) : ✅ toutes les lignes, jalon M4. Épics 2 à 8 : ❌, non démarrés.**
 
 ⚠️ Deux systèmes de numérotation des UC coexistent dans la documentation :
 REF-03 §8 (`UC-01`…`UC-17`) et REF-04 §3 (`UC-DOS-01`…`UC-REP-03`).
@@ -57,15 +57,15 @@ FR-AUD-01, FR-AUD-03, FR-DEL-02, FR-DEL-04, FR-INT-01, FR-INT-05, FR-GED-01, FR-
 
 | FR | US | UC | RG | Entités | Endpoint | Comportement attendu | Statut |
 |---|---|---|---|---|---|---|---|
-| FR-DOS-01 | 1.1, 1.5, 1.7 | UC-DOS-01 | RG-DOS-01,02,03,07,08,09 | `dossier`, `client`, `etape_procedure`, `historique_action`, **`dossier_juriste`/`dossier_avocat` (Q-01)** | `POST /dossiers` | Valide les champs obligatoires ; référence unique (409/ERR-002) ; `clientId` existant (404) ; champs conditionnels selon `categorie` (Q-11) ; crée l'étape `INSTANCE` au statut `OUVERTURE` ; historise ; **201**. Si `estSensible=true` → circuit de validation DJ/DJA (Q-10) | ❌ |
-| FR-DOS-01 | 1.3 | UC-DOS-03 | RG-DOS-06 | idem | `GET /dossiers` (filtres nature/catégorie/juridiction + pagination) | Liste paginée `{content,totalPages,totalElements}` | ❌ |
-| FR-DOS-03 | 1.3 | UC-DOS-03 | RG-DOS-06 | + `document`, `historique_action` | `GET /dossiers/{id}` | Métadonnées + étapes avec statuts + historique chronologique + documents, < 2 s ; 404 si absent | ❌ |
-| FR-DOS-02 | 1.2, 1.7 | UC-DOS-02 | RG-DOS-03, RG-DOS-07 | `dossier_juriste`, `dossier_avocat`, `historique_action` | `PUT /dossiers/{id}/affectation` | Détecte les doublons → **409/ERR-003 avec possibilité de confirmer** (Q-12) ; historise ancienne + nouvelle affectation | ❌ |
-| FR-DOS-04 | 1.4 | UC-DOS-04 | RG-DOS-04, RG-DOS-06 | `etape_procedure`, `historique_action` | `PATCH /dossiers/{id}/etapes/{etapeId}/statut` | Vérifie que la transition est autorisée (400/ERR-004 sinon) ; création directe d'une étape ultérieure → crée les étapes intermédiaires en `OUVERTURE` ; `DELIBERE_VIDE` + recours → ouvre automatiquement `RECOURS_1`/`RECOURS_2` | ❌ |
-| — | — | — | RG-DOS-09 | `dossier`, `audit_seuil_dossier` | `POST /dossiers/{id}/seuil-derogation` | Juriste propose un nouveau seuil + motif obligatoire → `EN_ATTENTE` ; 400 si dossier non sensible ; **201** | ❌ |
-| — | — | — | RG-DOS-09 | `audit_seuil_dossier` | `PUT /dossiers/{id}/seuil-derogation/{auditId}` | DJ/DJA valide ou rejette (motif obligatoire si rejet) ; si validée → `dossier.seuil_montant` + `seuil_origine='DEROGATION'` | ❌ |
-| FR-DOS-01 | 1.6 | toutes | RG-DOS-06 | `historique_action` | *(transversal)* | Chaque opération de modification insère une ligne `{dossier_id, utilisateur_id, action, details JSONB, date_action}` | ❌ |
-| FR-REP-03 | 8.6 | UC-REP-03 | RG-REP-04 | `client`, `dossier` | `GET /clients`, `GET /clients/{id}` | Recherche par nom (partielle) / référence, paginée | ❌ |
+| FR-DOS-01 | 1.1, 1.5, 1.7 | UC-DOS-01 | RG-DOS-01,02,03,07,08,09 | `dossier`, `client`, `etape_procedure`, `historique_action`, **`dossier_juriste`/`dossier_avocat` (Q-01)** | `POST /dossiers` | Valide les champs obligatoires ; référence unique (409/ERR-002) ; `clientId` existant (404) ; champs conditionnels selon `categorie` (Q-11) ; crée l'étape `INSTANCE` au statut `OUVERTURE` ; historise ; **201**. Si `estSensible=true` → circuit de validation DJ/DJA (Q-10) | ✅ |
+| FR-DOS-01 | 1.3 | UC-DOS-03 | RG-DOS-06 | idem | `GET /dossiers` (filtres nature/catégorie/juridiction + pagination) | Liste paginée `{content,totalPages,totalElements}` | ✅ |
+| FR-DOS-03 | 1.3 | UC-DOS-03 | RG-DOS-06 | + `document`, `historique_action` | `GET /dossiers/{id}` | Métadonnées + étapes avec statuts + historique chronologique + documents, < 2 s ; 404 si absent | ✅ |
+| FR-DOS-02 | 1.2, 1.7 | UC-DOS-02 | RG-DOS-03, RG-DOS-07 | `dossier_juriste`, `dossier_avocat`, `historique_action` | `PUT /dossiers/{id}/affectation` | Détecte les doublons → **409/ERR-003 avec possibilité de confirmer** (Q-12) ; historise ancienne + nouvelle affectation | ✅ |
+| FR-DOS-04 | 1.4 | UC-DOS-04 | RG-DOS-04, RG-DOS-06 | `etape_procedure`, `historique_action` | `PATCH /dossiers/{id}/etapes/{etapeId}/statut` | Vérifie que la transition est autorisée (400/ERR-004 sinon) ; création directe d'une étape ultérieure → crée les étapes intermédiaires en `OUVERTURE` ; `DELIBERE_VIDE` + recours → ouvre automatiquement `RECOURS_1`/`RECOURS_2` | ✅ |
+| — | — | — | RG-DOS-09 | `dossier`, `audit_seuil_dossier` | `POST /dossiers/{id}/seuil-derogation` | Juriste propose un nouveau seuil + motif obligatoire → `EN_ATTENTE` ; 400 si dossier non sensible ; **201** | ✅ |
+| — | — | — | RG-DOS-09 | `audit_seuil_dossier` | `PUT /dossiers/{id}/seuil-derogation/{auditId}` | DJ/DJA valide ou rejette (motif obligatoire si rejet) ; si validée → `dossier.seuil_montant` + `seuil_origine='DEROGATION'` | ✅ |
+| FR-DOS-01 | 1.6 | toutes | RG-DOS-06 | `historique_action` | *(transversal)* | Chaque opération de modification insère une ligne `{dossier_id, utilisateur_id, action, details JSONB, date_action}` | ✅ |
+| FR-REP-03 | 8.6 | UC-REP-03 | RG-REP-04 | `client`, `dossier` | `GET /clients`, `GET /clients/{id}` | Recherche par nom (partielle) / référence, paginée | ✅ |
 
 **Tests attendus** : création nominale, référence en doublon, client inexistant, champs
 conditionnels manquants par catégorie, dossier sensible, doublon d'affectation, transition de
@@ -278,7 +278,7 @@ vue client sans dossier, client inexistant.
 
 | Épic | Stories | Must | Should | Endpoints | Implémenté |
 |---|---|---|---|---|---|
-| 1 — Dossiers | 7 | 7 | 0 | 9 | 0 |
+| 1 — Dossiers | 7 | 7 | 0 | 9 (+ 4 clients, + 1 🆕) | **✅ 14** (M4) |
 | 2 — Audiences | 6 | 5 | 1 | 5 | 0 |
 | 3 — Délibérés | 6 | 5 | 1 | 5 | 0 |
 | 4 — Frais | 6 | 5 | 1 | 5 | 0 |
@@ -286,4 +286,4 @@ vue client sans dossier, client inexistant.
 | 6 — GED | 6 | 5 | 1 | 5 | 0 |
 | 7 — Alertes | 4 | 2 | 2 | 5 | 0 |
 | 8 — Décisions & reporting | 6 | 4 | 2 | 8 | 0 |
-| **Total** | **49** | **39** | **10** | **~50** | **0** |
+| **Total** | **49** | **39** | **10** | **~54** | **14** |

@@ -103,16 +103,17 @@ src/main/resources/db/migration/
 └── V2__donnees_reference.sql        ✅ profils, configuration_systeme, taxonomie
 ```
 
-Aucun package `controller`/`dto` n'existe encore : le socle générique hors domaine et le chemin
-d'authentification hérité (HS256 maison) ont été intégralement supprimés en M1 ; M2 a posé le
-schéma et les entités des référentiels ; M3 a posé les briques transversales (erreurs,
-utilisateur courant, historisation, pagination) — sans qu'aucune n'ait encore de consommateur,
-faute de contrôleur.
+Le socle générique hors domaine et le chemin d'authentification hérité (HS256 maison) ont été
+intégralement supprimés en M1 ; M2 a posé le schéma et les entités des référentiels ; M3 a posé
+les briques transversales (erreurs, utilisateur courant, historisation, pagination) ; M4 a livré
+le premier module fonctionnel — `dossier/{domain,repository,service,web,mapper}` et
+`referentiel/{service,web,mapper}` (contrôleur `ClientController`) — consommant l'ensemble des
+briques M3.
 
-**Verdict : le schéma de données et le socle transversal sont complets et validés
-(Hibernate `ddl-auto=validate` + 20 tests automatisés dont un test d'intégration Testcontainers),
-mais aucun endpoint du domaine métier n'est implémenté (0 des ~52 endpoints du contrat d'API).**
-Le développement des modules fonctionnels (M4+) n'a pas commencé.
+**Verdict : le schéma de données et le socle transversal sont complets et validés, et le module
+Dossiers/Clients (M4) est livré et testé — 13 des ~53 endpoints du contrat d'API sont
+implémentés** (51 tests automatisés, dont un test d'intégration Testcontainers). Les autres
+modules fonctionnels (M5+) n'ont pas commencé.
 
 ### 2.2 Infrastructure réellement configurée
 
