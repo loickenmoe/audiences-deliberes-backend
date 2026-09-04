@@ -333,37 +333,46 @@ L'alerte est déclenchée **une seule fois** (US 3.3 critère 2).
 
 ## QUESTIONS IMPORTANTES (P1)
 
-### Q-02 — Table `demande_suppression` absente — `P1` (module GED)
+### Q-02 ✅ Table `demande_suppression` absente — créée (M2)
 FR-GED-03 critère 1 cite explicitement « la table `demande_suppression` », qui **n'existe ni au
 dictionnaire ni au script SQL**. UC-GED-03 alt. 6-a ajoute une **relance automatique à 72 h**.
 **C** : créer `demande_suppression (id, document_id, demandeur_id, motif, statut
 [EN_ATTENTE|APPROUVEE|REJETEE], valide_par, motif_rejet, date_demande, date_decision,
-date_derniere_relance)`. **Décision attendue :** …
+date_derniere_relance)`.
+**Statut (2026-09-04, M2)** : appliqué tel quel — `V1__schema_initial.sql`. La relance à 72 h
+(planificateur) reste à implémenter en M8 (module GED).
 
-### Q-03 — Table `demande_constitution` absente — `P1` (module intervenant)
+### Q-03 ✅ Table `demande_constitution` absente — créée (M2)
 FR-INT-06/07, UC-INT-05/06, US 5.6/5.7 (« Tables `constitution` (à créer) »).
 **C** : `demande_constitution (id, dossier_id, prestataire_id, demandeur_id, motif, statut
 [EN_ATTENTE|VALIDEE|REJETEE], valide_par, motif_rejet, lettre_document_id, date_demande,
-date_decision)`. **Décision attendue :** …
+date_decision)`.
+**Statut (2026-09-04, M2)** : appliqué tel quel — `V1__schema_initial.sql`.
 
-### Q-05 — Traçabilité des validations de frais insuffisante — `P1` (module frais)
+### Q-05 ✅ Traçabilité des validations de frais insuffisante — corrigée (M2)
 `demande_frais` ne porte qu'un `statut_circuit` et un `motif_rejet` unique. Or il faut tracer :
 qui a contrôlé la conformité, qui a contrôlé l'opportunité, **les deux accords distincts** de la
 validation conjointe (US 4.5 critère 2 : « le système enregistre **mon** accord ; si les **deux**
 accords sont obtenus… »), avec dates et motifs. Impossible en l'état.
 **C** : `validation_frais (id, demande_frais_id, etape [CONFORMITE|OPPORTUNITE|CONJOINTE_DJ|
 CONJOINTE_DJA], utilisateur_id, decision [ACCORD|REJET], motif, date_validation)`.
-**Décision attendue :** …
+**Statut (2026-09-04, M2)** : appliqué tel quel — `V1__schema_initial.sql`.
 
-### Q-06 — Référentiel `type_client_sensible` — `P1`
+### Q-06 ✅ Référentiel `type_client_sensible` — tranché et créé (M2)
 RG-DOS-09 (REF-04) : « liste **prédéfinie**, gérée par le DJ ». Le dictionnaire n'a qu'un
 `VARCHAR(50)` libre. **C** : table de référentiel + endpoints d'administration DJ, ou clé
-`configuration_systeme` contenant une liste. **Décision attendue :** …
+`configuration_systeme` contenant une liste.
+**Statut (2026-09-04, M2)** : première option retenue — table `type_client_sensible (id, code,
+libelle, actif)`, non FK-contrainte depuis `dossier.type_client_sensible` (même traitement que
+`dossier.nature` vis-à-vis de sa taxonomie). Entité JPA + repository créés. Valeurs initiales
+indicatives (VIP, ENTREPRISE, PARTICULIER) — aucune liste n'étant fournie par la documentation,
+à ajuster par le DJ via une future interface d'administration.
 
-### Q-07 — `document.chemin_stockage` absent du script SQL — `P1`
+### Q-07 ✅ `document.chemin_stockage` absent du script SQL — corrigé (M2)
 Colonne `VARCHAR(255) NOT NULL` (« chemin ou référence MinIO ») présente au dictionnaire REF-06
 §2.3.1, **omise** du `CREATE TABLE document` de REF-05 §12.1. Sans elle, aucun fichier n'est
-récupérable. **C** : l'ajouter (le dictionnaire fait foi sur les données). **Décision attendue :** …
+récupérable. **C** : l'ajouter (le dictionnaire fait foi sur les données).
+**Statut (2026-09-04, M2)** : appliqué — colonne ajoutée à `V1__schema_initial.sql`.
 
 ### Q-13 — Trois endpoints listés au §2 mais absents de la spécification OpenAPI — `P1`
 `POST /dossiers/{id}/alarmes`, `PUT /alarmes/{id}/reprogrammer`, `PUT /deliberes/{id}/expedition`
@@ -418,15 +427,17 @@ demandes de frais, les publications, les demandes de suppression, les constituti
 mais **jamais définis** dans `components/schemas`. Contrat incomplet.
 **C** : les définir d'après le dictionnaire de données. **Décision attendue :** …
 
-### Q-29 — `audit_seuil_dossier.statut` : présent à l'API, absent de la base — `P1`
+### Q-29 ✅ `audit_seuil_dossier.statut` : présent à l'API, absent de la base — corrigé (M2)
 Le schéma `AuditSeuil` (REF-07) expose `statut ∈ {EN_ATTENTE, VALIDEE, REJETEE}` ; la table
-(REF-06 et REF-05 §12.1) **n'a pas cette colonne**. **C** : l'ajouter. **Décision attendue :** …
+(REF-06 et REF-05 §12.1) **n'a pas cette colonne**. **C** : l'ajouter.
+**Statut (2026-09-04, M2)** : appliqué — colonne ajoutée à `V1__schema_initial.sql`.
 
-### Q-27 — `dossier.parties` défini deux fois — `P1`
+### Q-27 ✅ `dossier.parties` défini deux fois — tranché (M2)
 Le dictionnaire REF-06 §2.1.2 déclare `parties JSONB` **deux fois**, avec deux structures
 différentes : `{demandeur, defendeur}` et `{demandeur, defendeur, client}`. Le contrat d'API et
 le script SQL retiennent `{demandeur, defendeur}`, le client étant porté par `client_id`.
-**C** : retenir `{demandeur, defendeur}`. **Décision attendue :** …
+**C** : retenir `{demandeur, defendeur}`.
+**Statut (2026-09-04, M2)** : appliqué — `V1__schema_initial.sql` ne retient qu'une définition.
 
 ---
 
