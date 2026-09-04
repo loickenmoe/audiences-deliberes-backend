@@ -1,37 +1,46 @@
 package com.afriland.audiences.config;
 
+import com.afriland.audiences.common.error.ErrorCodes;
+import com.afriland.audiences.common.error.ErrorResponse;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.io.IOException;
 import java.util.Arrays;
-import java.util.List;
 
 import static org.springframework.security.config.http.SessionCreationPolicy.STATELESS;
 
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
+@RequiredArgsConstructor
 public class SecurityConfig {
 
     private static final String[] PUBLIC_PATHS = {
             "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html",
             "/ws/**", "/actuator/health"
     };
+
+    private final ObjectMapper objectMapper;
 
     @Value("${cors.allowed-origins:http://localhost:3000,http://localhost:4200}")
     private String allowedOrigins;
@@ -47,11 +56,41 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(STATELESS))
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint(authenticationEntryPoint())
+                        .accessDeniedHandler(accessDeniedHandler())
+                )
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
                 );
 
         return http.build();
+    }
+
+    /**
+     * 401 — jeton absent/invalide, avant même d'atteindre un contrôleur. Format aligné sur
+     * {@link com.afriland.audiences.common.error.GlobalExceptionHandler} (REF-07 §1.3).
+     */
+    private AuthenticationEntryPoint authenticationEntryPoint() {
+        return (request, response, authException) -> writeError(
+                response, HttpStatus.UNAUTHORIZED, ErrorCodes.NON_AUTHENTIFIE, "Authentification requise");
+    }
+
+    /**
+     * 403 — droits insuffisants au niveau du filtre (règles URL de authorizeHttpRequests). Les
+     * 403 issus d'un {@code @PreAuthorize} au niveau contrôleur sont interceptés séparément par
+     * {@link com.afriland.audiences.common.error.GlobalExceptionHandler}.
+     */
+    private AccessDeniedHandler accessDeniedHandler() {
+        return (request, response, accessDeniedException) -> writeError(
+                response, HttpStatus.FORBIDDEN, ErrorCodes.DROITS_INSUFFISANTS, "Droits insuffisants");
+    }
+
+    private void writeError(HttpServletResponse response, HttpStatus status,
+                             String code, String message) throws IOException {
+        response.setStatus(status.value());
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        objectMapper.writeValue(response.getOutputStream(), new ErrorResponse(code, message));
     }
 
     /**
@@ -67,11 +106,6 @@ public class SecurityConfig {
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
         converter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
         return converter;
-    }
-
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
     }
 
     @Bean
