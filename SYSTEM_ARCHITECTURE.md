@@ -64,9 +64,10 @@ Internet → HTTPS:443 → nginx (DMZ, terminaison TLS)
 
 ## 2. Architecture réellement implémentée (B)
 
-> Mise à jour après le jalon **M1 — Assainissement du socle et sécurisation** (validé le
-> 2026-09-04, commits `3025c46` et `e33f668`). Voir `DEVELOPMENT_ROADMAP.md` pour le détail du
-> jalon et `DECISIONS_AND_OPEN_QUESTIONS.md` pour le suivi des risques R-01 à R-05.
+> Mise à jour après les jalons **M1 — Assainissement du socle et sécurisation** (validé le
+> 2026-09-04, commits `3025c46` et `e33f668`) et **M2 — Schéma de base et référentiels**
+> (validé le 2026-09-04, commit `ceb0e77`). Voir `DEVELOPMENT_ROADMAP.md` pour le détail des
+> jalons et `DECISIONS_AND_OPEN_QUESTIONS.md` pour le suivi des risques R-01 à R-05.
 
 ### 2.1 Ce qui existe
 
@@ -79,15 +80,26 @@ src/main/java/com/afriland/audiences/
 │   ├── WebSocketConfig.java         ✅ STOMP + SockJS, endpoint /ws
 │   └── WebSocketAuthInterceptor.java ✅ valide les JWT Keycloak (JwtDecoder), rejette les
 │                                        connexions/trames non authentifiées
+└── referentiel/                     ✅ module M2 — schéma + données de référence uniquement
+    ├── domain/                      Profil, Utilisateur, Client, ConfigurationSysteme,
+    │                                TypeClientSensible, NatureDossier, Intervenant (JOINED)
+    │                                → Avocat, AutrePrestataire
+    └── repository/                  un JpaRepository par entité ci-dessus (8 au total)
+
+src/main/resources/db/migration/
+├── V1__schema_initial.sql           ✅ 32 tables, contraintes CHECK, FK, index
+└── V2__donnees_reference.sql        ✅ profils, configuration_systeme, taxonomie
 ```
 
-Aucun autre package (`controller`, `model`, `repository`, `service`, `dto`) n'existe : le socle
+Aucun autre package applicatif (`controller`, `service`, `dto`) n'existe encore : le socle
 générique hors domaine et le chemin d'authentification hérité (HS256 maison) ont été
-intégralement supprimés en M1. Il ne reste que la configuration transversale ci-dessus.
+intégralement supprimés en M1 ; M2 n'a posé que le schéma et les entités des référentiels,
+sans aucune logique métier ni endpoint.
 
-**Verdict : aucune entité, aucun repository, aucun service, aucun endpoint du domaine métier
-n'est implémenté (0 des ~52 endpoints du contrat d'API).** Le socle technique est propre et
-sécurisé ; le développement métier (M2+) n'a pas commencé.
+**Verdict : le schéma de données complet existe et est validé (Hibernate `ddl-auto=validate`
+confirme la correspondance exacte), mais aucun endpoint du domaine métier n'est implémenté
+(0 des ~52 endpoints du contrat d'API).** Le développement des modules fonctionnels (M3+)
+n'a pas commencé.
 
 ### 2.2 Infrastructure réellement configurée
 
@@ -101,7 +113,7 @@ sécurisé ; le développement métier (M2+) n'a pas commencé.
 | PostgreSQL conteneur | base applicative | héberge **`audiences_db`** (Keycloak) et **`audiences_app`** (API) | ✅ aligné (M1) |
 | nginx / TLS | obligatoire (RSK-06) | absent | 🟡 non traité en M1, hors périmètre local de développement |
 | Frontend | service compose | absent (normal — backend seul) | ok |
-| Schéma DB | script SQL versionné | `ddl-auto=update`, **aucune migration** | 🔴 reste à traiter en **M2** |
+| Schéma DB | script SQL versionné | **Flyway, `ddl-auto=validate`, 32 tables** (`V1__schema_initial.sql`) | ✅ aligné (M2) |
 | Realm Keycloak | — | `audiences-realm`, 8 rôles (dont `ROLE_SAISIE` composite, Q-08), 6 users, client `audiences-api` | ✅ |
 | Claim des rôles | — | claim `roles` (mapper realm-roles), préfixe déjà `ROLE_` — vérifié en conditions réelles (jeton `juriste.test` contient `ROLE_JURISTE, ROLE_SAISIE, ROLE_CONSULTATION`) | ✅ |
 
@@ -194,11 +206,14 @@ Chaque module : `web/` (controller + DTO) · `service/` · `domain/` (entités +
 
 ---
 
-## 4. Modèle de données cible
+## 4. Modèle de données — ✅ implémenté (M2)
 
-22 tables issues de REF-06 + REF-05 §12.1, **plus 4 tables manquantes identifiées** (§4.2).
+**32 tables**, créées par `src/main/resources/db/migration/V1__schema_initial.sql` et vérifiées
+par Hibernate `ddl-auto=validate` contre PostgreSQL 17 réel : 24 tables issues de REF-06 +
+REF-05 §12.1, **plus 8 tables/colonnes ajoutées** lors de l'audit (§4.2). Voir
+`DEVELOPMENT_ROADMAP.md` M2 et `DECISIONS_AND_OPEN_QUESTIONS.md` pour le détail des arbitrages.
 
-### 4.1 Tables spécifiées
+### 4.1 Tables spécifiées par la documentation
 
 **Référentiel** — `profil`, `utilisateur`, `client`, `configuration_systeme`, `intervenant`,
 `avocat`, `autre_prestataire`
@@ -210,19 +225,28 @@ Chaque module : `web/` (controller + DTO) · `service/` · `domain/` (entités +
 
 Héritage : `intervenant`→(`avocat`|`autre_prestataire`), `decision_definitive`→
 (`adjudication`|`condamnation_pecuniaire`), `publication`→(`compte_rendu_audience`|`autre_publication`)
-— **table-par-type avec PK partagée** (JPA : `@Inheritance(JOINED)`).
+— **table-par-type avec PK partagée** (JPA : `@Inheritance(JOINED)`). Seule la hiérarchie
+`Intervenant` a ses entités JPA à ce stade (M2) ; les deux autres suivront avec leurs modules
+respectifs (M11 publications, M12 décisions).
 
-### 4.2 Tables manquantes dans la documentation (à créer — cf. Q-01 à Q-05)
+### 4.2 Tables et colonnes ajoutées lors de l'audit — ✅ créées (M2)
 
-| Table | Justification documentaire | Question |
-|---|---|---|
-| `dossier_juriste` / `dossier_avocat` (N:N) | RG-DOS-03 « affecté à un ou plusieurs juristes et avocats » ; POST /dossiers reçoit `juristesAffectes[]`, `avocatsAffectes[]` — **aucune table d'affectation n'existe** | **Q-01** |
-| `demande_suppression` | FR-GED-03 cite explicitement « la table demande_suppression » ; UC-GED-03 (relance 72 h) — **absente du dictionnaire et du SQL** | **Q-02** |
-| `demande_constitution` | FR-INT-06/07, UC-INT-05/06, US 5.6/5.7 « Tables constitution (à créer) » | **Q-03** |
-| `alarme` (ou extension de `alerte`) | FR-AUD-03 : objet + échéance + étape ; `alerte` n'a ni `objet` ni `etape_id` ; `dossier.champ_alarme TEXT` ne permet pas plusieurs alarmes | **Q-04** |
-| `validation_frais` (traces par étape) | FR-INT-02/03/04 : qui a validé quoi, quand, avec quel motif ; `demande_frais` n'a qu'un `statut_circuit` et un `motif_rejet` unique — la validation conjointe DJ **et** DJA est intraçable | **Q-05** |
-| `type_client_sensible` (référentiel) | RG-DOS-09 « liste prédéfinie gérée par le DJ » | **Q-06** |
-| Champ `document.chemin_stockage` | Présent au dictionnaire, **absent du script SQL** REF-05 §12.1 | **Q-07** |
+| Table / colonne | Justification documentaire | Question | Entité JPA |
+|---|---|---|---|
+| `dossier_juriste` / `dossier_avocat` (N:N) | RG-DOS-03 « affecté à un ou plusieurs juristes et avocats » ; POST /dossiers reçoit `juristesAffectes[]`, `avocatsAffectes[]` — aucune table d'affectation n'existait | Q-01 | à créer en M4 |
+| `demande_suppression` | FR-GED-03 cite explicitement « la table demande_suppression » ; UC-GED-03 (relance 72 h) | Q-02 | à créer en M8 |
+| `demande_constitution` | FR-INT-06/07, UC-INT-05/06, US 5.6/5.7 « Tables constitution (à créer) » | Q-03 | à créer en M9 |
+| `alarme` (distincte de `alerte`) | FR-AUD-03 : objet + échéance + étape ; `alerte` n'a ni objet ni etape_id | Q-04 | à créer en M6 |
+| `validation_frais` (traces par étape) | FR-INT-02/03/04 : traçabilité des accords DJ/DJA distincts, impossible avec le seul `statut_circuit` | Q-05 | à créer en M10 |
+| `type_client_sensible` (référentiel) | RG-DOS-09 « liste prédéfinie gérée par le DJ » | Q-06 | ✅ `TypeClientSensible` |
+| `nature_dossier` (référentiel, Annexe A) | RG-DOS-02 ; CONF02 (taxonomie gérée par le DJ) | — | ✅ `NatureDossier` |
+| `document.chemin_stockage` | Présent au dictionnaire, absent du script SQL REF-05 §12.1 | Q-07 | à créer en M8 |
+| `audit_seuil_dossier.statut` | Exposé par le schéma `AuditSeuil` du contrat d'API, absent de la table documentée | Q-29 | à créer en M4 |
+| `dossier.sensibilite_statut/valide_par/motif_rejet` | Circuit de validation DJ/DJA de la sensibilité (RG-DOS-09, UC-DOS-01 alt. 6-a) | Q-10 | à créer en M4 |
+
+**Q-11** (cardinalité ET/OU des champs conditionnels par catégorie de dossier) reste **non
+tranchée** : la contrainte `chk_categorie_coherence` reprend l'énoncé littéral de REF-05
+(sémantique OU) en attendant l'arbitrage, prévu en M4.
 
 ### 4.3 Cycle de vie d'une étape de procédure (RG-DOS-04, REF-04 §7)
 

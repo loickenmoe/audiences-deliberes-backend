@@ -2,7 +2,7 @@
 
 > Feuille de route séquentielle du backend. Un jalon = un objectif, un périmètre fermé,
 > une validation manuelle par le porteur du projet avant passage au suivant.
-> Dernière mise à jour : 2026-09-04 (M1 terminé et validé — M2 en attente d'autorisation).
+> Dernière mise à jour : 2026-09-04 (M1 et M2 terminés et validés — M3 en attente d'autorisation).
 
 ---
 
@@ -25,8 +25,8 @@
 |---|---|---|---|
 | **M0** | Audit et contexte projet | — | ✅ **Terminé** (2026-09-04) |
 | **M1** | Assainissement du socle et sécurisation | R-01→R-05, Q-08, Q-16 | ✅ **Terminé et validé manuellement** (2026-09-04, commits `3025c46`, `e33f668`) |
-| **M2** | Schéma de base et référentiels | Q-00 ✅, Q-01 ✅, Q-02, Q-03, Q-04 ✅, Q-05, Q-06, Q-07, Q-22 ✅, Q-26 ✅, Q-27, Q-29 | ⏸️ **prêt à démarrer, en attente d'autorisation explicite** |
-| **M3** | Socle transversal (erreurs, historique, utilisateur, pagination) | Q-08 | ⏸️ |
+| **M2** | Schéma de base et référentiels | Q-00 ✅, Q-01 ✅, Q-02 ✅, Q-03 ✅, Q-04 ✅, Q-05 ✅, Q-06 ✅, Q-07 ✅, Q-22 ✅, Q-26 ✅, Q-27 ✅, Q-29 ✅ | ✅ **Terminé et validé** (2026-09-04, commit `ceb0e77`) |
+| **M3** | Socle transversal (erreurs, historique, utilisateur, pagination) | Q-08 ✅ | ⏸️ **prêt à démarrer, en attente d'autorisation explicite** |
 | **M4** | Module Dossiers | Q-10, Q-11, Q-12, Q-23, Q-26, Q-28 | ⏸️ |
 | **M5** | Module Alertes (moteur + notifications) | Q-22, Q-32 | ⏸️ |
 | **M6** | Module Audiences + Alarmes | Q-04, Q-13 | ⏸️ |
@@ -113,21 +113,44 @@ Neon/iDrive déjà exposés avant M1, et statuer sur une éventuelle purge de l'
 
 ---
 
-## M2 — Schéma de base et référentiels
+## M2 — Schéma de base et référentiels ✅ **Terminé**
 
 **Objectif.** Traduire REF-05 §12.1 + REF-06 en migrations Flyway versionnées, complétées des
 tables manquantes arbitrées (Q-01 à Q-07, Q-22, Q-26, Q-27, Q-29).
 
-Contenu : `V1__schema_initial.sql` (24 à 28 tables, contraintes `CHECK`, FK avec le comportement
-`ON DELETE` du dictionnaire §3, index §4), `V2__donnees_reference.sql` (6 profils,
-`configuration_systeme` : `SEUIL_MONTANT_DEFAUT`, `SEUIL_PROROGATIONS`, `CANAUX_NOTIFICATION_DEFAUT`,
-`DELAI_VALIDATION_CONJOINTE`, `TAILLE_MAX_GED`, `FORMATS_GED` ; taxonomie des natures, Annexe A),
-entités JPA + repositories pour les référentiels (`profil`, `utilisateur`, `client`,
-`configuration_systeme`, `intervenant`/`avocat`/`autre_prestataire`), `ddl-auto=validate`.
+### Réalisé
+- Flyway ajouté (`flyway-core`, `flyway-database-postgresql`), `ddl-auto` basculé sur `validate`.
+- `V1__schema_initial.sql` : **32 tables** (24 documentées + 8 ajoutées lors de l'audit :
+  `dossier_juriste`, `dossier_avocat`, `alarme`, `type_client_sensible`, `nature_dossier`,
+  `demande_suppression`, `demande_constitution`, `validation_frais`), contraintes `CHECK`, FK
+  avec comportement `ON DELETE` cohérent, index de performance.
+- `V2__donnees_reference.sql` : 7 profils, 7 clés `configuration_systeme`, 3 types de client
+  sensible, 17 natures de dossier (Annexe A).
+- Module `referentiel` : entités JPA + repositories — `Profil`, `Utilisateur`, `Client`,
+  `ConfigurationSysteme`, `TypeClientSensible`, `NatureDossier`, `Intervenant` (héritage
+  `JOINED`) → `Avocat`, `AutrePrestataire`.
+- **7 questions P1 tranchées et appliquées** : Q-02, Q-03, Q-05, Q-06, Q-07, Q-27, Q-29
+  (recommandations déjà documentées à l'audit, appliquées et signalées comme telles).
 
-**Validation manuelle** : `\dt` liste toutes les tables ; les contraintes `CHECK` rejettent les
-valeurs hors énumération ; les données de référence sont présentes ; l'application démarre en
-`validate` sans erreur.
+### Écart au plan initial
+**Q-11** (cardinalité ET/OU des champs conditionnels par catégorie) volontairement **non
+tranchée** — explicitement hors périmètre de M2 (scopée à M4 dans ce tableau). La contrainte
+`chk_categorie_coherence` reprend l'énoncé littéral de REF-05 (sémantique OU), à resserrer si
+besoin par une migration ultérieure une fois Q-11 arbitrée.
+
+### Validation manuelle — réalisée et confirmée par le porteur du projet (2026-09-04)
+Migrations appliquées à froid sur PostgreSQL 17 réel (`Successfully applied 2 migrations`) ;
+**Hibernate `ddl-auto=validate` confirme la correspondance exacte des 8 entités avec le schéma** ;
+idempotence vérifiée sur redémarrage à froid ; données de référence vérifiées en base (7/7/3/17) ;
+`mvn test` vert (`contextLoads`, contexte Spring complet + DB réelle) ; non-régression sécurité
+M1 confirmée (401 sans jeton, 200 sur `/actuator/health`).
+
+### Commit
+`ceb0e77` `feat(db): initial Flyway schema and référentiel module (M2)`
+
+### Restant
+Rien côté schéma des référentiels. Les entités des autres modules (dossier, audience, délibéré,
+frais, GED, alertes, publications, décisions) viendront module par module sur ce même schéma.
 
 ---
 

@@ -155,28 +155,32 @@ sauf besoin de vérification ponctuelle.**
 - **Ne pas ajouter de ligne `Co-Authored-By: Claude ...` aux messages de commit** (préférence
   utilisateur explicite, 2026-09-04) — déroge à la convention par défaut de l'outil.
 
-## 9. État actuel (2026-09-04, après le jalon M1)
+## 9. État actuel (2026-09-04, après le jalon M2)
 
 - **Documentation** : complète et validée en amont (8 documents).
-- **Code métier** : **0 %**. Aucune fonctionnalité du domaine (dossiers, audiences, délibérés,
-  frais, GED, alertes, décisions définitives, reporting) n'est implémentée — reste entièrement
-  à faire à partir de M2.
-- **Socle technique** : ✅ assaini au jalon **M1** (validé manuellement de bout en bout,
-  commits `3025c46` / `e33f668`) :
+- **Code métier** : **0 %** — aucun endpoint, aucun service métier. Le schéma de données et les
+  référentiels sont posés (M2) ; les modules fonctionnels (dossiers, audiences, délibérés, frais,
+  GED, alertes, décisions définitives, reporting) restent entièrement à construire à partir de M3/M4.
+- **Socle technique** : ✅ assaini au jalon **M1** (commits `3025c46` / `e33f668`) :
   - squelette générique hors domaine et authentification héritée (HS256 maison) supprimés ;
   - authentification exclusivement via Keycloak (OAuth2 Resource Server), y compris WebSocket ;
   - infrastructure 100 % locale (PostgreSQL + MinIO conteneurisés, plus aucune dépendance cloud) ;
   - ports alignés sur le contrat d'API (backend 8080, Keycloak 8081) ;
   - `ROLE_SAISIE` ajouté comme rôle composite Keycloak (Q-08) ;
   - `pom.xml` nettoyé (doublons, licence AGPL retirée, MapStruct câblé).
-- **Base de données** : toujours aucune table métier ; `spring.jpa.hibernate.ddl-auto=update`,
-  aucune migration versionnée — prévu au jalon **M2**.
-- **Tests** : 1 test `contextLoads()`, classe renommée en conformité Java. Aucun test métier
-  (normal, aucune fonctionnalité métier n'existe encore).
+- **Base de données** : ✅ posée au jalon **M2** (commit `ceb0e77`) : Flyway,
+  `ddl-auto=validate`, 32 tables (`src/main/resources/db/migration/V1__schema_initial.sql`),
+  données de référence (`V2__donnees_reference.sql`). Validé de bout en bout contre PostgreSQL 17
+  réel — migrations idempotentes, correspondance Hibernate/schéma confirmée.
+- **Module `referentiel`** : entités JPA + repositories pour `Profil`, `Utilisateur`, `Client`,
+  `ConfigurationSysteme`, `TypeClientSensible`, `NatureDossier`, `Intervenant`/`Avocat`/
+  `AutrePrestataire`. Aucun service, aucun contrôleur — prévu module par module à partir de M3/M4.
+- **Tests** : 1 test `contextLoads()`, désormais vert contre le schéma complet et la base réelle.
+  Aucun test métier (normal, aucune fonctionnalité métier n'existe encore).
 - **Risques** : voir `DECISIONS_AND_OPEN_QUESTIONS.md` §Risques — R-01 (secrets exposés)
   résolu dans les fichiers versionnés, mais la rotation des secrets déjà exposés côté
   Neon/iDrive e2 reste une action utilisateur en attente ; R-02, R-03, R-04 résolus par M1 ;
-  R-05 (schéma non versionné) reste ouvert, prévu en M2.
+  R-05 (schéma non versionné) résolu par M2.
 
 ## 10. Où aller ensuite
 
