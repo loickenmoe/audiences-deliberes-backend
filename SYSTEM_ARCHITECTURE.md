@@ -110,12 +110,16 @@ le premier module fonctionnel — `dossier/{domain,repository,service,web,mapper
 `referentiel/{service,web,mapper}` (contrôleur `ClientController`) — consommant l'ensemble des
 briques M3 ; M5 a livré le module `alerte/{domain,repository,service,web,mapper}` (socle
 transversal, dépendance des modules M6+) ainsi que `referentiel/{service,web}/Configuration*`, et
-a introduit le premier traitement planifié effectif (`dossier/service/ChargeMaxAvocatScheduler`).
+a introduit le premier traitement planifié effectif (`dossier/service/ChargeMaxAvocatScheduler`) ;
+M6 a livré `audience/{domain,repository,service,web,mapper}` (premier module métier autorisé à
+dépendre directement de `dossier` par `@ManyToOne`, contrairement à `alerte`), avec deux nouveaux
+traitements planifiés (`RappelAudienceScheduler`, `AlarmeEcheanceScheduler`) et un premier export
+de données (PDF/Excel, `CalendrierExportService`).
 
 **Verdict : le schéma de données et le socle transversal sont complets et validés, et les modules
-Dossiers/Clients (M4) et Alertes/Configurations (M5) sont livrés et testés — 18 des ~53 endpoints
-du contrat d'API sont implémentés** (67 tests automatisés, dont un test d'intégration
-Testcontainers). Les autres modules fonctionnels (M6+) n'ont pas commencé.
+Dossiers/Clients (M4), Alertes/Configurations (M5) et Audiences/Alarmes (M6) sont livrés et
+testés — 23 des ~53 endpoints du contrat d'API sont implémentés** (88 tests automatisés, dont un
+test d'intégration Testcontainers). Les autres modules fonctionnels (M7+) n'ont pas commencé.
 
 ### 2.2 Infrastructure réellement configurée
 

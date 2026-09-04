@@ -1,7 +1,7 @@
 # API_IMPLEMENTATION_STATUS
 
 > Inventaire exhaustif des endpoints et état d'implémentation.
-> Dernière mise à jour : 2026-09-04 (après jalon M5 — module Alertes/Configurations).
+> Dernière mise à jour : 2026-09-04 (après jalon M6 — module Audiences/Alarmes).
 
 **Base URL** : `http://localhost:8080/api/v1` — aligné sur le contrat REF-07 depuis M1 (Q-16 résolue).
 **Authentification** : `Authorization: Bearer <JWT Keycloak>` sur tous les endpoints sauf health checks.
@@ -17,12 +17,12 @@
 
 | Catégorie | Nombre | Implémentés |
 |---|---|---|
-| 📋 Spécifiés dans l'OpenAPI | 37 | **16** (§1-2, §9 #44-48) |
-| 📄 Cités §2 mais absents de l'OpenAPI | 3 | 0 |
+| 📋 Spécifiés dans l'OpenAPI | 37 | **19** (§1-2, §3 #13-15, §9 #44-48) |
+| 📄 Cités §2 mais absents de l'OpenAPI | 3 | 2 (§3 #16-17, alarmes — Q-13) |
 | 💡 « À proposer » (user stories) | 10 | 0 |
 | 🆕 Manquants dans toute la documentation | 2 | 1 (`POST /clients`) |
 | 🆕 Ajoutés en cours d'implémentation (hors inventaire initial) | 1 | 1 (`POST /dossiers/{id}/etapes`, cf. Q-34) |
-| **Surface cible totale** | **~53** | **18 (≈34 %)** |
+| **Surface cible totale** | **~53** | **23 (≈43 %)** |
 
 Le squelette de starter hors périmètre (Template/Admin/Staff/Dashboard/Chat, auth JWT maison) a
 été intégralement supprimé en M1 (cf. `DECISIONS_AND_OPEN_QUESTIONS.md` R-03/R-04) — l'ancienne
@@ -75,11 +75,19 @@ Q-10, Q-11, Q-12, Q-26, Q-34, Q-35 pour le détail des arbitrages pris pendant l
 
 | # | Méthode | Endpoint | Rôle requis | FR / US | Src | Statut |
 |---|---|---|---|---|---|---|
-| 13 | POST | `/dossiers/{id}/audiences` | `ROLE_JURISTE` | FR-AUD-01 / US 2.1, 2.6 | 📋 | ❌ |
-| 14 | PUT | `/audiences/{id}/compte-rendu` | `ROLE_JURISTE` | FR-AUD-02 / US 2.2 | 📋 | ❌ |
-| 15 | GET | `/audiences/calendrier` | `ROLE_JURISTE`, `ROLE_DJ` | FR-AUD-05 / US 2.5 | 📋 | ❌ |
-| 16 | POST | `/dossiers/{id}/alarmes` | `ROLE_JURISTE` | FR-AUD-03 / US 2.3 | **📄** | ❌ |
-| 17 | PUT | `/alarmes/{id}/reprogrammer` | `ROLE_JURISTE` | FR-AUD-04 / US 2.4 | **📄** | ❌ |
+| 13 | POST | `/dossiers/{id}/audiences` | `ROLE_JURISTE` | FR-AUD-01 / US 2.1, 2.6 | 📋 | ✅ M6 |
+| 14 | PUT | `/audiences/{id}/compte-rendu` | `ROLE_JURISTE` | FR-AUD-02 / US 2.2 | 📋 | ✅ M6 |
+| 15 | GET | `/audiences/calendrier` | `ROLE_JURISTE`, `ROLE_DJ` | FR-AUD-05 / US 2.5 | 📋 | ✅ M6 |
+| 16 | POST | `/dossiers/{id}/alarmes` | `ROLE_JURISTE` | FR-AUD-03 / US 2.3 | **📄** | ✅ M6 |
+| 17 | PUT | `/alarmes/{id}/reprogrammer` | `ROLE_JURISTE` | FR-AUD-04 / US 2.4 | **📄** | ✅ M6 |
+
+> Testé manuellement de bout en bout (curl + JWT Keycloak réels) : doublon d'audience confirmé
+> (`?forcer=true`, Q-12), compte rendu refusé sur audience future, rappels J-7/J-3/J-1 déclenchés
+> par `RappelAudienceScheduler` (cron accéléré pour le test) avec anti-doublon, alarme reprogrammée
+> (chaîne `alarme_precedente_id`), échéance d'alarme déclenchant une alerte `ALARME` une seule fois
+> (`AlarmeEcheanceScheduler`), export du calendrier dans les 3 formats (signatures de fichier
+> vérifiées). 24 tests automatisés dédiés. Voir `DECISIONS_AND_OPEN_QUESTIONS.md` Q-04, Q-12, Q-13,
+> Q-39, Q-40, Q-41.
 
 ## 4. Délibérés
 
@@ -183,7 +191,7 @@ Q-10, Q-11, Q-12, Q-26, Q-34, Q-35 pour le détail des arbitrages pris pendant l
 | `ERR-002` | 409 | Référence de dossier déjà utilisée | `POST /dossiers` | ✅ M4 |
 | `ERR-003` | 409 | Doublon d'affectation | `PUT /dossiers/{id}/affectation` | ✅ M4 (`forcer` — Q-12) |
 | `ERR-004` | 400 | Transition non autorisée | `PATCH …/statut` | ✅ M4 |
-| `ERR-005` | 409 | Doublon d'audience | `POST /dossiers/{id}/audiences` | ❌ M6 |
+| `ERR-005` | 409 | Doublon d'audience | `POST /dossiers/{id}/audiences` | ✅ M6 (`forcer` — Q-12) |
 | `ERR-006` | 409 | Facture en double | `POST /frais/demandes` | ❌ M8 |
 | `ERR-007` | 409 / 422 / 201 ? | Plus de 10 prorogations | `POST /deliberes/{id}/prorogations` — **Q-17** | ❌ M7 |
 | `ERR-008` | 400 | Format ou poids du document non conforme | `POST /ged/documents` | ❌ M9 |

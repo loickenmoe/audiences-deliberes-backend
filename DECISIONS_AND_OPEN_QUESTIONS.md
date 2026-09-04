@@ -2,7 +2,7 @@
 
 > Contradictions documentaires, ambiguïtés et lacunes nécessitant un **arbitrage explicite**.
 > Aucune de ces questions n'a été tranchée silencieusement.
-> Dernière mise à jour : 2026-09-04 (après jalon M5 — voir statuts R-01 à R-05, Q-01/10/11/12/22/23/26/32/34/35/36/37/38).
+> Dernière mise à jour : 2026-09-04 (après jalon M6 — voir statuts R-01 à R-05, Q-01/04/10/11/12/13/22/23/26/32/34-41).
 
 **Convention de lecture de chaque fiche :**
 - **A — Ce que la documentation exige** (avec la source exacte)
@@ -222,7 +222,7 @@ Q-12 pour la gestion du doublon). Chaque affectation/désaffectation génère un
 
 ---
 
-### Q-04 — Entité « alarme » : absente du modèle de données — `P0`
+### Q-04 ✅ Entité « alarme » : absente du modèle de données — créée (M2) et implémentée (M6)
 
 **A.** FR-AUD-03 / UC-AUD-03 / US 2.3 : le juriste configure une alarme libre
 (**objet** + **échéance**), rattachée **au dossier et à l'étape**. FR-AUD-04 : l'ancienne alarme
@@ -246,6 +246,12 @@ pour une alarme libre (l'objet est arbitraire).
 **C — Recommandation** : **option A** — l'alarme est une *intention de suivi*, l'alerte est une
 *notification*. Les endpoints `/dossiers/{id}/alarmes` et `/alarmes/{id}/reprogrammer` du
 contrat §2 confirment une ressource distincte.
+
+**Statut (2026-09-04, M2/M6)** : option A appliquée — table `alarme` créée en M2 ; `AlarmeService`
+(`creerAlarme`, `reprogrammerAlarme`) et `AlarmeEcheanceScheduler` (génère une `Alerte` de type
+`ALARME` quand `date_echeance` est atteinte, une seule fois par alarme — cf. Q-39) livrés en M6.
+L'alarme reste `ACTIVE` après le déclenchement de l'alerte ; seule une reprogrammation la marque
+`TRAITEE`, exactement comme FR-AUD-04 le décrit.
 
 **Décision attendue :** …
 
@@ -410,12 +416,15 @@ Colonne `VARCHAR(255) NOT NULL` (« chemin ou référence MinIO ») présente au
 récupérable. **C** : l'ajouter (le dictionnaire fait foi sur les données).
 **Statut (2026-09-04, M2)** : appliqué — colonne ajoutée à `V1__schema_initial.sql`.
 
-### Q-13 — Trois endpoints listés au §2 mais absents de la spécification OpenAPI — `P1`
+### Q-13 🟡 Trois endpoints listés au §2 mais absents de la spécification OpenAPI — 2/3 implémentés (M6)
 `POST /dossiers/{id}/alarmes`, `PUT /alarmes/{id}/reprogrammer`, `PUT /deliberes/{id}/expedition`
 figurent dans le tableau récapitulatif REF-07 §2 et dans les user stories (2.3, 2.4, 3.6) mais
 **pas dans la spécification OpenAPI §3** (pas de schéma de requête ni de réponse).
 **C** : les implémenter selon les critères Gherkin des US et compléter le contrat.
-**Décision attendue :** …
+
+**Statut (2026-09-04, M6)** : `POST /dossiers/{id}/alarmes` et `PUT /alarmes/{id}/reprogrammer`
+implémentés selon les critères Gherkin de US 2.3/2.4 (`AlarmeController`). `PUT
+/deliberes/{id}/expedition` reste ouvert, prévu au module M7 (Délibérés).
 
 ### Q-19 — `GET /deliberes/{id}/recours` utilisé pour *créer* une alerte — `P1`
 US 3.5 critère 1 : « **When** je soumets une `dateEcheance` **via GET** `/deliberes/{id}/recours`
@@ -424,7 +433,7 @@ US 3.5 critère 1 : « **When** je soumets une `dateEcheance` **via GET** `/deli
 `POST /dossiers/{id}/alarmes` (Q-04) avec un type `DELAI_RECOURS`.
 **Décision attendue :** …
 
-### Q-12 ✅ « 409 avec possibilité de confirmer ou annuler » : mécanisme non spécifié — tranché et implémenté (M4, volet dossier)
+### Q-12 ✅ « 409 avec possibilité de confirmer ou annuler » : mécanisme non spécifié — tranché et implémenté (M4 volet dossier, M6 volet audience)
 RG-DOS-07 et RG-AUD-06 : le doublon d'affectation / d'audience **n'est pas bloquant** — le juriste
 peut confirmer (UC-DOS-01 alt. 7-a, UC-DOS-02 alt. 7-a, UC-AUD-01 alt. 7-a). Un `409` seul ne
 permet pas de confirmer. **C** : paramètre `?forcer=true` (ou champ `confirmerDoublon: true`) ;
@@ -434,9 +443,14 @@ la confirmation crée une alerte `DOUBLON_*` et une entrée d'historique (US 2.6
 (booléen, défaut `false`). `DossierService.modifierAffectation` renvoie `409` sur une affectation
 déjà existante sauf si `forcer=true`, auquel cas elle est acceptée et une entrée `historique_action`
 la trace explicitement comme doublon confirmé. La génération d'une alerte `DOUBLON_AFFECTATION`
-(référentiel de types Q-22) reste à câbler en M5 (module Alertes, pas encore implémenté) — le
-mécanisme de confirmation lui-même est complet et testé. Le volet audience (RG-AUD-06) reste
-ouvert, prévu au module M6.
+(référentiel de types Q-22) câblée en M5 (`DossierService.signalerDoublonAffectation`, destinataire
+DJ — Q-36).
+
+**Statut (2026-09-04, M6)** : volet audience appliqué à l'identique — `PlanifierAudienceRequest`
+via `?forcer=true` sur `POST /dossiers/{id}/audiences` ; `AudienceService.planifierAudience`
+renvoie `409/ERR-005` sur un doublon (même `etapeId` + `datePlanifiee`, RG-AUD-06) sauf
+confirmation, auquel cas une alerte `DOUBLON_AUDIENCE` est déclenchée vers les DJ actifs (même
+mécanisme que Q-36). Q-12 est donc intégralement clos sur ses deux volets.
 **Décision attendue :** …
 
 ### Q-28 — `avocatsAffectes` obligatoire à la création vs circuit de constitution — `P1`
@@ -559,6 +573,43 @@ avec anti-doublon tant qu'une alerte du même avocat reste `DECLENCHEE`
 (5 s) : alerte créée une seule fois malgré plusieurs cycles tant qu'elle n'est pas traitée, puis
 une nouvelle alerte générée après traitement de la précédente.
 
+### Q-39 ✅ Destinataires des alertes `RAPPEL_AUDIENCE` et `ALARME` — tranché (M6)
+FR-AUD-01 (RG-AUD-03) et FR-AUD-03/04 (Q-04) prévoient le déclenchement de ces alertes mais ne
+précisent pas leur destinataire — contrairement à `PUT /alertes/seuils` (Q-38), aucun endpoint
+associé n'indique un rôle par élimination.
+**C — Recommandation** : (a) `RAPPEL_AUDIENCE` → chaque juriste affecté au dossier (ce sont eux qui
+suivent l'audience, cf. `dossier_juriste`) ; (b) `ALARME` → le créateur de l'alarme (`created_by`),
+puisque c'est un rappel personnel qu'il s'est lui-même fixé (RG-AUD-02).
+**Statut (2026-09-04, M6)** : appliqué — `RappelAudienceScheduler` déclenche une alerte par juriste
+affecté (via `DossierJuristeRepository`) ; `AlarmeEcheanceScheduler` déclenche vers
+`alarme.created_by`. Vérifié en conditions réelles (cron/intervalle réduits pour le test) : les
+deux mécanismes fonctionnent et l'anti-doublon (`AlerteService.aDejaEteDeclenchee`) empêche toute
+répétition tant que l'audience/l'alarme concernée n'a pas changé d'état.
+
+### Q-40 ✅ Date de tenue d'une audience et « prochaine date » du calendrier — tranché (M6)
+FR-AUD-02 exige une « date passée » pour enregistrer un compte rendu, sans préciser si
+`date_tenue` est fournie par l'utilisateur ou déduite ; FR-AUD-05 mentionne une « prochaine date »
+par ligne de calendrier sans définir sa source (l'audience elle-même n'a qu'une `date_planifiee`).
+**C — Recommandation** : (a) `date_tenue` = date de saisie du compte rendu (le juriste ne peut
+saisir un compte rendu qu'après l'audience, donc « aujourd'hui » satisfait
+`date_tenue >= date_planifiee`, contrainte SQL `chk_audience_dates`) plutôt qu'un champ demandé au
+client, non spécifié par le contrat ; (b) « prochaine date » = `date_planifiee` de l'audience
+elle-même — chaque ligne du calendrier représente déjà l'échéance à venir.
+**Statut (2026-09-04, M6)** : appliqué — `AudienceService.enregistrerCompteRendu` fixe
+`dateTenue = LocalDate.now()` ; `CalendrierEntreeResponse.datePlanifiee` sert de champ unique pour
+la date, sans duplication artificielle en un champ « prochaineDate » distinct.
+
+### Q-41 ✅ Formats d'export du calendrier des audiences — tranché (M6)
+FR-AUD-05 exige un export JSON/PDF/EXCEL sans préciser le mécanisme de sélection du format
+(paramètre de requête, en-tête `Accept`, endpoints distincts ?).
+**C — Recommandation** : paramètre de requête `format` (`JSON` par défaut, `PDF`, `EXCEL`) sur
+`GET /audiences/calendrier` — le plus simple à documenter et à tester, cohérent avec le reste du
+contrat qui n'utilise jamais la négociation de contenu HTTP. PDFBox (déjà au `pom.xml` depuis
+l'audit initial, cf. Q-31) et Apache POI pour la génération.
+**Statut (2026-09-04, M6)** : appliqué — `CalendrierExportService` (PDFBox pour le PDF, POI pour
+le classeur `.xlsx`), export testé en conditions réelles dans les 3 formats (signatures de fichier
+`%PDF-`/`PK..` vérifiées, tailles non nulles).
+
 ### Q-27 ✅ `dossier.parties` défini deux fois — tranché (M2)
 Le dictionnaire REF-06 §2.1.2 déclare `parties JSONB` **deux fois**, avec deux structures
 différentes : `{demandeur, defendeur}` et `{demandeur, defendeur, client}`. Le contrat d'API et
@@ -666,6 +717,12 @@ une formation des utilisateurs clés a été réalisée ; les données historiqu
 | 2026-09-04 | Q-36 | Destinataire de l'alerte `DOUBLON_AFFECTATION` = DJ actifs (supervision) | Implémenté M5 |
 | 2026-09-04 | Q-37 | `alerte.canal` reste `APPLICATIF` uniquement en M5 ; Outlook/Teams différés (aucune infrastructure SMTP/webhook fournie au projet) | Implémenté M5, réévaluer si infra fournie |
 | 2026-09-04 | Q-38 | Alerte `CHARGE_MAX_AVOCAT` : destinataire = DJ actifs ; calcul planifié placé dans le module `dossier` (dépendance vers `alerte`, jamais l'inverse) | Implémenté M5 |
+| 2026-09-04 | Q-04 | Table `alarme` (M2) + `AlarmeService`/`AlarmeEcheanceScheduler` (M6) ; l'alarme reste `ACTIVE` après le déclenchement de son alerte, seule une reprogrammation la marque `TRAITEE` | Implémenté M6 |
+| 2026-09-04 | Q-12 | Volet audience du doublon confirmé : `?forcer=true` sur `POST /dossiers/{id}/audiences`, alerte `DOUBLON_AUDIENCE` vers les DJ | Implémenté M6 |
+| 2026-09-04 | Q-13 | `POST /dossiers/{id}/alarmes` et `PUT /alarmes/{id}/reprogrammer` implémentés ; `PUT /deliberes/{id}/expedition` reste ouvert | Implémenté M6, reste M7 |
+| 2026-09-04 | Q-39 | Destinataires : `RAPPEL_AUDIENCE` → juristes affectés ; `ALARME` → créateur de l'alarme | Implémenté M6 |
+| 2026-09-04 | Q-40 | `date_tenue` = date de saisie du compte rendu ; « prochaine date » du calendrier = `date_planifiee` de l'audience | Implémenté M6 |
+| 2026-09-04 | Q-41 | Export du calendrier via `?format=JSON\|PDF\|EXCEL` (JSON par défaut), PDFBox + POI | Implémenté M6 |
 
 Les autres questions (P1/P2) restent ouvertes et seront tranchées au fil des jalons concernés,
 au plus tard avant le module qui en dépend (cf. tableau des prérequis dans `DEVELOPMENT_ROADMAP.md`).

@@ -98,6 +98,18 @@ public class AlerteService {
                 type, destinataireId, StatutAlerte.DECLENCHEE, marqueur);
     }
 
+    /**
+     * Anti-doublon pour un événement à signaler au plus une fois dans son existence (ex. rappel
+     * J-N d'une audience, échéance d'une alarme) — contrairement à {@link #estDejaSignalee},
+     * un traitement ultérieur de l'alerte n'autorise pas un nouveau déclenchement du même
+     * événement : le marqueur doit encoder l'identité de l'événement lui-même (ex.
+     * {@code "[audienceId:5;J-7] "}), pas seulement celle du sujet.
+     */
+    @Transactional(readOnly = true)
+    public boolean aDejaEteDeclenchee(TypeAlerte type, Long destinataireId, String marqueur) {
+        return alerteRepository.existsByTypeAndDestinataireIdAndDeclencheurStartingWith(type, destinataireId, marqueur);
+    }
+
     @Transactional
     public AlerteResponse traiter(Long alerteId) {
         Alerte alerte = alerteRepository.findById(alerteId)
