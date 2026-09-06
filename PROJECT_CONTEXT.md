@@ -155,13 +155,25 @@ sauf besoin de vérification ponctuelle.**
 - **Ne pas ajouter de ligne `Co-Authored-By: Claude ...` aux messages de commit** (préférence
   utilisateur explicite, 2026-09-04) — déroge à la convention par défaut de l'outil.
 
-## 9. État actuel (2026-09-06, après le jalon M7)
+## 9. État actuel (2026-09-06, après le jalon M8)
 
 - **Documentation** : complète et validée en amont (8 documents).
 - **Code métier** : modules **Dossiers + Clients** (M4, Épic 1), **Alertes + Configurations**
-  (M5, Épic 7), **Audiences + Alarmes** (M6, Épic 2) et **Délibérés** (M7, Épic 3) livrés. Les
-  autres modules fonctionnels (frais, GED, décisions définitives, reporting) restent entièrement
-  à construire à partir de M8.
+  (M5, Épic 7), **Audiences + Alarmes** (M6, Épic 2), **Délibérés** (M7, Épic 3) et **GED** (M8,
+  Épic 6) livrés. Les autres modules fonctionnels (intervenants, frais, publications, décisions
+  définitives, reporting) restent entièrement à construire à partir de M9.
+- **Module `ged`** : ✅ posé au jalon **M8** : entités `Document`/`DemandeSuppression`
+  (`@ManyToOne Dossier` direct — module dépendant de `dossier`/`audience`, même principe que
+  `delibere` en M7), `MinioConfig`/`MinioStorageService` (bootstrap du bucket, dépôt, URL
+  pré-signée, suppression), `GedService` (dépôt avec validation format/poids, consultation,
+  double comportement de suppression DJ/DJA vs juriste auteur, approbation/rejet, rapport
+  journalier), `SuppressionRelanceScheduler` (relance à 72 h, placé dans `ged` — jamais dans
+  `alerte`). 6 endpoints du contrat (#38-43). Deux bugs détectés et corrigés en validation
+  manuelle (référence circulaire au bootstrap MinIO, conflit de gestionnaire d'exception pour les
+  fichiers volumineux). Validé de bout en bout (curl + JWT Keycloak réels : rejets format/poids,
+  circuit de suppression complet, relance à 72 h en conditions réelles, rapport journalier) et par
+  16 tests automatisés dédiés. Voir `DEVELOPMENT_ROADMAP.md` §M8 et
+  `DECISIONS_AND_OPEN_QUESTIONS.md` (Q-02, Q-45 à Q-51).
 - **Module `delibere`** : ✅ posé au jalon **M7** : entités `Delibere`/`Prorogation`
   (`@ManyToOne` directe vers `Dossier`/`EtapeProcedure` — module dépendant de `dossier`/
   `audience`, même principe que `audience` en M6), `DelibereService` (enregistrement avec
@@ -219,17 +231,18 @@ sauf besoin de vérification ponctuelle.**
   utilisateur depuis Keycloak), `common/audit/HistoriqueActionService`,
   `common/web/PageResponse<T>`, `common/config/SchedulingConfig` (dont l'usage `@Scheduled`
   effectif depuis M5, `ChargeMaxAvocatScheduler`, étendu en M6 avec `RappelAudienceScheduler`/
-  `AlarmeEcheanceScheduler`, puis en M7 avec `DelaiRecoursScheduler`). Consommé par les modules
-  `dossier` (M4), `alerte` (M5), `audience` (M6) et `delibere` (M7).
-- **Tests** : `contextLoads()` toujours vert. **102 tests au total après M7** (20 socle M1-M3 +
-  31 M4 + 15 M5 + 24 M6 + 14 nouveaux M7 (`DelibereServiceTest`, `DelaiRecoursSchedulerTest`) — un
-  test devenu obsolète a été retiré en cours de M7 lors de la correction Q-44), aucune régression.
+  `AlarmeEcheanceScheduler`, en M7 avec `DelaiRecoursScheduler`, puis en M8 avec
+  `SuppressionRelanceScheduler`). Consommé par les modules `dossier` (M4), `alerte` (M5),
+  `audience` (M6), `delibere` (M7) et `ged` (M8).
+- **Tests** : `contextLoads()` toujours vert. **118 tests au total après M8** (20 socle M1-M3 +
+  31 M4 + 15 M5 + 24 M6 + 14 M7 + 16 nouveaux M8 (`GedServiceTest`,
+  `SuppressionRelanceSchedulerTest`)), aucune régression.
 - **Risques** : voir `DECISIONS_AND_OPEN_QUESTIONS.md` §Risques — R-01 (secrets exposés)
   résolu dans les fichiers versionnés, mais la rotation des secrets déjà exposés côté
   Neon/iDrive e2 reste une action utilisateur en attente ; R-02, R-03, R-04 résolus par M1 ;
   R-05 (schéma non versionné) résolu par M2 ; R-06 (provisionnement d'un utilisateur en première
   connexion incompatible avec un endpoint `@Transactional(readOnly = true)`) découvert en
-  validation manuelle M7, non corrigé (défaut du socle M3, hors périmètre de M7).
+  validation manuelle M7, non corrigé (défaut du socle M3, hors périmètre de M7/M8).
 
 ## 10. Où aller ensuite
 

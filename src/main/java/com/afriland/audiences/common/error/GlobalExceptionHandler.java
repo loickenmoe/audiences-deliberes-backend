@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 import java.util.stream.Collectors;
@@ -100,6 +101,25 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return ResponseEntity.badRequest()
                 .body(new ErrorResponse(ErrorCodes.REQUETE_INVALIDE,
                         "Paramètre invalide : " + ex.getName(), String.valueOf(ex.getValue())));
+    }
+
+    /**
+     * RG-GED-08 : intercepte le rejet Spring/Tomcat (413, format {@code ProblemDetail} générique)
+     * avant même que {@code GedService} ne voie la requête, pour rester conforme au format
+     * {@code {code, message, details}} du contrat — découvert en validation manuelle M8, un
+     * fichier dépassant {@code spring.servlet.multipart.max-file-size} déclenche cette exception
+     * en amont du contrôleur, quel que soit le seuil {@code TAILLE_MAX_GED} configuré.
+     * <p>
+     * Contrairement aux autres cas ci-dessus, ce n'est pas un {@code @ExceptionHandler} distinct
+     * (ambigu avec le {@code handleException} générique final de {@link ResponseEntityExceptionHandler}
+     * — constaté via {@code contextLoads()} en échec) mais l'override du point d'extension dédié
+     * que la classe mère expose déjà pour ce type précis.
+     */
+    @Override
+    protected ResponseEntity<Object> handleMaxUploadSizeExceededException(
+            MaxUploadSizeExceededException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        return ResponseEntity.badRequest()
+                .body(new ErrorResponse(ErrorCodes.DOCUMENT_NON_CONFORME, "Fichier trop volumineux", null));
     }
 
     String formatFieldError(FieldError fieldError) {

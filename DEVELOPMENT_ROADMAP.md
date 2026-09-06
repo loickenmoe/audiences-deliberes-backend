@@ -2,7 +2,7 @@
 
 > Feuille de route séquentielle du backend. Un jalon = un objectif, un périmètre fermé,
 > une validation manuelle par le porteur du projet avant passage au suivant.
-> Dernière mise à jour : 2026-09-06 (M1 à M7 terminés et validés — M8 en attente d'autorisation).
+> Dernière mise à jour : 2026-09-06 (M1 à M8 terminés et validés — M9 en attente d'autorisation).
 
 ---
 
@@ -30,9 +30,9 @@
 | **M4** | Module Dossiers | Q-10, Q-11, Q-12, Q-23, Q-26, Q-28 | ✅ **Terminé et validé manuellement** (2026-09-04, commit `955aa4c`, PR #2 mergée dans `dev`) |
 | **M5** | Module Alertes (moteur + notifications) | Q-22 ✅, Q-32 ✅, Q-36 ✅, Q-37 ✅, Q-38 ✅ | ✅ **Terminé et validé manuellement** (2026-09-04, commit `7cd8954`, PR #4 mergée dans `dev`) |
 | **M6** | Module Audiences + Alarmes | Q-04 ✅, Q-12 ✅, Q-13 ✅, Q-39 ✅, Q-40 ✅, Q-41 ✅ | ✅ **Terminé et validé manuellement** (2026-09-04, commit `e427be3`, PR #5 mergée dans `dev`) |
-| **M7** | Module Délibérés | Q-13 ✅, Q-17 ✅, Q-18 ✅, Q-19 ✅, Q-35 ✅, Q-42 ✅, Q-43 ✅ | ✅ **Terminé et validé manuellement** (2026-09-06) |
-| **M8** | Module GED | Q-02, Q-07, Q-24, R-02 | ⏸️ **prêt à démarrer, en attente d'autorisation explicite** |
-| **M9** | Module Intervenants (avocats, répertoire, constitutions) | Q-03, Q-28 | ⏸️ |
+| **M7** | Module Délibérés | Q-13 ✅, Q-17 ✅, Q-18 ✅, Q-19 ✅, Q-35 ✅, Q-42 ✅, Q-43 ✅ | ✅ **Terminé et validé manuellement** (2026-09-06, commit `5a99400`, PR #6 mergée dans `dev`) |
+| **M8** | Module GED | Q-02 ✅, Q-07 ✅, Q-45 ✅, Q-46 ✅, Q-47 ✅, Q-48 ✅, Q-49 ✅ | ✅ **Terminé et validé manuellement** (2026-09-06) |
+| **M9** | Module Intervenants (avocats, répertoire, constitutions) | Q-03, Q-28 | ⏸️ **prêt à démarrer, en attente d'autorisation explicite** |
 | **M10** | Module Frais (circuit de validation) | Q-05, Q-24, Q-26 | ⏸️ |
 | **M11** | Module Publications et correspondances | Q-20, Q-24, Q-25 | ⏸️ |
 | **M12** | Module Décisions définitives et jurisprudence | — | ⏸️ |
@@ -385,10 +385,51 @@ Bascule vers le module Décisions définitives à l'expiration du délai de reco
 
 ---
 
-## M8 — Module GED
-Épic 6 (6 US). Intégration MinIO (URLs pré-signées), contrôle format/poids, notification des
-juristes cotés, circuit de suppression avec approbation et relance 72 h, suppression directe DJ/DJA,
-rapport journalier.
+## M8 — Module GED ✅ **Terminé**
+
+**Objectif.** Épic 6 (6 US). Intégration MinIO (URLs pré-signées), contrôle format/poids,
+notification des juristes cotés, circuit de suppression avec approbation et relance 72 h,
+suppression directe DJ/DJA, rapport journalier.
+
+### Réalisé
+- Module `ged` : entités `Document`/`DemandeSuppression` (`@ManyToOne Dossier` direct — module
+  dépendant de `dossier`/`audience`, même principe que `delibere` en M7), enums `FormatDocument`,
+  `StatutSuppression`.
+- `MinioConfig`/`MinioStorageService` : client MinIO, bootstrap du bucket applicatif au démarrage,
+  dépôt/URL pré-signée (10 min)/suppression d'objet (best-effort).
+- `GedService` : `uploaderDocument` (format dérivé de l'extension + poids ≤ `TAILLE_MAX_GED`,
+  notifie les juristes cotés — Q-45/Q-46), `obtenirDocument`/`listerDocumentsDossier` (404 si
+  supprimé), `supprimerOuDemander` (double comportement DJ/DJA vs juriste auteur — Q-47),
+  `approuverOuRejeter` (motif obligatoire au rejet), `rapportJournalier` (4 indicateurs — Q-49).
+- `SuppressionRelanceScheduler` : relance à 72 h des demandes en attente — placé dans le module
+  `ged` (jamais dans `alerte`), même principe que les planificateurs des jalons précédents.
+- 2 bugs détectés et corrigés en validation manuelle : référence circulaire au bootstrap MinIO
+  (Q-50) et conflit de gestionnaire d'exception pour les fichiers trop volumineux (Q-51).
+- 6 endpoints du contrat (#38-43, dont l'approbation « à proposer » et la liste par dossier 🆕).
+
+### Décisions prises en implémentation (documentées dans `DECISIONS_AND_OPEN_QUESTIONS.md`)
+Q-02 (relance 72 h), Q-45 (`type_document` texte libre), Q-46 (format dérivé de l'extension),
+Q-47 (double comportement de la suppression), Q-48 (réutilisation de `SUPPRESSION_DOCUMENT`),
+Q-49 (périmètre du rapport journalier, dépendance étendue vers `audience`), Q-50/Q-51 (bugs
+corrigés).
+
+### Validation manuelle — réalisée et confirmée par le porteur du projet (2026-09-06)
+118/118 tests automatisés verts (`mvn test`, dont 16 nouveaux pour M8, aucune régression M1-M7) ;
+validation manuelle de bout en bout (curl + JWT Keycloak réels) : rejet d'un format non conforme
+et d'un fichier trop volumineux, dépôt réussi avec notification des juristes cotés, URL pré-signée
+de téléchargement, liste des documents d'un dossier, demande de suppression par l'auteur (202,
+409 en cas de doublon), refus pour un juriste non auteur (403), suppression directe DJ/DJA (200),
+approbation (motif non requis) et rejet (motif obligatoire) d'une demande, relance à 72 h
+déclenchée en conditions réelles (date antidatée, cron accéléré) avec anti-doublon, rapport
+journalier correct sur une date active et à zéro sur une date sans donnée.
+
+### Commit
+Module livré en un seul commit (docs de contexte incluses, comme pour M5/M6/M7).
+
+### Restant
+Canaux Outlook/Teams des alertes toujours hors périmètre (Q-37) ; aucun reste propre à la GED.
+
+---
 
 ## M9 — Module Intervenants
 Répertoire des avocats avec indicateurs de charge et de performance, gestion des prestataires,

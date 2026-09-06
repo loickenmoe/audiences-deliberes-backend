@@ -2,7 +2,7 @@
 
 > Contradictions documentaires, ambiguïtés et lacunes nécessitant un **arbitrage explicite**.
 > Aucune de ces questions n'a été tranchée silencieusement.
-> Dernière mise à jour : 2026-09-06 (après jalon M7 — voir statuts R-01 à R-06, Q-01/04/10/11/12/13/17-19/22/23/26/32/34-44).
+> Dernière mise à jour : 2026-09-06 (après jalon M8 — voir statuts R-01 à R-06, Q-01/02/04/07/10/11/12/13/17-19/22/23/26/32/34-51).
 
 **Convention de lecture de chaque fiche :**
 - **A — Ce que la documentation exige** (avec la source exacte)
@@ -414,6 +414,11 @@ date_derniere_relance)`.
 **Statut (2026-09-04, M2)** : appliqué tel quel — `V1__schema_initial.sql`. La relance à 72 h
 (planificateur) reste à implémenter en M8 (module GED).
 
+**Statut (2026-09-06, M8)** : relance à 72 h implémentée — `SuppressionRelanceScheduler`, même
+principe que les planificateurs des jalons précédents (Q-38/Q-39/Q-43). Vérifiée en conditions
+réelles (`date_demande` antidatée de 73 h, cron accéléré) : relance déclenchée vers DJ et DJA,
+`date_derniere_relance` mise à jour, aucune resignalisation avant le prochain cycle de 72 h.
+
 ### Q-03 ✅ Table `demande_constitution` absente — créée (M2)
 FR-INT-06/07, UC-INT-05/06, US 5.6/5.7 (« Tables `constitution` (à créer) »).
 **C** : `demande_constitution (id, dossier_id, prestataire_id, demandeur_id, motif, statut
@@ -717,6 +722,113 @@ l'étape ; seul `prorogationRepository.findById`/`countByDelibereId` conditionne
 Revérifié en conditions réelles (curl) : 11 prorogations enregistrées avec succès sur un délibéré
 déjà `DELIBERE_VIDE`, alerte `PROROGATION` déclenchée à la 11e.
 
+### Q-45 ✅ `document.type_document` : aucune taxonomie documentée (GED) — tranché (M8)
+Contrairement à `autre_publication.type_document` (fermé à {PIECE, DECISION, CONCLUSION} — table
+distincte, module publications M11), `document.type_document VARCHAR(50) NOT NULL` (GED, M8) ne
+porte **aucun** commentaire ni référentiel dans le dictionnaire ou le script SQL. RG-GED-02/04/06
+ne mentionnent que format et poids, jamais de taxonomie de type.
+**C — Recommandation** : conserver un champ texte libre saisi par le client (ex. « Pièce
+d'identité », « Décision de justice », « Correspondance »), sans validation de valeur — à
+distinguer explicitement du champ homonyme de `autre_publication`.
+**Statut (2026-09-06, M8)** : appliqué — `GedController.uploaderDocument` accepte `typeDocument`
+en texte libre (`@RequestParam String`, aucune contrainte d'énumération).
+
+### Q-46 ✅ Format d'un document : dérivé du fichier ou déclaré par le client ? — tranché (M8)
+RG-GED-04/08 exigent un format ∈ {PDF, PNG, JPG, TXT, XLSX} et un poids ≤ `TAILLE_MAX_GED`, sans
+préciser la source de vérité du format (extension du nom de fichier, `Content-Type` HTTP déclaré,
+ou champ de requête dédié) — un client pourrait déclarer un type MIME ne correspondant pas au
+contenu réel.
+**C — Recommandation** : dériver le format de l'**extension du nom de fichier** (`nomFichier`
+tronqué après le dernier `.`), plus robuste qu'un `Content-Type` déclaratif et plus simple qu'une
+inspection du contenu binaire (hors périmètre, aucune bibliothèque de détection fournie au
+projet) ; le rejeter (`ERR-008`) si l'extension ne correspond à aucune valeur de
+`FormatDocument`, **ou** si elle y correspond mais est désactivée par la configuration
+`FORMATS_GED` (paramétrable par le DJ, CONF06).
+**Statut (2026-09-06, M8)** : appliqué — `GedService.validerFichier`. Le poids est comparé au
+paramètre configurable `TAILLE_MAX_GED` (CONF06) *en plus* du plafond statique Spring
+(`spring.servlet.multipart.max-file-size=10MB`, M1) : ce dernier reste la limite absolue
+(protection mémoire/réseau, non reconfigurable par le DJ), tandis que `TAILLE_MAX_GED` permet au
+DJ d'abaisser le seuil fonctionnel en dessous de ce plafond. Un fichier dépassant le plafond
+Spring déclenche `MaxUploadSizeExceededException` **avant** même que le contrôleur ne soit atteint
+— gérée séparément (cf. Q-51) pour rester conforme au format d'erreur du contrat.
+
+### Q-47 ✅ `DELETE /ged/documents/{id}` : double comportement, un seul endpoint — tranché (M8)
+RG-GED-05/09 : le juriste **auteur du chargement** obtient une demande soumise à approbation
+(202) ; le DJ/DJA obtient une suppression immédiate (200) — sur le **même** verbe/chemin, sans
+paramètre de requête distinctif dans le contrat.
+**C — Recommandation** : brancher sur le profil de l'appelant résolu côté serveur
+(`CurrentUserService`), jamais sur une déclaration du client : DJ/DJA → suppression immédiate ;
+JURISTE → vérifier qu'il est bien l'auteur (403 sinon) puis créer la demande ; ASSISTANTE/SH
+(peuvent charger, RG-GED-02, mais ne sont mentionnés par aucune RG de suppression) → 403.
+Garde-fou additionnel non documenté mais nécessaire : refuser (409) une nouvelle demande tant
+qu'une demande `EN_ATTENTE` existe déjà pour le document, pour éviter l'accumulation de demandes
+concurrentes sur le même document.
+**Statut (2026-09-06, M8)** : appliqué — `GedService.supprimerOuDemander` retourne une enveloppe
+interne (`SuppressionResult`) que `GedController` traduit en 200/202 ; vérifié en conditions
+réelles (juriste non-auteur → 403, auteur → 202, doublon de demande → 409, DJ → 200 direct).
+
+### Q-48 ✅ Un seul type d'alerte pour tout le cycle de vie de la suppression — tranché (M8)
+La liste fermée de `TypeAlerte` (Q-22) ne réserve qu'**un** type à la GED-suppression
+(`SUPPRESSION_DOCUMENT`), alors que RG-GED-05/09 distinguent au moins quatre événements
+notifiables : demande soumise (→ DJ/DJA), demande approuvée (→ demandeur), demande rejetée (→
+demandeur), suppression directe DJ/DJA (→ auteur du chargement) — sans compter la relance à 72 h
+(UC-GED-03 alt. 6-a).
+**C — Recommandation** : réutiliser `SUPPRESSION_DOCUMENT` pour les cinq cas, la nuance portée par
+le texte libre `declencheur` — même principe déjà établi pour `TypeAlerte.ALARME` (Q-04, un seul
+type pour toute échéance d'alarme, quel que soit son objet).
+**Statut (2026-09-06, M8)** : appliqué et vérifié en conditions réelles — les 5 déclenchements
+(demande, approbation, rejet, suppression directe, relance) sont bien distinguables côté client
+via `declencheur`, tous historisés sous `SUPPRESSION_DOCUMENT`.
+
+### Q-49 ✅ Rapport journalier GED : périmètre des 4 indicateurs — tranché (M8)
+FR-GED-04 nomme `dossiersManipules`, `piecesAjoutees`, `affairesNouvelles`, `planificationActes[]`
+sans définir leur mode de calcul exact, ni les entités/modules à consulter pour les obtenir.
+**C — Recommandation** :
+- `dossiersManipules` = nombre de dossiers **distincts** ayant au moins une entrée
+  `historique_action` à la date donnée (mesure large de « manipulation », cohérente avec RG-DOS-06
+  qui historise déjà toute action sur un dossier) ;
+- `piecesAjoutees` = nombre de `document` dont `date_chargement` tombe ce jour-là ;
+- `affairesNouvelles` = nombre de `dossier` dont `created_at` tombe ce jour-là ;
+- `planificationActes[]` = audiences au statut `PLANIFIEE` dont `date_planifiee` est cette date
+  (référence, dossier, date) — réutilise `AudienceRepository` (M6) plutôt que de dupliquer une
+  notion de planification propre à la GED.
+Conséquence architecturale : `ged` dépend donc aussi du module `audience`, pas seulement de
+`dossier`/`alerte` comme déclaré initialement dans `FUNCTIONAL_MAP.md` §6 — mis à jour en
+conséquence.
+**Statut (2026-09-06, M8)** : appliqué — `GedService.rapportJournalier`, zéros/liste vide
+retournés pour une date sans donnée (vérifié en conditions réelles : dossiers/pièces du jour
+comptés correctement, date passée sans activité → tous les indicateurs à zéro).
+
+### Q-50 ✅ Bug — référence circulaire au démarrage (`MinioConfig`) — corrigé (M8)
+Un `@PostConstruct` sur `MinioConfig` appelant sa propre méthode `@Bean minioClient()` pour créer
+le bucket applicatif provoque `BeanCreationException: Requested bean is currently in creation`
+(le proxy CGLIB de la classe `@Configuration` tente de résoudre le bean `minioClient` alors que
+`MinioConfig` elle-même n'a pas fini de s'instancier) — détecté en validation manuelle M8 (tout
+dépôt de document échouait avec « The specified bucket does not exist », le bucket n'ayant jamais
+été créé silencieusement en amont).
+**C** : déplacer la vérification/création du bucket dans un `ApplicationRunner` **distinct**,
+recevant `MinioClient` en paramètre injecté (bean déjà pleinement construit à ce stade), plutôt
+qu'un rappel de méthode `@Bean` depuis un hook de cycle de vie de la même classe.
+**Statut (2026-09-06, M8)** : appliqué — `MinioConfig.assurerBucketMinio(MinioClient)`. Revérifié
+en conditions réelles : bucket créé au premier démarrage, dépôt de document réussi.
+
+### Q-51 ✅ Bug — `@ExceptionHandler(MaxUploadSizeExceededException)` ambigu avec `ResponseEntityExceptionHandler` — corrigé (M8)
+Un fichier dépassant `spring.servlet.multipart.max-file-size` (M1) déclenche
+`MaxUploadSizeExceededException` **avant** le contrôleur, avec le format d'erreur générique Spring
+(`ProblemDetail`), non conforme au contrat (`{code, message, details}`). Ajouter un
+`@ExceptionHandler(MaxUploadSizeExceededException.class)` classique sur `GlobalExceptionHandler`
+(qui étend `ResponseEntityExceptionHandler`) provoque une `IllegalStateException: Ambiguous
+@ExceptionHandler method` au démarrage : `ResponseEntityExceptionHandler` gère déjà ce type via
+son dispatcher interne `handleException(Exception, WebRequest)` — détecté par `contextLoads()`
+(`AudiencesApplicationTests`) en validation M8.
+**C** : `ResponseEntityExceptionHandler` expose un point d'extension protégé dédié,
+`handleMaxUploadSizeExceededException(...)`, à **surcharger** (`@Override`) — même mécanisme déjà
+utilisé pour `handleHttpMessageNotReadable`/`handleMissingServletRequestParameter`/
+`handleHttpRequestMethodNotSupported` — plutôt qu'un nouvel `@ExceptionHandler` concurrent.
+**Statut (2026-09-06, M8)** : appliqué — `GlobalExceptionHandler.handleMaxUploadSizeExceededException`
+(override). `contextLoads()` de nouveau vert ; testé en conditions réelles (fichier > 10 Mo → 400
+`ERR-008`, format conforme au contrat).
+
 ### Q-27 ✅ `dossier.parties` défini deux fois — tranché (M2)
 Le dictionnaire REF-06 §2.1.2 déclare `parties JSONB` **deux fois**, avec deux structures
 différentes : `{demandeur, defendeur}` et `{demandeur, defendeur, client}`. Le contrat d'API et
@@ -836,6 +948,14 @@ une formation des utilisateurs clés a été réalisée ; les données historiqu
 | 2026-09-06 | Q-42 | Rabattement (`POST /deliberes/{id}/rabattement`, dédié) vs. exercice d'un recours (endpoint générique) : même transition, endpoints et effets de bord différents (ouverture ou non de l'étape suivante) | Implémenté M7 |
 | 2026-09-06 | Q-43 | Bascule automatique `CLOTURE` + alerte `DELAI_RECOURS` implémentées (`DelaiRecoursScheduler`) ; volet « décisions définitives » différé à M12 | Implémenté M7, reste M12 |
 | 2026-09-06 | Q-44 | Prorogation : aucune précondition de statut d'étape (structurellement impossible vu le schéma M2) — « l'étape reste EN_DELIBERE » lu comme un constat, pas une garde d'entrée | Implémenté M7 |
+| 2026-09-06 | Q-02 | Relance à 72 h des demandes de suppression implémentée (`SuppressionRelanceScheduler`) | Implémenté M8 |
+| 2026-09-06 | Q-45 | `document.type_document` : texte libre, aucune taxonomie (à distinguer de `autre_publication.type_document`) | Implémenté M8 |
+| 2026-09-06 | Q-46 | Format dérivé de l'extension du fichier (pas du `Content-Type` déclaré) ; poids comparé à `TAILLE_MAX_GED` en complément du plafond Spring statique | Implémenté M8 |
+| 2026-09-06 | Q-47 | `DELETE /ged/documents/{id}` : branchement sur le profil résolu serveur (DJ/DJA → immédiat, juriste auteur → demande, sinon 403) ; 409 si demande déjà en attente | Implémenté M8 |
+| 2026-09-06 | Q-48 | `TypeAlerte.SUPPRESSION_DOCUMENT` réutilisé pour les 5 événements du cycle de suppression, nuance portée par `declencheur` | Implémenté M8 |
+| 2026-09-06 | Q-49 | Rapport journalier : 4 indicateurs définis (historique_action, document, dossier, audience) ; `ged` dépend aussi de `audience` | Implémenté M8 |
+| 2026-09-06 | Q-50 | Bug corrigé : bootstrap du bucket MinIO déplacé dans un `ApplicationRunner` dédié (référence circulaire `@PostConstruct`/`@Bean`) | Corrigé M8 |
+| 2026-09-06 | Q-51 | Bug corrigé : override du point d'extension `handleMaxUploadSizeExceededException` au lieu d'un `@ExceptionHandler` concurrent | Corrigé M8 |
 
 Les autres questions (P1/P2) restent ouvertes et seront tranchées au fil des jalons concernés,
 au plus tard avant le module qui en dépend (cf. tableau des prérequis dans `DEVELOPMENT_ROADMAP.md`).

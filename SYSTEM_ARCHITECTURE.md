@@ -118,12 +118,15 @@ traitements planifiés (`RappelAudienceScheduler`, `AlarmeEcheanceScheduler`) et
 de données (PDF/Excel, `CalendrierExportService`) ; M7 a livré
 `delibere/{domain,repository,service,web,mapper}` (même principe de dépendance directe vers
 `dossier`/`audience`), avec un troisième traitement planifié (`DelaiRecoursScheduler`, bascule
-automatique `CLOTURE`).
+automatique `CLOTURE`) ; M8 a livré `ged/{domain,repository,service,web,mapper,config}` (même
+principe de dépendance directe, étendue à `audience` pour le rapport journalier — Q-49), première
+intégration MinIO du projet (`MinioConfig`/`MinioStorageService`) et un quatrième traitement
+planifié (`SuppressionRelanceScheduler`, relance à 72 h).
 
 **Verdict : le schéma de données et le socle transversal sont complets et validés, et les modules
-Dossiers/Clients (M4), Alertes/Configurations (M5), Audiences/Alarmes (M6) et Délibérés (M7) sont
-livrés et testés — 28 des ~53 endpoints du contrat d'API sont implémentés** (102 tests
-automatisés, dont un test d'intégration Testcontainers). Les autres modules fonctionnels (M8+)
+Dossiers/Clients (M4), Alertes/Configurations (M5), Audiences/Alarmes (M6), Délibérés (M7) et GED
+(M8) sont livrés et testés — 34 des ~53 endpoints du contrat d'API sont implémentés** (118 tests
+automatisés, dont un test d'intégration Testcontainers). Les autres modules fonctionnels (M9+)
 n'ont pas commencé.
 
 ### 2.2 Infrastructure réellement configurée
@@ -259,13 +262,13 @@ respectifs (M11 publications, M12 décisions).
 | Table / colonne | Justification documentaire | Question | Entité JPA |
 |---|---|---|---|
 | `dossier_juriste` / `dossier_avocat` (N:N) | RG-DOS-03 « affecté à un ou plusieurs juristes et avocats » ; POST /dossiers reçoit `juristesAffectes[]`, `avocatsAffectes[]` — aucune table d'affectation n'existait | Q-01 | à créer en M4 |
-| `demande_suppression` | FR-GED-03 cite explicitement « la table demande_suppression » ; UC-GED-03 (relance 72 h) | Q-02 | à créer en M8 |
+| `demande_suppression` | FR-GED-03 cite explicitement « la table demande_suppression » ; UC-GED-03 (relance 72 h) | Q-02 | ✅ `DemandeSuppression` (M8) |
 | `demande_constitution` | FR-INT-06/07, UC-INT-05/06, US 5.6/5.7 « Tables constitution (à créer) » | Q-03 | à créer en M9 |
 | `alarme` (distincte de `alerte`) | FR-AUD-03 : objet + échéance + étape ; `alerte` n'a ni objet ni etape_id | Q-04 | à créer en M6 |
 | `validation_frais` (traces par étape) | FR-INT-02/03/04 : traçabilité des accords DJ/DJA distincts, impossible avec le seul `statut_circuit` | Q-05 | à créer en M10 |
 | `type_client_sensible` (référentiel) | RG-DOS-09 « liste prédéfinie gérée par le DJ » | Q-06 | ✅ `TypeClientSensible` |
 | `nature_dossier` (référentiel, Annexe A) | RG-DOS-02 ; CONF02 (taxonomie gérée par le DJ) | — | ✅ `NatureDossier` |
-| `document.chemin_stockage` | Présent au dictionnaire, absent du script SQL REF-05 §12.1 | Q-07 | à créer en M8 |
+| `document.chemin_stockage` | Présent au dictionnaire, absent du script SQL REF-05 §12.1 | Q-07 | ✅ `Document` (M8) |
 | `audit_seuil_dossier.statut` | Exposé par le schéma `AuditSeuil` du contrat d'API, absent de la table documentée | Q-29 | à créer en M4 |
 | `dossier.sensibilite_statut/valide_par/motif_rejet` | Circuit de validation DJ/DJA de la sensibilité (RG-DOS-09, UC-DOS-01 alt. 6-a) | Q-10 | à créer en M4 |
 
