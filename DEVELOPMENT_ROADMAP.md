@@ -2,7 +2,7 @@
 
 > Feuille de route séquentielle du backend. Un jalon = un objectif, un périmètre fermé,
 > une validation manuelle par le porteur du projet avant passage au suivant.
-> Dernière mise à jour : 2026-09-04 (M1 à M6 terminés et validés — M7 en attente d'autorisation).
+> Dernière mise à jour : 2026-09-06 (M1 à M7 terminés et validés — M8 en attente d'autorisation).
 
 ---
 
@@ -29,9 +29,9 @@
 | **M3** | Socle transversal (erreurs, historique, utilisateur, pagination) | Q-08 ✅ | ✅ **Terminé et validé** (2026-09-04, commit `57e75c3`) |
 | **M4** | Module Dossiers | Q-10, Q-11, Q-12, Q-23, Q-26, Q-28 | ✅ **Terminé et validé manuellement** (2026-09-04, commit `955aa4c`, PR #2 mergée dans `dev`) |
 | **M5** | Module Alertes (moteur + notifications) | Q-22 ✅, Q-32 ✅, Q-36 ✅, Q-37 ✅, Q-38 ✅ | ✅ **Terminé et validé manuellement** (2026-09-04, commit `7cd8954`, PR #4 mergée dans `dev`) |
-| **M6** | Module Audiences + Alarmes | Q-04 ✅, Q-12 ✅, Q-13 ✅, Q-39 ✅, Q-40 ✅, Q-41 ✅ | ✅ **Terminé et validé manuellement** (2026-09-04) |
-| **M7** | Module Délibérés | Q-17, Q-18, Q-19, Q-13 | ⏸️ **prêt à démarrer, en attente d'autorisation explicite** |
-| **M8** | Module GED | Q-02, Q-07, Q-24, R-02 | ⏸️ |
+| **M6** | Module Audiences + Alarmes | Q-04 ✅, Q-12 ✅, Q-13 ✅, Q-39 ✅, Q-40 ✅, Q-41 ✅ | ✅ **Terminé et validé manuellement** (2026-09-04, commit `e427be3`, PR #5 mergée dans `dev`) |
+| **M7** | Module Délibérés | Q-13 ✅, Q-17 ✅, Q-18 ✅, Q-19 ✅, Q-35 ✅, Q-42 ✅, Q-43 ✅ | ✅ **Terminé et validé manuellement** (2026-09-06) |
+| **M8** | Module GED | Q-02, Q-07, Q-24, R-02 | ⏸️ **prêt à démarrer, en attente d'autorisation explicite** |
 | **M9** | Module Intervenants (avocats, répertoire, constitutions) | Q-03, Q-28 | ⏸️ |
 | **M10** | Module Frais (circuit de validation) | Q-05, Q-24, Q-26 | ⏸️ |
 | **M11** | Module Publications et correspondances | Q-20, Q-24, Q-25 | ⏸️ |
@@ -331,9 +331,59 @@ des alertes toujours hors périmètre (Q-37, aucune infrastructure fournie).
 
 ---
 
-## M7 — Module Délibérés
-Épic 3 (6 US). Enregistrement, prorogations illimitées + alerte au seuil (Q-17, Q-18),
-rabattement, suivi du délai de recours avec bascule automatique en `CLOTURE`, levée d'expédition.
+## M7 — Module Délibérés ✅ **Terminé**
+
+**Objectif.** Épic 3 (6 US). Enregistrement, prorogations illimitées + alerte au seuil (Q-17,
+Q-18), rabattement, suivi du délai de recours avec bascule automatique en `CLOTURE`, levée
+d'expédition. Dernier volet de Q-13 (`PUT /deliberes/{id}/expedition`).
+
+### Réalisé
+- Module `delibere` : entités `Delibere`/`Prorogation` (avec `@ManyToOne Dossier`/`EtapeProcedure`
+  directes — module dépendant de `dossier`/`audience`, cf. FUNCTIONAL_MAP.md §3, même principe que
+  `audience` en M6), enums `ResultatDelibere`, `StatutExpedition`.
+- `DelibereService` : `enregistrerDelibere` (étape `EN_DELIBERE` requise, transition directe vers
+  `DELIBERE_VIDE`, échéance de recours requise/interdite selon le résultat — Q-42), `proroger`
+  (compteur cumulé, `alerte:true` dès dépassement du seuil configurable — Q-17/Q-18), `rabattre`
+  (réouverture de l'étape en `EN_COURS` sans jamais ouvrir l'étape suivante, motif obligatoire —
+  distinction avec l'exercice d'un recours, Q-42), `consulterRecours` (lecture seule — Q-19),
+  `modifierExpedition`.
+- `DelaiRecoursScheduler` : à l'échéance du délai de recours sans recours exercé, déclenche
+  `TypeAlerte.DELAI_RECOURS` vers les juristes affectés puis bascule l'étape en `CLOTURE` — placé
+  dans le module `delibere` (jamais dans `alerte`), même principe que `ChargeMaxAvocatScheduler`
+  (M5) et `RappelAudienceScheduler`/`AlarmeEcheanceScheduler` (M6). Le volet « bascule décisions
+  définitives » de FR-DEL-02 est différé au module M12 (Q-43).
+- Correction de Q-35 : le rabattement cible en réalité `DELIBERE_VIDE→EN_COURS` (et non
+  `EN_DELIBERE→EN_COURS` comme anticipé en M6) — même valeur de transition que l'exercice d'un
+  recours (M4), distinguée par l'endpoint appelé et les effets de bord (Q-42).
+- 5 endpoints du contrat (#18-22, dont le dernier volet de Q-13, `PUT /deliberes/{id}/expedition`,
+  jusque-là hors OpenAPI formel).
+
+### Décisions prises en implémentation (documentées dans `DECISIONS_AND_OPEN_QUESTIONS.md`)
+Q-13 (dernier volet, expédition), Q-17/Q-18 (code retour et seuil des prorogations), Q-19 (révisé —
+`Delibere.dateEcheanceRecours` dédiée plutôt que réutilisation de l'alarme M6), Q-35 (correction de
+la cible du rabattement), Q-42 (distinction rabattement/recours exercé), Q-43 (bascule `CLOTURE`
+implémentée, volet décisions définitives différé à M12).
+
+### Validation manuelle — réalisée et confirmée par le porteur du projet (2026-09-06)
+102/102 tests automatisés verts (`mvn test`, dont 14 nouveaux pour M7, aucune régression M1-M6) ;
+validation manuelle de bout en bout (curl + JWT Keycloak réels) : rejet d'un délibéré sur étape non
+`EN_DELIBERE`, échéance de recours refusée sur un résultat FAVORABLE puis exigée sur DEFAVORABLE,
+enregistrement faisant basculer l'étape en `DELIBERE_VIDE`, 10 puis 11 prorogations (alerte
+`PROROGATION` déclenchée une seule fois vers DJ et DJA), seuil modifié par le DJ pris en compte,
+rabattement refusé hors `DELIBERE_VIDE` puis accepté (étape repassée `EN_COURS` sans ouverture de
+l'étape suivante), nouveau cycle `EN_COURS`→`EN_DELIBERE`→nouveau délibéré sur la même étape,
+`GET /deliberes/{id}/recours` strictement consultatif, expiration du délai de recours déclenchée en
+conditions réelles (cron accéléré pour le test) avec bascule `CLOTURE` et alerte `DELAI_RECOURS`
+vers les juristes affectés, `PUT /deliberes/{id}/expedition` (403 hors rôle JURISTE / 200 sinon).
+
+### Commit
+Module livré en un seul commit (docs de contexte incluses, comme pour M5/M6).
+
+### Restant
+Bascule vers le module Décisions définitives à l'expiration du délai de recours (Q-43, différée
+à M12, module non encore conçu) ; canaux Outlook/Teams des alertes toujours hors périmètre (Q-37).
+
+---
 
 ## M8 — Module GED
 Épic 6 (6 US). Intégration MinIO (URLs pré-signées), contrôle format/poids, notification des

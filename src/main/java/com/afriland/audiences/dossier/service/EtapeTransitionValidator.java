@@ -17,11 +17,19 @@ import static com.afriland.audiences.dossier.domain.StatutCycleVie.OUVERTURE;
  * Transitions de cycle de vie autorisées via l'endpoint générique
  * {@code PATCH /dossiers/{id}/etapes/{etapeId}/statut} (RG-DOS-04).
  * <p>
- * Les transitions {@code EN_DELIBERE → DELIBERE_VIDE} (enregistrement d'un délibéré,
- * RG-DEL-01/FR-DEL-01) et {@code EN_DELIBERE → EN_COURS} (rabattement, RG-DEL-07/FR-DEL-05) ne
- * figurent volontairement <b>pas</b> ici : elles sont réservées aux endpoints dédiés du module
- * délibéré (M7), qui collectent des données métier (résultat, motif) que cet endpoint générique
- * ne reçoit pas — les autoriser ici permettrait de les contourner.
+ * La transition {@code EN_DELIBERE → DELIBERE_VIDE} (enregistrement d'un délibéré,
+ * RG-DEL-01/FR-DEL-01) ne figure volontairement <b>pas</b> ici : elle est réservée à l'endpoint
+ * dédié {@code POST /dossiers/{id}/deliberes} du module délibéré (M7), qui collecte des données
+ * métier (résultat, échéance du délai de recours) que cet endpoint générique ne reçoit pas —
+ * l'autoriser ici permettrait de la contourner.
+ * <p>
+ * {@code DELIBERE_VIDE → EN_COURS} reste en revanche autorisée ici : c'est la transition
+ * de <b>l'exercice d'un recours</b> ({@link #estExerciceDeRecours}, RG-DOS-04), qui ouvre
+ * automatiquement l'étape suivante. Le <b>rabattement</b> (RG-DEL-07/FR-DEL-05, M7) porte sur la
+ * même valeur de statut mais via son propre endpoint dédié {@code POST
+ * /deliberes/{id}/rabattement}, en dehors de ce validateur générique : il ne rouvre jamais
+ * l'étape suivante et exige un motif que cet endpoint générique ne reçoit pas non plus
+ * (cf. DECISIONS_AND_OPEN_QUESTIONS.md Q-42 pour la distinction des deux cas).
  */
 @Component
 public class EtapeTransitionValidator {

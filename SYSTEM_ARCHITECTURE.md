@@ -100,7 +100,8 @@ src/main/java/com/afriland/audiences/
 
 src/main/resources/db/migration/
 ├── V1__schema_initial.sql           ✅ 32 tables, contraintes CHECK, FK, index
-└── V2__donnees_reference.sql        ✅ profils, configuration_systeme, taxonomie
+├── V2__donnees_reference.sql        ✅ profils, configuration_systeme, taxonomie
+└── V3__delibere_delai_recours.sql   ✅ M7 : delibere.date_echeance_recours + index (Q-19/Q-42)
 ```
 
 Le socle générique hors domaine et le chemin d'authentification hérité (HS256 maison) ont été
@@ -114,12 +115,16 @@ a introduit le premier traitement planifié effectif (`dossier/service/ChargeMax
 M6 a livré `audience/{domain,repository,service,web,mapper}` (premier module métier autorisé à
 dépendre directement de `dossier` par `@ManyToOne`, contrairement à `alerte`), avec deux nouveaux
 traitements planifiés (`RappelAudienceScheduler`, `AlarmeEcheanceScheduler`) et un premier export
-de données (PDF/Excel, `CalendrierExportService`).
+de données (PDF/Excel, `CalendrierExportService`) ; M7 a livré
+`delibere/{domain,repository,service,web,mapper}` (même principe de dépendance directe vers
+`dossier`/`audience`), avec un troisième traitement planifié (`DelaiRecoursScheduler`, bascule
+automatique `CLOTURE`).
 
 **Verdict : le schéma de données et le socle transversal sont complets et validés, et les modules
-Dossiers/Clients (M4), Alertes/Configurations (M5) et Audiences/Alarmes (M6) sont livrés et
-testés — 23 des ~53 endpoints du contrat d'API sont implémentés** (88 tests automatisés, dont un
-test d'intégration Testcontainers). Les autres modules fonctionnels (M7+) n'ont pas commencé.
+Dossiers/Clients (M4), Alertes/Configurations (M5), Audiences/Alarmes (M6) et Délibérés (M7) sont
+livrés et testés — 28 des ~53 endpoints du contrat d'API sont implémentés** (102 tests
+automatisés, dont un test d'intégration Testcontainers). Les autres modules fonctionnels (M8+)
+n'ont pas commencé.
 
 ### 2.2 Infrastructure réellement configurée
 

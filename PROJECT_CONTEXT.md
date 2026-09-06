@@ -155,13 +155,24 @@ sauf besoin de vérification ponctuelle.**
 - **Ne pas ajouter de ligne `Co-Authored-By: Claude ...` aux messages de commit** (préférence
   utilisateur explicite, 2026-09-04) — déroge à la convention par défaut de l'outil.
 
-## 9. État actuel (2026-09-04, après le jalon M6)
+## 9. État actuel (2026-09-06, après le jalon M7)
 
 - **Documentation** : complète et validée en amont (8 documents).
 - **Code métier** : modules **Dossiers + Clients** (M4, Épic 1), **Alertes + Configurations**
-  (M5, Épic 7) et **Audiences + Alarmes** (M6, Épic 2) livrés. Les autres modules fonctionnels
-  (délibérés, frais, GED, décisions définitives, reporting) restent entièrement à construire à
-  partir de M7.
+  (M5, Épic 7), **Audiences + Alarmes** (M6, Épic 2) et **Délibérés** (M7, Épic 3) livrés. Les
+  autres modules fonctionnels (frais, GED, décisions définitives, reporting) restent entièrement
+  à construire à partir de M8.
+- **Module `delibere`** : ✅ posé au jalon **M7** : entités `Delibere`/`Prorogation`
+  (`@ManyToOne` directe vers `Dossier`/`EtapeProcedure` — module dépendant de `dossier`/
+  `audience`, même principe que `audience` en M6), `DelibereService` (enregistrement avec
+  transition `EN_DELIBERE→DELIBERE_VIDE`, prorogations avec alerte au seuil, rabattement sans
+  réouverture de l'étape suivante, consultation du recours, levée d'expédition),
+  `DelaiRecoursScheduler` (bascule automatique `CLOTURE` + alerte `DELAI_RECOURS`, placé dans le
+  module `delibere` — jamais dans `alerte`). 5 endpoints du contrat (#18-22, dont le dernier volet
+  de Q-13). Validé de bout en bout (curl + JWT Keycloak réels, seuil de prorogation franchi une
+  seule fois vers DJ et DJA, cycle rabattement→nouveau délibéré, bascule `CLOTURE` observée en
+  conditions réelles) et par 15 tests automatisés dédiés. Voir `DEVELOPMENT_ROADMAP.md` §M7 et
+  `DECISIONS_AND_OPEN_QUESTIONS.md` (Q-13, Q-17, Q-18, Q-19, Q-35, Q-42, Q-43, Q-44).
 - **Module `audience`** : ✅ posé au jalon **M6** : entités `Audience`/`Alarme` (`@ManyToOne`
   directe vers `Dossier`/`EtapeProcedure` — module dépendant de `dossier`, contrairement à
   `alerte`), `AudienceService` (planification avec doublon confirmable — Q-12, compte rendu),
@@ -208,16 +219,17 @@ sauf besoin de vérification ponctuelle.**
   utilisateur depuis Keycloak), `common/audit/HistoriqueActionService`,
   `common/web/PageResponse<T>`, `common/config/SchedulingConfig` (dont l'usage `@Scheduled`
   effectif depuis M5, `ChargeMaxAvocatScheduler`, étendu en M6 avec `RappelAudienceScheduler`/
-  `AlarmeEcheanceScheduler`). Consommé par les modules `dossier` (M4), `alerte` (M5) et `audience`
-  (M6).
-- **Tests** : `contextLoads()` toujours vert. **88 tests au total après M6** (20 socle M1-M3 +
-  31 M4 + 15 M5 + 24 nouveaux M6 : `AudienceServiceTest`, `AlarmeServiceTest`,
-  `RappelAudienceSchedulerTest`, `AlarmeEcheanceSchedulerTest`, `CalendrierExportServiceTest`,
-  `PeriodeCalendrierTest`), aucune régression.
+  `AlarmeEcheanceScheduler`, puis en M7 avec `DelaiRecoursScheduler`). Consommé par les modules
+  `dossier` (M4), `alerte` (M5), `audience` (M6) et `delibere` (M7).
+- **Tests** : `contextLoads()` toujours vert. **102 tests au total après M7** (20 socle M1-M3 +
+  31 M4 + 15 M5 + 24 M6 + 14 nouveaux M7 (`DelibereServiceTest`, `DelaiRecoursSchedulerTest`) — un
+  test devenu obsolète a été retiré en cours de M7 lors de la correction Q-44), aucune régression.
 - **Risques** : voir `DECISIONS_AND_OPEN_QUESTIONS.md` §Risques — R-01 (secrets exposés)
   résolu dans les fichiers versionnés, mais la rotation des secrets déjà exposés côté
   Neon/iDrive e2 reste une action utilisateur en attente ; R-02, R-03, R-04 résolus par M1 ;
-  R-05 (schéma non versionné) résolu par M2.
+  R-05 (schéma non versionné) résolu par M2 ; R-06 (provisionnement d'un utilisateur en première
+  connexion incompatible avec un endpoint `@Transactional(readOnly = true)`) découvert en
+  validation manuelle M7, non corrigé (défaut du socle M3, hors périmètre de M7).
 
 ## 10. Où aller ensuite
 
