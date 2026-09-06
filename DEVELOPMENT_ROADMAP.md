@@ -2,7 +2,7 @@
 
 > Feuille de route séquentielle du backend. Un jalon = un objectif, un périmètre fermé,
 > une validation manuelle par le porteur du projet avant passage au suivant.
-> Dernière mise à jour : 2026-09-04 (M1 à M5 terminés et validés — M6 en attente d'autorisation).
+> Dernière mise à jour : 2026-09-04 (M1 à M6 terminés et validés — M7 en attente d'autorisation).
 
 ---
 
@@ -28,9 +28,9 @@
 | **M2** | Schéma de base et référentiels | Q-00 ✅, Q-01 ✅, Q-02 ✅, Q-03 ✅, Q-04 ✅, Q-05 ✅, Q-06 ✅, Q-07 ✅, Q-22 ✅, Q-26 ✅, Q-27 ✅, Q-29 ✅ | ✅ **Terminé et validé** (2026-09-04, commit `ceb0e77`) |
 | **M3** | Socle transversal (erreurs, historique, utilisateur, pagination) | Q-08 ✅ | ✅ **Terminé et validé** (2026-09-04, commit `57e75c3`) |
 | **M4** | Module Dossiers | Q-10, Q-11, Q-12, Q-23, Q-26, Q-28 | ✅ **Terminé et validé manuellement** (2026-09-04, commit `955aa4c`, PR #2 mergée dans `dev`) |
-| **M5** | Module Alertes (moteur + notifications) | Q-22 ✅, Q-32 ✅, Q-36 ✅, Q-37 ✅, Q-38 ✅ | ✅ **Terminé et validé manuellement** (2026-09-04) |
-| **M6** | Module Audiences + Alarmes | Q-04, Q-13 | ⏸️ **prêt à démarrer, en attente d'autorisation explicite** |
-| **M7** | Module Délibérés | Q-17, Q-18, Q-19, Q-13 | ⏸️ |
+| **M5** | Module Alertes (moteur + notifications) | Q-22 ✅, Q-32 ✅, Q-36 ✅, Q-37 ✅, Q-38 ✅ | ✅ **Terminé et validé manuellement** (2026-09-04, commit `7cd8954`, PR #4 mergée dans `dev`) |
+| **M6** | Module Audiences + Alarmes | Q-04 ✅, Q-12 ✅, Q-13 ✅, Q-39 ✅, Q-40 ✅, Q-41 ✅ | ✅ **Terminé et validé manuellement** (2026-09-04) |
+| **M7** | Module Délibérés | Q-17, Q-18, Q-19, Q-13 | ⏸️ **prêt à démarrer, en attente d'autorisation explicite** |
 | **M8** | Module GED | Q-02, Q-07, Q-24, R-02 | ⏸️ |
 | **M9** | Module Intervenants (avocats, répertoire, constitutions) | Q-03, Q-28 | ⏸️ |
 | **M10** | Module Frais (circuit de validation) | Q-05, Q-24, Q-26 | ⏸️ |
@@ -286,9 +286,50 @@ réelles).
 
 ---
 
-## M6 — Module Audiences + Alarmes
-Épic 2 (6 US). Planification + programmation automatique J-7/J-3/J-1, compte rendu juriste,
-alarmes libres (Q-04), reprogrammation, calendrier avec exports, détection de doublon.
+## M6 — Module Audiences + Alarmes ✅ **Terminé**
+
+**Objectif.** Épic 2 (6 US). Planification + programmation automatique J-7/J-3/J-1, compte rendu
+juriste, alarmes libres (Q-04), reprogrammation, calendrier avec exports, détection de doublon.
+Endpoints #13 à #17 de `API_IMPLEMENTATION_STATUS.md`.
+
+### Réalisé
+- Module `audience` : entités `Audience`/`Alarme` (avec `@ManyToOne Dossier`/`EtapeProcedure`
+  directes — module dépendant de `dossier`, cf. FUNCTIONAL_MAP.md §2), `AudienceService`
+  (planification avec détection de doublon confirmable, compte rendu), `AlarmeService` (création,
+  reprogrammation avec chaîne `alarme_precedente_id`).
+- `RappelAudienceScheduler` : rappels J-7/J-3/J-1 vers chaque juriste affecté (Q-39), anti-doublon
+  par (audience, décalage, destinataire).
+- `AlarmeEcheanceScheduler` : alerte `ALARME` vers le créateur à l'échéance, une seule fois par
+  alarme tant qu'elle n'est pas reprogrammée.
+- `CalendrierExportService` : export JSON/PDF (PDFBox)/Excel (Apache POI) — Q-41.
+- Intégration M4→M6 : le volet audience du doublon confirmé (Q-12, RG-AUD-06, resté ouvert en M4)
+  déclenche une alerte `DOUBLON_AUDIENCE` vers les DJ, sur le même mécanisme que
+  `DOUBLON_AFFECTATION` (M5).
+- 5 endpoints du contrat (#13-17, dont 2 hors OpenAPI formel — Q-13).
+
+### Décisions prises en implémentation (documentées dans `DECISIONS_AND_OPEN_QUESTIONS.md`)
+Q-04 (implémentation de la table `alarme` posée en M2), Q-12 (clôture du volet audience), Q-13
+(2/3 endpoints absents de l'OpenAPI implémentés), Q-39 (destinataires des alertes
+`RAPPEL_AUDIENCE`/`ALARME`), Q-40 (`date_tenue` = date de saisie, « prochaine date » = 
+`date_planifiee`), Q-41 (sélection du format d'export par paramètre de requête).
+
+### Validation manuelle — réalisée et confirmée par le porteur du projet (2026-09-04)
+88/88 tests automatisés verts (`mvn test`, dont 24 nouveaux pour M6, aucune régression M1-M5) ;
+validation manuelle de bout en bout (curl + JWT Keycloak réels) : rejet d'une date passée à la
+planification, doublon d'audience confirmé avec alerte DJ, compte rendu refusé sur audience
+future puis accepté après passage de la date, alarme créée/reprogrammée avec chaîne de
+précédence, échéance d'alarme et rappels J-7 déclenchés en conditions réelles (cron/intervalle
+accélérés pour le test) avec anti-doublon vérifié sur plusieurs cycles, export du calendrier dans
+les 3 formats (signatures de fichier PDF/XLSX vérifiées).
+
+### Commit
+Module livré en un seul commit (docs de contexte incluses, comme pour M5).
+
+### Restant
+`PUT /deliberes/{id}/expedition` (Q-13, volet restant) différé au module M7 ; canaux Outlook/Teams
+des alertes toujours hors périmètre (Q-37, aucune infrastructure fournie).
+
+---
 
 ## M7 — Module Délibérés
 Épic 3 (6 US). Enregistrement, prorogations illimitées + alerte au seuil (Q-17, Q-18),

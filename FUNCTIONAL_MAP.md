@@ -2,10 +2,10 @@
 
 > Carte fonctionnelle complète : Exigence → User Story → Cas d'utilisation → Règles de gestion →
 > Domaine/Données → Module backend → Endpoint(s) → Comportement attendu → Tests.
-> Dernière mise à jour : 2026-09-04 (après le jalon M4 — Épic 1 implémenté).
+> Dernière mise à jour : 2026-09-04 (après le jalon M6 — Épics 1, 2 et 7 implémentés).
 
 **Légende statut** : ❌ non implémenté · 🟡 partiel · ✅ implémenté et testé
-**Épic 1 (Gestion des dossiers) : ✅ toutes les lignes, jalon M4. Épics 2 à 8 : ❌, non démarrés.**
+**Épics 1 (Dossiers, M4), 2 (Audiences, M6) et 7 (Alertes, M5) : ✅. Épics 3 à 6, 8 : ❌, non démarrés.**
 
 ⚠️ Deux systèmes de numérotation des UC coexistent dans la documentation :
 REF-03 §8 (`UC-01`…`UC-17`) et REF-04 §3 (`UC-DOS-01`…`UC-REP-03`).
@@ -84,15 +84,24 @@ statut interdite, création directe de `RECOURS_2`, historisation systématique.
 
 | FR | US | UC | RG | Entités | Endpoint | Comportement attendu | Statut |
 |---|---|---|---|---|---|---|---|
-| FR-AUD-01 | 2.1, 2.6 | UC-AUD-01 | RG-AUD-01,03,06,07 | `audience`, `alerte` | `POST /dossiers/{id}/audiences` | Étape au statut `EN_COURS` ; date future (400 sinon) ; crée l'audience `PLANIFIEE` ; **programme 3 alertes `RAPPEL_AUDIENCE` à J-7, J-3, J-1** ; doublon (même `etapeId` + `datePlanifiee`) → 409/ERR-005 avec confirmation possible ; **201** | ❌ |
-| FR-AUD-02 | 2.2 | UC-AUD-02 | RG-AUD-01 | `audience`, `historique_action` | `PUT /audiences/{id}/compte-rendu` | Date passée requise ; compte rendu non vide (400 sinon) ; statut → `TENUE` ; historise | ❌ |
-| FR-AUD-03 | 2.3 | UC-AUD-03 | RG-AUD-02, RG-DEL-02, RG-DEL-05 | **`alarme` (Q-04)** | `POST /dossiers/{id}/alarmes` | Objet + échéance future + étape ; crée une alarme active rattachée au dossier **et à l'étape** ; **⚠️ endpoint absent de la spécification OpenAPI (Q-13)** | ❌ |
-| FR-AUD-04 | 2.4 | UC-AUD-04 | RG-AUD-04 | `alarme`/`alerte` | `PUT /alarmes/{id}/reprogrammer` | Marque l'ancienne `TRAITEE` + `date_traitement` ; crée la nouvelle ; historise ; **⚠️ absent de l'OpenAPI (Q-13)** | ❌ |
-| FR-AUD-05 | 2.5 | UC-AUD-05 | RG-AUD-05, RG-REP-01 | `audience`, `dossier`, `etape_procedure` | `GET /audiences/calendrier` | Période HEBDOMADAIRE/MENSUELLE/TRIMESTRIELLE + `dateDebut` ; retourne juridiction, étape, juriste, avocat, unité d'origine, compte client, objet, risque, prochaine date ; export JSON/PDF/EXCEL ; < 5 s | ❌ |
+| FR-AUD-01 | 2.1, 2.6 | UC-AUD-01 | RG-AUD-01,03,06,07 | `audience`, `alerte` | `POST /dossiers/{id}/audiences` | Étape au statut `EN_COURS` ; date future (400 sinon) ; crée l'audience `PLANIFIEE` ; **programme 3 alertes `RAPPEL_AUDIENCE` à J-7, J-3, J-1** ; doublon (même `etapeId` + `datePlanifiee`) → 409/ERR-005 avec confirmation possible ; **201** | ✅ |
+| FR-AUD-02 | 2.2 | UC-AUD-02 | RG-AUD-01 | `audience`, `historique_action` | `PUT /audiences/{id}/compte-rendu` | Date passée requise ; compte rendu non vide (400 sinon) ; statut → `TENUE` ; historise | ✅ |
+| FR-AUD-03 | 2.3 | UC-AUD-03 | RG-AUD-02, RG-DEL-02, RG-DEL-05 | **`alarme` (Q-04)** | `POST /dossiers/{id}/alarmes` | Objet + échéance future + étape ; crée une alarme active rattachée au dossier **et à l'étape** ; **⚠️ endpoint absent de la spécification OpenAPI (Q-13)** | ✅ |
+| FR-AUD-04 | 2.4 | UC-AUD-04 | RG-AUD-04 | `alarme`/`alerte` | `PUT /alarmes/{id}/reprogrammer` | Marque l'ancienne `TRAITEE` + `date_traitement` ; crée la nouvelle ; historise ; **⚠️ absent de l'OpenAPI (Q-13)** | ✅ |
+| FR-AUD-05 | 2.5 | UC-AUD-05 | RG-AUD-05, RG-REP-01 | `audience`, `dossier`, `etape_procedure` | `GET /audiences/calendrier` | Période HEBDOMADAIRE/MENSUELLE/TRIMESTRIELLE + `dateDebut` ; retourne juridiction, étape, juriste, avocat, unité d'origine, compte client, objet, risque, prochaine date ; export JSON/PDF/EXCEL ; < 5 s | ✅ |
 
-**Tests attendus** : planification nominale + 3 alertes créées, date passée refusée, étape non
-`EN_COURS`, doublon d'audience, compte rendu vide, compte rendu sur audience future,
-reprogrammation (ancienne `TRAITEE`), calendrier vide, chaque format d'export.
+> **FR-AUD-01** : les 3 rappels ne sont pas pré-enregistrés à la création — `RappelAudienceScheduler`
+> vérifie quotidiennement les audiences `PLANIFIEE` à J-7/J-3/J-1 et déclenche l'alerte
+> correspondante vers chaque juriste affecté (destinataire non spécifié par la documentation,
+> tranché en Q-39), avec anti-doublon par (audience, décalage, destinataire). Comportement
+> observable identique, mécanisme plus robuste à une modification/suppression ultérieure de
+> l'audience. **FR-AUD-03/04** : implémentés selon Q-13 (endpoints hors OpenAPI formel).
+
+**Tests réalisés** (M6, 24 tests dédiés) : planification nominale, date passée refusée, étape non
+`EN_COURS`, doublon d'audience (avec et sans confirmation), compte rendu refusé sur audience
+future puis accepté, reprogrammation d'alarme (ancienne `TRAITEE`, chaîne de précédence),
+échéance d'alarme et rappels J-7/J-3/J-1 déclenchés en conditions réelles avec anti-doublon,
+export du calendrier dans les 3 formats.
 
 **Écrans frontend** : *Planifier une audience* · *Détail audience / Saisie du compte rendu* ·
 *Calendrier des audiences* (vue semaine/mois/trimestre + export) · *Configurer une alarme* ·
@@ -287,11 +296,11 @@ vue client sans dossier, client inexistant.
 | Épic | Stories | Must | Should | Endpoints | Implémenté |
 |---|---|---|---|---|---|
 | 1 — Dossiers | 7 | 7 | 0 | 9 (+ 4 clients, + 1 🆕) | **✅ 14** (M4) |
-| 2 — Audiences | 6 | 5 | 1 | 5 | 0 |
+| 2 — Audiences | 6 | 5 | 1 | 5 | **✅ 5** (M6) |
 | 3 — Délibérés | 6 | 5 | 1 | 5 | 0 |
 | 4 — Frais | 6 | 5 | 1 | 5 | 0 |
 | 5 — Publications & constitutions | 8 | 6 | 2 | 8 | 0 |
 | 6 — GED | 6 | 5 | 1 | 5 | 0 |
 | 7 — Alertes | 4 | 2 | 2 | 5 | **✅ 5** (M5, 🟡 déclencheurs futurs) |
 | 8 — Décisions & reporting | 6 | 4 | 2 | 8 | 0 |
-| **Total** | **49** | **39** | **10** | **~54** | **19** |
+| **Total** | **49** | **39** | **10** | **~54** | **24** |

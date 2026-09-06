@@ -23,4 +23,13 @@ public interface AlerteRepository extends JpaRepository<Alerte, Long> {
      */
     boolean existsByTypeAndDestinataireIdAndStatutAndDeclencheurStartingWith(
             TypeAlerte type, Long destinataireId, StatutAlerte statut, String marqueur);
+
+    /**
+     * Anti-doublon pour un événement qui ne doit être signalé **qu'une seule fois dans son
+     * existence** (ex. rappel J-7 d'une audience, échéance d'une alarme) — contrairement à
+     * {@link #existsByTypeAndDestinataireIdAndStatutAndDeclencheurStartingWith}, le statut
+     * {@code TRAITEE} ne doit pas autoriser un nouveau déclenchement du même événement.
+     */
+    boolean existsByTypeAndDestinataireIdAndDeclencheurStartingWith(
+            TypeAlerte type, Long destinataireId, String marqueur);
 }

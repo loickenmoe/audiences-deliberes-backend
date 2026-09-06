@@ -155,12 +155,22 @@ sauf besoin de vérification ponctuelle.**
 - **Ne pas ajouter de ligne `Co-Authored-By: Claude ...` aux messages de commit** (préférence
   utilisateur explicite, 2026-09-04) — déroge à la convention par défaut de l'outil.
 
-## 9. État actuel (2026-09-04, après le jalon M5)
+## 9. État actuel (2026-09-04, après le jalon M6)
 
 - **Documentation** : complète et validée en amont (8 documents).
-- **Code métier** : modules **Dossiers + Clients** (M4, Épic 1) et **Alertes + Configurations**
-  (M5, Épic 7) livrés. Les autres modules fonctionnels (audiences, délibérés, frais, GED,
-  décisions définitives, reporting) restent entièrement à construire à partir de M6.
+- **Code métier** : modules **Dossiers + Clients** (M4, Épic 1), **Alertes + Configurations**
+  (M5, Épic 7) et **Audiences + Alarmes** (M6, Épic 2) livrés. Les autres modules fonctionnels
+  (délibérés, frais, GED, décisions définitives, reporting) restent entièrement à construire à
+  partir de M7.
+- **Module `audience`** : ✅ posé au jalon **M6** : entités `Audience`/`Alarme` (`@ManyToOne`
+  directe vers `Dossier`/`EtapeProcedure` — module dépendant de `dossier`, contrairement à
+  `alerte`), `AudienceService` (planification avec doublon confirmable — Q-12, compte rendu),
+  `AlarmeService` (création, reprogrammation en chaîne), `RappelAudienceScheduler` (rappels
+  J-7/J-3/J-1), `AlarmeEcheanceScheduler` (alerte à l'échéance), `CalendrierExportService`
+  (JSON/PDF/Excel). 5 endpoints du contrat (#13-17). Validé de bout en bout (curl + JWT Keycloak
+  réels, déclenchements planifiés observés avec anti-doublon, export testé dans les 3 formats) et
+  par 24 tests automatisés dédiés. Voir `DEVELOPMENT_ROADMAP.md` §M6 et
+  `DECISIONS_AND_OPEN_QUESTIONS.md` (Q-04, Q-12, Q-13, Q-39, Q-40, Q-41).
 - **Module `alerte`** : ✅ posé au jalon **M5** : entité `Alerte` (référence `dossierId` libre,
   sans dépendance vers `dossier` — même principe que `HistoriqueAction`), `AlerteService`
   (déclenchement, consultation, traitement, anti-doublon, push WebSocket best-effort avec repli
@@ -190,17 +200,20 @@ sauf besoin de vérification ponctuelle.**
   réel — migrations idempotentes, correspondance Hibernate/schéma confirmée.
 - **Module `referentiel`** : entités JPA + repositories pour `Profil`, `Utilisateur`, `Client`,
   `ConfigurationSysteme`, `TypeClientSensible`, `NatureDossier`, `Intervenant`/`Avocat`/
-  `AutrePrestataire`. Aucun service, aucun contrôleur.
+  `AutrePrestataire` ; `ClientService`/`Controller` (M4) et `ConfigurationService`/`Controller`
+  (M5) pour les parties exposées à ce jour.
 - **Socle transversal** : ✅ posé au jalon **M3** (commit `57e75c3`) : `common/error`
   (`ApiException`, `GlobalExceptionHandler`, format `{code, message, details}` uniforme y
   compris au niveau du filtre de sécurité), `common/security/CurrentUserService` (provisioning
   utilisateur depuis Keycloak), `common/audit/HistoriqueActionService`,
   `common/web/PageResponse<T>`, `common/config/SchedulingConfig` (dont l'usage `@Scheduled`
-  effectif depuis M5, `ChargeMaxAvocatScheduler`). Consommé par les modules `dossier` (M4) et
-  `alerte` (M5).
-- **Tests** : `contextLoads()` toujours vert. **67 tests au total après M5** (20 socle M1-M3 +
-  31 M4 + 15 nouveaux M5 : `AlerteServiceTest`, `ChargeMaxAvocatSchedulerTest`,
-  `ConfigurationServiceTest`), aucune régression.
+  effectif depuis M5, `ChargeMaxAvocatScheduler`, étendu en M6 avec `RappelAudienceScheduler`/
+  `AlarmeEcheanceScheduler`). Consommé par les modules `dossier` (M4), `alerte` (M5) et `audience`
+  (M6).
+- **Tests** : `contextLoads()` toujours vert. **88 tests au total après M6** (20 socle M1-M3 +
+  31 M4 + 15 M5 + 24 nouveaux M6 : `AudienceServiceTest`, `AlarmeServiceTest`,
+  `RappelAudienceSchedulerTest`, `AlarmeEcheanceSchedulerTest`, `CalendrierExportServiceTest`,
+  `PeriodeCalendrierTest`), aucune régression.
 - **Risques** : voir `DECISIONS_AND_OPEN_QUESTIONS.md` §Risques — R-01 (secrets exposés)
   résolu dans les fichiers versionnés, mais la rotation des secrets déjà exposés côté
   Neon/iDrive e2 reste une action utilisateur en attente ; R-02, R-03, R-04 résolus par M1 ;
