@@ -2,7 +2,7 @@
 
 > Carte fonctionnelle complète : Exigence → User Story → Cas d'utilisation → Règles de gestion →
 > Domaine/Données → Module backend → Endpoint(s) → Comportement attendu → Tests.
-> Dernière mise à jour : 2026-09-04 (après le jalon M6 — Épics 1, 2 et 7 implémentés).
+> Dernière mise à jour : 2026-09-06 (après le jalon M7 — Épics 1, 2, 3 et 7 implémentés).
 
 **Légende statut** : ❌ non implémenté · 🟡 partiel · ✅ implémenté et testé
 **Épics 1 (Dossiers, M4), 2 (Audiences, M6) et 7 (Alertes, M5) : ✅. Épics 3 à 6, 8 : ❌, non démarrés.**
@@ -115,16 +115,18 @@ export du calendrier dans les 3 formats.
 
 | FR | US | UC | RG | Entités | Endpoint | Comportement attendu | Statut |
 |---|---|---|---|---|---|---|---|
-| FR-DEL-01 | 3.1 | UC-DEL-01 | RG-DEL-01, RG-DEL-05 | `delibere`, `etape_procedure` | `POST /dossiers/{id}/deliberes` | Étape `EN_DELIBERE` requise (400 sinon) ; `resultat` ∈ {FAVORABLE, DEFAVORABLE, MIXTE} ; **étape → `DELIBERE_VIDE`** ; historise ; 201 | ❌ |
-| FR-DEL-04 | 3.2, 3.3 | UC-DEL-04 | RG-DEL-06, RG-ALR-01 | `prorogation`, `alerte`, `configuration_systeme` | `POST /deliberes/{id}/prorogations` | Nombre **illimité**, jamais écrasé ; incrémente le compteur ; **l'étape reste `EN_DELIBERE`** ; au franchissement du seuil (`SEUIL_PROROGATIONS`, défaut 10) → alerte `PROROGATION` vers **DJ et DJA**, une seule fois ; **⚠️ code de retour contradictoire : 201 vs 409 vs 422 (Q-17) ; seuil atteint à 10 ou à 11 (Q-18)** | ❌ |
-| FR-DEL-05 | 3.4 | UC-DEL-05 | RG-DEL-07 | `etape_procedure`, `historique_action` | `POST /deliberes/{id}/rabattement` | Date + **motif obligatoire** (400 sinon) ; étape → `EN_COURS` ; historique du parcours conservé ; nouvelles audiences planifiables ; l'étape peut repasser n fois en `EN_DELIBERE` | ❌ |
-| FR-DEL-02 | 3.5 | UC-DEL-02 | RG-DEL-02, RG-DEL-04 | `alerte`, `etape_procedure` | `GET /deliberes/{id}/recours` | Consulte l'échéance + état d'alerte. **⚠️ Les US demandent une *création* d'alerte via un GET — incohérent REST (Q-19).** À l'échéance sans recours : étape → `CLOTURE`, bascule décisions définitives, notification | ❌ |
-| FR-DEL-03 | 3.6 | UC-DEL-03 | RG-DEL-03 | `delibere` | `PUT /deliberes/{id}/expedition` | `statutExpedition` ∈ {A_LEVER, LEVEE} ; historise ; **⚠️ absent de l'OpenAPI (Q-13)** | ❌ |
+| FR-DEL-01 | 3.1 | UC-DEL-01 | RG-DEL-01, RG-DEL-05 | `delibere`, `etape_procedure` | `POST /dossiers/{id}/deliberes` | Étape `EN_DELIBERE` requise (400 sinon) ; `resultat` ∈ {FAVORABLE, DEFAVORABLE, MIXTE} ; **étape → `DELIBERE_VIDE`** ; historise ; 201 | ✅ |
+| FR-DEL-04 | 3.2, 3.3 | UC-DEL-04 | RG-DEL-06, RG-ALR-01 | `prorogation`, `alerte`, `configuration_systeme` | `POST /deliberes/{id}/prorogations` | Nombre **illimité**, jamais écrasé ; incrémente le compteur ; **l'étape reste `EN_DELIBERE`** ; au franchissement du seuil (`SEUIL_PROROGATIONS`, défaut 10) → alerte `PROROGATION` vers **DJ et DJA**, une seule fois ; **⚠️ code de retour contradictoire : 201 vs 409 vs 422 (Q-17 ✅) ; seuil atteint à 10 ou à 11 (Q-18 ✅)** | ✅ |
+| FR-DEL-05 | 3.4 | UC-DEL-05 | RG-DEL-07 | `etape_procedure`, `historique_action` | `POST /deliberes/{id}/rabattement` | Date + **motif obligatoire** (400 sinon) ; étape → `EN_COURS` ; historique du parcours conservé ; nouvelles audiences planifiables ; l'étape peut repasser n fois en `EN_DELIBERE` | ✅ |
+| FR-DEL-02 | 3.5 | UC-DEL-02 | RG-DEL-02, RG-DEL-04 | `alerte`, `etape_procedure` | `GET /deliberes/{id}/recours` | Consulte l'échéance + état d'alerte, strictement en lecture (Q-19 ✅, révisé — `Delibere.dateEcheanceRecours` dédiée). À l'échéance sans recours : étape → `CLOTURE`, alerte `DELAI_RECOURS` (`DelaiRecoursScheduler`) ; bascule décisions définitives différée à M12 (Q-43 ✅) | ✅ |
+| FR-DEL-03 | 3.6 | UC-DEL-03 | RG-DEL-03 | `delibere` | `PUT /deliberes/{id}/expedition` | `statutExpedition` ∈ {A_LEVER, LEVEE} ; historise ; absent de l'OpenAPI, implémenté (Q-13 ✅, close) | ✅ |
 
-**Tests attendus** : délibéré sur étape non `EN_DELIBERE`, résultat invalide, transition
-`DELIBERE_VIDE`, 10 puis 11 prorogations (déclenchement unique de l'alerte), seuil modifié par le
-DJ pris en compte, rabattement sans motif, cycle `EN_DELIBERE`→`EN_COURS`→`EN_DELIBERE`,
-expiration du délai de recours (test du planificateur).
+**Tests attendus** : délibéré sur étape non `EN_DELIBERE`, échéance de recours refusée/exigée
+selon le résultat, transition `DELIBERE_VIDE`, 10 puis 11 prorogations (déclenchement unique de
+l'alerte), seuil modifié par le DJ pris en compte, rabattement refusé hors `DELIBERE_VIDE`, cycle
+`DELIBERE_VIDE`→`EN_COURS`→`EN_DELIBERE`→nouveau délibéré, expiration du délai de recours (test du
+planificateur). Réalisés : 14 tests automatisés (`DelibereServiceTest`,
+`DelaiRecoursSchedulerTest`) + validation manuelle de bout en bout (curl + JWT Keycloak réels).
 
 **Écrans frontend** : *Enregistrer un délibéré* · *Proroger* (avec historique des prorogations) ·
 *Rabattre* · *Suivi du délai de recours* · *Gestion de l'expédition (grosse)*.
@@ -297,10 +299,10 @@ vue client sans dossier, client inexistant.
 |---|---|---|---|---|---|
 | 1 — Dossiers | 7 | 7 | 0 | 9 (+ 4 clients, + 1 🆕) | **✅ 14** (M4) |
 | 2 — Audiences | 6 | 5 | 1 | 5 | **✅ 5** (M6) |
-| 3 — Délibérés | 6 | 5 | 1 | 5 | 0 |
+| 3 — Délibérés | 6 | 5 | 1 | 5 | **✅ 5** (M7) |
 | 4 — Frais | 6 | 5 | 1 | 5 | 0 |
 | 5 — Publications & constitutions | 8 | 6 | 2 | 8 | 0 |
 | 6 — GED | 6 | 5 | 1 | 5 | 0 |
 | 7 — Alertes | 4 | 2 | 2 | 5 | **✅ 5** (M5, 🟡 déclencheurs futurs) |
 | 8 — Décisions & reporting | 6 | 4 | 2 | 8 | 0 |
-| **Total** | **49** | **39** | **10** | **~54** | **24** |
+| **Total** | **49** | **39** | **10** | **~54** | **29** |

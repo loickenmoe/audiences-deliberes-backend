@@ -2,7 +2,7 @@
 
 > Contradictions documentaires, ambiguïtés et lacunes nécessitant un **arbitrage explicite**.
 > Aucune de ces questions n'a été tranchée silencieusement.
-> Dernière mise à jour : 2026-09-04 (après jalon M6 — voir statuts R-01 à R-05, Q-01/04/10/11/12/13/22/23/26/32/34-41).
+> Dernière mise à jour : 2026-09-06 (après jalon M7 — voir statuts R-01 à R-06, Q-01/04/10/11/12/13/17-19/22/23/26/32/34-44).
 
 **Convention de lecture de chaque fiche :**
 - **A — Ce que la documentation exige** (avec la source exacte)
@@ -115,6 +115,30 @@ de la colonne `document.chemin_stockage` pourtant exigée par le dictionnaire (*
 
 **Statut (2026-09-04)** : non traité en M1 (hors périmètre — aucune entité n'existe encore) ;
 objet du jalon **M2 — Schéma de base et référentiels**.
+
+---
+
+### R-06 🔴 Provisionnement d'un utilisateur en première connexion incompatible avec un endpoint en lecture seule — découvert en validation manuelle M7
+
+`CurrentUserService.getCurrentUser()` (M3) **provisionne** (INSERT) l'utilisateur en base à sa
+toute première requête authentifiée (aucun compte n'étant créé côté Keycloak par l'application).
+Or toute méthode appelante marquée `@Transactional(readOnly = true)` propage ce mode à cet INSERT
+imbriqué (propagation par défaut `REQUIRED`) : PostgreSQL rejette l'écriture avec `ERROR: cannot
+execute INSERT in a read-only transaction`, et la première requête de **tout nouvel utilisateur**
+échoue en `500 ERR-INTERNAL` si cette requête tombe sur un endpoint en lecture seule (constaté ici
+sur `GET /alertes/mes-notifications`, M5, mais le défaut est structurel à `CurrentUserService`,
+pas propre à ce seul endpoint — tout `@Transactional(readOnly = true)` appelant
+`getCurrentUser()`/`resolveOrProvision()` est concerné). Une fois l'utilisateur provisionné par un
+premier appel en écriture, le problème disparaît pour ses appels suivants — d'où sa découverte
+tardive (les utilisateurs de test des jalons précédents avaient déjà été provisionnés par des
+appels en écriture antérieurs).
+**C — Recommandation** : isoler le provisionnement dans sa propre transaction en écriture (ex.
+`@Transactional(propagation = Propagation.REQUIRES_NEW)` sur `provisionFromJwt`), indépendante du
+mode de la transaction appelante.
+**Statut (2026-09-06)** : non corrigé — hors périmètre du jalon M7 (défaut du socle M3, aucun
+module M7 n'y touche). Contourné pour la validation manuelle (provisionnement direct en base du
+test `dja.test`). **Recommandé en correction dès que possible**, un premier appel en lecture de
+n'importe quel nouvel utilisateur (DJA, ASSISTANTE, SH, AVOCAT dans cette session) y étant exposé.
 
 ---
 
@@ -369,7 +393,13 @@ Conserver le code `ERR-007` comme code applicatif informatif, non comme erreur H
 document de réalisation (US) et avec la formulation « **plus de** 10 prorogations » du contrat.
 L'alerte est déclenchée **une seule fois** (US 3.3 critère 2).
 
-**Décision attendue :** …
+**Statut (2026-09-06, M7)** : les deux recommandations C appliquées telles quelles.
+`POST /deliberes/{id}/prorogations` retourne toujours `201 Created` ; `ProrogationResponse` porte
+un champ `alerte` — `true` dès que `compteur > SEUIL_PROROGATIONS` (pas seulement à la prorogation
+qui franchit le seuil, pour que le frontend puisse afficher l'état à tout moment). Le
+déclenchement effectif de l'alerte `PROROGATION` (vers chaque DJ/DJA actif) reste protégé par
+`AlerteService.aDejaEteDeclenchee` avec un marqueur `[delibereId:X]`, garantissant l'unicité
+« une seule fois » même si de nouveaux DJ/DJA deviennent actifs après le franchissement.
 
 ---
 
@@ -416,7 +446,7 @@ Colonne `VARCHAR(255) NOT NULL` (« chemin ou référence MinIO ») présente au
 récupérable. **C** : l'ajouter (le dictionnaire fait foi sur les données).
 **Statut (2026-09-04, M2)** : appliqué — colonne ajoutée à `V1__schema_initial.sql`.
 
-### Q-13 🟡 Trois endpoints listés au §2 mais absents de la spécification OpenAPI — 2/3 implémentés (M6)
+### Q-13 ✅ Trois endpoints listés au §2 mais absents de la spécification OpenAPI — 3/3 implémentés (M6/M7)
 `POST /dossiers/{id}/alarmes`, `PUT /alarmes/{id}/reprogrammer`, `PUT /deliberes/{id}/expedition`
 figurent dans le tableau récapitulatif REF-07 §2 et dans les user stories (2.3, 2.4, 3.6) mais
 **pas dans la spécification OpenAPI §3** (pas de schéma de requête ni de réponse).
@@ -426,12 +456,24 @@ figurent dans le tableau récapitulatif REF-07 §2 et dans les user stories (2.3
 implémentés selon les critères Gherkin de US 2.3/2.4 (`AlarmeController`). `PUT
 /deliberes/{id}/expedition` reste ouvert, prévu au module M7 (Délibérés).
 
-### Q-19 — `GET /deliberes/{id}/recours` utilisé pour *créer* une alerte — `P1`
+**Statut (2026-09-06, M7)** : `PUT /deliberes/{id}/expedition` implémenté (`DelibereController`) —
+bascule `statutExpedition` entre `A_LEVER`/`LEVEE`, historisée. Les 3 endpoints du contrat sont
+désormais couverts.
+
+### Q-19 ✅ `GET /deliberes/{id}/recours` utilisé pour *créer* une alerte — tranché (M7)
 US 3.5 critère 1 : « **When** je soumets une `dateEcheance` **via GET** `/deliberes/{id}/recours`
 (création d'alerte) ». Un `GET` ne doit pas créer de ressource ni accepter de corps.
 **C** : conserver `GET /deliberes/{id}/recours` en **consultation** et créer le suivi via
 `POST /dossiers/{id}/alarmes` (Q-04) avec un type `DELAI_RECOURS`.
-**Décision attendue :** …
+
+**Statut (2026-09-06, M7)** : recommandation C **révisée**. L'alarme M6 (`objet` en texte libre,
+sans notion de type) ne porte pas de sémantique `DELAI_RECOURS` propre, et un délibéré ne devrait
+pas nécessiter deux mécanismes de suivi distincts (alarme libre + échéance de recours) pour la
+même information. Choix final : `Delibere.dateEcheanceRecours` est saisie **directement** dans
+`POST /dossiers/{id}/deliberes` (requise et postérieure à `dateDeliberee` si `resultat` ∈
+{DEFAVORABLE, MIXTE} — Q-42), suivie par un planificateur dédié `DelaiRecoursScheduler` qui
+déclenche `TypeAlerte.DELAI_RECOURS` (déjà réservé en base depuis M2) à l'échéance. `GET
+/deliberes/{id}/recours` reste strictement une consultation (`RecoursResponse`), conforme à C.
 
 ### Q-12 ✅ « 409 avec possibilité de confirmer ou annuler » : mécanisme non spécifié — tranché et implémenté (M4 volet dossier, M6 volet audience)
 RG-DOS-07 et RG-AUD-06 : le doublon d'affectation / d'audience **n'est pas bloquant** — le juriste
@@ -527,6 +569,17 @@ autorisée par l'endpoint générique M4, avec ouverture automatique de l'étape
 aucune duplication, aucune entrée d'historique parasite ; étape suivante absente : création
 automatique tracée).
 
+**Statut (2026-09-06, M7)** : la cible du rabattement (RG-DEL-07/FR-DEL-05) est **corrigée** en
+implémentant le module : ce n'est pas `EN_DELIBERE→EN_COURS` mais `DELIBERE_VIDE→EN_COURS` — la
+**même** valeur de transition que l'exercice d'un recours (l'endpoint `POST /deliberes/{id}/...`
+suppose un délibéré déjà enregistré, donc une étape déjà `DELIBERE_VIDE`, cf. Q-42). Les deux cas
+partagent la même transition de statut mais sont distingués par l'endpoint appelé et par leurs
+effets de bord : le rabattement (`POST /deliberes/{id}/rabattement`, dédié M7) ne rouvre jamais
+l'étape suivante et exige un motif ; l'exercice d'un recours (endpoint générique M4) ouvre
+toujours l'étape suivante et ne prend aucun motif. `EN_DELIBERE→EN_COURS` reste, elle, exclue de
+l'endpoint générique et n'est utilisée par aucun endpoint (le rabattement s'applique après
+enregistrement du délibéré, jamais avant).
+
 ### Q-36 ✅ Destinataire de l'alerte `DOUBLON_AFFECTATION` — tranché (M5)
 Q-12 (M4) a implémenté la confirmation d'un doublon d'affectation (`forcer=true`) et prévu qu'elle
 « crée une alerte `DOUBLON_*` », sans que RG-DOS-07/US 2.6 ne précisent le **destinataire** de
@@ -609,6 +662,60 @@ l'audit initial, cf. Q-31) et Apache POI pour la génération.
 **Statut (2026-09-04, M6)** : appliqué — `CalendrierExportService` (PDFBox pour le PDF, POI pour
 le classeur `.xlsx`), export testé en conditions réelles dans les 3 formats (signatures de fichier
 `%PDF-`/`PK..` vérifiées, tailles non nulles).
+
+### Q-42 ✅ Rabattement vs. exercice d'un recours : même transition d'étape, deux endpoints — tranché (M7)
+RG-DEL-07/FR-DEL-05 (rabattement, `POST /deliberes/{id}/rabattement`) et RG-DOS-04 (exercice d'un
+recours, endpoint générique `PATCH /dossiers/{id}/etapes/{etapeId}/statut`, M4) ciblent tous deux
+`DELIBERE_VIDE→EN_COURS` — aucun des deux documents ne signale ce chevauchement, ni comment le
+système doit distinguer les deux cas (cf. correction de Q-35 ci-dessus).
+**C — Recommandation** : distinguer par l'endpoint appelé plutôt que par la valeur de transition,
+avec des effets de bord différents : le rabattement rejoue la **même** étape (aucune étape
+suivante ouverte, motif obligatoire, `RabattementRequest`) ; l'exercice d'un recours ouvre
+**toujours** l'étape suivante (`ouvrirEtapeSuivante`, Q-34), sans motif. Un résultat FAVORABLE
+n'ouvrant aucune voie de recours (aucune `dateEcheanceRecours`), seuls DEFAVORABLE/MIXTE peuvent,
+en toute rigueur, faire l'objet d'un recours exercé — le rabattement, lui, reste possible quel que
+soit le résultat (une décision favorable peut aussi être rabattue pour complément d'instruction).
+**Statut (2026-09-06, M7)** : appliqué — `DelibereService.rabattre` vérifie `etape.statutCycleVie
+== DELIBERE_VIDE`, bascule directement vers `EN_COURS` sans jamais appeler la logique
+d'ouverture d'étape suivante ; testé négativement (étape non `DELIBERE_VIDE` → 400) et
+positivement (`verify(etapeProcedureRepository, never()).existsByDossierIdAndType(...)`, preuve
+qu'aucune étape suivante n'est consultée/ouverte).
+
+### Q-43 ✅ Bascule automatique en `CLOTURE` à l'expiration du délai de recours — tranché (M7)
+FR-DEL-02 : « à l'échéance sans recours : étape → `CLOTURE`, **bascule décisions définitives**,
+notification ». Le module Décisions définitives (Épic 8 partiel, M12) n'existe pas encore à ce
+stade du roadmap — sa « bascule » ne peut donc pas être implémentée maintenant sans spéculer sur
+un schéma non conçu.
+**C — Recommandation** : implémenter la partie réalisable dès M7 (notification + bascule
+`CLOTURE`) via un planificateur dédié (`DelaiRecoursScheduler`, même principe que
+`ChargeMaxAvocatScheduler`/`RappelAudienceScheduler`/`AlarmeEcheanceScheduler` — Q-38/Q-39) ;
+différer explicitement le volet « décisions définitives » à M12, plutôt que de l'omettre
+silencieusement.
+**Statut (2026-09-06, M7)** : appliqué — `DelaiRecoursScheduler` (module `delibere`, dépend de
+`dossier` et `alerte`) déclenche `TypeAlerte.DELAI_RECOURS` vers chaque juriste affecté (anti-
+doublon `aDejaEteDeclenchee`, marqueur `[delibereId:X]`, même sémantique « une seule fois » que
+Q-39) puis bascule l'étape en `CLOTURE`. Aucune entrée `historique_action` pour cette transition
+automatique — `historique_action.utilisateur_id` est `NOT NULL` et aucun planificateur M5/M6
+n'historise ses propres actions système (le déclenchement de l'alerte, lui, est toujours
+persisté et fait foi de traçabilité). Le volet « bascule décisions définitives » reste à faire au
+module M12.
+
+### Q-44 ✅ Prorogation : « l'étape reste EN_DELIBERE » — précondition ou constat ? — tranché (M7)
+FR-DEL-04 critère 4 : « incrémente le compteur ; **l'étape reste `EN_DELIBERE`** ». Lu comme une
+précondition d'entrée, ce critère est **structurellement impossible à satisfaire** : `prorogation.
+delibere_id` est `NOT NULL` (schéma M2) et référence donc nécessairement un délibéré déjà
+enregistré via `POST /dossiers/{id}/deliberes`, lequel a — par construction (Q-01, FR-DEL-01) —
+déjà fait basculer l'étape vers `DELIBERE_VIDE` avant qu'aucune prorogation ne puisse exister. Une
+implémentation initiale de ce projet avait pourtant ajouté cette vérification comme garde d'entrée
+(rejet 400 si l'étape n'était plus `EN_DELIBERE`), rendant `POST /deliberes/{id}/prorogations`
+**inutilisable en pratique** — détecté en validation manuelle (M7).
+**C — Recommandation** : lire « l'étape reste EN_DELIBERE » comme un **constat d'absence d'effet
+de bord** (la prorogation ne touche jamais au cycle de vie de l'étape), pas comme une précondition
+— aucune vérification de statut d'étape sur `proroger`.
+**Statut (2026-09-06, M7)** : appliqué — `DelibereService.proroger` ne consulte plus le statut de
+l'étape ; seul `prorogationRepository.findById`/`countByDelibereId` conditionnent l'opération.
+Revérifié en conditions réelles (curl) : 11 prorogations enregistrées avec succès sur un délibéré
+déjà `DELIBERE_VIDE`, alerte `PROROGATION` déclenchée à la 11e.
 
 ### Q-27 ✅ `dossier.parties` défini deux fois — tranché (M2)
 Le dictionnaire REF-06 §2.1.2 déclare `parties JSONB` **deux fois**, avec deux structures
@@ -703,8 +810,8 @@ une formation des utilisateurs clés a été réalisée ; les données historiqu
 | 2026-09-04 | Q-04 | Création d'une table `alarme` distincte de `alerte` (objet + échéance + étape ; l'alarme génère une `alerte` à échéance) | Prévu au schéma M2, module `audience`/`delibere` M6/M7 |
 | 2026-09-04 | Q-08 | Ajout de `ROLE_SAISIE` au realm Keycloak comme rôle composite (JURISTE, DJ, DJA, ASSISTANTE, SH) | Appliqué en M1 (`keycloak/audiences-realm.json`) |
 | 2026-09-04 | Q-10 | Option A retenue : le dossier est créé immédiatement (201) ; `estSensible` reste à l'état proposé (`sensibilite_statut = EN_ATTENTE`) et n'a d'effet sur le circuit des frais qu'une fois validé par le DJ/DJA | Ajout de colonnes + endpoint dédié, prévu M2/M4 |
-| 2026-09-04 | Q-17 | Code de retour `201 Created` sur `POST /deliberes/{id}/prorogations`, y compris au-delà du seuil ; `alerte:true` dans le corps | Prévu M7 |
-| 2026-09-04 | Q-18 | Le seuil se déclenche quand `compteur > seuilProrogations` (11e prorogation avec le défaut 10), une seule fois | Prévu M7 |
+| 2026-09-04 | Q-17 | Code de retour `201 Created` sur `POST /deliberes/{id}/prorogations`, y compris au-delà du seuil ; `alerte:true` dans le corps | Implémenté M7 |
+| 2026-09-04 | Q-18 | Le seuil se déclenche quand `compteur > seuilProrogations` (11e prorogation avec le défaut 10), une seule fois | Implémenté M7 |
 | 2026-09-04 | Q-22 | Liste réunie des 16 types d'alerte retenue (cf. recommandation Q-22) | Prévu M2 (contrainte CHECK) et M5 |
 | 2026-09-04 | Q-26 | La logique de la conception/contrat prévaut sur celle de RG-DOS-09 au sens strict : `seuil_montant` reste `NULL` par défaut (seuil global applicable), renseigné uniquement en cas de dérogation validée | Prévu M2 (contrainte SQL), M4 |
 | 2026-09-04 | Q-11 | Validation `ET` des champs conditionnels appliquée en couche service (contrainte SQL `OR` conservée comme filet de sécurité) ; catégorie déduite de la nature via `nature_dossier` | Implémenté M4 |
@@ -723,6 +830,12 @@ une formation des utilisateurs clés a été réalisée ; les données historiqu
 | 2026-09-04 | Q-39 | Destinataires : `RAPPEL_AUDIENCE` → juristes affectés ; `ALARME` → créateur de l'alarme | Implémenté M6 |
 | 2026-09-04 | Q-40 | `date_tenue` = date de saisie du compte rendu ; « prochaine date » du calendrier = `date_planifiee` de l'audience | Implémenté M6 |
 | 2026-09-04 | Q-41 | Export du calendrier via `?format=JSON\|PDF\|EXCEL` (JSON par défaut), PDFBox + POI | Implémenté M6 |
+| 2026-09-06 | Q-13 | `PUT /deliberes/{id}/expedition` implémenté — les 3 endpoints hors OpenAPI sont couverts | Implémenté M7 |
+| 2026-09-06 | Q-19 | `Delibere.dateEcheanceRecours` dédiée (pas de réutilisation de l'alarme M6) ; `GET /deliberes/{id}/recours` reste une consultation ; suivi par `DelaiRecoursScheduler` | Implémenté M7 |
+| 2026-09-06 | Q-35 | Correction : le rabattement cible `DELIBERE_VIDE→EN_COURS` (pas `EN_DELIBERE→EN_COURS`) — même transition que l'exercice d'un recours, distinguée par l'endpoint et les effets de bord (Q-42) | Implémenté M7 |
+| 2026-09-06 | Q-42 | Rabattement (`POST /deliberes/{id}/rabattement`, dédié) vs. exercice d'un recours (endpoint générique) : même transition, endpoints et effets de bord différents (ouverture ou non de l'étape suivante) | Implémenté M7 |
+| 2026-09-06 | Q-43 | Bascule automatique `CLOTURE` + alerte `DELAI_RECOURS` implémentées (`DelaiRecoursScheduler`) ; volet « décisions définitives » différé à M12 | Implémenté M7, reste M12 |
+| 2026-09-06 | Q-44 | Prorogation : aucune précondition de statut d'étape (structurellement impossible vu le schéma M2) — « l'étape reste EN_DELIBERE » lu comme un constat, pas une garde d'entrée | Implémenté M7 |
 
 Les autres questions (P1/P2) restent ouvertes et seront tranchées au fil des jalons concernés,
 au plus tard avant le module qui en dépend (cf. tableau des prérequis dans `DEVELOPMENT_ROADMAP.md`).

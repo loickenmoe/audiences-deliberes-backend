@@ -1,7 +1,7 @@
 # API_IMPLEMENTATION_STATUS
 
 > Inventaire exhaustif des endpoints et état d'implémentation.
-> Dernière mise à jour : 2026-09-04 (après jalon M6 — module Audiences/Alarmes).
+> Dernière mise à jour : 2026-09-06 (après jalon M7 — module Délibérés).
 
 **Base URL** : `http://localhost:8080/api/v1` — aligné sur le contrat REF-07 depuis M1 (Q-16 résolue).
 **Authentification** : `Authorization: Bearer <JWT Keycloak>` sur tous les endpoints sauf health checks.
@@ -17,12 +17,12 @@
 
 | Catégorie | Nombre | Implémentés |
 |---|---|---|
-| 📋 Spécifiés dans l'OpenAPI | 37 | **19** (§1-2, §3 #13-15, §9 #44-48) |
-| 📄 Cités §2 mais absents de l'OpenAPI | 3 | 2 (§3 #16-17, alarmes — Q-13) |
+| 📋 Spécifiés dans l'OpenAPI | 37 | **23** (§1-2, §3 #13-15, #18-21, §9 #44-48) |
+| 📄 Cités §2 mais absents de l'OpenAPI | 3 | 3 (§3 #16-17 alarmes, #22 expédition — Q-13, close) |
 | 💡 « À proposer » (user stories) | 10 | 0 |
 | 🆕 Manquants dans toute la documentation | 2 | 1 (`POST /clients`) |
 | 🆕 Ajoutés en cours d'implémentation (hors inventaire initial) | 1 | 1 (`POST /dossiers/{id}/etapes`, cf. Q-34) |
-| **Surface cible totale** | **~53** | **23 (≈43 %)** |
+| **Surface cible totale** | **~53** | **28 (≈53 %)** |
 
 Le squelette de starter hors périmètre (Template/Admin/Staff/Dashboard/Chat, auth JWT maison) a
 été intégralement supprimé en M1 (cf. `DECISIONS_AND_OPEN_QUESTIONS.md` R-03/R-04) — l'ancienne
@@ -93,11 +93,34 @@ Q-10, Q-11, Q-12, Q-26, Q-34, Q-35 pour le détail des arbitrages pris pendant l
 
 | # | Méthode | Endpoint | Rôle requis | FR / US | Src | Statut |
 |---|---|---|---|---|---|---|
-| 18 | POST | `/dossiers/{id}/deliberes` | `ROLE_JURISTE` | FR-DEL-01 / US 3.1 | 📋 | ❌ |
-| 19 | POST | `/deliberes/{id}/prorogations` | `ROLE_JURISTE` | FR-DEL-04 / US 3.2, 3.3 | 📋 | ❌ |
-| 20 | POST | `/deliberes/{id}/rabattement` | `ROLE_JURISTE` | FR-DEL-05 / US 3.4 | 📋 | ❌ |
-| 21 | GET | `/deliberes/{id}/recours` | `ROLE_JURISTE` | FR-DEL-02 / US 3.5 | 📋 | ❌ |
-| 22 | PUT | `/deliberes/{id}/expedition` | `ROLE_JURISTE` | FR-DEL-03 / US 3.6 | **📄** | ❌ |
+| 18 | POST | `/dossiers/{id}/deliberes` | `ROLE_JURISTE` | FR-DEL-01 / US 3.1 | 📋 | ✅ M7 |
+| 19 | POST | `/deliberes/{id}/prorogations` | `ROLE_JURISTE` | FR-DEL-04 / US 3.2, 3.3 | 📋 | ✅ M7 |
+| 20 | POST | `/deliberes/{id}/rabattement` | `ROLE_JURISTE` | FR-DEL-05 / US 3.4 | 📋 | ✅ M7 |
+| 21 | GET | `/deliberes/{id}/recours` | `ROLE_JURISTE` | FR-DEL-02 / US 3.5 | 📋 | ✅ M7 |
+| 22 | PUT | `/deliberes/{id}/expedition` | `ROLE_JURISTE` | FR-DEL-03 / US 3.6 | **📄** | ✅ M7 |
+
+> **#18** : `dateEcheanceRecours` requise et postérieure à `dateDeliberee` si `resultat` ∈
+> {DEFAVORABLE, MIXTE} (Q-42), absente sinon ; l'enregistrement fait basculer l'étape en
+> `DELIBERE_VIDE`.
+> **#19** : réponse toujours `201 Created`, corps `{...prorogation, alerte}` — `alerte:true` dès
+> que le compteur dépasse le seuil configurable `SEUIL_PROROGATIONS` (Q-17/Q-18) ; aucune
+> précondition de statut d'étape (Q-44).
+> **#20** : réservé aux délibérés dont l'étape est encore `DELIBERE_VIDE` (RG-DEL-07) ; ne rouvre
+> jamais l'étape suivante — distinct de l'exercice d'un recours (endpoint générique #5, Q-42).
+> **#21** : strictement consultatif (Q-19) ; le suivi de l'échéance est assuré par
+> `DelaiRecoursScheduler` (bascule `CLOTURE` + alerte `DELAI_RECOURS`, Q-43).
+> **#22** : dernier volet de Q-13, absent de l'OpenAPI formel mais implémenté selon les critères
+> Gherkin de l'US 3.6.
+
+Testé manuellement de bout en bout (curl + JWT Keycloak réels) : rejet d'un délibéré sur étape non
+`EN_DELIBERE`, échéance de recours refusée/exigée selon le résultat, 10 puis 11 prorogations
+(alerte `PROROGATION` déclenchée une seule fois vers DJ et DJA actifs), rabattement refusé hors
+`DELIBERE_VIDE` puis accepté (nouveau cycle `EN_COURS`→`EN_DELIBERE`→second délibéré sur la même
+étape), expiration du délai de recours déclenchée en conditions réelles (cron accéléré) avec
+bascule `CLOTURE` et alerte `DELAI_RECOURS` (anti-doublon vérifié sur plusieurs cycles), levée
+d'expédition (403 hors rôle JURISTE / 200 sinon). 14 tests automatisés dédiés. Voir
+`DECISIONS_AND_OPEN_QUESTIONS.md` Q-13, Q-17, Q-18, Q-19, Q-35, Q-42, Q-43, Q-44 — ainsi que R-06
+(défaut préexistant du socle M3 découvert en validation, hors périmètre de ce module).
 
 ## 5. Frais
 
