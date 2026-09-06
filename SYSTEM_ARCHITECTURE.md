@@ -121,13 +121,16 @@ de données (PDF/Excel, `CalendrierExportService`) ; M7 a livré
 automatique `CLOTURE`) ; M8 a livré `ged/{domain,repository,service,web,mapper,config}` (même
 principe de dépendance directe, étendue à `audience` pour le rapport journalier — Q-49), première
 intégration MinIO du projet (`MinioConfig`/`MinioStorageService`) et un quatrième traitement
-planifié (`SuppressionRelanceScheduler`, relance à 72 h).
+planifié (`SuppressionRelanceScheduler`, relance à 72 h) ; M9 a livré
+`intervenant/{domain,repository,service,web,mapper}` (dépendance directe étendue à `dossier`,
+`delibere` et `ged` — Q-53), première génération de document système intégrée à la GED (lettre de
+constitution PDFBox stockée comme `Document` M8).
 
 **Verdict : le schéma de données et le socle transversal sont complets et validés, et les modules
-Dossiers/Clients (M4), Alertes/Configurations (M5), Audiences/Alarmes (M6), Délibérés (M7) et GED
-(M8) sont livrés et testés — 34 des ~53 endpoints du contrat d'API sont implémentés** (118 tests
-automatisés, dont un test d'intégration Testcontainers). Les autres modules fonctionnels (M9+)
-n'ont pas commencé.
+Dossiers/Clients (M4), Alertes/Configurations (M5), Audiences/Alarmes (M6), Délibérés (M7), GED
+(M8) et Intervenants (M9) sont livrés et testés — 37 des ~53 endpoints du contrat d'API sont
+implémentés** (129 tests automatisés, dont un test d'intégration Testcontainers). Les autres
+modules fonctionnels (M10+) n'ont pas commencé.
 
 ### 2.2 Infrastructure réellement configurée
 
@@ -263,7 +266,7 @@ respectifs (M11 publications, M12 décisions).
 |---|---|---|---|
 | `dossier_juriste` / `dossier_avocat` (N:N) | RG-DOS-03 « affecté à un ou plusieurs juristes et avocats » ; POST /dossiers reçoit `juristesAffectes[]`, `avocatsAffectes[]` — aucune table d'affectation n'existait | Q-01 | à créer en M4 |
 | `demande_suppression` | FR-GED-03 cite explicitement « la table demande_suppression » ; UC-GED-03 (relance 72 h) | Q-02 | ✅ `DemandeSuppression` (M8) |
-| `demande_constitution` | FR-INT-06/07, UC-INT-05/06, US 5.6/5.7 « Tables constitution (à créer) » | Q-03 | à créer en M9 |
+| `demande_constitution` | FR-INT-06/07, UC-INT-05/06, US 5.6/5.7 « Tables constitution (à créer) » | Q-03 | ✅ `DemandeConstitution` (M9) |
 | `alarme` (distincte de `alerte`) | FR-AUD-03 : objet + échéance + étape ; `alerte` n'a ni objet ni etape_id | Q-04 | à créer en M6 |
 | `validation_frais` (traces par étape) | FR-INT-02/03/04 : traçabilité des accords DJ/DJA distincts, impossible avec le seul `statut_circuit` | Q-05 | à créer en M10 |
 | `type_client_sensible` (référentiel) | RG-DOS-09 « liste prédéfinie gérée par le DJ » | Q-06 | ✅ `TypeClientSensible` |

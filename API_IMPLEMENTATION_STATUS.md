@@ -1,7 +1,7 @@
 # API_IMPLEMENTATION_STATUS
 
 > Inventaire exhaustif des endpoints et état d'implémentation.
-> Dernière mise à jour : 2026-09-06 (après jalon M8 — module GED).
+> Dernière mise à jour : 2026-09-06 (après jalon M9 — module Intervenants).
 
 **Base URL** : `http://localhost:8080/api/v1` — aligné sur le contrat REF-07 depuis M1 (Q-16 résolue).
 **Authentification** : `Authorization: Bearer <JWT Keycloak>` sur tous les endpoints sauf health checks.
@@ -19,10 +19,10 @@
 |---|---|---|
 | 📋 Spécifiés dans l'OpenAPI | 37 | **27** (§1-2, §3 #13-15, #18-21, §8 #38-40 #42, §9 #44-48) |
 | 📄 Cités §2 mais absents de l'OpenAPI | 3 | 3 (§3 #16-17 alarmes, #22 expédition — Q-13, close) |
-| 💡 « À proposer » (user stories) | 10 | 1 (§8 #41 approbation-suppression) |
+| 💡 « À proposer » (user stories) | 10 | 4 (§8 #41 approbation-suppression ; §7 #35-37 constitutions/répertoire) |
 | 🆕 Manquants dans toute la documentation | 2 | 1 (`POST /clients`) |
 | 🆕 Ajoutés en cours d'implémentation (hors inventaire initial) | 1 | 2 (`POST /dossiers/{id}/etapes` — Q-34 ; `GET /dossiers/{id}/documents` — #43) |
-| **Surface cible totale** | **~53** | **34 (≈64 %)** |
+| **Surface cible totale** | **~53** | **37 (≈70 %)** |
 
 Le squelette de starter hors périmètre (Template/Admin/Staff/Dashboard/Chat, auth JWT maison) a
 été intégralement supprimé en M1 (cf. `DECISIONS_AND_OPEN_QUESTIONS.md` R-03/R-04) — l'ancienne
@@ -155,9 +155,22 @@ d'expédition (403 hors rôle JURISTE / 200 sinon). 14 tests automatisés dédi�
 
 | # | Méthode | Endpoint | Rôle requis | FR / US | Src | Statut |
 |---|---|---|---|---|---|---|
-| 35 | POST | `/constitutions/prestataires` | `ROLE_JURISTE` | FR-INT-06 / US 5.6 | 💡 | ❌ |
-| 36 | PUT | `/constitutions/prestataires/{id}/validation` | `ROLE_SH` | FR-INT-07 / US 5.7 | 💡 | ❌ |
-| 37 | GET | `/repertoire/avocats` | `ROLE_JURISTE`, `ROLE_ASSISTANTE` | FR-INT-08 / US 5.8 | 💡 | ❌ |
+| 35 | POST | `/constitutions/prestataires` | `ROLE_JURISTE` | FR-INT-06 / US 5.6 | 💡 | ✅ M9 |
+| 36 | PUT | `/constitutions/prestataires/{id}/validation` | `ROLE_SH` | FR-INT-07 / US 5.7 | 💡 | ✅ M9 |
+| 37 | GET | `/repertoire/avocats` | `ROLE_JURISTE`, `ROLE_ASSISTANTE` | FR-INT-08 / US 5.8 | 💡 | ✅ M9 |
+
+> **#35/#36** : `demande_constitution.motif` obligatoire ; l'approbation génère la lettre de
+> constitution (PDFBox) et l'attache comme `Document` GED (M8) ; seul un `Avocat` avec compte
+> applicatif reçoit une notification de validation (Q-52), un `AutrePrestataire` n'en reçoit
+> aucune (pas de compte, pas d'infrastructure email — même limite que Q-37). **#37** :
+> `indicateurCharge`/`indicateurPerformance` calculés à la demande (Q-53), triés par charge
+> croissante, recherche par `?nom=`.
+
+Testé manuellement de bout en bout (curl + JWT Keycloak réels) : répertoire avec charge/performance
+corrects et tri croissant, recherche par nom, demande de constitution notifiant les SH, approbation
+générant une lettre PDF consultable dans la GED et notifiant l'avocat, rejet exigeant un motif et
+notifiant le demandeur, décision déjà prise refusée (409). 11 tests automatisés dédiés. Voir
+`DECISIONS_AND_OPEN_QUESTIONS.md` Q-03, Q-28, Q-52, Q-53.
 
 ## 8. GED
 

@@ -2,7 +2,7 @@
 
 > Feuille de route séquentielle du backend. Un jalon = un objectif, un périmètre fermé,
 > une validation manuelle par le porteur du projet avant passage au suivant.
-> Dernière mise à jour : 2026-09-06 (M1 à M8 terminés et validés — M9 en attente d'autorisation).
+> Dernière mise à jour : 2026-09-06 (M1 à M9 terminés et validés — M10 en attente d'autorisation).
 
 ---
 
@@ -32,8 +32,8 @@
 | **M6** | Module Audiences + Alarmes | Q-04 ✅, Q-12 ✅, Q-13 ✅, Q-39 ✅, Q-40 ✅, Q-41 ✅ | ✅ **Terminé et validé manuellement** (2026-09-04, commit `e427be3`, PR #5 mergée dans `dev`) |
 | **M7** | Module Délibérés | Q-13 ✅, Q-17 ✅, Q-18 ✅, Q-19 ✅, Q-35 ✅, Q-42 ✅, Q-43 ✅ | ✅ **Terminé et validé manuellement** (2026-09-06, commit `5a99400`, PR #6 mergée dans `dev`) |
 | **M8** | Module GED | Q-02 ✅, Q-07 ✅, Q-45 ✅, Q-46 ✅, Q-47 ✅, Q-48 ✅, Q-49 ✅ | ✅ **Terminé et validé manuellement** (2026-09-06) |
-| **M9** | Module Intervenants (avocats, répertoire, constitutions) | Q-03, Q-28 | ⏸️ **prêt à démarrer, en attente d'autorisation explicite** |
-| **M10** | Module Frais (circuit de validation) | Q-05, Q-24, Q-26 | ⏸️ |
+| **M9** | Module Intervenants (avocats, répertoire, constitutions) | Q-03 ✅, Q-28 ✅, Q-52 ✅, Q-53 ✅ | ✅ **Terminé et validé manuellement** (2026-09-06) |
+| **M10** | Module Frais (circuit de validation) | Q-05, Q-24, Q-26 | ⏸️ **prêt à démarrer, en attente d'autorisation explicite** |
 | **M11** | Module Publications et correspondances | Q-20, Q-24, Q-25 | ⏸️ |
 | **M12** | Module Décisions définitives et jurisprudence | — | ⏸️ |
 | **M13** | Module Reporting et tableau de bord | Q-14 | ⏸️ |
@@ -431,9 +431,53 @@ Canaux Outlook/Teams des alertes toujours hors périmètre (Q-37) ; aucun reste 
 
 ---
 
-## M9 — Module Intervenants
-Répertoire des avocats avec indicateurs de charge et de performance, gestion des prestataires,
-demandes de constitution + seconde signature SH + génération de la lettre (US 5.6, 5.7, 5.8).
+## M9 — Module Intervenants ✅ **Terminé**
+
+**Objectif.** Répertoire des avocats avec indicateurs de charge et de performance, gestion des
+prestataires, demandes de constitution + seconde signature SH + génération de la lettre (US 5.6,
+5.7, 5.8).
+
+### Réalisé
+- Module `intervenant` : entité `DemandeConstitution` (`@ManyToOne Dossier`/`Intervenant`
+  polymorphe/`Document` direct — dépend de `dossier`, `delibere` et `ged`, en plus de
+  `referentiel`/`alerte` — cf. Q-53), enum `StatutConstitution`.
+- `ConstitutionService` : `creerDemande` (notifie les SH actifs), `valider` (approbation → génère
+  la lettre via `LettreConstitutionService` (PDFBox) et l'attache comme `Document` GED (M8),
+  notifie l'avocat s'il a un compte ; rejet → motif obligatoire, notifie le demandeur ; 409 si déjà
+  décidée).
+- `RepertoireAvocatsService` : `indicateurCharge` (dossiers actifs, nouvelle requête dans
+  `DossierAvocatRepository`) et `indicateurPerformance` (taux de délibérés `FAVORABLE`, nouvelle
+  requête dans `DelibereRepository`) calculés à la demande, triés par charge croissante, recherche
+  par nom.
+- `IntervenantRepository` (référentiel) : résolution polymorphe d'un prestataire (avocat ou autre).
+- `MinioStorageService` étendu d'une variante pour un document généré par le système (sans passer
+  par un `MultipartFile` d'upload HTTP).
+- 3 endpoints du contrat (#35-37, tous hors OpenAPI formel).
+
+### Décisions prises en implémentation (documentées dans `DECISIONS_AND_OPEN_QUESTIONS.md`)
+Q-03 (circuit complet), Q-28 (affectation et constitution restent deux circuits indépendants),
+Q-52 (réutilisation de `CONSTITUTION_A_SIGNER`, notification impossible d'un prestataire sans
+compte), Q-53 (indicateurs calculés à la demande, dépendances étendues de `intervenant`).
+
+### Validation manuelle — réalisée et confirmée par le porteur du projet (2026-09-06)
+129/129 tests automatisés verts (`mvn test`, dont 11 nouveaux pour M9, aucune régression M1-M8) ;
+validation manuelle de bout en bout (curl + JWT Keycloak réels) : répertoire correct (charge,
+performance à 0 sans délibéré, tri croissant, recherche par nom, rôles JURISTE/ASSISTANTE),
+demande de constitution notifiant les SH actifs, approbation générant une lettre PDF valide
+enregistrée dans la GED (consultable via `GET /ged/documents/{id}` et `GET
+/dossiers/{id}/documents`) et notifiant l'avocat, rejet exigeant un motif et notifiant le
+demandeur, décision déjà prise refusée (409), absence de notification silencieuse pour un
+prestataire sans compte applicatif.
+
+### Commit
+Module livré en un seul commit (docs de contexte incluses, comme pour M5 à M8).
+
+### Restant
+Notification effective d'un `AutrePrestataire` (aucun compte, aucune infrastructure email/SMTP —
+Q-37/Q-52, à réévaluer si une infrastructure est fournie) ; reste de l'Épic 5 (publications,
+comptes rendus, correspondances) différé à M11.
+
+---
 
 ## M10 — Module Frais
 Épic 4 (6 US). Circuit complet dépôt → conformité → opportunité → validation conjointe → paiement,

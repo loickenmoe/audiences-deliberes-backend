@@ -2,7 +2,8 @@
 
 > Carte fonctionnelle complète : Exigence → User Story → Cas d'utilisation → Règles de gestion →
 > Domaine/Données → Module backend → Endpoint(s) → Comportement attendu → Tests.
-> Dernière mise à jour : 2026-09-06 (après le jalon M8 — Épics 1, 2, 3, 6 et 7 implémentés).
+> Dernière mise à jour : 2026-09-06 (après le jalon M9 — Épics 1, 2, 3, 6 et 7 implémentés ; volet
+> constitutions/répertoire de l'Épic 5).
 
 **Légende statut** : ❌ non implémenté · 🟡 partiel · ✅ implémenté et testé
 **Épics 1 (Dossiers, M4), 2 (Audiences, M6) et 7 (Alertes, M5) : ✅. Épics 3 à 6, 8 : ❌, non démarrés.**
@@ -162,7 +163,7 @@ chaque rôle non autorisé → 403.
 
 ## 5. ÉPIC 5 — Intervenants : publications et constitutions
 
-**Modules** : `publication`, `intervenant` · **Dépend de** : `dossier`, `audience`, `alerte`
+**Modules** : `publication`, `intervenant` · **Dépend de** : `dossier`, `audience`, `delibere`, `ged` (Q-53), `alerte`
 
 | FR | US | UC | RG | Entités | Endpoint | Comportement attendu | Statut |
 |---|---|---|---|---|---|---|---|
@@ -171,13 +172,17 @@ chaque rôle non autorisé → 403.
 | FR-INT-09 | 5.3 | UC-INT-09 | RG-INT-06 | `publication`, `autre_publication` | `POST /publications/autres` | `typeDocument` ∈ {PIECE, DECISION, CONCLUSION} ; statut `DEPOSE` ; notifie l'Assistante | ❌ |
 | — | 5.4 | UC-INT-08 | RG-INT-06 | `publication` | `GET /publications/{id}` | Consultable si `VALIDE` ; `restriction_acces` non nulle et ≠ utilisateur → **403/ERR-009** ; `REJETE` → 404 | ❌ |
 | — | 5.5 | UC-INT-08 | RG-INT-07 | `publication`, `historique_action` | `POST /publications/{id}/commentaires` | Un juriste **ne commente jamais directement** : le commentaire est transmis au DJ/DJA. Le DJ/DJA transmet une **correspondance unique** à l'avocat (`POST /publications/{id}/correspondance` — **à proposer, Q-20**) | ❌ |
-| FR-INT-06 | 5.6 | UC-INT-05 | RG-INT-08 | **`demande_constitution` (Q-03)**, `alerte` | `POST /constitutions/prestataires` **(à proposer)** | Juriste ; `dossierId` + `prestataireId` + motif obligatoire ; statut `EN_ATTENTE` ; notifie le SH | ❌ |
-| FR-INT-07 | 5.7 | UC-INT-06 | RG-INT-08 | `demande_constitution`, `document`, `alerte` | `PUT /constitutions/prestataires/{id}/validation` **(à proposer)** | `ROLE_SH` ; validation → **génère la lettre de constitution** ; avocat notifié via son compte, autre prestataire par email ; rejet + motif → retour au juriste | ❌ |
-| FR-INT-08 | 5.8 | UC-INT-07 | RG-INT-01 | `avocat`, `intervenant`, `dossier` | `GET /repertoire/avocats` **(à proposer)** | Coordonnées + `indicateurCharge` (dossiers actifs) + `indicateurPerformance` (taux de succès), triés par charge croissante ; recherche par nom ; < 2 s | ❌ |
+| FR-INT-06 | 5.6 | UC-INT-05 | RG-INT-08 | **`demande_constitution` (Q-03)**, `alerte` | `POST /constitutions/prestataires` **(à proposer)** | Juriste ; `dossierId` + `prestataireId` + motif obligatoire ; statut `EN_ATTENTE` ; notifie le SH | ✅ |
+| FR-INT-07 | 5.7 | UC-INT-06 | RG-INT-08 | `demande_constitution`, `document`, `alerte` | `PUT /constitutions/prestataires/{id}/validation` **(à proposer)** | `ROLE_SH` ; validation → **génère la lettre de constitution** ; avocat notifié via son compte (autre prestataire : aucun compte, aucune notification possible — Q-52) ; rejet + motif obligatoire → retour au juriste | ✅ |
+| FR-INT-08 | 5.8 | UC-INT-07 | RG-INT-01 | `avocat`, `intervenant`, `dossier` | `GET /repertoire/avocats` **(à proposer)** | Coordonnées + `indicateurCharge` (dossiers actifs) + `indicateurPerformance` (taux de succès), triés par charge croissante ; recherche par nom ; < 2 s (Q-53) | ✅ |
 
 **Tests attendus** : dépôt de CR sur une audience d'un autre dossier, publication non validée
 invisible, restriction d'accès respectée, commentaire de juriste **non** transmis directement à
-l'avocat, constitution sans motif, validation SH générant la lettre, calcul des indicateurs de charge.
+l'avocat, constitution sans motif, validation SH générant la lettre, calcul des indicateurs de
+charge. Réalisés pour le volet constitutions/répertoire (US 5.6-5.8) : 11 tests automatisés
+(`ConstitutionServiceTest`, `RepertoireAvocatsServiceTest`, `LettreConstitutionServiceTest`) +
+validation manuelle de bout en bout (curl + JWT Keycloak réels), y compris la lettre générée
+vérifiée dans la GED (M8). Le volet publications (US 5.1-5.5) reste à faire (M11).
 
 **Écrans frontend** : *(Avocat)* Déposer un compte rendu / une pièce, Mes publications, Mes lettres
 de constitution · *(Assistante)* File des publications à valider · *(Juriste)* Publications du
@@ -303,8 +308,8 @@ vue client sans dossier, client inexistant.
 | 2 — Audiences | 6 | 5 | 1 | 5 | **✅ 5** (M6) |
 | 3 — Délibérés | 6 | 5 | 1 | 5 | **✅ 5** (M7) |
 | 4 — Frais | 6 | 5 | 1 | 5 | 0 |
-| 5 — Publications & constitutions | 8 | 6 | 2 | 8 | 0 |
+| 5 — Publications & constitutions | 8 | 6 | 2 | 8 | **🟡 3** (M9, volet constitutions/répertoire ; publications restent M11) |
 | 6 — GED | 6 | 5 | 1 | 5 (+ 1 🆕) | **✅ 6** (M8) |
 | 7 — Alertes | 4 | 2 | 2 | 5 | **✅ 5** (M5, 🟡 déclencheurs futurs) |
 | 8 — Décisions & reporting | 6 | 4 | 2 | 8 | 0 |
-| **Total** | **49** | **39** | **10** | **~54** | **35** |
+| **Total** | **49** | **39** | **10** | **~54** | **38** |
