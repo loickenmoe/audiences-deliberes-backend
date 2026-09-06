@@ -155,13 +155,24 @@ sauf besoin de vérification ponctuelle.**
 - **Ne pas ajouter de ligne `Co-Authored-By: Claude ...` aux messages de commit** (préférence
   utilisateur explicite, 2026-09-04) — déroge à la convention par défaut de l'outil.
 
-## 9. État actuel (2026-09-06, après le jalon M8)
+## 9. État actuel (2026-09-06, après le jalon M9)
 
 - **Documentation** : complète et validée en amont (8 documents).
 - **Code métier** : modules **Dossiers + Clients** (M4, Épic 1), **Alertes + Configurations**
-  (M5, Épic 7), **Audiences + Alarmes** (M6, Épic 2), **Délibérés** (M7, Épic 3) et **GED** (M8,
-  Épic 6) livrés. Les autres modules fonctionnels (intervenants, frais, publications, décisions
-  définitives, reporting) restent entièrement à construire à partir de M9.
+  (M5, Épic 7), **Audiences + Alarmes** (M6, Épic 2), **Délibérés** (M7, Épic 3), **GED** (M8,
+  Épic 6) et **Intervenants** (M9, volet constitutions/répertoire de l'Épic 5) livrés. Les autres
+  modules fonctionnels (frais, publications, décisions définitives, reporting) restent entièrement
+  à construire à partir de M10.
+- **Module `intervenant`** : ✅ posé au jalon **M9** : entité `DemandeConstitution` (`@ManyToOne
+  Dossier`/`Intervenant` polymorphe/`Document` direct — dépend de `dossier`, `delibere` et `ged`
+  en plus de `referentiel`/`alerte`, cf. Q-53), `ConstitutionService` (demande → SH, approbation
+  générant la lettre via PDFBox et l'attachant comme `Document` GED, notification de l'avocat s'il
+  a un compte, rejet avec motif obligatoire), `RepertoireAvocatsService` (indicateurs de charge et
+  de performance calculés à la demande, triés par charge croissante, recherche par nom). 3
+  endpoints du contrat (#35-37, tous hors OpenAPI formel). Validé de bout en bout (curl + JWT
+  Keycloak réels : répertoire correct, circuit de constitution complet avec lettre PDF vérifiée
+  dans la GED, rejet et décision déjà prise) et par 11 tests automatisés dédiés. Voir
+  `DEVELOPMENT_ROADMAP.md` §M9 et `DECISIONS_AND_OPEN_QUESTIONS.md` (Q-03, Q-28, Q-52, Q-53).
 - **Module `ged`** : ✅ posé au jalon **M8** : entités `Document`/`DemandeSuppression`
   (`@ManyToOne Dossier` direct — module dépendant de `dossier`/`audience`, même principe que
   `delibere` en M7), `MinioConfig`/`MinioStorageService` (bootstrap du bucket, dépôt, URL
@@ -233,16 +244,16 @@ sauf besoin de vérification ponctuelle.**
   effectif depuis M5, `ChargeMaxAvocatScheduler`, étendu en M6 avec `RappelAudienceScheduler`/
   `AlarmeEcheanceScheduler`, en M7 avec `DelaiRecoursScheduler`, puis en M8 avec
   `SuppressionRelanceScheduler`). Consommé par les modules `dossier` (M4), `alerte` (M5),
-  `audience` (M6), `delibere` (M7) et `ged` (M8).
-- **Tests** : `contextLoads()` toujours vert. **118 tests au total après M8** (20 socle M1-M3 +
-  31 M4 + 15 M5 + 24 M6 + 14 M7 + 16 nouveaux M8 (`GedServiceTest`,
-  `SuppressionRelanceSchedulerTest`)), aucune régression.
+  `audience` (M6), `delibere` (M7), `ged` (M8) et `intervenant` (M9).
+- **Tests** : `contextLoads()` toujours vert. **129 tests au total après M9** (20 socle M1-M3 +
+  31 M4 + 15 M5 + 24 M6 + 14 M7 + 16 M8 + 11 nouveaux M9 (`ConstitutionServiceTest`,
+  `RepertoireAvocatsServiceTest`, `LettreConstitutionServiceTest`)), aucune régression.
 - **Risques** : voir `DECISIONS_AND_OPEN_QUESTIONS.md` §Risques — R-01 (secrets exposés)
   résolu dans les fichiers versionnés, mais la rotation des secrets déjà exposés côté
   Neon/iDrive e2 reste une action utilisateur en attente ; R-02, R-03, R-04 résolus par M1 ;
   R-05 (schéma non versionné) résolu par M2 ; R-06 (provisionnement d'un utilisateur en première
   connexion incompatible avec un endpoint `@Transactional(readOnly = true)`) découvert en
-  validation manuelle M7, non corrigé (défaut du socle M3, hors périmètre de M7/M8).
+  validation manuelle M7, non corrigé (défaut du socle M3, hors périmètre de M7/M8/M9).
 
 ## 10. Où aller ensuite
 

@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.UUID;
@@ -36,17 +37,31 @@ public class MinioStorageService {
 
     /** Dépose le fichier sous une clé unique {@code dossiers/{dossierId}/{uuid}-{nomFichier}} et la retourne. */
     public String deposer(Long dossierId, MultipartFile fichier) {
-        String cle = "dossiers/" + dossierId + "/" + UUID.randomUUID() + "-" + fichier.getOriginalFilename();
         try (InputStream flux = fichier.getInputStream()) {
+            return deposer(dossierId, fichier.getOriginalFilename(), fichier.getContentType(), flux, fichier.getSize());
+        } catch (IOException e) {
+            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE, "Fichier illisible : " + e.getMessage());
+        }
+    }
+
+    /**
+     * Variante pour un document généré par le système (ex. lettre de constitution, M9), sans
+     * passer par un {@link MultipartFile} d'upload HTTP.
+     */
+    public String deposer(Long dossierId, String nomFichier, String contentType, byte[] contenu) {
+        return deposer(dossierId, nomFichier, contentType, new ByteArrayInputStream(contenu), (long) contenu.length);
+    }
+
+    private String deposer(Long dossierId, String nomFichier, String contentType, InputStream flux, long taille) {
+        String cle = "dossiers/" + dossierId + "/" + UUID.randomUUID() + "-" + nomFichier;
+        try {
             minioClient.putObject(PutObjectArgs.builder()
                     .bucket(bucketName)
                     .object(cle)
-                    .stream(flux, fichier.getSize(), -1)
-                    .contentType(fichier.getContentType())
+                    .stream(flux, taille, -1)
+                    .contentType(contentType)
                     .build());
             return cle;
-        } catch (IOException e) {
-            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE, "Fichier illisible : " + e.getMessage());
         } catch (Exception e) {
             log.error("Échec du dépôt MinIO pour la clé {}", cle, e);
             throw new ApiException(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR,

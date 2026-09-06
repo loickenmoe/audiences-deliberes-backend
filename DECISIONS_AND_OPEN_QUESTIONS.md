@@ -2,7 +2,7 @@
 
 > Contradictions documentaires, ambiguïtés et lacunes nécessitant un **arbitrage explicite**.
 > Aucune de ces questions n'a été tranchée silencieusement.
-> Dernière mise à jour : 2026-09-06 (après jalon M8 — voir statuts R-01 à R-06, Q-01/02/04/07/10/11/12/13/17-19/22/23/26/32/34-51).
+> Dernière mise à jour : 2026-09-06 (après jalon M9 — voir statuts R-01 à R-06, Q-01/02/03/04/07/10/11/12/13/17-19/22/23/26/28/32/34-53).
 
 **Convention de lecture de chaque fiche :**
 - **A — Ce que la documentation exige** (avec la source exacte)
@@ -426,6 +426,9 @@ FR-INT-06/07, UC-INT-05/06, US 5.6/5.7 (« Tables `constitution` (à créer) »)
 date_decision)`.
 **Statut (2026-09-04, M2)** : appliqué tel quel — `V1__schema_initial.sql`.
 
+**Statut (2026-09-06, M9)** : entité JPA `DemandeConstitution` et circuit complet implémentés
+(`ConstitutionService`) — cf. Q-52/Q-53.
+
 ### Q-05 ✅ Traçabilité des validations de frais insuffisante — corrigée (M2)
 `demande_frais` ne porte qu'un `statut_circuit` et un `motif_rejet` unique. Or il faut tracer :
 qui a contrôlé la conformité, qui a contrôlé l'opportunité, **les deux accords distincts** de la
@@ -500,13 +503,19 @@ confirmation, auquel cas une alerte `DOUBLON_AUDIENCE` est déclenchée vers les
 mécanisme que Q-36). Q-12 est donc intégralement clos sur ses deux volets.
 **Décision attendue :** …
 
-### Q-28 — `avocatsAffectes` obligatoire à la création vs circuit de constitution — `P1`
+### Q-28 ✅ `avocatsAffectes` obligatoire à la création vs circuit de constitution — tranché (M9)
 US 1.1 : `avocatsAffectes (≥1)` est **obligatoire** à la création du dossier.
 RG-INT-08 : la constitution d'un prestataire requiert la **seconde signature du SH** avant l'envoi
 de la lettre. Comment un avocat peut-il être affecté avant sa constitution validée ?
 **C** : distinguer *affectation* (interne, immédiate) et *constitution* (formalité externe,
 validée par le SH) — ou rendre `avocatsAffectes` facultatif à la création.
-**Décision attendue :** …
+**Statut (2026-09-06, M9)** : première branche de C retenue — les deux restent des circuits
+indépendants et non séquencés l'un par rapport à l'autre. `avocatsAffectes` (M4) désigne qui **suit
+le dossier en interne** (déjà référencé dans `avocat`, aucune formalité requise) ; `POST
+/constitutions/prestataires` (M9) est une démarche **distincte** d'engagement formel d'un
+prestataire pour ce dossier (avocat déjà affecté ou non, ou tout autre prestataire), au besoin
+après coup. Rien n'empêche ni n'exige l'ordre entre les deux — `ConstitutionService.creerDemande`
+n'exige pas que le prestataire soit déjà dans `avocatsAffectes`.
 
 ### Q-16 ✅ Ports — tranché et appliqué (M1)
 REF-07 : `http://localhost:8080/api/v1` ; REF-05 §8.1 : backend 8080, Keycloak 8081.
@@ -829,6 +838,45 @@ utilisé pour `handleHttpMessageNotReadable`/`handleMissingServletRequestParamet
 (override). `contextLoads()` de nouveau vert ; testé en conditions réelles (fichier > 10 Mo → 400
 `ERR-008`, format conforme au contrat).
 
+### Q-52 ✅ Constitution : un seul type d'alerte, et aucune notification possible du prestataire sans compte — tranché (M9)
+Comme pour la suppression de document (Q-48), la liste fermée de `TypeAlerte` (Q-22) ne réserve
+qu'**un** type à la constitution (`CONSTITUTION_A_SIGNER`), alors que RG-INT-08 distingue trois
+événements : demande soumise (→ SH), validation (→ prestataire constitué), rejet (→ juriste
+demandeur). De plus, FR-INT-07 exige de notifier « l'avocat via son compte, **l'autre prestataire
+par email** » — mais un `AutrePrestataire` n'a par construction **aucun compte** (RG-INT-02) et
+aucune infrastructure SMTP n'est fournie au projet (même constat que Q-37).
+**C — Recommandation** : réutiliser `CONSTITUTION_A_SIGNER` pour les trois événements (nuance
+portée par `declencheur`, précédent Q-04/Q-48) ; notifier l'`Avocat` s'il possède déjà un
+`Utilisateur` provisionné (recherche par `compteKeycloak`) ; ne **pas** tenter de notifier un
+`AutrePrestataire` — documenter l'impossibilité plutôt que l'omettre silencieusement.
+**Statut (2026-09-06, M9)** : appliqué — `ConstitutionService.notifierPrestataire` ne notifie que
+si `prestataire instanceof Avocat` et qu'un `Utilisateur` existe pour son `compteKeycloak` ; testé
+en conditions réelles (avocat sans compte réel → aucune notification, sans erreur ; autre
+prestataire → aucune notification, sans erreur — comportement identique, vérifié distinctement).
+
+### Q-53 ✅ Répertoire des avocats : calcul des indicateurs, non persistance — tranché (M9)
+`Avocat.indicateurCharge`/`indicateurPerformance` sont des colonnes **stockées** (schéma M2,
+valeur par défaut 0) mais RG-INT-01 ne précise ni leur mode de calcul ni s'il faut les maintenir à
+jour en écriture (à chaque affectation/désaffectation, à chaque délibéré) ou les calculer à la
+demande.
+**C — Recommandation** : calculer les deux indicateurs **à la demande**, dans `GET
+/repertoire/avocats`, plutôt que de maintenir des colonnes dénormalisées à travers plusieurs
+modules (`dossier`, `delibere`) — plus simple, toujours à jour, pas de couplage d'écriture entre
+modules. Sémantique retenue : `indicateurCharge` = nombre de dossiers **actifs** (au moins une
+étape hors `CLOTURE`/`ARCHIVE`), distinct du compteur brut de M5 (`CHARGE_MAX_AVOCAT`, Q-38, qui
+compte **toute** affectation) ; `indicateurPerformance` = taux de délibérés `FAVORABLE` sur les
+dossiers affectés — seule mesure de « succès » disponible avant le module Décisions définitives
+(M12) ; `0` si l'avocat n'a encore aucun délibéré (absence de donnée, pas une contre-performance).
+Les colonnes stockées `Avocat.indicateurCharge`/`indicateurPerformance` restent donc **non
+utilisées** par ce jalon (vestigiales, comme `dossier.champ_alarme` supplanté par la table
+`alarme` en M6).
+**Statut (2026-09-06, M9)** : appliqué — `RepertoireAvocatsService.lister`, tri par charge
+croissante, recherche par nom (`?nom=`). Extension de dépendance du module `intervenant` vers
+`dossier` (`DossierAvocatRepository.compterDossiersActifsParAvocat`, nouvelle méthode) et
+`delibere` (`DelibereRepository.calculerPerformanceParAvocat`, nouvelle méthode) — non déclarée
+dans `FUNCTIONAL_MAP.md` §5 à l'origine, mise à jour en conséquence. Vérifié en conditions
+réelles : charge et performance corrects sur un dossier actif, tri croissant sur plusieurs avocats.
+
 ### Q-27 ✅ `dossier.parties` défini deux fois — tranché (M2)
 Le dictionnaire REF-06 §2.1.2 déclare `parties JSONB` **deux fois**, avec deux structures
 différentes : `{demandeur, defendeur}` et `{demandeur, defendeur, client}`. Le contrat d'API et
@@ -956,6 +1004,10 @@ une formation des utilisateurs clés a été réalisée ; les données historiqu
 | 2026-09-06 | Q-49 | Rapport journalier : 4 indicateurs définis (historique_action, document, dossier, audience) ; `ged` dépend aussi de `audience` | Implémenté M8 |
 | 2026-09-06 | Q-50 | Bug corrigé : bootstrap du bucket MinIO déplacé dans un `ApplicationRunner` dédié (référence circulaire `@PostConstruct`/`@Bean`) | Corrigé M8 |
 | 2026-09-06 | Q-51 | Bug corrigé : override du point d'extension `handleMaxUploadSizeExceededException` au lieu d'un `@ExceptionHandler` concurrent | Corrigé M8 |
+| 2026-09-06 | Q-03 | Circuit `DemandeConstitution` complet implémenté (`ConstitutionService`) | Implémenté M9 |
+| 2026-09-06 | Q-28 | Affectation (interne, M4) et constitution (formalité SH, M9) restent deux circuits indépendants, non séquencés | Tranché M9 |
+| 2026-09-06 | Q-52 | `TypeAlerte.CONSTITUTION_A_SIGNER` réutilisé pour les 3 événements du cycle de constitution ; aucune notification pour un prestataire sans compte (documenté, pas implémenté) | Implémenté M9 |
+| 2026-09-06 | Q-53 | Indicateurs du répertoire calculés à la demande (non persistés) ; `intervenant` dépend aussi de `dossier`/`delibere` | Implémenté M9 |
 
 Les autres questions (P1/P2) restent ouvertes et seront tranchées au fil des jalons concernés,
 au plus tard avant le module qui en dépend (cf. tableau des prérequis dans `DEVELOPMENT_ROADMAP.md`).
