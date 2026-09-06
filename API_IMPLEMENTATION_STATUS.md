@@ -1,7 +1,7 @@
 # API_IMPLEMENTATION_STATUS
 
 > Inventaire exhaustif des endpoints et état d'implémentation.
-> Dernière mise à jour : 2026-09-06 (après jalon M7 — module Délibérés).
+> Dernière mise à jour : 2026-09-06 (après jalon M8 — module GED).
 
 **Base URL** : `http://localhost:8080/api/v1` — aligné sur le contrat REF-07 depuis M1 (Q-16 résolue).
 **Authentification** : `Authorization: Bearer <JWT Keycloak>` sur tous les endpoints sauf health checks.
@@ -17,12 +17,12 @@
 
 | Catégorie | Nombre | Implémentés |
 |---|---|---|
-| 📋 Spécifiés dans l'OpenAPI | 37 | **23** (§1-2, §3 #13-15, #18-21, §9 #44-48) |
+| 📋 Spécifiés dans l'OpenAPI | 37 | **27** (§1-2, §3 #13-15, #18-21, §8 #38-40 #42, §9 #44-48) |
 | 📄 Cités §2 mais absents de l'OpenAPI | 3 | 3 (§3 #16-17 alarmes, #22 expédition — Q-13, close) |
-| 💡 « À proposer » (user stories) | 10 | 0 |
+| 💡 « À proposer » (user stories) | 10 | 1 (§8 #41 approbation-suppression) |
 | 🆕 Manquants dans toute la documentation | 2 | 1 (`POST /clients`) |
-| 🆕 Ajoutés en cours d'implémentation (hors inventaire initial) | 1 | 1 (`POST /dossiers/{id}/etapes`, cf. Q-34) |
-| **Surface cible totale** | **~53** | **28 (≈53 %)** |
+| 🆕 Ajoutés en cours d'implémentation (hors inventaire initial) | 1 | 2 (`POST /dossiers/{id}/etapes` — Q-34 ; `GET /dossiers/{id}/documents` — #43) |
+| **Surface cible totale** | **~53** | **34 (≈64 %)** |
 
 Le squelette de starter hors périmètre (Template/Admin/Staff/Dashboard/Chat, auth JWT maison) a
 été intégralement supprimé en M1 (cf. `DECISIONS_AND_OPEN_QUESTIONS.md` R-03/R-04) — l'ancienne
@@ -163,15 +163,29 @@ d'expédition (403 hors rôle JURISTE / 200 sinon). 14 tests automatisés dédi�
 
 | # | Méthode | Endpoint | Rôle requis | FR / US | Src | Statut |
 |---|---|---|---|---|---|---|
-| 38 | POST | `/ged/documents` | `ROLE_SAISIE` | FR-GED-01 / US 6.1 | 📋 | ❌ |
-| 39 | GET | `/ged/documents/{id}` | `ROLE_CONSULTATION` | FR-GED-02 / US 6.3 | 📋 | ❌ |
-| 40 | DELETE | `/ged/documents/{id}` | `ROLE_SAISIE` (202) / `ROLE_DJ`,`ROLE_DJA` (200) | FR-GED-03 / US 6.4, 6.5 | 📋 | ❌ |
-| 41 | PUT | `/ged/documents/{id}/approbation-suppression` | `ROLE_DJ`, `ROLE_DJA` | FR-GED-03 / US 6.4 | 💡 | ❌ |
-| 42 | GET | `/ged/rapport-journalier` | `ROLE_JURISTE` | FR-GED-04 / US 6.6 | 📋 | ❌ |
-| 43 | GET | `/dossiers/{id}/documents` | `ROLE_CONSULTATION` | UC-GED-02 | 🆕 | ❌ |
+| 38 | POST | `/ged/documents` | `ROLE_SAISIE` | FR-GED-01 / US 6.1 | 📋 | ✅ M8 |
+| 39 | GET | `/ged/documents/{id}` | `ROLE_CONSULTATION` | FR-GED-02 / US 6.3 | 📋 | ✅ M8 |
+| 40 | DELETE | `/ged/documents/{id}` | `ROLE_SAISIE` (202) / `ROLE_DJ`,`ROLE_DJA` (200) | FR-GED-03 / US 6.4, 6.5 | 📋 | ✅ M8 |
+| 41 | PUT | `/ged/documents/{id}/approbation-suppression` | `ROLE_DJ`, `ROLE_DJA` | FR-GED-03 / US 6.4 | 💡 | ✅ M8 |
+| 42 | GET | `/ged/rapport-journalier` | `ROLE_JURISTE` | FR-GED-04 / US 6.6 | 📋 | ✅ M8 |
+| 43 | GET | `/dossiers/{id}/documents` | `ROLE_CONSULTATION` | UC-GED-02 | 🆕 | ✅ M8 |
 
-> **#43** : UC-GED-02 et US 6.3 supposent la liste des documents d'un dossier. Le contrat ne
-> prévoit que la consultation unitaire. Peut être couvert par la réponse de `GET /dossiers/{id}`.
+> **#38** : format dérivé de l'extension du fichier (pas du `Content-Type` déclaré, Q-46) ;
+> `typeDocument` reste un texte libre (Q-45). **#40** : double comportement selon le profil résolu
+> côté serveur — juriste auteur du chargement → demande (202) ; DJ/DJA → suppression immédiate
+> (200) ; 409 si une demande est déjà en attente (Q-47). **#41** : absent du contrat formel,
+> implémenté selon les critères Gherkin de l'US 6.4 ; motif de rejet obligatoire. **#42** :
+> `dossiersManipules`/`piecesAjoutees`/`affairesNouvelles`/`planificationActes[]` définis en Q-49
+> (dépendance étendue vers le module `audience`). **#43** : UC-GED-02 et US 6.3 supposent la liste
+> des documents d'un dossier, absente du contrat qui ne prévoit que la consultation unitaire.
+
+Testé manuellement de bout en bout (curl + JWT Keycloak réels) : rejet d'un format non conforme et
+d'un fichier trop volumineux, dépôt avec notification des juristes cotés, URL pré-signée MinIO,
+liste des documents d'un dossier, demande de suppression par l'auteur (202, 409 en doublon), refus
+pour un juriste non auteur (403), suppression directe DJ/DJA (200), approbation et rejet (motif
+obligatoire) d'une demande, relance à 72 h déclenchée en conditions réelles avec anti-doublon,
+rapport journalier correct (actif et à zéro). 16 tests automatisés dédiés. Voir
+`DECISIONS_AND_OPEN_QUESTIONS.md` Q-02, Q-45, Q-46, Q-47, Q-48, Q-49, Q-50, Q-51.
 
 ## 9. Alertes, configurations, reporting
 

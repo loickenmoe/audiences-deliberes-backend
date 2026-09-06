@@ -2,7 +2,7 @@
 
 > Carte fonctionnelle complète : Exigence → User Story → Cas d'utilisation → Règles de gestion →
 > Domaine/Données → Module backend → Endpoint(s) → Comportement attendu → Tests.
-> Dernière mise à jour : 2026-09-06 (après le jalon M7 — Épics 1, 2, 3 et 7 implémentés).
+> Dernière mise à jour : 2026-09-06 (après le jalon M8 — Épics 1, 2, 3, 6 et 7 implémentés).
 
 **Légende statut** : ❌ non implémenté · 🟡 partiel · ✅ implémenté et testé
 **Épics 1 (Dossiers, M4), 2 (Audiences, M6) et 7 (Alertes, M5) : ✅. Épics 3 à 6, 8 : ❌, non démarrés.**
@@ -188,16 +188,16 @@ Répertoire des avocats · *(SH)* Constitutions à signer.
 
 ## 6. ÉPIC 6 — Gestion documentaire (GED)
 
-**Module** : `ged` · **Dépend de** : `dossier`, `alerte`, MinIO
+**Module** : `ged` · **Dépend de** : `dossier`, `audience` (Q-49), `alerte`, MinIO
 
 | FR | US | UC | RG | Entités | Endpoint | Comportement attendu | Statut |
 |---|---|---|---|---|---|---|---|
-| FR-GED-01 | 6.1, 6.2 | UC-GED-01 | RG-GED-02,04,06,08 | `document`, `alerte` | `POST /ged/documents` (multipart) | Rôles : Juriste, Assistante, SH, DJ, DJA ; **format ∈ {PDF, PNG, JPG, TXT, XLSX}** et **poids ≤ 10 Mo** (400/ERR-008 sinon) ; stocke dans MinIO ; `estSupprime=false` ; **notifie les juristes cotés au dossier** (`DOCUMENT_CHARGE`) < 5 s ; ≤ 3 s ; 201 | ❌ |
-| FR-GED-02 | 6.3 | UC-GED-02 | RG-GED-03 | `document` | `GET /ged/documents/{id}` | 404 si `estSupprime=true` ; récupère depuis MinIO (URL pré-signée) ; < 3 s | ❌ |
-| FR-GED-03 | 6.4 | UC-GED-03 | RG-GED-05, RG-GED-09 | **`demande_suppression` (Q-02)**, `alerte` | `DELETE /ged/documents/{id}` | Juriste **auteur du chargement** → crée une demande, notifie DJ **et** DJA, **202** ; document intact. **Relance automatique à 72 h** (UC-GED-03 alt. 6-a) | ❌ |
-| FR-GED-03 | 6.4 | UC-GED-03 | RG-GED-09 | `demande_suppression`, `document` | `PUT /ged/documents/{id}/approbation-suppression` **(à proposer)** | DJ/DJA approuve → `estSupprime=true` + suppression MinIO + notifie le juriste ; rejet + motif → demande annulée | ❌ |
-| FR-GED-03 | 6.5 | UC-GED-03 alt. | RG-GED-05 | `document`, `historique_action` | `DELETE /ged/documents/{id}` (DJ/DJA) | **Suppression immédiate sans approbation** ; historise ; notifie l'auteur du chargement ; 200 | ❌ |
-| FR-GED-04 | 6.6 | UC-GED-04 | RG-GED-07 | `document`, `dossier`, `historique_action`, `audience` | `GET /ged/rapport-journalier` | `dossiersManipules`, `piecesAjoutees`, `affairesNouvelles`, `planificationActes[]` pour une date ; zéros si aucune donnée ; < 5 s | ❌ |
+| FR-GED-01 | 6.1, 6.2 | UC-GED-01 | RG-GED-02,04,06,08 | `document`, `alerte` | `POST /ged/documents` (multipart) | Rôles : Juriste, Assistante, SH, DJ, DJA ; **format ∈ {PDF, PNG, JPG, TXT, XLSX}** (dérivé de l'extension, Q-46) et **poids ≤ 10 Mo** (400/ERR-008 sinon) ; stocke dans MinIO ; `estSupprime=false` ; **notifie les juristes cotés au dossier** (`DOCUMENT_CHARGE`) < 5 s ; ≤ 3 s ; 201 | ✅ |
+| FR-GED-02 | 6.3 | UC-GED-02 | RG-GED-03 | `document` | `GET /ged/documents/{id}` | 404 si `estSupprime=true` ; récupère depuis MinIO (URL pré-signée) ; < 3 s | ✅ |
+| FR-GED-03 | 6.4 | UC-GED-03 | RG-GED-05, RG-GED-09 | **`demande_suppression` (Q-02)**, `alerte` | `DELETE /ged/documents/{id}` | Juriste **auteur du chargement** → crée une demande, notifie DJ **et** DJA, **202** ; document intact ; 409 si demande déjà en attente (Q-47). **Relance automatique à 72 h** (UC-GED-03 alt. 6-a) | ✅ |
+| FR-GED-03 | 6.4 | UC-GED-03 | RG-GED-09 | `demande_suppression`, `document` | `PUT /ged/documents/{id}/approbation-suppression` **(à proposer)** | DJ/DJA approuve → `estSupprime=true` + suppression MinIO + notifie le juriste ; rejet + motif obligatoire → demande annulée | ✅ |
+| FR-GED-03 | 6.5 | UC-GED-03 alt. | RG-GED-05 | `document`, `historique_action` | `DELETE /ged/documents/{id}` (DJ/DJA) | **Suppression immédiate sans approbation** ; historise ; notifie l'auteur du chargement ; 200 | ✅ |
+| FR-GED-04 | 6.6 | UC-GED-04 | RG-GED-07 | `document`, `dossier`, `historique_action`, `audience` | `GET /ged/rapport-journalier` | `dossiersManipules`, `piecesAjoutees`, `affairesNouvelles`, `planificationActes[]` pour une date ; zéros si aucune donnée ; < 5 s (Q-49) | ✅ |
 
 **Point non tranché** : RG-GED-01 « le dossier de crédit est mis à disposition **manuellement** par
 le GFC ». Le GFC n'ayant pas de compte, c'est le **juriste** qui charge ces pièces. Aucune
@@ -206,7 +206,9 @@ fonctionnalité système spécifique n'en découle — à confirmer (Q-21).
 **Tests attendus** : chaque format autorisé et un format refusé, fichier de 10 Mo puis de 10 Mo + 1 o,
 notification des juristes cotés, suppression par un juriste non auteur (403), circuit
 demande→approbation, suppression directe DJ/DJA, consultation d'un document supprimé (404),
-rapport journalier vide.
+rapport journalier vide. Réalisés : 16 tests automatisés (`GedServiceTest`,
+`SuppressionRelanceSchedulerTest`) + validation manuelle de bout en bout (curl + JWT Keycloak
+réels), y compris la relance à 72 h en conditions réelles (cron accéléré, date antidatée).
 
 **Écrans frontend** : *Documents du dossier* (liste, aperçu, chargement, demande de suppression) ·
 *(DJ/DJA)* Demandes de suppression en attente · *Rapport journalier GED*.
@@ -302,7 +304,7 @@ vue client sans dossier, client inexistant.
 | 3 — Délibérés | 6 | 5 | 1 | 5 | **✅ 5** (M7) |
 | 4 — Frais | 6 | 5 | 1 | 5 | 0 |
 | 5 — Publications & constitutions | 8 | 6 | 2 | 8 | 0 |
-| 6 — GED | 6 | 5 | 1 | 5 | 0 |
+| 6 — GED | 6 | 5 | 1 | 5 (+ 1 🆕) | **✅ 6** (M8) |
 | 7 — Alertes | 4 | 2 | 2 | 5 | **✅ 5** (M5, 🟡 déclencheurs futurs) |
 | 8 — Décisions & reporting | 6 | 4 | 2 | 8 | 0 |
-| **Total** | **49** | **39** | **10** | **~54** | **29** |
+| **Total** | **49** | **39** | **10** | **~54** | **35** |
