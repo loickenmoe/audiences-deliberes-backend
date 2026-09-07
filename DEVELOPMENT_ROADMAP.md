@@ -2,7 +2,8 @@
 
 > Feuille de route séquentielle du backend. Un jalon = un objectif, un périmètre fermé,
 > une validation manuelle par le porteur du projet avant passage au suivant.
-> Dernière mise à jour : 2026-09-07 (M0 à M14 terminés et validés — feuille de route achevée).
+> Dernière mise à jour : 2026-09-07 (M0 à M15 terminés et validés — feuille de route achevée,
+> M15 ajouté hors roadmap initiale pour rendre le backend consommable par un frontend).
 
 ---
 
@@ -35,15 +36,20 @@
 | **M9** | Module Intervenants (avocats, répertoire, constitutions) | Q-03 ✅, Q-28 ✅, Q-52 ✅, Q-53 ✅ | ✅ **Terminé et validé manuellement** (2026-09-06) |
 | **M10** | Module Frais (circuit de validation) | Q-05 ✅, Q-24 🟡, Q-26 ✅, Q-54 ✅ | ✅ **Terminé et validé manuellement** (2026-09-07) |
 | **M11** | Module Publications et correspondances | Q-20 ✅, Q-24 🟡, Q-25 | ✅ **Terminé et validé manuellement** (2026-09-07) |
-| **M12** | Module Décisions définitives et jurisprudence | Q-58 ✅, Q-59 🟡, Q-60 🟡, Q-61 ✅, Q-62 ✅ | ✅ **Terminé et validé manuellement** (2026-09-07) |
+| **M12** | Module Décisions définitives et jurisprudence | Q-58 ✅, Q-59 ✅, Q-60 ✅, Q-61 ✅, Q-62 ✅ | ✅ **Terminé et validé manuellement** (2026-09-07) |
 | **M13** | Module Reporting et tableau de bord | Q-14 (sans impact code), Q-63 ✅, Q-64 ✅ | ✅ **Terminé et validé manuellement** (2026-09-07) |
 | **M14** | Durcissement, tests d'intégration, vérification finale de l'API | Q-65 ✅, Q-66 ✅, Q-67 ✅, R-08 🟡 | ✅ **Terminé et validé manuellement** (2026-09-07) |
+| **M15** | Habilitation frontend (correctif R-06 + endpoints de lecture manquants) | Q-24 ✅, Q-68 ✅, Q-69 ✅, R-06 ✅ | ✅ **Terminé et validé manuellement** (2026-09-07) |
 
-**Feuille de route achevée** — les 8 épics fonctionnels et le durcissement final sont livrés.
-Points ouverts avant mise en production : R-01 (rotation des secrets déjà exposés), R-06
-(provisionnement en transaction lecture seule), R-08 (documentation d'API publique), campagne de
-performance outillée sur volumétrie réelle, et les questions `🟡` restées à confirmer par la
-Direction Juridique (Q-24, Q-59, Q-60, Q-67).
+**Feuille de route achevée** — les 8 épics fonctionnels, le durcissement final et l'habilitation du
+backend pour un frontend sont livrés. **Toutes les questions fonctionnelles sont tranchées** :
+Q-59, Q-60 et Q-67, laissées ouvertes pour confirmation, ont été **arbitrées par le porteur du
+projet le 2026-09-07 en faveur des recommandations émises** — sans modification de code, le
+comportement livré étant déjà celui recommandé.
+
+Points restants, **tous liés à la mise en production et non au développement en cours** : R-01
+(rotation des secrets déjà exposés), R-08 (documentation d'API accessible sans authentification),
+campagne de performance outillée sur volumétrie réelle.
 
 ---
 
@@ -787,11 +793,182 @@ Q-65 (substitutions des tests bout en bout), Q-66 (2 écarts de conformité corr
 ### Commit
 Jalon livré en un seul commit (docs de contexte incluses, comme pour M5 à M13).
 
-### Restant
+### Restant *(état à la clôture de M14 — soldé depuis, voir §M15)*
 Avant mise en production : fermer R-08 (documentation d'API), corriger R-06 (provisionnement en
 transaction lecture seule), mener une campagne de performance outillée sur volumétrie réelle, et
 trancher les questions restées ouvertes (Q-59, Q-60, Q-67 côté frontend, Q-21, Q-24 pour les volets
 publications/suppressions/constitutions).
+> **Soldé en M15** : R-06 corrigé, Q-24 close, Q-59/Q-60/Q-67 arbitrées. Restent R-08 et la
+> campagne de performance, tous deux liés à la mise en production.
+
+---
+
+## M15 — Habilitation frontend ✅ **Terminé**
+
+**Origine.** Jalon **hors feuille de route initiale**, ouvert le 2026-09-07 en réponse à une question
+du porteur du projet : *« si on branche le frontend à l'état actuel, l'application fonctionnerait-elle
+normalement ? »* La réponse, établie par revue du code et non par impression, était **non** — pour
+deux raisons distinctes :
+
+1. **Un défaut bloquant (R-06)** : la **toute première requête** de tout nouvel utilisateur
+   retombait en 500 dès lors qu'elle touchait un endpoint en lecture seule — c'est-à-dire dans
+   presque tous les cas au chargement de l'application.
+2. **Des trous de lecture** : plusieurs écrans décrits dans `FUNCTIONAL_MAP.md` n'avaient
+   **aucune source de données** (files de travail « … en attente »), les onglets d'une fiche dossier
+   n'étaient pas servis, les référentiels fermés que le backend impose en écriture n'étaient pas
+   exposés en lecture, et **aucun endpoint ne permettait de créer un avocat** — alors qu'un avocat
+   est obligatoire à la création d'un dossier (`avocatsAffectes` est `@NotEmpty`).
+
+**Objectif.** Rendre le backend consommable par un frontend, sans ajouter la moindre règle métier :
+1 correctif + **11** endpoints de lecture/administration. Périmètre fermé, arrêté avec le porteur du
+projet avant démarrage, **élargi d'un endpoint en cours de jalon** (#66, Q-69 — voir §6).
+
+### 1. Correctif R-06 — provisionnement en transaction lecture seule ✅
+Le provisionnement d'un `Utilisateur` à partir du jeton Keycloak était exécuté par
+`CurrentUserService` **dans la transaction de l'appelant**. Tout endpoint annoté
+`@Transactional(readOnly = true)` propageait donc son mode à cet `INSERT`, que PostgreSQL rejette
+(*cannot execute INSERT in a read-only transaction*).
+
+Correction : extraction d'un bean dédié `UtilisateurProvisioningService` portant
+`@Transactional(propagation = REQUIRES_NEW)`. **Une classe distincte est nécessaire** : `@Transactional`
+s'appuie sur un proxy Spring, un appel interne à `CurrentUserService` n'aurait pas changé de
+transaction. La méthode reteste l'existence de l'utilisateur dans la nouvelle transaction, pour que
+deux requêtes concurrentes du même nouvel arrivant ne créent pas deux lignes.
+
+Preuve : `ProvisionnementLectureSeuleIntegrationTest` (PostgreSQL réel, appelant annoté
+`readOnly = true`) — **rouge avant le correctif, vert après**. Le scénario est en outre rejoué par
+HTTP dans `HabilitationFrontendIntegrationTest` sur `GET /alertes/mes-notifications`, l'endpoint que
+le frontend appelle effectivement au chargement.
+
+### 2. Endpoints ajoutés — 11 endpoints 🆕
+
+| Endpoint | Rôle | Écran servi |
+|---|---|---|
+| `GET /referentiels/natures-dossier?categorie=` | `CONSULTATION` | Liste « nature » du formulaire de création (RG-DOS-02) |
+| `GET /referentiels/types-client-sensible` | `CONSULTATION` | Volet « dossier sensible » (RG-DOS-09) |
+| `POST /intervenants` | `DJ`, `DJA` | Administration du répertoire |
+| `GET /intervenants?type=` | `CONSULTATION` | Sélecteurs d'affectation et de constitution |
+| `GET /dossiers/{id}/audiences` | `CONSULTATION` | Onglet « Audiences » de la fiche dossier |
+| `GET /dossiers/{id}/deliberes` | `CONSULTATION` | Onglet « Délibérés » |
+| `GET /dossiers/{id}/alarmes` | `CONSULTATION` | Onglet « Alarmes » |
+| `GET /publications?dossierId=&statut=` | `ASSISTANTE`, `JURISTE`, `DJ`, `DJA` | File « publications à valider » |
+| `GET /ged/demandes-suppression?statut=` | `DJ`, `DJA` | File « demandes de suppression en attente » |
+| `GET /constitutions/prestataires?statut=` | `SH`, `JURISTE` | File « constitutions à signer » |
+| `GET /utilisateurs?profil=` | `CONSULTATION` | Sélecteur « juriste affecté » (§6, Q-69) |
+
+Ces endpoints ferment les trois derniers volets de **Q-24** (files de travail sans source de données),
+qui passe donc à **close**.
+
+**Aucune règle métier nouvelle.** Deux points ont toutefois dû être tranchés, et le sont
+explicitement (Q-68) :
+- **Création d'un intervenant** : les invariants existants sont portés par le service — un `AVOCAT`
+  exige un compte Keycloak unique (400 s'il manque, 409 s'il est déjà pris, RG-INT-01) et refuse le
+  champ `notification` ; un `AUTRE_PRESTATAIRE` refuse tout compte applicatif (RG-INT-02). Même
+  raisonnement que `POST /clients` (Q-23, M4) : aucune user story ne décrit cet endpoint, mais sans
+  lui le référentiel ne peut être alimenté que par SQL.
+- **`GET /publications`** : contrairement à `GET /publications/{id}`, la liste **n'applique pas** la
+  restriction d'accès individuelle (Q-57) — elle sert des profils internes chargés d'instruire les
+  publications et n'expose que des métadonnées ; le contenu détaillé reste soumis au contrôle
+  unitaire.
+
+### 3. Tests — ✅ 255 tests verts, couverture 85,9 %
+
+**42 tests nets ajoutés** (213 → 255) ; couverture JaCoCo **84,9 % → 85,9 %** des instructions
+(7852/9139) et **75,9 % → 77,7 %** des branches.
+
+| Test | Portée |
+|---|---|
+| `HabilitationFrontendIntegrationTest` (13) | Routage, filtres et **habilitations** des 11 endpoints, bout en bout — dont la **chaîne complète** « lister les juristes → créer un dossier avec l'identifiant obtenu » (Q-69) |
+| `IntervenantServiceTest` (8) | Invariants RG-INT-01/02, doublon de compte, filtre par type |
+| `UtilisateurServiceTest` (6) | Filtres (profil, comptes inactifs), tri, et non-exposition de `keycloakId` |
+| `UtilisateurProvisioningServiceTest` (4) | Dérivation du profil depuis le jeton — 3 tests déplacés depuis `CurrentUserServiceTest` avec le code qu'ils couvrent, + le cas de course (utilisateur apparu entre-temps) |
+| `ProvisionnementLectureSeuleIntegrationTest` (2) | R-06 contre PostgreSQL réel |
+| 11 ajouts dans 6 classes existantes | `listerParDossier` (audiences, délibérés, alarmes) + 404 si dossier absent ; aiguillage des 4 combinaisons de filtres de `PublicationService.lister` ; listes filtrées GED et constitutions |
+
+Le choix d'un **test d'intégration** pour les endpoints eux-mêmes est délibéré : ces endpoints n'ont
+presque pas de logique, leur risque réel est l'habilitation — qu'un test de service mocké ne peut
+pas vérifier. Chaque file de travail est donc testée servie à son profil **et refusée aux autres**.
+
+**Régression corrigée au passage** : le refactor R-06 laissait `CurrentUserServiceTest` cassé
+(3 tests en échec) — `@InjectMocks` ne pouvait plus alimenter le constructeur, et trois tests
+portaient sur la dérivation du profil, désormais dans l'autre classe. Ils ont été déplacés dans
+`UtilisateurProvisioningServiceTest` avec le code qu'ils couvrent ; `CurrentUserServiceTest` ne
+teste plus que la délégation. Le défaut n'a été révélé que par l'exécution de la **suite complète**,
+les tests ciblés du jalon passant tous.
+
+### 4. Validation manuelle en conditions réelles — ✅
+Docker (PostgreSQL 17 + Keycloak 24 + MinIO), jetons Keycloak **réels** pour les 6 profils, base
+repartie **vierge** (volume recréé — circonstance qui a rendu la preuve de R-06 particulièrement
+nette).
+
+- **R-06** : première requête de `sh.test`, jamais provisionné → `GET /alertes/mes-notifications`
+  (service `@Transactional(readOnly = true)`) répond **200**, et la table `utilisateur` contient
+  ensuite exactement une ligne, créée par cette requête. Avant M15, ce même appel retournait 500.
+- **Référentiels** : 10 natures pour `?categorie=RECOUVREMENT` (toutes de cette catégorie),
+  3 types de client sensible ; 403 sans `ROLE_CONSULTATION`.
+- **Intervenants** : avocat créé (201), doublon de compte Keycloak (**409**), avocat sans compte
+  (**400**), avocat avec `notification` (**400**), autre prestataire créé (201), autre prestataire
+  avec compte (**400**), création par un juriste (**403**) ; listes filtrées par type correctes.
+- **Onglets d'une fiche dossier** : les trois répondent `[]` sur un dossier neuf, **404** sur un
+  dossier inexistant, puis restituent l'audience, l'alarme et le délibéré réellement créés ; 403
+  pour un avocat (sans `ROLE_CONSULTATION`).
+- **Files de travail** : les trois vides d'abord, puis alimentées par une constitution, une
+  publication et une demande de suppression réelles ; chaque filtre discrimine (`?statut=DEPOSE` →
+  1, `?statut=VALIDE` → 0, puis **l'inverse après validation de la publication** ; `?dossierId=1` →
+  1, `?dossierId=99` → 0). Chacune est refusée (**403**) aux profils non concernés.
+- **Répertoire des utilisateurs (#66)** : liste triée par nom, filtre `?profil=` correct et
+  insensible à la casse, `keycloakId` absent de la réponse, **403** pour un avocat. Surtout, la
+  **chaîne rompue a été rejouée en entier** : lister les juristes → retenir l'identifiant renvoyé →
+  `POST /dossiers` avec ce `juristesAffectes` → **201**, le dossier créé portant bien l'affectation.
+
+### 5. Arbitrages rendus à la clôture du jalon — Q-59, Q-60, Q-67 closes
+
+Le porteur du projet a **retenu les recommandations** de Q-59, Q-60 et Q-67, qui restaient ouvertes
+pour confirmation. Les trois sont **closes sans modification de code** — le comportement livré en
+M12/M14 était déjà celui recommandé, revérifié dans le code à cette occasion :
+
+| Question | Décision retenue | Conséquence |
+|---|---|---|
+| **Q-59** | L'asymétrie est intentionnelle : une condamnation pécuniaire n'exige **aucune** précondition d'étape, `etapeId` reste optionnel — à la différence de l'adjudication (`CLOTURE` requise) | Aucune. Une harmonisation ultérieure serait un **durcissement** de l'API, à versionner |
+| **Q-60** | Le passage d'une étape à `ARCHIVE` reste **manuel** (`PATCH …/etapes/{id}/statut`) ; P5 décrit un enchaînement métier, pas un automatisme | Aucune. Une automatisation ultérieure n'introduirait aucune rupture de contrat |
+| **Q-67** | `DossierResponse.documents` reste présent et **vide par construction** ; les pièces se lisent via `GET /dossiers/{id}/documents` (#43). Le champ n'est **pas** retiré : le supprimer serait une rupture pour un gain nul | **Point d'attention frontend** : ne pas lire `dossier.documents` |
+
+### 6. Élargissement de périmètre en cours de jalon — `GET /utilisateurs` (Q-69)
+
+Le contrôle « le frontend peut-il consommer l'API ? » a été **rejoué après la livraison** du
+périmètre initial, et a révélé un manque de la même famille que ceux de Q-68 : `POST /dossiers`
+exige `juristesAffectes` (`@NotEmpty`, des `utilisateur.id`), et **aucun endpoint n'exposait la
+table `utilisateur`**. Le point d'entrée de toute l'application était donc inconstructible depuis
+une interface. M15 avait traité les avocats (`GET /intervenants`) et omis le personnel interne.
+
+Ni les tests ni les validations manuelles ne pouvaient le révéler : les uns comme les autres lisent
+l'identifiant directement en base. Seule la question « par quel appel le frontend obtient-il cette
+valeur ? » le fait apparaître.
+
+`GET /utilisateurs?profil=&inclureInactifs=` (#66) comble le manque, en lecture seule — les comptes
+naissent du provisionnement au premier appel authentifié, Keycloak restant la source de vérité des
+identités (REF-05 §1.3). Trois choix tranchés, détaillés en Q-69 : `keycloakId` non exposé, comptes
+actifs seuls par défaut, et `ROLE_CONSULTATION` — que les six profils internes portent mais **pas**
+`AVOCAT`, un intervenant externe ne devant pas énumérer le personnel de la Direction Juridique.
+
+**Non retenu** : enrichir `DossierResponse.juristesAffectes` (aujourd'hui des identifiants nus) en
+objets `{id, nom, prenom}`. Ce serait une **rupture du contrat de réponse déjà publié**, pour un
+besoin que le frontend couvre avec un appel à `GET /utilisateurs` mis en cache. Reste à arbitrer si
+l'équipe frontend juge le double-appel gênant — même raisonnement que Q-67.
+
+### Décisions prises (documentées dans `DECISIONS_AND_OPEN_QUESTIONS.md`)
+Q-68 (périmètre et invariants du jalon), **Q-69** (répertoire des utilisateurs internes),
+**Q-24 close**, **R-06 ✅ corrigé**, et les clôtures de **Q-59, Q-60, Q-67** ci-dessus.
+
+### Commit
+Jalon livré en un seul commit (docs de contexte incluses, comme pour M5 à M14).
+
+### Restant
+**Le projet reste en développement — les points ci-dessous ne se posent qu'à la mise en
+production** : R-01 (rotation des secrets déjà exposés côté Neon/iDrive e2), R-08 (documentation
+d'API `/v3/api-docs` et `/swagger-ui` accessible sans authentification), et une campagne de
+performance outillée sur volumétrie réelle. Plus aucune question fonctionnelle n'est en attente
+d'arbitrage.
 
 ---
 

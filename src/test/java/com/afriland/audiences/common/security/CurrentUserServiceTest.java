@@ -1,14 +1,11 @@
 package com.afriland.audiences.common.security;
 
 import com.afriland.audiences.common.error.ApiException;
-import com.afriland.audiences.referentiel.domain.Profil;
 import com.afriland.audiences.referentiel.domain.Utilisateur;
-import com.afriland.audiences.referentiel.repository.ProfilRepository;
 import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -28,6 +25,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * Depuis M15, ce service ne fait plus que <b>résoudre</b> l'utilisateur : la création est déléguée
+ * à {@link UtilisateurProvisioningService} pour qu'elle s'exécute dans sa propre transaction en
+ * écriture (correctif R-06). Les règles de dérivation du profil sont donc testées dans
+ * {@link UtilisateurProvisioningServiceTest} ; ici, seule la délégation est vérifiée.
+ */
 @ExtendWith(MockitoExtension.class)
 class CurrentUserServiceTest {
 
@@ -35,7 +38,7 @@ class CurrentUserServiceTest {
     private UtilisateurRepository utilisateurRepository;
 
     @Mock
-    private ProfilRepository profilRepository;
+    private UtilisateurProvisioningService provisioningService;
 
     @InjectMocks
     private CurrentUserService currentUserService;
@@ -46,7 +49,7 @@ class CurrentUserServiceTest {
     }
 
     @Test
-    void resolveOrProvision_returnsExistingUserWithoutCreatingANewOne() {
+    void resolveOrProvision_returnsExistingUserWithoutProvisioning() {
         Jwt jwt = jwtWithRoles("kc-123", List.of("ROLE_JURISTE", "ROLE_SAISIE", "ROLE_CONSULTATION"));
         Utilisateur existing = Utilisateur.builder().id(42L).keycloakId("kc-123").build();
         when(utilisateurRepository.findByKeycloakId("kc-123")).thenReturn(Optional.of(existing));
@@ -54,51 +57,18 @@ class CurrentUserServiceTest {
         Utilisateur result = currentUserService.resolveOrProvision(jwt);
 
         assertThat(result).isSameAs(existing);
-        verify(utilisateurRepository, never()).save(any());
+        verify(provisioningService, never()).provisionner(any());
     }
 
     @Test
-    void resolveOrProvision_provisionsNewUserWithPrimaryProfilRoleOnFirstRequest() {
-        Jwt jwt = jwtWithRoles("kc-456", List.of("ROLE_DJ", "ROLE_SAISIE", "ROLE_CONSULTATION"));
-        Profil djProfil = Profil.builder().id(2L).code("DJ").libelle("Directeur Juridique").build();
+    void resolveOrProvision_delegatesToTheProvisioningServiceOnFirstRequest() {
+        Jwt jwt = jwtWithRoles("kc-456", List.of("ROLE_DJ", "ROLE_SAISIE"));
+        Utilisateur provisionne = Utilisateur.builder().id(7L).keycloakId("kc-456").build();
         when(utilisateurRepository.findByKeycloakId("kc-456")).thenReturn(Optional.empty());
-        when(profilRepository.findByCode("DJ")).thenReturn(Optional.of(djProfil));
-        when(utilisateurRepository.save(any(Utilisateur.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(provisioningService.provisionner(jwt)).thenReturn(provisionne);
 
-        Utilisateur result = currentUserService.resolveOrProvision(jwt);
-
-        ArgumentCaptor<Utilisateur> captor = ArgumentCaptor.forClass(Utilisateur.class);
-        verify(utilisateurRepository).save(captor.capture());
-        Utilisateur saved = captor.getValue();
-        assertThat(saved.getKeycloakId()).isEqualTo("kc-456");
-        assertThat(saved.getProfil()).isEqualTo(djProfil);
-        assertThat(saved.getActif()).isTrue();
-        assertThat(result.getProfil().getCode()).isEqualTo("DJ");
-    }
-
-    @Test
-    void resolveOrProvision_ignoresTransverseRolesWhenPickingTheProfil() {
-        // ROLE_SAISIE et ROLE_CONSULTATION apparaissent avant ROLE_ASSISTANTE dans le jeton :
-        // seul le rôle métier doit être retenu comme profil (cf. Q-08).
-        Jwt jwt = jwtWithRoles("kc-789", List.of("ROLE_SAISIE", "ROLE_CONSULTATION", "ROLE_ASSISTANTE"));
-        Profil assistanteProfil = Profil.builder().id(4L).code("ASSISTANTE").build();
-        when(utilisateurRepository.findByKeycloakId("kc-789")).thenReturn(Optional.empty());
-        when(profilRepository.findByCode("ASSISTANTE")).thenReturn(Optional.of(assistanteProfil));
-        when(utilisateurRepository.save(any(Utilisateur.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        Utilisateur result = currentUserService.resolveOrProvision(jwt);
-
-        assertThat(result.getProfil().getCode()).isEqualTo("ASSISTANTE");
-    }
-
-    @Test
-    void resolveOrProvision_rejectsTokenWithNoRecognizedBusinessRole() {
-        Jwt jwt = jwtWithRoles("kc-000", List.of("ROLE_SAISIE", "ROLE_CONSULTATION"));
-        when(utilisateurRepository.findByKeycloakId("kc-000")).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> currentUserService.resolveOrProvision(jwt))
-                .isInstanceOf(ApiException.class)
-                .hasMessageContaining("Aucun rôle métier reconnu");
+        assertThat(currentUserService.resolveOrProvision(jwt)).isSameAs(provisionne);
+        verify(utilisateurRepository, never()).save(any());
     }
 
     @Test

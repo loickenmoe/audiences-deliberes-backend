@@ -53,7 +53,11 @@ class CurrentUserServiceIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        currentUserService = new CurrentUserService(utilisateurRepository, profilRepository);
+        // Le provisionnement vit désormais dans son propre bean, porteur de REQUIRES_NEW (R-06,
+        // corrigé en M15) — instancié directement ici, la propagation transactionnelle n'étant pas
+        // l'objet de ce test (elle l'est de UtilisateurProvisioningServiceIntegrationTest).
+        currentUserService = new CurrentUserService(utilisateurRepository,
+                new UtilisateurProvisioningService(utilisateurRepository, profilRepository));
     }
 
     @Test

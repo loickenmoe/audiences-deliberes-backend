@@ -34,6 +34,13 @@ public class AlarmeController {
         return ResponseEntity.status(HttpStatus.CREATED).body(alarmeService.creerAlarme(id, request));
     }
 
+    /** M15 (Q-68) : alarmes d'un dossier — endpoint 🆕, aucune lecture n'existait. */
+    @org.springframework.web.bind.annotation.GetMapping("${api.prefix}/dossiers/{id}/alarmes")
+    @PreAuthorize("hasRole('CONSULTATION')")
+    public java.util.List<AlarmeResponse> listerAlarmesDossier(@PathVariable Long id) {
+        return alarmeService.listerParDossier(id);
+    }
+
     @PutMapping("${api.prefix}/alarmes/{id}/reprogrammer")
     @PreAuthorize("hasRole('JURISTE')")
     public AlarmeResponse reprogrammerAlarme(@PathVariable Long id,

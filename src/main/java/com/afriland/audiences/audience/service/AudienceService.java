@@ -125,6 +125,15 @@ public class AudienceService {
                 .orElseThrow(() -> ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE, "Dossier introuvable : " + id));
     }
 
+    /** M15 (Q-68) : onglet « Audiences » de la fiche dossier — 404 si le dossier n'existe pas. */
+    @Transactional(readOnly = true)
+    public List<AudienceResponse> listerParDossier(Long dossierId) {
+        getDossierOrThrow(dossierId);
+        return audienceRepository.findByDossierIdOrderByDatePlanifieeDesc(dossierId).stream()
+                .map(audienceMapper::toResponse)
+                .toList();
+    }
+
     @Transactional(readOnly = true)
     public List<CalendrierEntreeResponse> calendrier(PeriodeCalendrier periode, LocalDate dateDebut) {
         LocalDate dateFin = periode.dateFin(dateDebut);

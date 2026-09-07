@@ -22,4 +22,9 @@ public interface DemandeSuppressionRepository extends JpaRepository<DemandeSuppr
 
     /** Demandes en attente déjà relancées une fois, mais dont la dernière relance dépasse le délai. */
     List<DemandeSuppression> findByStatutAndDateDerniereRelanceLessThanEqual(StatutSuppression statut, LocalDateTime seuil);
+
+    /** M15 (Q-68) : file de travail « demandes de suppression en attente » du DJ/DJA, plus ancienne d'abord. */
+    List<DemandeSuppression> findByStatutOrderByDateDemandeAsc(StatutSuppression statut);
+
+    List<DemandeSuppression> findByOrderByDateDemandeDesc();
 }

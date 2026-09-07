@@ -291,4 +291,28 @@ class DelibereServiceTest {
 
         assertThat(result.statutExpedition()).isEqualTo(StatutExpedition.LEVEE);
     }
+
+    // ------------------------------------------------------------------ listerParDossier (M15, Q-68)
+
+    @Test
+    void listerParDossier_retourneLesDeliberesDuDossier() {
+        when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
+        when(delibereRepository.findByDossierIdOrderByDateDelibereeDesc(1L)).thenReturn(List.of(
+                Delibere.builder().id(2L).dossier(dossier).etape(etapeEnDelibere)
+                        .dateDeliberee(LocalDate.now()).build(),
+                Delibere.builder().id(1L).dossier(dossier).etape(etapeEnDelibere)
+                        .dateDeliberee(LocalDate.now().minusMonths(1)).build()));
+
+        assertThat(service.listerParDossier(1L)).extracting(DelibereResponse::id).containsExactly(2L, 1L);
+    }
+
+    @Test
+    void listerParDossier_dossierInconnu_retourne404() {
+        when(dossierRepository.findById(999L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.listerParDossier(999L))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("Dossier introuvable");
+        verify(delibereRepository, never()).findByDossierIdOrderByDateDelibereeDesc(any());
+    }
 }

@@ -66,6 +66,14 @@ public class GedController {
                 : ResponseEntity.status(HttpStatus.ACCEPTED).body(resultat.demande());
     }
 
+    /** M15 (Q-68) : file de travail des demandes de suppression (DJ/DJA) — endpoint 🆕. */
+    @GetMapping("${api.prefix}/ged/demandes-suppression")
+    @PreAuthorize("hasAnyRole('DJ', 'DJA')")
+    public List<DemandeSuppressionResponse> listerDemandesSuppression(
+            @RequestParam(required = false) com.afriland.audiences.ged.domain.StatutSuppression statut) {
+        return gedService.listerDemandesSuppression(statut);
+    }
+
     @PutMapping("${api.prefix}/ged/documents/{id}/approbation-suppression")
     @PreAuthorize("hasAnyRole('DJ', 'DJA')")
     public DemandeSuppressionResponse approuverOuRejeter(@PathVariable Long id,

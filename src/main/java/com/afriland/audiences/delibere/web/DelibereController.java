@@ -54,6 +54,13 @@ public class DelibereController {
         return ResponseEntity.status(HttpStatus.CREATED).body(delibereService.rabattre(id, request));
     }
 
+    /** M15 (Q-68) : onglet « Délibérés » de la fiche dossier — endpoint 🆕. */
+    @GetMapping("${api.prefix}/dossiers/{id}/deliberes")
+    @PreAuthorize("hasRole('CONSULTATION')")
+    public java.util.List<DelibereResponse> listerDeliberesDossier(@PathVariable Long id) {
+        return delibereService.listerParDossier(id);
+    }
+
     @GetMapping("${api.prefix}/deliberes/{id}/recours")
     @PreAuthorize("hasRole('JURISTE')")
     public RecoursResponse consulterRecours(@PathVariable Long id) {

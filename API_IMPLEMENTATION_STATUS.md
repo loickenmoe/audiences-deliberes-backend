@@ -1,10 +1,12 @@
 # API_IMPLEMENTATION_STATUS
 
 > Inventaire exhaustif des endpoints et état d'implémentation.
-> Dernière mise à jour : 2026-09-07 (après jalon M14 — durcissement final, feuille de route achevée).
+> Dernière mise à jour : 2026-09-07 (après jalon M15 — habilitation frontend, 11 endpoints ajoutés).
 > **Conformité vérifiée endpoint par endpoint en M14** : les 56 endpoints du code ont été audités
 > contre ce tableau — 54 strictement conformes, 2 écarts de rôle corrigés ici (`POST
 > /dossiers/{id}/etapes` et `DELETE /ged/documents/{id}` : `ROLE_JURISTE`, non `ROLE_SAISIE`) — Q-66.
+> Les 11 endpoints de M15 (#56-#66) portent tous un `@PreAuthorize` explicite, vérifié par
+> `HabilitationFrontendIntegrationTest` (servi au profil attendu **et refusé aux autres**).
 
 **Base URL** : `http://localhost:8080/api/v1` — aligné sur le contrat REF-07 depuis M1 (Q-16 résolue).
 **Authentification** : `Authorization: Bearer <JWT Keycloak>` sur tous les endpoints sauf health checks.
@@ -30,10 +32,17 @@
 `POST /clients` (🆕, manquant de toute documentation source, cf. Q-23) atteint la barre des 100 %
 qu'après une décision d'ajout — traité comme tel dès M4.
 
-**+ 4 endpoints hors inventaire initial**, ajoutés en cours d'implémentation faute d'alternative
-dans le contrat : `POST /dossiers/{id}/etapes` (Q-34, M4), `GET /dossiers/{id}/documents` (#43, M8),
-`GET /frais/demandes` (#28, Q-24, M10), `GET /jurisprudences` (#55, UC-DEF-03, M12) — soit **55
-endpoints exposés au total**.
+**+ 14 endpoints hors inventaire initial**, ajoutés faute d'alternative dans le contrat :
+
+- **M4 à M12 (4)** : `POST /dossiers/{id}/etapes` (Q-34), `GET /dossiers/{id}/documents` (#43),
+  `GET /frais/demandes` (#28, Q-24), `GET /jurisprudences` (#55, UC-DEF-03).
+- **M15 (11)** — jalon « habilitation frontend » (Q-68, Q-69) : trois onglets d'une fiche dossier
+  (#56 audiences, #57 alarmes, #58 délibérés), trois files de travail fermant Q-24 (#59
+  publications, #60 constitutions, #63 demandes de suppression), l'administration du référentiel
+  des intervenants (#61, #62), les deux référentiels de formulaire (#64, #65) et le répertoire des
+  utilisateurs internes (#66, Q-69).
+
+Soit **66 endpoints exposés au total**.
 
 Le squelette de starter hors périmètre (Template/Admin/Staff/Dashboard/Chat, auth JWT maison) a
 été intégralement supprimé en M1 (cf. `DECISIONS_AND_OPEN_QUESTIONS.md` R-03/R-04) — l'ancienne
@@ -91,6 +100,13 @@ Q-10, Q-11, Q-12, Q-26, Q-34, Q-35 pour le détail des arbitrages pris pendant l
 | 15 | GET | `/audiences/calendrier` | `ROLE_JURISTE`, `ROLE_DJ` | FR-AUD-05 / US 2.5 | 📋 | ✅ M6 |
 | 16 | POST | `/dossiers/{id}/alarmes` | `ROLE_JURISTE` | FR-AUD-03 / US 2.3 | **📄** | ✅ M6 |
 | 17 | PUT | `/alarmes/{id}/reprogrammer` | `ROLE_JURISTE` | FR-AUD-04 / US 2.4 | **📄** | ✅ M6 |
+| 56 | GET | `/dossiers/{id}/audiences` | `ROLE_CONSULTATION` | US 1.3 (onglet « Audiences ») | 🆕 | ✅ M15 |
+| 57 | GET | `/dossiers/{id}/alarmes` | `ROLE_CONSULTATION` | US 2.3/2.4 (onglet « Alarmes ») | 🆕 | ✅ M15 |
+
+> **#56/#57 (M15, Q-68)** : aucune lecture des audiences ni des alarmes d'un dossier n'existait —
+> elles ne pouvaient être créées puis jamais relues. 404 si le dossier est inconnu ; audiences
+> triées par date planifiée décroissante, alarmes par échéance croissante (ordre d'usage de chaque
+> écran).
 
 > Testé manuellement de bout en bout (curl + JWT Keycloak réels) : doublon d'audience confirmé
 > (`?forcer=true`, Q-12), compte rendu refusé sur audience future, rappels J-7/J-3/J-1 déclenchés
@@ -109,6 +125,7 @@ Q-10, Q-11, Q-12, Q-26, Q-34, Q-35 pour le détail des arbitrages pris pendant l
 | 20 | POST | `/deliberes/{id}/rabattement` | `ROLE_JURISTE` | FR-DEL-05 / US 3.4 | 📋 | ✅ M7 |
 | 21 | GET | `/deliberes/{id}/recours` | `ROLE_JURISTE` | FR-DEL-02 / US 3.5 | 📋 | ✅ M7 |
 | 22 | PUT | `/deliberes/{id}/expedition` | `ROLE_JURISTE` | FR-DEL-03 / US 3.6 | **📄** | ✅ M7 |
+| 58 | GET | `/dossiers/{id}/deliberes` | `ROLE_CONSULTATION` | US 1.3 (onglet « Délibérés ») | 🆕 | ✅ M15 |
 
 > **#18** : `dateEcheanceRecours` requise et postérieure à `dateDeliberee` si `resultat` ∈
 > {DEFAVORABLE, MIXTE} (Q-42), absente sinon ; l'enregistrement fait basculer l'étape en
@@ -122,6 +139,8 @@ Q-10, Q-11, Q-12, Q-26, Q-34, Q-35 pour le détail des arbitrages pris pendant l
 > `DelaiRecoursScheduler` (bascule `CLOTURE` + alerte `DELAI_RECOURS`, Q-43).
 > **#22** : dernier volet de Q-13, absent de l'OpenAPI formel mais implémenté selon les critères
 > Gherkin de l'US 3.6.
+> **#58 (M15, Q-68)** : symétrique de #56/#57 — 404 si le dossier est inconnu, tri par date
+> délibérée décroissante.
 
 Testé manuellement de bout en bout (curl + JWT Keycloak réels) : rejet d'un délibéré sur étape non
 `EN_DELIBERE`, échéance de recours refusée/exigée selon le résultat, 10 puis 11 prorogations
@@ -165,6 +184,7 @@ si sensible ou montant > seuil, paiement (Assistante). Traçabilité complète v
 | 32 | GET | `/publications/{id}` | `ROLE_CONSULTATION` | US 5.4 | 📋 | ✅ |
 | 33 | POST | `/publications/{id}/commentaires` | `ROLE_JURISTE` | FR-INT-09 / US 5.5 | 📋 | ✅ |
 | 34 | POST | `/publications/{id}/correspondance` | `ROLE_DJ`, `ROLE_DJA` | RG-INT-07 / US 5.5 | 💡 | ✅ |
+| 59 | GET | `/publications?dossierId=&statut=` | `ROLE_ASSISTANTE`, `ROLE_JURISTE`, `ROLE_DJ`, `ROLE_DJA` | UC-INT-09 (« file des publications à valider ») | 🆕 | ✅ M15 |
 
 > **#30** : chemin généralisé, sans le segment `cr-audience` du contrat — s'applique aux deux
 > sous-types de publication (Q-55), aucun second endpoint n'étant prévu pour valider une « autre »
@@ -174,6 +194,12 @@ si sensible ou montant > seuil, paiement (Assistante). Traçabilité complète v
 > via `$ref` mais **ne les définit jamais** dans `components/schemas`. Contrat incomplet (Q-25) —
 > nos propres DTOs (`PublicationResponse`, `CommentaireResponse`, `CorrespondanceResponse`) en
 > tiennent lieu côté implémentation.
+>
+> **#59 (M15, Q-68)** : dernier volet de Q-24 pour les publications — `statut=DEPOSE` alimente la
+> file de l'Assistante, `dossierId` l'onglet publications d'une fiche dossier. Contrairement à #32,
+> cette liste **n'applique pas** la restriction d'accès individuelle (Q-57) : elle sert des profils
+> internes chargés d'instruire les publications et n'expose que des métadonnées, le contenu détaillé
+> restant soumis au contrôle unitaire.
 
 **Circuit implémenté (M11)** : `PublicationService` — dépôt d'un compte rendu d'audience (avocat,
 audience rattachée au dossier — 404 sinon, US 5.1), dépôt d'une autre publication (PIECE/DECISION/
@@ -191,6 +217,9 @@ automatisés dédiés. Voir `DECISIONS_AND_OPEN_QUESTIONS.md` Q-20, Q-25, Q-55, 
 | 35 | POST | `/constitutions/prestataires` | `ROLE_JURISTE` | FR-INT-06 / US 5.6 | 💡 | ✅ M9 |
 | 36 | PUT | `/constitutions/prestataires/{id}/validation` | `ROLE_SH` | FR-INT-07 / US 5.7 | 💡 | ✅ M9 |
 | 37 | GET | `/repertoire/avocats` | `ROLE_JURISTE`, `ROLE_ASSISTANTE` | FR-INT-08 / US 5.8 | 💡 | ✅ M9 |
+| 60 | GET | `/constitutions/prestataires?statut=` | `ROLE_SH`, `ROLE_JURISTE` | UC-INT-07 (« constitutions à signer ») | 🆕 | ✅ M15 |
+| 61 | POST | `/intervenants` | `ROLE_DJ`, `ROLE_DJA` | RG-INT-01/02 (administration du référentiel) | 🆕 | ✅ M15 |
+| 62 | GET | `/intervenants?type=` | `ROLE_CONSULTATION` | RG-DOS-03 (sélecteurs d'affectation) | 🆕 | ✅ M15 |
 
 > **#35/#36** : `demande_constitution.motif` obligatoire ; l'approbation génère la lettre de
 > constitution (PDFBox) et l'attache comme `Document` GED (M8) ; seul un `Avocat` avec compte
@@ -198,6 +227,16 @@ automatisés dédiés. Voir `DECISIONS_AND_OPEN_QUESTIONS.md` Q-20, Q-25, Q-55, 
 > aucune (pas de compte, pas d'infrastructure email — même limite que Q-37). **#37** :
 > `indicateurCharge`/`indicateurPerformance` calculés à la demande (Q-53), triés par charge
 > croissante, recherche par `?nom=`.
+>
+> **#60 (M15, Q-68)** : dernier volet de Q-24 pour les constitutions — `statut=EN_ATTENTE` alimente
+> la file de travail du SH ; sans filtre, l'historique complet (plus récentes d'abord).
+> **#61/#62 (M15, Q-68)** : **aucun endpoint ne permettait de créer un avocat** — le référentiel ne
+> pouvait être alimenté qu'en SQL, alors qu'un avocat est obligatoire à la création d'un dossier
+> (`avocatsAffectes` est `@NotEmpty`) et conditionne frais, publications et constitutions. Même
+> raisonnement que `POST /clients` (Q-23, M4). Les invariants existants sont portés par le service :
+> un `AVOCAT` exige un compte Keycloak **unique** (400 s'il manque, 409 s'il est déjà pris,
+> RG-INT-01) et refuse le champ `notification` ; un `AUTRE_PRESTATAIRE` refuse tout compte
+> applicatif (RG-INT-02). Aucune modification ni suppression : non demandées par les user stories.
 
 Testé manuellement de bout en bout (curl + JWT Keycloak réels) : répertoire avec charge/performance
 corrects et tri croissant, recherche par nom, demande de constitution notifiant les SH, approbation
@@ -215,6 +254,7 @@ notifiant le demandeur, décision déjà prise refusée (409). 11 tests automati
 | 41 | PUT | `/ged/documents/{id}/approbation-suppression` | `ROLE_DJ`, `ROLE_DJA` | FR-GED-03 / US 6.4 | 💡 | ✅ M8 |
 | 42 | GET | `/ged/rapport-journalier` | `ROLE_JURISTE` | FR-GED-04 / US 6.6 | 📋 | ✅ M8 |
 | 43 | GET | `/dossiers/{id}/documents` | `ROLE_CONSULTATION` | UC-GED-02 | 🆕 | ✅ M8 |
+| 63 | GET | `/ged/demandes-suppression?statut=` | `ROLE_DJ`, `ROLE_DJA` | UC-GED-04 (« demandes en attente ») | 🆕 | ✅ M15 |
 
 > **#38** : format dérivé de l'extension du fichier (pas du `Content-Type` déclaré, Q-46) ;
 > `typeDocument` reste un texte libre (Q-45). **#40** : double comportement selon le profil résolu
@@ -224,6 +264,8 @@ notifiant le demandeur, décision déjà prise refusée (409). 11 tests automati
 > `dossiersManipules`/`piecesAjoutees`/`affairesNouvelles`/`planificationActes[]` définis en Q-49
 > (dépendance étendue vers le module `audience`). **#43** : UC-GED-02 et US 6.3 supposent la liste
 > des documents d'un dossier, absente du contrat qui ne prévoit que la consultation unitaire.
+> **#63 (M15, Q-68)** : dernier volet de Q-24 pour la GED — le DJ/DJA devait approuver (#41) des
+> demandes qu'aucun endpoint ne lui permettait de lister.
 
 Testé manuellement de bout en bout (curl + JWT Keycloak réels) : rejet d'un format non conforme et
 d'un fichier trop volumineux, dépôt avec notification des juristes cotés, URL pré-signée MinIO,
@@ -282,9 +324,32 @@ stockage dédié sans dossier (Q-58), recherche paginée par mots-clés/nature/j
 transition automatique d'étape vers `ARCHIVE` (Q-60, reste manuelle via l'endpoint générique M4).
 13 tests automatisés dédiés. Voir `DECISIONS_AND_OPEN_QUESTIONS.md` Q-58, Q-59, Q-60, Q-61.
 
+## 11. Référentiels de formulaire et utilisateurs internes (M15)
+
+| # | Méthode | Endpoint | Rôle requis | FR / US | Src | Statut |
+|---|---|---|---|---|---|---|
+| 64 | GET | `/referentiels/natures-dossier?categorie=` | `ROLE_CONSULTATION` | RG-DOS-02 / US 1.1 | 🆕 | ✅ M15 |
+| 65 | GET | `/referentiels/types-client-sensible` | `ROLE_CONSULTATION` | RG-DOS-09 / US 1.1 | 🆕 | ✅ M15 |
+| 66 | GET | `/utilisateurs?profil=&inclureInactifs=` | `ROLE_CONSULTATION` | RG-DOS-03 / US 1.1, 1.2 | 🆕 | ✅ M15 |
+
+> **#64/#65 (M15, Q-68)** : le backend **impose** ces référentiels fermés en écriture — `POST
+> /dossiers` rejette en 400 toute nature hors taxonomie (RG-DOS-02) — mais ne les exposait nulle
+> part en lecture : le formulaire de création ne pouvait pas peupler ses listes déroulantes.
+> Lecture seule : ces référentiels sont administrés par le DJ via la base (CONF02), aucune écriture
+> n'est demandée par les user stories. `natures-dossier` est filtrable par catégorie, le formulaire
+> s'adaptant à la catégorie choisie ; seules les entrées actives sont retournées.
+>
+> **#66 (M15, Q-69)** : `POST /dossiers` exige `juristesAffectes` (`@NotEmpty`, des
+> `utilisateur.id`) et **aucun endpoint n'exposait la table `utilisateur`** — le point d'entrée de
+> toute l'application était donc inconstructible depuis une interface. Pendant de #62 pour le
+> personnel interne. Lecture seule : les comptes naissent du provisionnement au premier appel
+> authentifié, Keycloak restant la source de vérité des identités (REF-05 §1.3). `keycloakId`
+> **n'est pas exposé** ; comptes actifs seuls par défaut ; `ROLE_CONSULTATION` — porté par les six
+> profils internes mais **pas par `AVOCAT`**, qui ne doit pas énumérer le personnel interne.
+
 ---
 
-## 11. Codes d'erreur du contrat (à implémenter dans le `GlobalExceptionHandler`)
+## 12. Codes d'erreur du contrat (à implémenter dans le `GlobalExceptionHandler`)
 
 | Code | HTTP | Description | Endpoint | Statut |
 |---|---|---|---|---|
@@ -303,7 +368,7 @@ Codes génériques : 400 requête invalide · 401 non authentifié · 403 droits
 
 ---
 
-## 12. Hors périmètre V1 (REF-07 §6.2)
+## 13. Hors périmètre V1 (REF-07 §6.2)
 
 | Endpoint | Statut |
 |---|---|

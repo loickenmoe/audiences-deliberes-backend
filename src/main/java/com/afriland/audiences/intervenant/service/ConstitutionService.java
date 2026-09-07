@@ -111,6 +111,18 @@ public class ConstitutionService {
         return demandeConstitutionMapper.toResponse(demande);
     }
 
+    /**
+     * M15 (Q-68) : file de travail « constitutions à signer » du SH — endpoint 🆕.
+     * {@code statut=EN_ATTENTE} alimente son écran ; sans filtre, l'historique complet.
+     */
+    @Transactional(readOnly = true)
+    public List<DemandeConstitutionResponse> lister(StatutConstitution statut) {
+        var demandes = statut == null
+                ? demandeConstitutionRepository.findByOrderByDateDemandeDesc()
+                : demandeConstitutionRepository.findByStatutOrderByDateDemandeAsc(statut);
+        return demandes.stream().map(demandeConstitutionMapper::toResponse).toList();
+    }
+
     /** RG-INT-08 : la validation génère la lettre de constitution, stockée dans la GED (M8). */
     private void genererEtAttacherLettre(DemandeConstitution demande, Utilisateur sh) {
         byte[] pdf = lettreConstitutionService.generer(demande);

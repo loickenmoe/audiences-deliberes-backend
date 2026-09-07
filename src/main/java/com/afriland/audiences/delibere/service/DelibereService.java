@@ -218,6 +218,15 @@ public class DelibereService {
                 .orElseThrow(() -> ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE, "Délibéré introuvable : " + id));
     }
 
+    /** M15 (Q-68) : onglet « Délibérés » de la fiche dossier — 404 si le dossier n'existe pas. */
+    @Transactional(readOnly = true)
+    public List<DelibereResponse> listerParDossier(Long dossierId) {
+        getDossierOrThrow(dossierId);
+        return delibereRepository.findByDossierIdOrderByDateDelibereeDesc(dossierId).stream()
+                .map(delibereMapper::toResponse)
+                .toList();
+    }
+
     private Dossier getDossierOrThrow(Long id) {
         return dossierRepository.findById(id)
                 .orElseThrow(() -> ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE, "Dossier introuvable : " + id));

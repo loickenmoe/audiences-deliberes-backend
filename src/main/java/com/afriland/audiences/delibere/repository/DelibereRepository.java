@@ -60,4 +60,7 @@ public interface DelibereRepository extends JpaRepository<Delibere, Long> {
 
     /** FR-REP-01 (rapport périodique, M13) : délibérés enregistrés dans la période. */
     long countByDateDelibereeBetween(LocalDate debut, LocalDate fin);
+
+    /** M15 : onglet « Délibérés » de la fiche dossier (Q-68), plus récent d'abord. */
+    List<Delibere> findByDossierIdOrderByDateDelibereeDesc(Long dossierId);
 }

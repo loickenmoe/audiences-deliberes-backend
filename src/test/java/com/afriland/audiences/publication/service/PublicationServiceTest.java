@@ -315,4 +315,28 @@ class PublicationServiceTest {
         assertThat(result.publicationId()).isEqualTo(100L);
         verify(alerteService).declencher(eq(TypeAlerte.NOUVELLE_PUBLICATION), eq(1L), eq(utilisateurAvocat), any());
     }
+
+    // ------------------------------------------------------------------ lister (M15, Q-68)
+
+    /** Les quatre combinaisons de filtres aiguillent vers quatre requêtes distinctes. */
+    @Test
+    void lister_aiguilleSelonLesFiltres() {
+        var pageable = org.springframework.data.domain.PageRequest.of(0, 20);
+        var page = new org.springframework.data.domain.PageImpl<Publication>(
+                List.of(CompteRenduAudience.builder().id(100L).dossier(dossier).avocat(avocat)
+                        .statutValidation(StatutPublication.DEPOSE).build()),
+                pageable, 1);
+
+        when(publicationRepository.findByDossierIdAndStatutValidation(1L, StatutPublication.DEPOSE, pageable)).thenReturn(page);
+        assertThat(service.lister(1L, StatutPublication.DEPOSE, pageable).content()).hasSize(1);
+
+        when(publicationRepository.findByDossierId(1L, pageable)).thenReturn(page);
+        assertThat(service.lister(1L, null, pageable).totalElements()).isEqualTo(1);
+
+        when(publicationRepository.findByStatutValidation(StatutPublication.DEPOSE, pageable)).thenReturn(page);
+        assertThat(service.lister(null, StatutPublication.DEPOSE, pageable).content()).hasSize(1);
+
+        when(publicationRepository.findAll(pageable)).thenReturn(page);
+        assertThat(service.lister(null, null, pageable).content()).hasSize(1);
+    }
 }

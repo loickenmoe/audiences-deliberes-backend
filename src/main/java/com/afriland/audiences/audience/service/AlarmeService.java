@@ -96,4 +96,15 @@ public class AlarmeService {
 
         return alarmeMapper.toResponse(nouvelle);
     }
+
+    /** M15 (Q-68) : alarmes d'un dossier — 404 si le dossier n'existe pas. */
+    @Transactional(readOnly = true)
+    public java.util.List<AlarmeResponse> listerParDossier(Long dossierId) {
+        if (!dossierRepository.existsById(dossierId)) {
+            throw ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE, "Dossier introuvable : " + dossierId);
+        }
+        return alarmeRepository.findByDossierIdOrderByDateEcheanceAsc(dossierId).stream()
+                .map(alarmeMapper::toResponse)
+                .toList();
+    }
 }
