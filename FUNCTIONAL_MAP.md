@@ -2,11 +2,13 @@
 
 > Carte fonctionnelle complète : Exigence → User Story → Cas d'utilisation → Règles de gestion →
 > Domaine/Données → Module backend → Endpoint(s) → Comportement attendu → Tests.
-> Dernière mise à jour : 2026-09-06 (après le jalon M9 — Épics 1, 2, 3, 6 et 7 implémentés ; volet
-> constitutions/répertoire de l'Épic 5).
+> Dernière mise à jour : 2026-09-07 (après le jalon M10 — Épics 1, 2, 3, 4, 6 et 7 implémentés ;
+> volet constitutions/répertoire de l'Épic 5).
 
 **Légende statut** : ❌ non implémenté · 🟡 partiel · ✅ implémenté et testé
-**Épics 1 (Dossiers, M4), 2 (Audiences, M6) et 7 (Alertes, M5) : ✅. Épics 3 à 6, 8 : ❌, non démarrés.**
+**Épics 1 (Dossiers, M4), 2 (Audiences, M6), 3 (Délibérés, M7), 4 (Frais, M10), 6 (GED, M8) et
+7 (Alertes, M5) : ✅. Épic 5 : 🟡 (constitutions/répertoire, M9 ; publications restent M11).
+Épic 8 : ❌, non démarré.**
 
 ⚠️ Deux systèmes de numérotation des UC coexistent dans la documentation :
 REF-03 §8 (`UC-01`…`UC-17`) et REF-04 §3 (`UC-DOS-01`…`UC-REP-03`).
@@ -136,15 +138,19 @@ planificateur). Réalisés : 14 tests automatisés (`DelibereServiceTest`,
 
 ## 4. ÉPIC 4 — Intervenants : demandes de frais
 
-**Module** : `frais` · **Dépend de** : `dossier`, `intervenant`, `alerte`, `configuration_systeme`
+**Module** : `frais` · **Dépend de** : `dossier` (affectation `dossier_avocat`), `referentiel`
+(`Avocat`, `ConfigurationService`), `alerte` — **pas** de dépendance au module `intervenant` (M9,
+constitutions) : « avocat constitué sur le dossier » (RG-INT-01) est interprété comme l'affectation
+`dossier_avocat`, indépendante de la lettre de constitution signée (Q-28, Q-54), corrigeant le
+schéma de dépendances de la §0 ci-dessus (`frais` y était dessiné comme dépendant de `intervenant`).
 
 | FR | US | UC | RG | Entités | Endpoint | Comportement attendu | Statut |
 |---|---|---|---|---|---|---|---|
-| FR-INT-01 | 4.1, 4.3 | UC-INT-01 | RG-INT-01,03,05 | `demande_frais`, `alerte` | `POST /frais/demandes` | `ROLE_AVOCAT` ; avocat **constitué sur le dossier** ; `piecesJustificatives` non vide (400) ; `referenceFacture` unique (409/ERR-006) ; statut `DEPOSEE` ; notifie l'Assistante < 5 s ; 201 | ❌ |
-| FR-INT-02 | 4.2, 4.3 | UC-INT-03 | RG-INT-03, RG-INT-05 | `demande_frais`, **`validation_frais` (Q-05)** | `PUT /frais/demandes/{id}/conformite` | `ROLE_ASSISTANTE` ; statut `DEPOSEE` requis ; conforme → `CONFORMITE` + notifie le DJA ; rejet → motif obligatoire + `REJETEE` + notifie l'avocat ; facture en double → blocage 409 + motif automatique « Facture en double » | ❌ |
-| FR-INT-03 | 4.4 | UC-INT-02 | RG-INT-03 | idem | `PUT /frais/demandes/{id}/opportunite` | `ROLE_DJA` ; statut `CONFORMITE` requis ; évalue `(estSensible = true) OR (montant > seuilMontant)` → si faux `VALIDEE`, si vrai `OPPORTUNITE` + notifie DJ **et** DJA ; rejet → motif obligatoire | ❌ |
-| FR-INT-04 | 4.5 | UC-INT-02 alt. | RG-INT-03 | idem | `POST /frais/demandes/{id}/validation-conjointe` | `ROLE_DJ` **ou** `ROLE_DJA` ; enregistre l'accord individuel ; **les deux accords requis** pour `VALIDEE` ; un seul refus → `REJETEE` | ❌ |
-| FR-INT-05 | 4.6 | UC-INT-04 | RG-INT-04 | `demande_frais`, `alerte` | `PATCH /frais/demandes/{id}/paiement` | `ROLE_ASSISTANTE` ; statut `VALIDEE` requis (400 sinon) ; `statutPaiement = PAYEE` ; notifie l'avocat **et** DJ/DJA < 5 s | ❌ |
+| FR-INT-01 | 4.1, 4.3 | UC-INT-01 | RG-INT-01,03,05 | `demande_frais`, `alerte` | `POST /frais/demandes` | `ROLE_AVOCAT` ; avocat **constitué sur le dossier** ; `piecesJustificatives` non vide (400) ; `referenceFacture` unique (409/ERR-006) ; statut `DEPOSEE` ; notifie l'Assistante < 5 s ; 201 | ✅ |
+| FR-INT-02 | 4.2, 4.3 | UC-INT-03 | RG-INT-03, RG-INT-05 | `demande_frais`, **`validation_frais` (Q-05)** | `PUT /frais/demandes/{id}/conformite` | `ROLE_ASSISTANTE` ; statut `DEPOSEE` requis ; conforme → `CONFORMITE` + notifie le DJA ; rejet → motif obligatoire + `REJETEE` + notifie l'avocat ; facture en double → blocage 409 + motif automatique « Facture en double » | ✅ |
+| FR-INT-03 | 4.4 | UC-INT-02 | RG-INT-03 | idem | `PUT /frais/demandes/{id}/opportunite` | `ROLE_DJA` ; statut `CONFORMITE` requis ; évalue `(estSensible = true) OR (montant > seuilMontant)` → si faux `VALIDEE`, si vrai `OPPORTUNITE` + notifie DJ **et** DJA ; rejet → motif obligatoire | ✅ |
+| FR-INT-04 | 4.5 | UC-INT-02 alt. | RG-INT-03 | idem | `POST /frais/demandes/{id}/validation-conjointe` | `ROLE_DJ` **ou** `ROLE_DJA` ; enregistre l'accord individuel ; **les deux accords requis** pour `VALIDEE` ; un seul refus → `REJETEE` | ✅ |
+| FR-INT-05 | 4.6 | UC-INT-04 | RG-INT-04 | `demande_frais`, `alerte` | `PATCH /frais/demandes/{id}/paiement` | `ROLE_ASSISTANTE` ; statut `VALIDEE` requis (400 sinon) ; `statutPaiement = PAYEE` ; notifie l'avocat **et** DJ/DJA < 5 s | ✅ |
 
 **Seuil applicable** : `dossier.seuil_montant` si `seuil_origine='DEROGATION'`, sinon
 `configuration_systeme['SEUIL_MONTANT_DEFAUT']` (50 000 000 FCFA).
@@ -307,9 +313,9 @@ vue client sans dossier, client inexistant.
 | 1 — Dossiers | 7 | 7 | 0 | 9 (+ 4 clients, + 1 🆕) | **✅ 14** (M4) |
 | 2 — Audiences | 6 | 5 | 1 | 5 | **✅ 5** (M6) |
 | 3 — Délibérés | 6 | 5 | 1 | 5 | **✅ 5** (M7) |
-| 4 — Frais | 6 | 5 | 1 | 5 | 0 |
+| 4 — Frais | 6 | 5 | 1 | 5 (+ 1 🆕) | **✅ 6** (M10) |
 | 5 — Publications & constitutions | 8 | 6 | 2 | 8 | **🟡 3** (M9, volet constitutions/répertoire ; publications restent M11) |
 | 6 — GED | 6 | 5 | 1 | 5 (+ 1 🆕) | **✅ 6** (M8) |
 | 7 — Alertes | 4 | 2 | 2 | 5 | **✅ 5** (M5, 🟡 déclencheurs futurs) |
 | 8 — Décisions & reporting | 6 | 4 | 2 | 8 | 0 |
-| **Total** | **49** | **39** | **10** | **~54** | **38** |
+| **Total** | **49** | **39** | **10** | **~55** | **44** |

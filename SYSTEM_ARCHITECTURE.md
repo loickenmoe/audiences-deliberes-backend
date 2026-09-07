@@ -124,13 +124,15 @@ intégration MinIO du projet (`MinioConfig`/`MinioStorageService`) et un quatri�
 planifié (`SuppressionRelanceScheduler`, relance à 72 h) ; M9 a livré
 `intervenant/{domain,repository,service,web,mapper}` (dépendance directe étendue à `dossier`,
 `delibere` et `ged` — Q-53), première génération de document système intégrée à la GED (lettre de
-constitution PDFBox stockée comme `Document` M8).
+constitution PDFBox stockée comme `Document` M8) ; M10 a livré `frais/{domain,repository,service,
+web,mapper}` (dépendance directe vers `dossier` et `referentiel`, **pas** `intervenant` — Q-54).
 
 **Verdict : le schéma de données et le socle transversal sont complets et validés, et les modules
 Dossiers/Clients (M4), Alertes/Configurations (M5), Audiences/Alarmes (M6), Délibérés (M7), GED
-(M8) et Intervenants (M9) sont livrés et testés — 37 des ~53 endpoints du contrat d'API sont
-implémentés** (129 tests automatisés, dont un test d'intégration Testcontainers). Les autres
-modules fonctionnels (M10+) n'ont pas commencé.
+(M8), Intervenants (M9) et Frais (M10) sont livrés et testés — 43 des ~53 endpoints du contrat
+d'API sont implémentés** (146 tests automatisés, dont un test d'intégration Testcontainers ; le
+test de fumée `contextLoads` échoue pour une cause d'environnement pré-existante et sans lien avec
+le code applicatif, R-07). Les autres modules fonctionnels (M11+) n'ont pas commencé.
 
 ### 2.2 Infrastructure réellement configurée
 
@@ -268,7 +270,7 @@ respectifs (M11 publications, M12 décisions).
 | `demande_suppression` | FR-GED-03 cite explicitement « la table demande_suppression » ; UC-GED-03 (relance 72 h) | Q-02 | ✅ `DemandeSuppression` (M8) |
 | `demande_constitution` | FR-INT-06/07, UC-INT-05/06, US 5.6/5.7 « Tables constitution (à créer) » | Q-03 | ✅ `DemandeConstitution` (M9) |
 | `alarme` (distincte de `alerte`) | FR-AUD-03 : objet + échéance + étape ; `alerte` n'a ni objet ni etape_id | Q-04 | à créer en M6 |
-| `validation_frais` (traces par étape) | FR-INT-02/03/04 : traçabilité des accords DJ/DJA distincts, impossible avec le seul `statut_circuit` | Q-05 | à créer en M10 |
+| `validation_frais` (traces par étape) | FR-INT-02/03/04 : traçabilité des accords DJ/DJA distincts, impossible avec le seul `statut_circuit` | Q-05 | ✅ `ValidationFrais` (M10) |
 | `type_client_sensible` (référentiel) | RG-DOS-09 « liste prédéfinie gérée par le DJ » | Q-06 | ✅ `TypeClientSensible` |
 | `nature_dossier` (référentiel, Annexe A) | RG-DOS-02 ; CONF02 (taxonomie gérée par le DJ) | — | ✅ `NatureDossier` |
 | `document.chemin_stockage` | Présent au dictionnaire, absent du script SQL REF-05 §12.1 | Q-07 | ✅ `Document` (M8) |

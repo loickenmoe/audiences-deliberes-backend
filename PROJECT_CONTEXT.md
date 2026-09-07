@@ -155,14 +155,25 @@ sauf besoin de vérification ponctuelle.**
 - **Ne pas ajouter de ligne `Co-Authored-By: Claude ...` aux messages de commit** (préférence
   utilisateur explicite, 2026-09-04) — déroge à la convention par défaut de l'outil.
 
-## 9. État actuel (2026-09-06, après le jalon M9)
+## 9. État actuel (2026-09-07, après le jalon M10)
 
 - **Documentation** : complète et validée en amont (8 documents).
 - **Code métier** : modules **Dossiers + Clients** (M4, Épic 1), **Alertes + Configurations**
   (M5, Épic 7), **Audiences + Alarmes** (M6, Épic 2), **Délibérés** (M7, Épic 3), **GED** (M8,
-  Épic 6) et **Intervenants** (M9, volet constitutions/répertoire de l'Épic 5) livrés. Les autres
-  modules fonctionnels (frais, publications, décisions définitives, reporting) restent entièrement
-  à construire à partir de M10.
+  Épic 6), **Intervenants** (M9, volet constitutions/répertoire de l'Épic 5) et **Frais** (M10,
+  Épic 4) livrés. Les autres modules fonctionnels (publications, décisions définitives, reporting)
+  restent entièrement à construire à partir de M11.
+- **Module `frais`** : ✅ posé au jalon **M10** : entités `DemandeFrais`/`ValidationFrais`
+  (`@ManyToOne Dossier`/`Avocat` direct, `validation_frais` distinct pour tracer conformité,
+  opportunité et les deux accords DJ/DJA de la validation conjointe — Q-05 ; dépend de `dossier`
+  et `referentiel`, **pas** de `intervenant` — Q-54), `FraisService` (circuit complet dépôt →
+  conformité → opportunité → validation conjointe si sensible/montant > seuil → paiement,
+  anti-doublon de facture ERR-006, notification systématique de l'avocat sur tout rejet). 6
+  endpoints (5 du contrat formel + 1 🆕 `GET /frais/demandes`, Q-24). Validé de bout en bout (curl +
+  JWT Keycloak réels : dépôt/doublon de facture, conformité, opportunité sensible/non sensible,
+  validation conjointe avec double-vote refusé et refus unique, rejets avec notification de
+  l'avocat, paiement, liste filtrée par profil) et par 17 tests automatisés dédiés. Voir
+  `DEVELOPMENT_ROADMAP.md` §M10 et `DECISIONS_AND_OPEN_QUESTIONS.md` (Q-05, Q-24, Q-26, Q-54, R-07).
 - **Module `intervenant`** : ✅ posé au jalon **M9** : entité `DemandeConstitution` (`@ManyToOne
   Dossier`/`Intervenant` polymorphe/`Document` direct — dépend de `dossier`, `delibere` et `ged`
   en plus de `referentiel`/`alerte`, cf. Q-53), `ConstitutionService` (demande → SH, approbation
@@ -244,16 +255,21 @@ sauf besoin de vérification ponctuelle.**
   effectif depuis M5, `ChargeMaxAvocatScheduler`, étendu en M6 avec `RappelAudienceScheduler`/
   `AlarmeEcheanceScheduler`, en M7 avec `DelaiRecoursScheduler`, puis en M8 avec
   `SuppressionRelanceScheduler`). Consommé par les modules `dossier` (M4), `alerte` (M5),
-  `audience` (M6), `delibere` (M7), `ged` (M8) et `intervenant` (M9).
-- **Tests** : `contextLoads()` toujours vert. **129 tests au total après M9** (20 socle M1-M3 +
-  31 M4 + 15 M5 + 24 M6 + 14 M7 + 16 M8 + 11 nouveaux M9 (`ConstitutionServiceTest`,
-  `RepertoireAvocatsServiceTest`, `LettreConstitutionServiceTest`)), aucune régression.
+  `audience` (M6), `delibere` (M7), `ged` (M8), `intervenant` (M9) et `frais` (M10).
+- **Tests** : **146 tests au total après M10** (20 socle M1-M3 + 31 M4 + 15 M5 + 24 M6 + 14 M7 +
+  16 M8 + 11 M9 (`ConstitutionServiceTest`, `RepertoireAvocatsServiceTest`,
+  `LettreConstitutionServiceTest`) + 17 nouveaux M10 (`FraisServiceTest`)), aucune régression sur
+  les tests unitaires/services. `contextLoads()` en échec — cause pré-existante et sans lien avec
+  le code applicatif (R-07), pas une régression M10.
 - **Risques** : voir `DECISIONS_AND_OPEN_QUESTIONS.md` §Risques — R-01 (secrets exposés)
   résolu dans les fichiers versionnés, mais la rotation des secrets déjà exposés côté
   Neon/iDrive e2 reste une action utilisateur en attente ; R-02, R-03, R-04 résolus par M1 ;
   R-05 (schéma non versionné) résolu par M2 ; R-06 (provisionnement d'un utilisateur en première
   connexion incompatible avec un endpoint `@Transactional(readOnly = true)`) découvert en
-  validation manuelle M7, non corrigé (défaut du socle M3, hors périmètre de M7/M8/M9).
+  validation manuelle M7, non corrigé (défaut du socle M3, hors périmètre de M7-M10) ; R-07
+  (démarrage complet de l'application impossible dans cet environnement de session,
+  `NoClassDefFoundError` sur `AlerteMapperImpl`, reproduit sur `dev` non modifié) découvert en
+  validation manuelle M10, non corrigé (indépendant du code applicatif, hors périmètre de M10).
 
 ## 10. Où aller ensuite
 
