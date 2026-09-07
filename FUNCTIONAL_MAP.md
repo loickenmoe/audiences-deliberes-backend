@@ -2,8 +2,9 @@
 
 > Carte fonctionnelle complète : Exigence → User Story → Cas d'utilisation → Règles de gestion →
 > Domaine/Données → Module backend → Endpoint(s) → Comportement attendu → Tests.
-> Dernière mise à jour : 2026-09-07 (après le jalon M13 — les 8 épics fonctionnels sont implémentés ;
-> seul M14, durcissement et vérification finale, reste à faire).
+> Dernière mise à jour : 2026-09-07 (après le jalon M14 — feuille de route achevée : les 8 épics
+> sont implémentés, et les **9 parcours du §9 sont couverts par des tests de bout en bout**
+> — contexte Spring complet + PostgreSQL réel, cf. `ParcoursEndToEndIntegrationTest`).
 
 **Légende statut** : ❌ non implémenté · 🟡 partiel · ✅ implémenté et testé
 **Épics 1 (Dossiers, M4), 2 (Audiences, M6), 3 (Délibérés, M7), 4 (Frais, M10), 5 (Intervenants,
@@ -61,7 +62,7 @@ FR-AUD-01, FR-AUD-03, FR-DEL-02, FR-DEL-04, FR-INT-01, FR-INT-05, FR-GED-01, FR-
 |---|---|---|---|---|---|---|---|
 | FR-DOS-01 | 1.1, 1.5, 1.7 | UC-DOS-01 | RG-DOS-01,02,03,07,08,09 | `dossier`, `client`, `etape_procedure`, `historique_action`, **`dossier_juriste`/`dossier_avocat` (Q-01)** | `POST /dossiers` | Valide les champs obligatoires ; référence unique (409/ERR-002) ; `clientId` existant (404) ; champs conditionnels selon `categorie` (Q-11) ; crée l'étape `INSTANCE` au statut `OUVERTURE` ; historise ; **201**. Si `estSensible=true` → circuit de validation DJ/DJA (Q-10) | ✅ |
 | FR-DOS-01 | 1.3 | UC-DOS-03 | RG-DOS-06 | idem | `GET /dossiers` (filtres nature/catégorie/juridiction + pagination) | Liste paginée `{content,totalPages,totalElements}` | ✅ |
-| FR-DOS-03 | 1.3 | UC-DOS-03 | RG-DOS-06 | + `document`, `historique_action` | `GET /dossiers/{id}` | Métadonnées + étapes avec statuts + historique chronologique + documents, < 2 s ; 404 si absent | ✅ |
+| FR-DOS-03 | 1.3 | UC-DOS-03 | RG-DOS-06 | + `document`, `historique_action` | `GET /dossiers/{id}` | Métadonnées + étapes avec statuts + historique chronologique, < 2 s ; 404 si absent. **Les documents sont servis par l'endpoint dédié `GET /dossiers/{id}/documents` (#43)** — le champ `documents` de la réponse reste vide par construction, le module `dossier` ne pouvant dépendre de `ged` (Q-67, tranché en M14) | ✅ |
 | FR-DOS-02 | 1.2, 1.7 | UC-DOS-02 | RG-DOS-03, RG-DOS-07 | `dossier_juriste`, `dossier_avocat`, `historique_action` | `PUT /dossiers/{id}/affectation` | Détecte les doublons → **409/ERR-003 avec possibilité de confirmer** (Q-12) ; historise ancienne + nouvelle affectation | ✅ |
 | FR-DOS-04 | 1.4 | UC-DOS-04 | RG-DOS-04, RG-DOS-06 | `etape_procedure`, `historique_action` | `PATCH /dossiers/{id}/etapes/{etapeId}/statut` | Vérifie que la transition est autorisée (400/ERR-004 sinon) ; création directe d'une étape ultérieure → crée les étapes intermédiaires en `OUVERTURE` ; `DELIBERE_VIDE` + recours → ouvre automatiquement `RECOURS_1`/`RECOURS_2` | ✅ |
 | — | — | — | RG-DOS-09 | `dossier`, `audit_seuil_dossier` | `POST /dossiers/{id}/seuil-derogation` | Juriste propose un nouveau seuil + motif obligatoire → `EN_ATTENTE` ; 400 si dossier non sensible ; **201** | ✅ |
@@ -302,6 +303,12 @@ bout en bout, y compris les 4 formats d'export du rapport.
 ---
 
 ## 9. Parcours utilisateurs de bout en bout (à supporter par le backend)
+
+> ✅ **Les 9 parcours sont couverts par des tests d'intégration de bout en bout** depuis M14
+> (`ParcoursEndToEndIntegrationTest` : contexte Spring complet avec sécurité, PostgreSQL réel migré
+> par Flyway via Testcontainers, appels HTTP réels — une méthode de test par parcours). Deux
+> substitutions assumées : JWT simulé au lieu d'un Keycloak conteneurisé, et `MinioClient` mocké
+> (Q-65).
 
 | # | Parcours | Enchaînement |
 |---|---|---|

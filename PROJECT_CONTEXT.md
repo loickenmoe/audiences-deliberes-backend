@@ -155,7 +155,13 @@ sauf besoin de vérification ponctuelle.**
 - **Ne pas ajouter de ligne `Co-Authored-By: Claude ...` aux messages de commit** (préférence
   utilisateur explicite, 2026-09-04) — déroge à la convention par défaut de l'outil.
 
-## 9. État actuel (2026-09-07, après le jalon M13)
+## 9. État actuel (2026-09-07, après le jalon M14 — feuille de route achevée)
+
+> **M14 (durcissement final)** : les 9 parcours utilisateurs sont couverts de bout en bout
+> (contexte Spring complet + PostgreSQL réel), les 56 endpoints ont été audités un par un
+> (2 écarts doc/code corrigés — Q-66), la campagne de performance tient les cibles (50 requêtes
+> simultanées : p95 ≤ 1,51 s pour une cible de 2 s), et la revue de sécurité n'a relevé aucun
+> défaut d'autorisation (un seul constat ouvert : R-08). Voir `DEVELOPMENT_ROADMAP.md` §M14.
 
 - **Documentation** : complète et validée en amont (8 documents).
 - **Code métier** : modules **Dossiers + Clients** (M4, Épic 1), **Alertes + Configurations**
@@ -304,23 +310,22 @@ sauf besoin de vérification ponctuelle.**
   `SuppressionRelanceScheduler`). Consommé par les modules `dossier` (M4), `alerte` (M5),
   `audience` (M6), `delibere` (M7), `ged` (M8), `intervenant` (M9), `frais` (M10),
   `publication` (M11), `decision` (M12) et `reporting` (M13, lecture seule).
-- **Tests** : **179 tests au total après M13** (20 socle M1-M3 + 31 M4 + 15 M5 + 24 M6 + 14 M7 +
-  16 M8 + 11 M9 (`ConstitutionServiceTest`, `RepertoireAvocatsServiceTest`,
-  `LettreConstitutionServiceTest`) + 17 M10 (`FraisServiceTest`) + 16 M11
-  (`PublicationServiceTest`) + 13 M12 (`DecisionDefinitiveServiceTest`,
-  `JurisprudenceServiceTest`) + 4 nouveaux M13 (`ReportingServiceTest`)), aucune régression.
-  `contextLoads()` intermittent dans cet environnement de session (R-07, pré-existant, sans lien
-  avec le code applicatif) — vert lors de la dernière exécution complète de M13.
+- **Tests** : **213 tests au total après M14** (20 socle M1-M3 + 31 M4 + 15 M5 + 24 M6 + 14 M7 +
+  16 M8 + 11 M9 + 17 M10 + 16 M11 + 13 M12 + 4 M13 + **34 nouveaux M14** :
+  `ParcoursEndToEndIntegrationTest` (10 — les 9 parcours de bout en bout + contrôle 401),
+  `WebSocketAuthInterceptorTest` (7), `ClientServiceTest` (7), `DossierSpecificationsTest` (6),
+  `RapportExportServiceTest` (4)), aucune régression. **Couverture JaCoCo : 84,9 % des instructions
+  (7319/8622) et 75,9 % des branches** — cible REF-02 §10.2 (> 80 %) atteinte sur les instructions
+  (DTO, entités et code généré exclus de la mesure). Voir `DEVELOPMENT_ROADMAP.md` §M14.
 - **Risques** : voir `DECISIONS_AND_OPEN_QUESTIONS.md` §Risques — R-01 (secrets exposés)
   résolu dans les fichiers versionnés, mais la rotation des secrets déjà exposés côté
   Neon/iDrive e2 reste une action utilisateur en attente ; R-02, R-03, R-04 résolus par M1 ;
-  R-05 (schéma non versionné) résolu par M2 ; R-06 (provisionnement d'un utilisateur en première
-  connexion incompatible avec un endpoint `@Transactional(readOnly = true)`) découvert en
-  validation manuelle M7, non corrigé (défaut du socle M3, hors périmètre de M7-M13) ; R-07
-  (démarrage intermittent de l'application dans cet environnement de session,
-  `NoClassDefFoundError` sur `AlerteMapperImpl`, reproduit sur `dev` non modifié, sans impact final
-  sur M10 à M13 — chaque validation manuelle a pu être menée à bien) découvert en validation
-  manuelle M10, non corrigé (indépendant du code applicatif, hors périmètre).
+  R-05 (schéma non versionné) résolu par M2 ; **R-06** (provisionnement d'un utilisateur en
+  première connexion incompatible avec un endpoint `@Transactional(readOnly = true)`) découvert en
+  validation manuelle M7, **toujours non corrigé** — à traiter avant production ; R-07 (démarrage
+  intermittent, `NoClassDefFoundError` sur `AlerteMapperImpl`) ne s'est plus manifesté depuis M11,
+  maintenu en veille ; **R-08** (documentation d'API `/v3/api-docs`, `/swagger-ui` accessible sans
+  authentification) relevé par la revue de sécurité M14, **à fermer avant production**.
 
 ## 10. Où aller ensuite
 

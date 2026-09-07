@@ -1,7 +1,10 @@
 # API_IMPLEMENTATION_STATUS
 
 > Inventaire exhaustif des endpoints et état d'implémentation.
-> Dernière mise à jour : 2026-09-07 (après jalon M13 — module Reporting, tous jalons fonctionnels terminés).
+> Dernière mise à jour : 2026-09-07 (après jalon M14 — durcissement final, feuille de route achevée).
+> **Conformité vérifiée endpoint par endpoint en M14** : les 56 endpoints du code ont été audités
+> contre ce tableau — 54 strictement conformes, 2 écarts de rôle corrigés ici (`POST
+> /dossiers/{id}/etapes` et `DELETE /ged/documents/{id}` : `ROLE_JURISTE`, non `ROLE_SAISIE`) — Q-66.
 
 **Base URL** : `http://localhost:8080/api/v1` — aligné sur le contrat REF-07 depuis M1 (Q-16 résolue).
 **Authentification** : `Authorization: Bearer <JWT Keycloak>` sur tous les endpoints sauf health checks.
@@ -50,7 +53,7 @@ Le squelette de starter hors périmètre (Template/Admin/Staff/Dashboard/Chat, a
 | 6 | POST | `/dossiers/{id}/seuil-derogation` | `ROLE_SAISIE` | RG-DOS-09 | 📋 | ✅ M4 |
 | 7 | PUT | `/dossiers/{id}/seuil-derogation/{auditId}` | `ROLE_DJ`, `ROLE_DJA` | RG-DOS-09 | 📋 | ✅ M4 |
 | 8 | POST | `/dossiers/{id}/sensibilite/validation` | `ROLE_DJ`, `ROLE_DJA` | RG-DOS-09 / UC-DOS-01 alt. 6-a | 🆕 | ✅ M4 |
-| — | POST | `/dossiers/{id}/etapes` | `ROLE_SAISIE` | UC-DOS-04 alt. 3-b | 🆕 | ✅ M4 |
+| — | POST | `/dossiers/{id}/etapes` | `ROLE_JURISTE` | UC-DOS-04 alt. 3-b | 🆕 | ✅ M4 |
 
 > **#8** : RG-DOS-09 et UC-DOS-01 exigent que la proposition de sensibilité du juriste soit
 > **validée par le DJ ou le DJA** (approuver / rejeter avec motif / ajuster) avant enregistrement
@@ -208,7 +211,7 @@ notifiant le demandeur, décision déjà prise refusée (409). 11 tests automati
 |---|---|---|---|---|---|---|
 | 38 | POST | `/ged/documents` | `ROLE_SAISIE` | FR-GED-01 / US 6.1 | 📋 | ✅ M8 |
 | 39 | GET | `/ged/documents/{id}` | `ROLE_CONSULTATION` | FR-GED-02 / US 6.3 | 📋 | ✅ M8 |
-| 40 | DELETE | `/ged/documents/{id}` | `ROLE_SAISIE` (202) / `ROLE_DJ`,`ROLE_DJA` (200) | FR-GED-03 / US 6.4, 6.5 | 📋 | ✅ M8 |
+| 40 | DELETE | `/ged/documents/{id}` | `ROLE_JURISTE` (202) / `ROLE_DJ`,`ROLE_DJA` (200) | FR-GED-03 / US 6.4, 6.5 | 📋 | ✅ M8 |
 | 41 | PUT | `/ged/documents/{id}/approbation-suppression` | `ROLE_DJ`, `ROLE_DJA` | FR-GED-03 / US 6.4 | 💡 | ✅ M8 |
 | 42 | GET | `/ged/rapport-journalier` | `ROLE_JURISTE` | FR-GED-04 / US 6.6 | 📋 | ✅ M8 |
 | 43 | GET | `/dossiers/{id}/documents` | `ROLE_CONSULTATION` | UC-GED-02 | 🆕 | ✅ M8 |
