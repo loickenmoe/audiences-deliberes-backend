@@ -1,7 +1,7 @@
 # API_IMPLEMENTATION_STATUS
 
 > Inventaire exhaustif des endpoints et état d'implémentation.
-> Dernière mise à jour : 2026-09-07 (après jalon M11 — module Publications).
+> Dernière mise à jour : 2026-09-07 (après jalon M12 — module Décisions définitives).
 
 **Base URL** : `http://localhost:8080/api/v1` — aligné sur le contrat REF-07 depuis M1 (Q-16 résolue).
 **Authentification** : `Authorization: Bearer <JWT Keycloak>` sur tous les endpoints sauf health checks.
@@ -19,10 +19,14 @@
 |---|---|---|
 | 📋 Spécifiés dans l'OpenAPI | 37 | **37 (100 %)** (§1-2, §3 #13-15, #18-21, §5 #23-27, §6 #29-33, §8 #38-40 #42, §9 #44-48) |
 | 📄 Cités §2 mais absents de l'OpenAPI | 3 | 3 (§3 #16-17 alarmes, #22 expédition — Q-13, close) |
-| 💡 « À proposer » (user stories) | 10 | 5 (§6 #34 correspondance ; §8 #41 approbation-suppression ; §7 #35-37 constitutions/répertoire) |
+| 💡 « À proposer » (user stories) | 10 | **10 (100 %)** (§6 #34 correspondance ; §7 #35-37 constitutions/répertoire ; §8 #41 approbation-suppression, #46 traiter alerte ; §10 #51-54 décisions définitives) |
 | 🆕 Manquants dans toute la documentation | 2 | 1 (`POST /clients`) |
-| 🆕 Ajoutés en cours d'implémentation (hors inventaire initial) | 1 | 3 (`POST /dossiers/{id}/etapes` — Q-34 ; `GET /dossiers/{id}/documents` — #43 ; `GET /frais/demandes` — #28, Q-24) |
-| **Surface cible totale** | **~53** | **49 (≈92 %)** |
+| **Surface cible totale (inventaire initial)** | **~52** | **51 (98 %)** |
+
+**+ 4 endpoints hors inventaire initial**, ajoutés en cours d'implémentation faute d'alternative
+dans le contrat : `POST /dossiers/{id}/etapes` (Q-34, M4), `GET /dossiers/{id}/documents` (#43, M8),
+`GET /frais/demandes` (#28, Q-24, M10), `GET /jurisprudences` (#55, UC-DEF-03, M12) — soit **55
+endpoints exposés au total**.
 
 Le squelette de starter hors périmètre (Template/Admin/Staff/Dashboard/Chat, auth JWT maison) a
 été intégralement supprimé en M1 (cf. `DECISIONS_AND_OPEN_QUESTIONS.md` R-03/R-04) — l'ancienne
@@ -247,11 +251,19 @@ rapport journalier correct (actif et à zéro). 16 tests automatisés dédiés. 
 
 | # | Méthode | Endpoint | Rôle requis | FR / US | Src | Statut |
 |---|---|---|---|---|---|---|
-| 51 | POST | `/dossiers/{id}/adjudications` | `ROLE_JURISTE` | FR-DEF-01 / US 8.1 | 💡 | ❌ |
-| 52 | POST | `/dossiers/{id}/condamnations` | `ROLE_JURISTE` | FR-DEF-02 / US 8.2 | 💡 | ❌ |
-| 53 | PATCH | `/condamnations/{id}/statut` | `ROLE_JURISTE` | FR-DEF-02 / US 8.2 | 💡 | ❌ |
-| 54 | POST | `/jurisprudences` | `ROLE_JURISTE` | FR-DEF-03 / US 8.3 | 💡 | ❌ |
-| 55 | GET | `/jurisprudences` | `ROLE_CONSULTATION` | UC-DEF-03 (« consultable dans la base ») | 🆕 | ❌ |
+| 51 | POST | `/dossiers/{id}/adjudications` | `ROLE_JURISTE` | FR-DEF-01 / US 8.1 | 💡 | ✅ |
+| 52 | POST | `/dossiers/{id}/condamnations` | `ROLE_JURISTE` | FR-DEF-02 / US 8.2 | 💡 | ✅ |
+| 53 | PATCH | `/condamnations/{id}/statut` | `ROLE_JURISTE` | FR-DEF-02 / US 8.2 | 💡 | ✅ |
+| 54 | POST | `/jurisprudences` (multipart) | `ROLE_JURISTE` | FR-DEF-03 / US 8.3 | 💡 | ✅ |
+| 55 | GET | `/jurisprudences` | `ROLE_CONSULTATION` | UC-DEF-03 (« consultable dans la base ») | 🆕 | ✅ |
+
+**Circuit implémenté (M12)** : `DecisionDefinitiveService` — adjudication (étape `CLOTURE`
+requise, RG-DEF-01), condamnation pécuniaire (aucune précondition d'étape, asymétrie assumée —
+Q-59), mise à jour du statut de paiement. `JurisprudenceService` — indexation obligatoire
+(mots-clés/nature/juridiction), fichier PDF ≤ 10 Mo (littéral, Q-61), `dossierId` optionnel avec
+stockage dédié sans dossier (Q-58), recherche paginée par mots-clés/nature/juridiction. Aucune
+transition automatique d'étape vers `ARCHIVE` (Q-60, reste manuelle via l'endpoint générique M4).
+13 tests automatisés dédiés. Voir `DECISIONS_AND_OPEN_QUESTIONS.md` Q-58, Q-59, Q-60, Q-61.
 
 ---
 
@@ -265,9 +277,9 @@ rapport journalier correct (actif et à zéro). 16 tests automatisés dédiés. 
 | `ERR-004` | 400 | Transition non autorisée | `PATCH …/statut` | ✅ M4 |
 | `ERR-005` | 409 | Doublon d'audience | `POST /dossiers/{id}/audiences` | ✅ M6 (`forcer` — Q-12) |
 | `ERR-006` | 409 | Facture en double | `POST /frais/demandes` | ✅ M10 |
-| `ERR-007` | 409 / 422 / 201 ? | Plus de 10 prorogations | `POST /deliberes/{id}/prorogations` — **Q-17** | ❌ M7 |
-| `ERR-008` | 400 | Format ou poids du document non conforme | `POST /ged/documents` | ❌ M9 |
-| `ERR-009` | 403 | Accès restreint à la publication | `GET /publications/{id}` | ❌ M9 |
+| `ERR-007` | 409 / 422 / 201 ? | Plus de 10 prorogations | `POST /deliberes/{id}/prorogations` — **Q-17** | ✅ M7 (201 + `alerte:true`) |
+| `ERR-008` | 400 | Format ou poids du document non conforme | `POST /ged/documents` | ✅ M8 |
+| `ERR-009` | 403 | Accès restreint à la publication | `GET /publications/{id}` | ✅ M11 |
 
 Codes génériques : 400 requête invalide · 401 non authentifié · 403 droits insuffisants ·
 404 non trouvé · 409 conflit d'unicité · 422 règle métier violée.

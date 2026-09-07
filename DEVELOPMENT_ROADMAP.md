@@ -2,7 +2,7 @@
 
 > Feuille de route séquentielle du backend. Un jalon = un objectif, un périmètre fermé,
 > une validation manuelle par le porteur du projet avant passage au suivant.
-> Dernière mise à jour : 2026-09-07 (M1 à M10 terminés et validés — M11 en attente d'autorisation).
+> Dernière mise à jour : 2026-09-07 (M1 à M12 terminés et validés — M13 en attente d'autorisation).
 
 ---
 
@@ -34,9 +34,9 @@
 | **M8** | Module GED | Q-02 ✅, Q-07 ✅, Q-45 ✅, Q-46 ✅, Q-47 ✅, Q-48 ✅, Q-49 ✅ | ✅ **Terminé et validé manuellement** (2026-09-06) |
 | **M9** | Module Intervenants (avocats, répertoire, constitutions) | Q-03 ✅, Q-28 ✅, Q-52 ✅, Q-53 ✅ | ✅ **Terminé et validé manuellement** (2026-09-06) |
 | **M10** | Module Frais (circuit de validation) | Q-05 ✅, Q-24 🟡, Q-26 ✅, Q-54 ✅ | ✅ **Terminé et validé manuellement** (2026-09-07) |
-| **M11** | Module Publications et correspondances | Q-20, Q-24, Q-25 | ⏸️ **prêt à démarrer, en attente d'autorisation explicite** |
-| **M12** | Module Décisions définitives et jurisprudence | — | ⏸️ |
-| **M13** | Module Reporting et tableau de bord | Q-14 | ⏸️ |
+| **M11** | Module Publications et correspondances | Q-20 ✅, Q-24 🟡, Q-25 | ✅ **Terminé et validé manuellement** (2026-09-07) |
+| **M12** | Module Décisions définitives et jurisprudence | Q-58 ✅, Q-59 🟡, Q-60 🟡, Q-61 ✅, Q-62 ✅ | ✅ **Terminé et validé manuellement** (2026-09-07) |
+| **M13** | Module Reporting et tableau de bord | Q-14 | ⏸️ **prêt à démarrer, en attente d'autorisation explicite** |
 | **M14** | Durcissement, tests d'intégration, vérification finale de l'API | toutes | ⏸️ |
 
 ---
@@ -589,9 +589,58 @@ Module livré en un seul commit (docs de contexte incluses, comme pour M5 à M10
 Épic 8 (Décisions définitives, Reporting) différé aux jalons suivants (M12/M13). R-07
 (intermittence de démarrage, sans impact sur ce jalon) à surveiller en M14.
 
-## M12 — Module Décisions définitives
-Épic 8 partiel (US 8.1, 8.2, 8.3). Adjudications, condamnations pécuniaires, base jurisprudentielle
-indexée et consultable.
+## M12 — Module Décisions définitives ✅ **Terminé**
+
+**Objectif.** Épic 8 partiel (US 8.1, 8.2, 8.3). Adjudications, condamnations pécuniaires, base
+jurisprudentielle indexée et consultable.
+
+### Réalisé
+- Module `decision` : hiérarchie `DecisionDefinitive`/`Adjudication`/`CondamnationPecuniaire`
+  (`JOINED`, même principe que `Publication`/`Intervenant`), entité `Jurisprudence` indépendante
+  (pas un troisième sous-type). Dépend de `dossier` et `ged` (`MinioStorageService`), **pas** de
+  `intervenant` (même raisonnement que Q-54/Q-56).
+- `DecisionDefinitiveService` : `creerAdjudication` (étape `CLOTURE` requise, RG-DEF-01),
+  `creerCondamnation` (**aucune précondition d'étape**, asymétrie assumée avec l'adjudication —
+  Q-59), `modifierStatutCondamnation`.
+- `JurisprudenceService` : `creer` (indexation obligatoire, PDF ≤ 10 Mo littéral — Q-61, `dossierId`
+  optionnel avec stockage dédié sans dossier — Q-58), `rechercher` (pagination + filtres
+  mots-clés/nature/juridiction, requête native Postgres pour `ANY(mots_cles)`).
+- 5 endpoints (4 « à proposer » + 1 🆕 `GET /jurisprudences`, UC-DEF-03) — **100 % des endpoints
+  « à proposer » du contrat sont désormais implémentés** (10/10).
+
+### Décisions prises en implémentation (documentées dans `DECISIONS_AND_OPEN_QUESTIONS.md`)
+Q-58 (jurisprudence sans colonne de stockage + dossier optionnel), Q-59 (asymétrie de précondition
+d'étape adjudication/condamnation, ouverte pour confirmation DJ), Q-60 (aucune transition
+automatique vers `ARCHIVE`, ouverte pour confirmation DJ), Q-61 (contraintes PDF/10 Mo littérales),
+**Q-62 (bug corrigé)** : `decision_definitive.type VARCHAR(20)` trop étroite pour sa propre
+contrainte `CHECK` (`'CONDAMNATION_PECUNIAIRE'` fait 23 caractères) — toute condamnation échouait
+en 500 ; corrigé par `V6__decision_definitive_type_largeur.sql` (`VARCHAR(30)`).
+
+### Validation
+13 tests automatisés dédiés (`DecisionDefinitiveServiceTest`, `JurisprudenceServiceTest`) + 175
+tests au total après M12, tous verts (y compris `contextLoads`, R-07 non manifesté sur cette
+exécution). Validation manuelle de bout en bout réalisée (curl + JWT Keycloak réels, sur un
+environnement Docker entièrement reconstruit après un redémarrage des conteneurs en cours de
+session — fixtures recréées) :
+- adjudication nominale sur étape `CLOTURE` (201), rejet sur étape non clôturée (400) ;
+- condamnation sans `etapeId` (201, confirme Q-59), mise à jour du statut vers `PAYE` (200), 404 sur
+  un id d'adjudication et sur un id inexistant ;
+- jurisprudence avec `dossierId` + PDF (stockage `dossiers/{id}/...`), sans `dossierId` (stockage
+  `jurisprudence/...`, confirme Q-58), rejet fichier non-PDF (400/ERR-008), rejet fichier > 10 Mo
+  (400/ERR-008, intercepté par la limite globale `spring.servlet.multipart.max-file-size` avant même
+  d'atteindre le contrôle applicatif — Q-61) ;
+- recherche par mot-clé, par juridiction, sans filtre — résultats corrects dans les trois cas.
+
+**Le bug Q-62 a été découvert par cette validation manuelle elle-même** (premier test réel du
+chemin condamnation) — confirmation que la validation manuelle en conditions réelles reste
+nécessaire au-delà des tests automatisés (qui mockent le repository et n'exercent jamais le SQL
+réel).
+
+### Commit
+Module livré en un seul commit (docs de contexte incluses, comme pour M5 à M11).
+
+### Restant
+Épic 8 volet reporting (US 8.4-8.6) différé à M13.
 
 ## M13 — Module Reporting
 US 8.4, 8.5, 8.6. Rapports périodiques avec exports PDF/Excel/CSV < 10 s, tableau de bord exécutif

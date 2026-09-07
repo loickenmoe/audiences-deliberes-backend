@@ -271,21 +271,26 @@ pris en compte immédiatement, relance 72 h des demandes de suppression.
 
 ## 8. ÉPIC 8 — Décisions définitives et reporting
 
-**Modules** : `decision`, `reporting` · **Dépend de** : tous
+**Modules** : `decision`, `reporting` · **Dépend de** : tous (`decision` dépend en pratique de
+`dossier` et `ged` uniquement, cf. Q-58 ; `reporting` reste entièrement à construire, M13)
 
 | FR | US | UC | RG | Entités | Endpoint | Comportement attendu | Statut |
 |---|---|---|---|---|---|---|---|
-| FR-DEF-01 | 8.1 | UC-DEF-01 | RG-DEF-01, RG-DEF-02 | `decision_definitive`, `adjudication` | `POST /dossiers/{id}/adjudications` **(à proposer)** | Étape `CLOTURE` requise ; `beneficiaire`, `statutComptabilisation`, `repriseProvision`, `restitutionSoulte`, `mutation`, `reliquat ≥ 0`, `dateDecision`, `etapeId` ; 201 | ❌ |
-| FR-DEF-02 | 8.2 | UC-DEF-02 | RG-DEF-03, RG-DEF-04 | `decision_definitive`, `condamnation_pecuniaire` | `POST /dossiers/{id}/condamnations` + `PATCH /condamnations/{id}/statut` **(à proposer)** | `sens` ∈ {BANQUE_REDEVABLE, TIERS_REDEVABLE} ; `statutPaiement` ∈ {EN_ATTENTE, PAYE, RECOUVREMENT_FORCE} ; mise à jour du statut au fil du suivi | ❌ |
-| FR-DEF-03 | 8.3 | UC-DEF-03 | RG-DEF-05 | `jurisprudence`, `document` | `POST /jurisprudences` **(à proposer)** | `typeArchive` ∈ {EXTRAIT_MINUTE, EXPEDITION, GROSSE} ; **indexation obligatoire** (`motsCles`, `natureDecision`, `juridiction`, `dateDecision`) ; fichier PDF ≤ 10 Mo ; `dossierId` optionnel | ❌ |
-| FR-REP-01 | 8.4 | UC-REP-01 | RG-REP-01, RG-REP-02 | toutes | `GET /rapports` | `type` ∈ {JOURNALIER…ANNUEL}, `dateDebut`, `dateFin`, `format` ∈ {JSON, PDF, EXCEL, CSV} ; **< 10 s** ; **204** si aucune donnée | ❌ |
-| FR-REP-02 | 8.5 | UC-REP-02 | RG-REP-03 | `dossier`, `audience`, `demande_frais`, `delibere`, `adjudication` | `GET /tableau-de-bord` | `ROLE_DJ` ; `nbDossiersActifs`, `nbAudiencesPlanifiees`, `nbDemandesFraisEnAttente`, `nbProrogationsAlerte`, `tauxSuccesRecouvrement`, `provisionsReprises` ; **temps réel**, < 2 s | ❌ |
-| FR-REP-03 | 8.6 | UC-REP-03 | RG-REP-04 | `client`, `dossier` | `GET /clients/{clientId}/dossiers` | Regroupe par catégorie `{RECOUVREMENT:[], EXPLOITATION_LITIGES:[]}` ; **indépendant de l'affectation du juriste** ; structure vide si aucun dossier (200) ; 404 si client inexistant | ❌ |
+| FR-DEF-01 | 8.1 | UC-DEF-01 | RG-DEF-01, RG-DEF-02 | `decision_definitive`, `adjudication` | `POST /dossiers/{id}/adjudications` (à proposer) | Étape `CLOTURE` requise ; `beneficiaire`, `statutComptabilisation`, `repriseProvision`, `restitutionSoulte`, `mutation`, `reliquat ≥ 0`, `dateDecision`, `etapeId` ; 201 | ✅ |
+| FR-DEF-02 | 8.2 | UC-DEF-02 | RG-DEF-03, RG-DEF-04 | `decision_definitive`, `condamnation_pecuniaire` | `POST /dossiers/{id}/condamnations` + `PATCH /condamnations/{id}/statut` (à proposer) | `sens` ∈ {BANQUE_REDEVABLE, TIERS_REDEVABLE} ; `statutPaiement` ∈ {EN_ATTENTE, PAYE, RECOUVREMENT_FORCE} ; mise à jour du statut au fil du suivi ; **aucune précondition d'étape** (asymétrie avec FR-DEF-01, Q-59) | ✅ |
+| FR-DEF-03 | 8.3 | UC-DEF-03 | RG-DEF-05 | `jurisprudence` | `POST /jurisprudences` (à proposer, multipart) | `typeArchive` ∈ {EXTRAIT_MINUTE, EXPEDITION, GROSSE} ; **indexation obligatoire** (`motsCles`, `natureDecision`, `juridiction`, `dateDecision`) ; fichier PDF ≤ 10 Mo (littéral, Q-61) ; `dossierId` optionnel (stockage dédié sans dossier, Q-58) | ✅ |
+| — | 8.3 | UC-DEF-03 | RG-DEF-05 | `jurisprudence` | `GET /jurisprudences` (🆕) | Recherche paginée par mots-clés/nature/juridiction, chaque filtre optionnel ; URL de téléchargement pré-signée | ✅ |
+| FR-REP-01 | 8.4 | UC-REP-01 | RG-REP-01, RG-REP-02 | toutes | `GET /rapports` | `type` ∈ {JOURNALIER…ANNUEL}, `dateDebut`, `dateFin`, `format` ∈ {JSON, PDF, EXCEL, CSV} ; **< 10 s** ; **204** si aucune donnée | ❌ (M13) |
+| FR-REP-02 | 8.5 | UC-REP-02 | RG-REP-03 | `dossier`, `audience`, `demande_frais`, `delibere`, `adjudication` | `GET /tableau-de-bord` | `ROLE_DJ` ; `nbDossiersActifs`, `nbAudiencesPlanifiees`, `nbDemandesFraisEnAttente`, `nbProrogationsAlerte`, `tauxSuccesRecouvrement`, `provisionsReprises` ; **temps réel**, < 2 s | ❌ (M13) |
+| FR-REP-03 | 8.6 | UC-REP-03 | RG-REP-04 | `client`, `dossier` | `GET /clients/{clientId}/dossiers` | Regroupe par catégorie `{RECOUVREMENT:[], EXPLOITATION_LITIGES:[]}` ; **indépendant de l'affectation du juriste** ; structure vide si aucun dossier (200) ; 404 si client inexistant | ❌ (M13) |
 
 **Tests attendus** : adjudication sur étape non clôturée, reliquat négatif, sens de condamnation
 invalide, indexation jurisprudence incomplète, rapport sans données (204), chaque format d'export,
 performance < 10 s sur volume représentatif, KPI cohérents avec les modules sources,
-vue client sans dossier, client inexistant.
+vue client sans dossier, client inexistant. Réalisés pour le volet décisions définitives (US
+8.1-8.3, M12) : 13 tests automatisés (`DecisionDefinitiveServiceTest`, `JurisprudenceServiceTest`)
++ validation manuelle de bout en bout (curl + JWT Keycloak réels). Le volet reporting (US 8.4-8.6)
+reste à faire (M13).
 
 **Écrans frontend** : *Enregistrer une adjudication* · *Suivi des condamnations* ·
 *Base jurisprudentielle* (recherche par mots-clés/nature/juridiction) · *Générer un rapport* ·

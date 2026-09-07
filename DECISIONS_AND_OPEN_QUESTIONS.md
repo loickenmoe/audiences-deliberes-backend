@@ -2,7 +2,7 @@
 
 > Contradictions documentaires, ambiguïtés et lacunes nécessitant un **arbitrage explicite**.
 > Aucune de ces questions n'a été tranchée silencieusement.
-> Dernière mise à jour : 2026-09-07 (après jalon M10 — voir statuts R-01 à R-07, Q-01/02/03/04/07/10/11/12/13/17-19/22/23/26/28/32/34-54).
+> Dernière mise à jour : 2026-09-07 (après jalon M12 — voir statuts R-01 à R-07, Q-01/02/03/04/07/10/11/12/13/17-20/22/23/25/26/28/32/34-62).
 
 **Convention de lecture de chaque fiche :**
 - **A — Ce que la documentation exige** (avec la source exacte)
@@ -980,6 +980,73 @@ l'utilisateur courant) mais aucune US ne précise ni qui la renseigne, ni via qu
 modification a posteriori n'étant demandé, aucun n'est ajouté.
 **Statut (2026-09-07, M11)** : appliqué — `restrictionAcces` (identifiant `Utilisateur`) sur les
 deux requêtes de dépôt.
+
+### Q-58 ✅ `jurisprudence` sans colonne de stockage + dossier optionnel — tranché (M12)
+FR-DEF-03 exige un fichier PDF pour chaque jurisprudence, mais le script SQL de `jurisprudence`
+(M2) n'a aucune colonne de stockage — même lacune que `autre_publication` (Q-56) et
+`document.chemin_stockage` (Q-07). De plus, `dossierId` est explicitement **optionnel** pour une
+jurisprudence (précédent documenté sans dossier interne associé), alors que `document.dossier_id`
+est `NOT NULL` — une jurisprudence sans dossier ne pourrait donc **jamais** devenir un `document`
+GED, contrairement à `autre_publication` (toujours rattachée à un dossier).
+**C — Recommandation** : ajouter `jurisprudence.chemin_stockage`, déposée via le
+`MinioStorageService` du module `ged`, sans ligne `document` GED (même principe que Q-56) ; pour
+le cas sans dossier, une nouvelle méthode de stockage générique (préfixe `jurisprudence/` au lieu
+de `dossiers/{id}/`) plutôt que de forcer un `dossierId` arbitraire.
+**Statut (2026-09-07, M12)** : appliqué — `V5__jurisprudence_stockage.sql`,
+`MinioStorageService.deposerSansDossier` (la méthode de dépôt privée commune prend désormais un
+préfixe de clé en paramètre au lieu d'un `dossierId`, sans changer le format de clé des appelants
+existants).
+
+### Q-59 — Adjudication vs condamnation : précondition d'étape non symétrique — `P2`
+FR-DEF-01 (adjudication) exige explicitement une étape `CLOTURE` et un `etapeId`. FR-DEF-02
+(condamnation) ne mentionne ni précondition d'étape ni `etapeId` dans son texte, alors que le
+parcours P5 (§9) présente les deux comme des alternatives équivalentes suivant l'épuisement des
+recours (« Recours épuisés → adjudication **ou** condamnation pécuniaire »), ce qui suggérerait la
+même précondition.
+**C — Recommandation** : implémenter chaque règle **littéralement** telle qu'écrite plutôt que
+d'harmoniser silencieusement — `etapeId` optionnel et aucune précondition de statut pour la
+condamnation, à la différence de l'adjudication. Une condamnation pécuniaire peut en effet naître
+indépendamment de la clôture complète du dossier (ex. jugement exécutoire par provision).
+**Statut (2026-09-07, M12)** : appliqué tel quel (asymétrie assumée, pas une omission de code) —
+`DecisionDefinitiveService.creerCondamnation` n'impose aucune précondition d'étape.
+**Décision attendue :** confirmer avec la Direction Juridique si cette asymétrie est intentionnelle.
+
+### Q-60 — Adjudication/condamnation n'archivent pas automatiquement l'étape — `P2`
+P5 (§9) enchaîne « adjudication/condamnation → archivage jurisprudentiel → étape `ARCHIVE` », ce qui
+pourrait suggérer un effet de bord automatique. Aucune FR-DEF-0x ne décrit explicitement cette
+transition comme résultant de l'enregistrement d'une décision définitive.
+**C — Recommandation** : ne pas inventer de transition automatique non spécifiée — l'endpoint
+générique existant (`PATCH /dossiers/{id}/etapes/{etapeId}/statut`, M4) reste la voie manuelle pour
+faire passer l'étape à `ARCHIVE` une fois la décision et l'archivage jurisprudentiel effectués.
+**Statut (2026-09-07, M12)** : appliqué tel quel — aucun effet de bord ajouté sur `EtapeProcedure`
+lors de la création d'une adjudication ou d'une condamnation.
+**Décision attendue :** confirmer si une automatisation est souhaitée pour un jalon ultérieur.
+
+### Q-61 ✅ Jurisprudence : contraintes de format/poids littérales, sans clé `configuration_systeme` — tranché (M12)
+FR-DEF-03 fixe « fichier PDF ≤ 10 Mo » directement dans le texte fonctionnel, contrairement à GED
+(RG-GED-02) dont les contraintes analogues (`FORMATS_GED`, `TAILLE_MAX_GED`) sont des clés
+`configuration_systeme` modifiables par le DJ (CONF01-07). Aucune clé équivalente n'est listée pour
+la jurisprudence.
+**C — Recommandation** : contraintes **littérales** dans `JurisprudenceService` (PDF uniquement,
+10 Mo), sans ajouter de clé de configuration non demandée.
+**Statut (2026-09-07, M12)** : appliqué tel quel. Observation : la limite globale
+`spring.servlet.multipart.max-file-size` (M1, Q-51) vaut déjà 10 Mo — un fichier dépassant cette
+taille est donc intercepté par `GlobalExceptionHandler` avant même d'atteindre le contrôle du
+service (même code `ERR-008` dans les deux cas) ; le contrôle applicatif reste néanmoins utile et
+testé unitairement (indépendant de la couche servlet), en défense en profondeur.
+
+### Q-62 ✅ Bug — `decision_definitive.type VARCHAR(20)` trop étroite pour sa propre contrainte CHECK — corrigé (M12)
+`V1__schema_initial.sql` (M2) déclare `decision_definitive.type VARCHAR(20)` avec
+`CHECK (type IN ('ADJUDICATION', 'CONDAMNATION_PECUNIAIRE'))` — or `'CONDAMNATION_PECUNIAIRE'` fait
+23 caractères, dépassant la largeur de sa propre colonne. Toute tentative d'enregistrement d'une
+condamnation échouait avec `PSQLException: value too long for type character varying(20)` (500),
+alors qu'une adjudication (`'ADJUDICATION'`, 12 caractères) fonctionnait normalement — détecté en
+validation manuelle M12 (le premier test réel du chemin condamnation).
+**C** : élargir la colonne à `VARCHAR(30)`.
+**Statut (2026-09-07, M12)** : appliqué — `V6__decision_definitive_type_largeur.sql`
+(`ALTER COLUMN type TYPE VARCHAR(30)`), `DecisionDefinitive` : `@DiscriminatorColumn(..., length = 30)`
+mis à jour en cohérence (`ddl-auto=validate` aurait sinon rejeté le décalage de longueur au
+démarrage). Revérifié en conditions réelles : condamnation créée et son statut mis à jour avec succès.
 
 ### Q-27 ✅ `dossier.parties` défini deux fois — tranché (M2)
 Le dictionnaire REF-06 §2.1.2 déclare `parties JSONB` **deux fois**, avec deux structures

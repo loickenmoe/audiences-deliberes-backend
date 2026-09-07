@@ -38,7 +38,7 @@ public class MinioStorageService {
     /** Dépose le fichier sous une clé unique {@code dossiers/{dossierId}/{uuid}-{nomFichier}} et la retourne. */
     public String deposer(Long dossierId, MultipartFile fichier) {
         try (InputStream flux = fichier.getInputStream()) {
-            return deposer(dossierId, fichier.getOriginalFilename(), fichier.getContentType(), flux, fichier.getSize());
+            return deposer("dossiers/" + dossierId, fichier.getOriginalFilename(), fichier.getContentType(), flux, fichier.getSize());
         } catch (IOException e) {
             throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE, "Fichier illisible : " + e.getMessage());
         }
@@ -49,11 +49,24 @@ public class MinioStorageService {
      * passer par un {@link MultipartFile} d'upload HTTP.
      */
     public String deposer(Long dossierId, String nomFichier, String contentType, byte[] contenu) {
-        return deposer(dossierId, nomFichier, contentType, new ByteArrayInputStream(contenu), (long) contenu.length);
+        return deposer("dossiers/" + dossierId, nomFichier, contentType, new ByteArrayInputStream(contenu), (long) contenu.length);
     }
 
-    private String deposer(Long dossierId, String nomFichier, String contentType, InputStream flux, long taille) {
-        String cle = "dossiers/" + dossierId + "/" + UUID.randomUUID() + "-" + nomFichier;
+    /**
+     * Variante pour un fichier non rattaché à un dossier (ex. jurisprudence sans {@code dossierId},
+     * Q-58, M12) — {@code document.dossier_id} étant `NOT NULL`, ce chemin ne peut jamais créer de
+     * ligne `document` GED ; il ne fait que déposer l'octet-stream sous un préfixe dédié.
+     */
+    public String deposerSansDossier(MultipartFile fichier) {
+        try (InputStream flux = fichier.getInputStream()) {
+            return deposer("jurisprudence", fichier.getOriginalFilename(), fichier.getContentType(), flux, fichier.getSize());
+        } catch (IOException e) {
+            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE, "Fichier illisible : " + e.getMessage());
+        }
+    }
+
+    private String deposer(String prefixe, String nomFichier, String contentType, InputStream flux, long taille) {
+        String cle = prefixe + "/" + UUID.randomUUID() + "-" + nomFichier;
         try {
             minioClient.putObject(PutObjectArgs.builder()
                     .bucket(bucketName)

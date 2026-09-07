@@ -155,14 +155,31 @@ sauf besoin de vérification ponctuelle.**
 - **Ne pas ajouter de ligne `Co-Authored-By: Claude ...` aux messages de commit** (préférence
   utilisateur explicite, 2026-09-04) — déroge à la convention par défaut de l'outil.
 
-## 9. État actuel (2026-09-07, après le jalon M11)
+## 9. État actuel (2026-09-07, après le jalon M12)
 
 - **Documentation** : complète et validée en amont (8 documents).
 - **Code métier** : modules **Dossiers + Clients** (M4, Épic 1), **Alertes + Configurations**
   (M5, Épic 7), **Audiences + Alarmes** (M6, Épic 2), **Délibérés** (M7, Épic 3), **GED** (M8,
   Épic 6), **Intervenants** (M9, volet constitutions/répertoire de l'Épic 5), **Frais** (M10,
-  Épic 4) et **Publications** (M11, volet publications de l'Épic 5) livrés. Seuls les modules
-  Décisions définitives et Reporting (Épic 8) restent entièrement à construire, à partir de M12.
+  Épic 4), **Publications** (M11, volet publications de l'Épic 5) et **Décisions définitives**
+  (M12, volet adjudications/condamnations/jurisprudence de l'Épic 8) livrés. Seul le volet
+  reporting (Épic 8, US 8.4-8.6) reste à construire, à partir de M13.
+- **Module `decision`** : ✅ posé au jalon **M12** : hiérarchie `DecisionDefinitive`/
+  `Adjudication`/`CondamnationPecuniaire` (`JOINED`, même principe que `Publication`/
+  `Intervenant`), entité `Jurisprudence` indépendante. Dépend de `dossier` et `ged`
+  (`MinioStorageService`), **pas** de `intervenant` (même raisonnement que Q-54/Q-56).
+  `DecisionDefinitiveService` : adjudication (étape `CLOTURE` requise, RG-DEF-01), condamnation
+  (aucune précondition d'étape, asymétrie assumée — Q-59), mise à jour du statut de paiement.
+  `JurisprudenceService` : indexation obligatoire, PDF ≤ 10 Mo (littéral — Q-61), `dossierId`
+  optionnel avec stockage dédié sans dossier (Q-58), recherche paginée par mots-clés/nature/
+  juridiction. 5 endpoints (4 « à proposer » + 1 🆕) — 100 % des endpoints « à proposer » du
+  contrat désormais implémentés. **Bug corrigé en validation manuelle (Q-62)** :
+  `decision_definitive.type VARCHAR(20)` trop étroite pour sa propre contrainte `CHECK`
+  (`'CONDAMNATION_PECUNIAIRE'` fait 23 caractères) — toute condamnation échouait en 500 ;
+  `V6__decision_definitive_type_largeur.sql` élargit la colonne à `VARCHAR(30)`. Validé de bout en
+  bout (curl + JWT Keycloak réels, sur un environnement Docker reconstruit en cours de session
+  après redémarrage des conteneurs) et par 13 tests automatisés dédiés. Voir
+  `DEVELOPMENT_ROADMAP.md` §M12 et `DECISIONS_AND_OPEN_QUESTIONS.md` (Q-58 à Q-62).
 - **Module `publication`** : ✅ posé au jalon **M11** : hiérarchie `Publication`/
   `CompteRenduAudience`/`AutrePublication` (`JOINED`, même principe que `Intervenant`/`Avocat`,
   M2), `CommentairePublication`, `CorrespondanceAvocat` (tables ajoutées en M11 —
@@ -271,24 +288,25 @@ sauf besoin de vérification ponctuelle.**
   effectif depuis M5, `ChargeMaxAvocatScheduler`, étendu en M6 avec `RappelAudienceScheduler`/
   `AlarmeEcheanceScheduler`, en M7 avec `DelaiRecoursScheduler`, puis en M8 avec
   `SuppressionRelanceScheduler`). Consommé par les modules `dossier` (M4), `alerte` (M5),
-  `audience` (M6), `delibere` (M7), `ged` (M8), `intervenant` (M9), `frais` (M10) et
-  `publication` (M11).
-- **Tests** : **162 tests au total après M11** (20 socle M1-M3 + 31 M4 + 15 M5 + 24 M6 + 14 M7 +
+  `audience` (M6), `delibere` (M7), `ged` (M8), `intervenant` (M9), `frais` (M10),
+  `publication` (M11) et `decision` (M12).
+- **Tests** : **175 tests au total après M12** (20 socle M1-M3 + 31 M4 + 15 M5 + 24 M6 + 14 M7 +
   16 M8 + 11 M9 (`ConstitutionServiceTest`, `RepertoireAvocatsServiceTest`,
-  `LettreConstitutionServiceTest`) + 17 M10 (`FraisServiceTest`) + 16 nouveaux M11
-  (`PublicationServiceTest`)), aucune régression. `contextLoads()` intermittent dans cet
+  `LettreConstitutionServiceTest`) + 17 M10 (`FraisServiceTest`) + 16 M11
+  (`PublicationServiceTest`) + 13 nouveaux M12 (`DecisionDefinitiveServiceTest`,
+  `JurisprudenceServiceTest`)), aucune régression. `contextLoads()` intermittent dans cet
   environnement de session (R-07, pré-existant, sans lien avec le code applicatif) — vert lors de
-  la dernière exécution complète de M11.
+  la dernière exécution complète de M12.
 - **Risques** : voir `DECISIONS_AND_OPEN_QUESTIONS.md` §Risques — R-01 (secrets exposés)
   résolu dans les fichiers versionnés, mais la rotation des secrets déjà exposés côté
   Neon/iDrive e2 reste une action utilisateur en attente ; R-02, R-03, R-04 résolus par M1 ;
   R-05 (schéma non versionné) résolu par M2 ; R-06 (provisionnement d'un utilisateur en première
   connexion incompatible avec un endpoint `@Transactional(readOnly = true)`) découvert en
-  validation manuelle M7, non corrigé (défaut du socle M3, hors périmètre de M7-M11) ; R-07
+  validation manuelle M7, non corrigé (défaut du socle M3, hors périmètre de M7-M12) ; R-07
   (démarrage intermittent de l'application dans cet environnement de session,
   `NoClassDefFoundError` sur `AlerteMapperImpl`, reproduit sur `dev` non modifié, sans impact final
-  sur M10/M11 — les deux validations manuelles ont pu être menées à bien) découvert en validation
-  manuelle M10, non corrigé (indépendant du code applicatif, hors périmètre).
+  sur M10/M11/M12 — les trois validations manuelles ont pu être menées à bien) découvert en
+  validation manuelle M10, non corrigé (indépendant du code applicatif, hors périmètre).
 
 ## 10. Où aller ensuite
 
