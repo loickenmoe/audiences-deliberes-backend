@@ -2,13 +2,11 @@
 
 > Carte fonctionnelle complète : Exigence → User Story → Cas d'utilisation → Règles de gestion →
 > Domaine/Données → Module backend → Endpoint(s) → Comportement attendu → Tests.
-> Dernière mise à jour : 2026-09-07 (après le jalon M10 — Épics 1, 2, 3, 4, 6 et 7 implémentés ;
-> volet constitutions/répertoire de l'Épic 5).
+> Dernière mise à jour : 2026-09-07 (après le jalon M11 — Épics 1, 2, 3, 4, 5, 6 et 7 implémentés).
 
 **Légende statut** : ❌ non implémenté · 🟡 partiel · ✅ implémenté et testé
-**Épics 1 (Dossiers, M4), 2 (Audiences, M6), 3 (Délibérés, M7), 4 (Frais, M10), 6 (GED, M8) et
-7 (Alertes, M5) : ✅. Épic 5 : 🟡 (constitutions/répertoire, M9 ; publications restent M11).
-Épic 8 : ❌, non démarré.**
+**Épics 1 (Dossiers, M4), 2 (Audiences, M6), 3 (Délibérés, M7), 4 (Frais, M10), 5 (Intervenants,
+M9+M11), 6 (GED, M8) et 7 (Alertes, M5) : ✅. Épic 8 : ❌, non démarré.**
 
 ⚠️ Deux systèmes de numérotation des UC coexistent dans la documentation :
 REF-03 §8 (`UC-01`…`UC-17`) et REF-04 §3 (`UC-DOS-01`…`UC-REP-03`).
@@ -170,14 +168,17 @@ chaque rôle non autorisé → 403.
 ## 5. ÉPIC 5 — Intervenants : publications et constitutions
 
 **Modules** : `publication`, `intervenant` · **Dépend de** : `dossier`, `audience`, `delibere`, `ged` (Q-53), `alerte`
+— deux modules **indépendants l'un de l'autre** malgré leur regroupement dans cette même Épic
+fonctionnelle : `publication` ne dépend pas de `intervenant` (schéma de dépendances de la §0 à
+corriger sur ce point, comme déjà noté pour `frais` en M10, Q-54).
 
 | FR | US | UC | RG | Entités | Endpoint | Comportement attendu | Statut |
 |---|---|---|---|---|---|---|---|
-| FR-INT-09 | 5.1 | UC-INT-09 | RG-INT-09 | `publication`, `compte_rendu_audience` | `POST /publications/cr-audience` | `ROLE_AVOCAT` ; audience **rattachée au dossier** (404 sinon) ; statut `DEPOSE` ; notifie l'Assistante < 5 s ; 201 | ❌ |
-| FR-INT-09 | 5.2 | UC-INT-10 | RG-INT-10, RG-INT-06 | `publication` | `PUT /publications/cr-audience/{id}/validation` | `ROLE_ASSISTANTE` ; `VALIDE` → consultable par les juristes du dossier ; `REJETE` + motif → renvoyé à l'avocat, **non consultable** | ❌ |
-| FR-INT-09 | 5.3 | UC-INT-09 | RG-INT-06 | `publication`, `autre_publication` | `POST /publications/autres` | `typeDocument` ∈ {PIECE, DECISION, CONCLUSION} ; statut `DEPOSE` ; notifie l'Assistante | ❌ |
-| — | 5.4 | UC-INT-08 | RG-INT-06 | `publication` | `GET /publications/{id}` | Consultable si `VALIDE` ; `restriction_acces` non nulle et ≠ utilisateur → **403/ERR-009** ; `REJETE` → 404 | ❌ |
-| — | 5.5 | UC-INT-08 | RG-INT-07 | `publication`, `historique_action` | `POST /publications/{id}/commentaires` | Un juriste **ne commente jamais directement** : le commentaire est transmis au DJ/DJA. Le DJ/DJA transmet une **correspondance unique** à l'avocat (`POST /publications/{id}/correspondance` — **à proposer, Q-20**) | ❌ |
+| FR-INT-09 | 5.1 | UC-INT-09 | RG-INT-09 | `publication`, `compte_rendu_audience` | `POST /publications/cr-audience` | `ROLE_AVOCAT` ; audience **rattachée au dossier** (404 sinon) ; statut `DEPOSE` ; notifie l'Assistante < 5 s ; 201 | ✅ |
+| FR-INT-09 | 5.2 | UC-INT-10 | RG-INT-10, RG-INT-06 | `publication` | `PUT /publications/{id}/validation` | `ROLE_ASSISTANTE` ; `VALIDE` → consultable par les juristes du dossier ; `REJETE` + motif → renvoyé à l'avocat, **non consultable** ; chemin généralisé aux deux sous-types (Q-55) | ✅ |
+| FR-INT-09 | 5.3 | UC-INT-09 | RG-INT-06 | `publication`, `autre_publication` | `POST /publications/autres` (multipart) | `typeDocument` ∈ {PIECE, DECISION, CONCLUSION} ; statut `DEPOSE` ; notifie l'Assistante ; fichier stocké via `MinioStorageService` (Q-56) | ✅ |
+| — | 5.4 | UC-INT-08 | RG-INT-06 | `publication` | `GET /publications/{id}` | Consultable si `VALIDE` ; `restriction_acces` non nulle et ≠ utilisateur → **403/ERR-009** ; `REJETE`/`DEPOSE` → 404 | ✅ |
+| — | 5.5 | UC-INT-08 | RG-INT-07 | `publication`, `historique_action` | `POST /publications/{id}/commentaires` | Un juriste **ne commente jamais directement** : le commentaire est transmis au DJ/DJA. Le DJ/DJA transmet une **correspondance unique** à l'avocat (`POST /publications/{id}/correspondance`, Q-20) | ✅ |
 | FR-INT-06 | 5.6 | UC-INT-05 | RG-INT-08 | **`demande_constitution` (Q-03)**, `alerte` | `POST /constitutions/prestataires` **(à proposer)** | Juriste ; `dossierId` + `prestataireId` + motif obligatoire ; statut `EN_ATTENTE` ; notifie le SH | ✅ |
 | FR-INT-07 | 5.7 | UC-INT-06 | RG-INT-08 | `demande_constitution`, `document`, `alerte` | `PUT /constitutions/prestataires/{id}/validation` **(à proposer)** | `ROLE_SH` ; validation → **génère la lettre de constitution** ; avocat notifié via son compte (autre prestataire : aucun compte, aucune notification possible — Q-52) ; rejet + motif obligatoire → retour au juriste | ✅ |
 | FR-INT-08 | 5.8 | UC-INT-07 | RG-INT-01 | `avocat`, `intervenant`, `dossier` | `GET /repertoire/avocats` **(à proposer)** | Coordonnées + `indicateurCharge` (dossiers actifs) + `indicateurPerformance` (taux de succès), triés par charge croissante ; recherche par nom ; < 2 s (Q-53) | ✅ |
@@ -185,10 +186,12 @@ chaque rôle non autorisé → 403.
 **Tests attendus** : dépôt de CR sur une audience d'un autre dossier, publication non validée
 invisible, restriction d'accès respectée, commentaire de juriste **non** transmis directement à
 l'avocat, constitution sans motif, validation SH générant la lettre, calcul des indicateurs de
-charge. Réalisés pour le volet constitutions/répertoire (US 5.6-5.8) : 11 tests automatisés
-(`ConstitutionServiceTest`, `RepertoireAvocatsServiceTest`, `LettreConstitutionServiceTest`) +
-validation manuelle de bout en bout (curl + JWT Keycloak réels), y compris la lettre générée
-vérifiée dans la GED (M8). Le volet publications (US 5.1-5.5) reste à faire (M11).
+charge. Tous réalisés : volet constitutions/répertoire (US 5.6-5.8, M9) — 11 tests automatisés
+(`ConstitutionServiceTest`, `RepertoireAvocatsServiceTest`, `LettreConstitutionServiceTest`) ;
+volet publications (US 5.1-5.5, M11) — 16 tests automatisés (`PublicationServiceTest`) ; les deux
+volets validés de bout en bout (curl + JWT Keycloak réels), y compris la lettre de constitution
+vérifiée dans la GED (M8) et le fichier d'une autre publication stocké via MinIO (Q-56, sans ligne
+`document` GED — cycle de vie propre à la publication).
 
 **Écrans frontend** : *(Avocat)* Déposer un compte rendu / une pièce, Mes publications, Mes lettres
 de constitution · *(Assistante)* File des publications à valider · *(Juriste)* Publications du
@@ -314,8 +317,8 @@ vue client sans dossier, client inexistant.
 | 2 — Audiences | 6 | 5 | 1 | 5 | **✅ 5** (M6) |
 | 3 — Délibérés | 6 | 5 | 1 | 5 | **✅ 5** (M7) |
 | 4 — Frais | 6 | 5 | 1 | 5 (+ 1 🆕) | **✅ 6** (M10) |
-| 5 — Publications & constitutions | 8 | 6 | 2 | 8 | **🟡 3** (M9, volet constitutions/répertoire ; publications restent M11) |
+| 5 — Publications & constitutions | 8 | 6 | 2 | 9 | **✅ 9** (M9 constitutions/répertoire + M11 publications) |
 | 6 — GED | 6 | 5 | 1 | 5 (+ 1 🆕) | **✅ 6** (M8) |
 | 7 — Alertes | 4 | 2 | 2 | 5 | **✅ 5** (M5, 🟡 déclencheurs futurs) |
 | 8 — Décisions & reporting | 6 | 4 | 2 | 8 | 0 |
-| **Total** | **49** | **39** | **10** | **~55** | **44** |
+| **Total** | **49** | **39** | **10** | **~56** | **50** |

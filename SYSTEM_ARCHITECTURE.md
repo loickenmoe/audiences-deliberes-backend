@@ -125,14 +125,20 @@ planifié (`SuppressionRelanceScheduler`, relance à 72 h) ; M9 a livré
 `intervenant/{domain,repository,service,web,mapper}` (dépendance directe étendue à `dossier`,
 `delibere` et `ged` — Q-53), première génération de document système intégrée à la GED (lettre de
 constitution PDFBox stockée comme `Document` M8) ; M10 a livré `frais/{domain,repository,service,
-web,mapper}` (dépendance directe vers `dossier` et `referentiel`, **pas** `intervenant` — Q-54).
+web,mapper}` (dépendance directe vers `dossier` et `referentiel`, **pas** `intervenant` — Q-54) ;
+M11 a livré `publication/{domain,repository,service,web,mapper}` (hiérarchie `JOINED` `Publication`/
+`CompteRenduAudience`/`AutrePublication`, dépendance directe vers `dossier`, `audience` et `ged`
+— réutilisation du `MinioStorageService` sans création de `document` GED, Q-56 —, **pas**
+`intervenant` non plus, même raisonnement que Q-54).
 
 **Verdict : le schéma de données et le socle transversal sont complets et validés, et les modules
 Dossiers/Clients (M4), Alertes/Configurations (M5), Audiences/Alarmes (M6), Délibérés (M7), GED
-(M8), Intervenants (M9) et Frais (M10) sont livrés et testés — 43 des ~53 endpoints du contrat
-d'API sont implémentés** (146 tests automatisés, dont un test d'intégration Testcontainers ; le
-test de fumée `contextLoads` échoue pour une cause d'environnement pré-existante et sans lien avec
-le code applicatif, R-07). Les autres modules fonctionnels (M11+) n'ont pas commencé.
+(M8), Intervenants (M9), Frais (M10) et Publications (M11) sont livrés et testés — 49 des ~53
+endpoints du contrat d'API sont implémentés, soit 100 % de la surface OpenAPI formelle** (162 tests
+automatisés, dont un test d'intégration Testcontainers ; le test de fumée `contextLoads` est
+intermittent dans cet environnement de session — vert lors de la dernière exécution complète —
+pour une cause d'environnement pré-existante et sans lien avec le code applicatif, R-07). Seul
+l'Épic 8 (Décisions définitives, Reporting) n'a pas commencé (M12+).
 
 ### 2.2 Infrastructure réellement configurée
 

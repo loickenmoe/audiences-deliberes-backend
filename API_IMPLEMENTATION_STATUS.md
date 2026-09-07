@@ -1,7 +1,7 @@
 # API_IMPLEMENTATION_STATUS
 
 > Inventaire exhaustif des endpoints et état d'implémentation.
-> Dernière mise à jour : 2026-09-07 (après jalon M10 — module Frais).
+> Dernière mise à jour : 2026-09-07 (après jalon M11 — module Publications).
 
 **Base URL** : `http://localhost:8080/api/v1` — aligné sur le contrat REF-07 depuis M1 (Q-16 résolue).
 **Authentification** : `Authorization: Bearer <JWT Keycloak>` sur tous les endpoints sauf health checks.
@@ -17,12 +17,12 @@
 
 | Catégorie | Nombre | Implémentés |
 |---|---|---|
-| 📋 Spécifiés dans l'OpenAPI | 37 | **32** (§1-2, §3 #13-15, #18-21, §5 #23-27, §8 #38-40 #42, §9 #44-48) |
+| 📋 Spécifiés dans l'OpenAPI | 37 | **37 (100 %)** (§1-2, §3 #13-15, #18-21, §5 #23-27, §6 #29-33, §8 #38-40 #42, §9 #44-48) |
 | 📄 Cités §2 mais absents de l'OpenAPI | 3 | 3 (§3 #16-17 alarmes, #22 expédition — Q-13, close) |
-| 💡 « À proposer » (user stories) | 10 | 4 (§8 #41 approbation-suppression ; §7 #35-37 constitutions/répertoire) |
+| 💡 « À proposer » (user stories) | 10 | 5 (§6 #34 correspondance ; §8 #41 approbation-suppression ; §7 #35-37 constitutions/répertoire) |
 | 🆕 Manquants dans toute la documentation | 2 | 1 (`POST /clients`) |
 | 🆕 Ajoutés en cours d'implémentation (hors inventaire initial) | 1 | 3 (`POST /dossiers/{id}/etapes` — Q-34 ; `GET /dossiers/{id}/documents` — #43 ; `GET /frais/demandes` — #28, Q-24) |
-| **Surface cible totale** | **~53** | **43 (≈81 %)** |
+| **Surface cible totale** | **~53** | **49 (≈92 %)** |
 
 Le squelette de starter hors périmètre (Template/Admin/Staff/Dashboard/Chat, auth JWT maison) a
 été intégralement supprimé en M1 (cf. `DECISIONS_AND_OPEN_QUESTIONS.md` R-03/R-04) — l'ancienne
@@ -148,15 +148,30 @@ si sensible ou montant > seuil, paiement (Assistante). Traçabilité complète v
 
 | # | Méthode | Endpoint | Rôle requis | FR / US | Src | Statut |
 |---|---|---|---|---|---|---|
-| 29 | POST | `/publications/cr-audience` | `ROLE_AVOCAT` | FR-INT-09 / US 5.1 | 📋 | ❌ |
-| 30 | PUT | `/publications/cr-audience/{id}/validation` | `ROLE_ASSISTANTE` | FR-INT-09 / US 5.2 | 📋 | ❌ |
-| 31 | POST | `/publications/autres` | `ROLE_AVOCAT` | FR-INT-09 / US 5.3 | 📋 | ❌ |
-| 32 | GET | `/publications/{id}` | `ROLE_CONSULTATION` | US 5.4 | 📋 | ❌ |
-| 33 | POST | `/publications/{id}/commentaires` | `ROLE_JURISTE` | FR-INT-09 / US 5.5 | 📋 | ❌ |
-| 34 | POST | `/publications/{id}/correspondance` | `ROLE_DJ`, `ROLE_DJA` | RG-INT-07 / US 5.5 | 💡 | ❌ |
+| 29 | POST | `/publications/cr-audience` | `ROLE_AVOCAT` | FR-INT-09 / US 5.1 | 📋 | ✅ |
+| 30 | PUT | `/publications/{id}/validation` | `ROLE_ASSISTANTE` | FR-INT-09 / US 5.2 | 📋 | ✅ |
+| 31 | POST | `/publications/autres` (multipart) | `ROLE_AVOCAT` | FR-INT-09 / US 5.3 | 📋 | ✅ |
+| 32 | GET | `/publications/{id}` | `ROLE_CONSULTATION` | US 5.4 | 📋 | ✅ |
+| 33 | POST | `/publications/{id}/commentaires` | `ROLE_JURISTE` | FR-INT-09 / US 5.5 | 📋 | ✅ |
+| 34 | POST | `/publications/{id}/correspondance` | `ROLE_DJ`, `ROLE_DJA` | RG-INT-07 / US 5.5 | 💡 | ✅ |
 
+> **#30** : chemin généralisé, sans le segment `cr-audience` du contrat — s'applique aux deux
+> sous-types de publication (Q-55), aucun second endpoint n'étant prévu pour valider une « autre »
+> publication (US 5.3).
+>
 > ⚠️ L'OpenAPI référence les schémas `Publication`, `CompteRenduAudience` et `AutrePublication`
-> via `$ref` mais **ne les définit jamais** dans `components/schemas`. Contrat incomplet (Q-25).
+> via `$ref` mais **ne les définit jamais** dans `components/schemas`. Contrat incomplet (Q-25) —
+> nos propres DTOs (`PublicationResponse`, `CommentaireResponse`, `CorrespondanceResponse`) en
+> tiennent lieu côté implémentation.
+
+**Circuit implémenté (M11)** : `PublicationService` — dépôt d'un compte rendu d'audience (avocat,
+audience rattachée au dossier — 404 sinon, US 5.1), dépôt d'une autre publication (PIECE/DECISION/
+CONCLUSION, fichier stocké via le `MinioStorageService` du module `ged` sans création de `document`
+GED — Q-56), validation générique aux deux sous-types (Q-55, motif obligatoire au rejet, notifie
+l'avocat), consultation restreinte aux publications `VALIDE` avec restriction d'accès individuelle
+optionnelle (403/ERR-009 — Q-57), commentaire d'un juriste transmis au DJ/DJA (jamais directement à
+l'avocat, RG-INT-07), correspondance unique DJ/DJA → avocat (409 si déjà transmise — Q-20). 16 tests
+automatisés dédiés. Voir `DECISIONS_AND_OPEN_QUESTIONS.md` Q-20, Q-25, Q-55, Q-56, Q-57.
 
 ## 7. Constitutions et répertoire
 

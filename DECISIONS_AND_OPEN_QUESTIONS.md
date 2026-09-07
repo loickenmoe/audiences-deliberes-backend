@@ -946,6 +946,41 @@ du type unique du workflow frais, même principe que Q-48/Q-52). `DOUBLON_FACTUR
 dans l'énumération `TypeAlerte` (Q-22) mais **inutilisé** par ce jalon : aucun texte fonctionnel ne
 décrit de destinataire à notifier pour l'anti-doublon (simple blocage HTTP 409, pas d'alerte).
 
+### Q-55 ✅ Publications : un seul point de validation pour les deux sous-types, chemin généralisé — tranché (M11)
+Le contrat ne numérote que `PUT /publications/cr-audience/{id}/validation` (#30, US 5.2) pour
+valider un compte rendu d'audience, mais US 5.3 (`POST /publications/autres`) dépose aussi des
+publications au statut `DEPOSE` qui notifient l'Assistante — sans qu'aucun endpoint ne soit prévu
+pour les faire passer à `VALIDE`/`REJETE`. RG-INT-06 (autres publications) et RG-INT-10 (validation)
+ne distinguent pourtant pas le sous-type : les deux partagent la même table `publication` et le même
+`statut_validation`.
+**C — Recommandation** : un point d'entrée unique `PUT /publications/{id}/validation`, sans le
+segment `cr-audience` du chemin contracté (qui n'aurait plus de sens appliqué à une « autre »
+publication), plutôt que d'inventer un second endpoint non prévu pour ce seul sous-type.
+**Statut (2026-09-07, M11)** : appliqué — `PublicationController.valider`/`PublicationService.valider`
+opèrent sur `Publication` (base), quel que soit le sous-type concret.
+
+### Q-56 ✅ `autre_publication` sans colonne de stockage — corrigé, sans dépendance à un `document` GED — tranché (M11)
+Le script SQL de `autre_publication` (M2) ne porte que `type_document` : aucune colonne ne permet
+de retrouver le fichier déposé par l'avocat (US 5.3) — même lacune que `document.chemin_stockage`
+(Q-07) à l'origine.
+**C — Recommandation** : ajouter `autre_publication.chemin_stockage`, alimentée via le
+`MinioStorageService` du module `ged` (dépendance déjà déclarée pour l'Épic 5), **sans** créer de
+ligne `document` dans la table GED — une publication a son propre cycle de vie (validation Assistante,
+restriction d'accès) distinct de celui d'un document GED (suppression avec accord DJ/DJA, M8),
+contrairement à la lettre de constitution (M9, Q-52) qui, elle, devait rester consultable dans la
+GED du dossier au même titre que n'importe quelle autre pièce.
+**Statut (2026-09-07, M11)** : appliqué — `V4__publication_commentaires_correspondances.sql`,
+`AutrePublication.cheminStockage`.
+
+### Q-57 ✅ `restriction_acces` : renseignée par l'avocat au dépôt, aucun endpoint de modification a posteriori — tranché (M11)
+US 5.4 exploite `publication.restriction_acces` (403/ERR-009 si renseignée et différente de
+l'utilisateur courant) mais aucune US ne précise ni qui la renseigne, ni via quel endpoint.
+**C — Recommandation** : champ optionnel du corps de dépôt (`POST /publications/cr-audience` et
+`POST /publications/autres`), laissé à la discrétion de l'avocat déposant ; aucun endpoint de
+modification a posteriori n'étant demandé, aucun n'est ajouté.
+**Statut (2026-09-07, M11)** : appliqué — `restrictionAcces` (identifiant `Utilisateur`) sur les
+deux requêtes de dépôt.
+
 ### Q-27 ✅ `dossier.parties` défini deux fois — tranché (M2)
 Le dictionnaire REF-06 §2.1.2 déclare `parties JSONB` **deux fois**, avec deux structures
 différentes : `{demandeur, defendeur}` et `{demandeur, defendeur, client}`. Le contrat d'API et
@@ -972,9 +1007,12 @@ Keycloak **26.6.4** (§8.1) vs `:latest` (§12.2) vs **24.0** (code).
 Nom de base : `juridique_db` vs `jurique_db` (faute de frappe §12.2) vs `audiences_db` (code).
 **C** : PostgreSQL 17, Keycloak 26.x épinglé, base `audiences_db`.
 
-### Q-20 — `POST /publications/{id}/correspondance` — `P2`
+### Q-20 ✅ `POST /publications/{id}/correspondance` — implémenté (M11)
 « À proposer » (US 5.5). RG-INT-07 impose que seul le DJ/DJA transmette une correspondance unique.
 **C** : créer l'endpoint et une table `correspondance_avocat`.
+**Statut (2026-09-07, M11)** : appliqué — `correspondance_avocat` (`UNIQUE(publication_id)`,
+`V4__publication_commentaires_correspondances.sql`), `PublicationService.transmettreCorrespondance`
+(409 si déjà transmise), notifie l'avocat.
 
 ### Q-21 — Mise à disposition du dossier de crédit par le GFC — `P2`
 RG-GED-01 : le GFC verse le dossier de crédit « manuellement ». Le GFC **n'a pas de compte**.
