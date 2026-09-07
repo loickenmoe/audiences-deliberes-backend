@@ -1,7 +1,8 @@
 # SYSTEM_ARCHITECTURE
 
 > Architecture documentée (A), architecture réellement implémentée (B), architecture cible proposée (C).
-> Dernière mise à jour : 2026-09-07 (après jalon M12 — module Décisions définitives).
+> Dernière mise à jour : 2026-09-07 (après jalon M13 — module Reporting, les 8 épics fonctionnels
+> sont désormais implémentés).
 > (Audit initial : 2026-09-04.)
 
 ---
@@ -136,19 +137,24 @@ M11 a livré `publication/{domain,repository,service,web,mapper}` (hiérarchie `
 vers `dossier` et `ged` uniquement — même raisonnement que Q-54/Q-56 — MinIO généralisé à un
 préfixe de clé au lieu d'un `dossierId` obligatoire pour couvrir le cas sans dossier, Q-58) —
 avec, en cours de route, la correction d'un bug de schéma pré-existant (Q-62,
-`decision_definitive.type VARCHAR(20)` trop étroite pour sa propre contrainte `CHECK`).
+`decision_definitive.type VARCHAR(20)` trop étroite pour sa propre contrainte `CHECK`) ; M13 a
+livré `reporting/{domain,service,web}` (lecture seule à travers `dossier`, `audience`, `frais`,
+`alerte`, `delibere`, `decision` — aucune écriture croisée, aucune nouvelle dépendance
+structurelle). US 8.6 (vue consolidée par client) était déjà couverte depuis M4
+(`GET /clients/{clientId}/dossiers`) — corrigé dans le suivi de couverture à cette occasion.
 
-**Verdict : le schéma de données et le socle transversal sont complets et validés, et les modules
-Dossiers/Clients (M4), Alertes/Configurations (M5), Audiences/Alarmes (M6), Délibérés (M7), GED
-(M8), Intervenants (M9), Frais (M10), Publications (M11) et Décisions définitives (M12) sont
-livrés et testés — 55 des ~52 endpoints de l'inventaire initial sont implémentés (100 % des
-endpoints spécifiés dans l'OpenAPI formel et des endpoints « à proposer » ; le dépassement de
-l'estimation initiale vient de 4 endpoints ajoutés en cours de route, faute d'alternative dans le
-contrat — cf. API_IMPLEMENTATION_STATUS.md §Synthèse)** (175 tests automatisés, dont un test
-d'intégration Testcontainers ; le test de fumée `contextLoads` est intermittent dans cet
-environnement de session — vert lors de la dernière exécution complète — pour une cause
-d'environnement pré-existante et sans lien avec le code applicatif, R-07). Seul le volet reporting
-de l'Épic 8 (US 8.4-8.6) n'a pas commencé (M13+).
+**Verdict : le schéma de données et le socle transversal sont complets et validés, et les 8 épics
+fonctionnels (Dossiers/Clients M4, Alertes/Configurations M5, Audiences/Alarmes M6, Délibérés M7,
+GED M8, Intervenants M9, Frais M10, Publications M11, Décisions définitives M12, Reporting M13)
+sont livrés et testés — 57 des ~52 endpoints de l'inventaire initial sont implémentés, soit
+**100 % des endpoints spécifiés dans l'OpenAPI formel et des endpoints « à proposer »** (le
+dépassement de l'estimation initiale vient de 4 endpoints ajoutés en cours de route, faute
+d'alternative dans le contrat — cf. API_IMPLEMENTATION_STATUS.md §Synthèse)** (179 tests
+automatisés, dont un test d'intégration Testcontainers ; le test de fumée `contextLoads` est
+intermittent dans cet environnement de session — vert lors de la dernière exécution complète —
+pour une cause d'environnement pré-existante et sans lien avec le code applicatif, R-07). Plus
+aucun module fonctionnel ne reste à construire ; seul M14 (durcissement et vérification finale)
+reste à faire.
 
 ### 2.2 Infrastructure réellement configurée
 

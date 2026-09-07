@@ -1048,6 +1048,34 @@ validation manuelle M12 (le premier test réel du chemin condamnation).
 mis à jour en cohérence (`ddl-auto=validate` aurait sinon rejeté le décalage de longueur au
 démarrage). Revérifié en conditions réelles : condamnation créée et son statut mis à jour avec succès.
 
+### Q-63 ✅ Contenu de `GET /rapports` : aucun champ nommé par le contrat — tranché (M13)
+FR-REP-01 (US 8.4) ne nomme aucun champ de sortie (contrairement à FR-REP-02, qui liste
+explicitement 6 indicateurs pour `GET /tableau-de-bord`) — seuls `type`, `dateDebut`, `dateFin`,
+`format` et les contraintes de performance/204 sont spécifiés. « toutes » (colonne Entités) suggère
+un rapport transversal, sans détail de contenu.
+**C — Recommandation** : dériver le contenu du rapport des mêmes indicateurs métier que le tableau
+de bord, mais **restreints à la période** `[dateDebut, dateFin]` plutôt que temps réel — cohérent
+avec le seul autre précédent de « rapport périodique » du projet (`GedService.rapportJournalier`,
+M8, également scopé à une date). `type` (JOURNALIER…ANNUEL) reste alors une simple étiquette de
+période sans effet de calcul, `dateDebut`/`dateFin` étant explicitement fournies par l'appelant
+(contrairement à `PeriodeCalendrier`, Épic 2, qui calcule sa propre `dateFin` à partir du type).
+**Statut (2026-09-07, M13)** : appliqué — `RapportResponse` : `nbNouveauxDossiers`,
+`nbAudiencesTenues`, `nbDemandesFraisDeposees`, `nbDeliberesEnregistres`, `tauxSuccesRecouvrement`,
+`provisionsReprises`, tous scopés à la période. **204** si les quatre compteurs sont nuls
+(RG-REP-02).
+
+### Q-64 ✅ « `tauxSuccesRecouvrement` » et « `provisionsReprises` » : définitions non précisées — tranché (M13)
+FR-REP-02 nomme ces deux indicateurs sans en définir le mode de calcul.
+**C — Recommandation** :
+- `tauxSuccesRecouvrement` = proportion de délibérés `FAVORABLE` parmi les délibérés rendus sur des
+  dossiers de catégorie `RECOUVREMENT` — même principe que l'indicateur de performance par avocat
+  (Q-53), mais agrégé toutes affectations confondues plutôt que par avocat ; `0` si aucun délibéré
+  (absence de donnée, pas une contre-performance, même convention qu'en Q-53).
+- `provisionsReprises` = somme des `reliquat` des `Adjudication` dont `repriseProvision = true` —
+  seule donnée monétaire liée à une « reprise de provision » disponible dans le schéma (M12).
+**Statut (2026-09-07, M13)** : appliqué — `DelibereRepository.calculerTauxSuccesRecouvrement(Periode)`,
+`DecisionDefinitiveRepository.sommeProvisionsReprises(Periode)`.
+
 ### Q-27 ✅ `dossier.parties` défini deux fois — tranché (M2)
 Le dictionnaire REF-06 §2.1.2 déclare `parties JSONB` **deux fois**, avec deux structures
 différentes : `{demandeur, defendeur}` et `{demandeur, defendeur, client}`. Le contrat d'API et

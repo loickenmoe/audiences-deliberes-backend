@@ -2,10 +2,12 @@ package com.afriland.audiences.delibere.repository;
 
 import com.afriland.audiences.delibere.domain.Delibere;
 import com.afriland.audiences.dossier.domain.StatutCycleVie;
-import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -36,4 +38,26 @@ public interface DelibereRepository extends JpaRepository<Delibere, Long> {
 
         Long getTotal();
     }
+
+    /** FR-REP-02 (tableau de bord, M13) : taux de succès recouvrement, toutes périodes confondues. */
+    @Query("SELECT SUM(CASE WHEN d.resultat = com.afriland.audiences.delibere.domain.ResultatDelibere.FAVORABLE THEN 1L ELSE 0L END) AS favorables, "
+            + "COUNT(d) AS total FROM Delibere d "
+            + "WHERE d.dossier.categorie = com.afriland.audiences.referentiel.domain.CategorieDossier.RECOUVREMENT")
+    PerformanceGlobale calculerTauxSuccesRecouvrement();
+
+    /** FR-REP-01 (rapport périodique, M13) : même indicateur, restreint aux délibérés rendus dans la période. */
+    @Query("SELECT SUM(CASE WHEN d.resultat = com.afriland.audiences.delibere.domain.ResultatDelibere.FAVORABLE THEN 1L ELSE 0L END) AS favorables, "
+            + "COUNT(d) AS total FROM Delibere d "
+            + "WHERE d.dossier.categorie = com.afriland.audiences.referentiel.domain.CategorieDossier.RECOUVREMENT "
+            + "AND d.dateDeliberee BETWEEN :debut AND :fin")
+    PerformanceGlobale calculerTauxSuccesRecouvrementPeriode(@Param("debut") LocalDate debut, @Param("fin") LocalDate fin);
+
+    interface PerformanceGlobale {
+        Long getFavorables();
+
+        Long getTotal();
+    }
+
+    /** FR-REP-01 (rapport périodique, M13) : délibérés enregistrés dans la période. */
+    long countByDateDelibereeBetween(LocalDate debut, LocalDate fin);
 }

@@ -2,7 +2,7 @@
 
 > Feuille de route séquentielle du backend. Un jalon = un objectif, un périmètre fermé,
 > une validation manuelle par le porteur du projet avant passage au suivant.
-> Dernière mise à jour : 2026-09-07 (M1 à M12 terminés et validés — M13 en attente d'autorisation).
+> Dernière mise à jour : 2026-09-07 (M1 à M13 terminés et validés — M14 en attente d'autorisation).
 
 ---
 
@@ -36,8 +36,8 @@
 | **M10** | Module Frais (circuit de validation) | Q-05 ✅, Q-24 🟡, Q-26 ✅, Q-54 ✅ | ✅ **Terminé et validé manuellement** (2026-09-07) |
 | **M11** | Module Publications et correspondances | Q-20 ✅, Q-24 🟡, Q-25 | ✅ **Terminé et validé manuellement** (2026-09-07) |
 | **M12** | Module Décisions définitives et jurisprudence | Q-58 ✅, Q-59 🟡, Q-60 🟡, Q-61 ✅, Q-62 ✅ | ✅ **Terminé et validé manuellement** (2026-09-07) |
-| **M13** | Module Reporting et tableau de bord | Q-14 | ⏸️ **prêt à démarrer, en attente d'autorisation explicite** |
-| **M14** | Durcissement, tests d'intégration, vérification finale de l'API | toutes | ⏸️ |
+| **M13** | Module Reporting et tableau de bord | Q-14 (sans impact code), Q-63 ✅, Q-64 ✅ | ✅ **Terminé et validé manuellement** (2026-09-07) |
+| **M14** | Durcissement, tests d'intégration, vérification finale de l'API | toutes | ⏸️ **prêt à démarrer, en attente d'autorisation explicite** |
 
 ---
 
@@ -642,9 +642,55 @@ Module livré en un seul commit (docs de contexte incluses, comme pour M5 à M11
 ### Restant
 Épic 8 volet reporting (US 8.4-8.6) différé à M13.
 
-## M13 — Module Reporting
-US 8.4, 8.5, 8.6. Rapports périodiques avec exports PDF/Excel/CSV < 10 s, tableau de bord exécutif
-temps réel < 2 s, vue consolidée par client.
+## M13 — Module Reporting ✅ **Terminé**
+
+**Objectif.** US 8.4, 8.5, 8.6. Rapports périodiques avec exports PDF/Excel/CSV < 10 s, tableau de
+bord exécutif temps réel < 2 s, vue consolidée par client.
+
+**Constat de périmètre** : US 8.6 (vue consolidée par client) était déjà implémentée depuis M4
+(`GET /clients/{clientId}/dossiers`, `DossierService.vueConsolideeParClient`) — erreur de suivi
+dans `FUNCTIONAL_MAP.md`/`API_IMPLEMENTATION_STATUS.md`, corrigée à l'occasion de ce jalon. Le
+périmètre réel de M13 se limite donc à US 8.4 (`GET /rapports`) et US 8.5 (`GET /tableau-de-bord`).
+
+### Réalisé
+- Module `reporting` : `TypeRapport` (JOURNALIER…ANNUEL, étiquette de période sans effet de
+  calcul — Q-63), `FormatRapport` (JSON/PDF/EXCEL/CSV, distinct de `FormatExport` de l'Épic 2 qui
+  n'a pas CSV). Dépend de `dossier`, `audience`, `frais`, `alerte`, `delibere`, `decision`
+  (lecture seule, aucune écriture croisée).
+- `ReportingService.tableauDeBord()` : 6 indicateurs temps réel (RG-REP-03) — `nbDossiersActifs`
+  (réutilise la définition de Q-53), `nbAudiencesPlanifiees`, `nbDemandesFraisEnAttente` (ni
+  payées, ni rejetées), `nbProrogationsAlerte` (alertes `PROROGATION` encore `DECLENCHEE`),
+  `tauxSuccesRecouvrement` et `provisionsReprises` (définitions en Q-64, aucune des deux n'étant
+  précisée par le contrat).
+- `ReportingService.genererRapport(...)` : mêmes indicateurs que le tableau de bord mais restreints
+  à `[dateDebut, dateFin]` (FR-REP-01 ne nomme aucun champ, contrairement à FR-REP-02 — Q-63) ; 204
+  si les 4 compteurs sont nuls (RG-REP-02).
+- `RapportExportService` : PDF (PDFBox) / Excel (Apache POI) / CSV, présentation libellé/valeur —
+  même stack que `CalendrierExportService` (Épic 2).
+- 6 nouvelles méthodes de repository ajoutées à travers `dossier`, `audience`, `frais`, `alerte`,
+  `delibere`, `decision` (comptages/sommes scopés ou non à une période) — aucune modification de
+  comportement des modules existants.
+- 2 endpoints (tous deux du contrat formel) — **100 % de la surface OpenAPI et « à proposer » du
+  contrat sont désormais implémentés**.
+
+### Décisions prises en implémentation (documentées dans `DECISIONS_AND_OPEN_QUESTIONS.md`)
+Q-63 (contenu de `GET /rapports`, dérivé du tableau de bord et restreint à la période), Q-64
+(définitions de `tauxSuccesRecouvrement` et `provisionsReprises`).
+
+### Validation
+4 tests automatisés dédiés (`ReportingServiceTest`) + 179 tests au total après M13, tous verts y
+compris `contextLoads`. Validation manuelle de bout en bout réalisée (curl + JWT Keycloak réels,
+sur les données de test constituées en M12) : tableau de bord cohérent avec les données en base,
+rapport sur une période avec activité (contenu non vide) et sur une période sans activité (204),
+les 4 formats d'export vérifiés (JSON, PDF, Excel, CSV).
+
+### Commit
+Module livré en un seul commit (docs de contexte incluses, comme pour M5 à M12).
+
+### Restant
+Plus aucun module fonctionnel. Seul M14 (durcissement, tests d'intégration bout en bout,
+vérification finale de conformité au contrat, campagne de performance, revue de sécurité) reste à
+faire.
 
 ## M14 — Durcissement et vérification finale
 Tests d'intégration bout en bout des 9 parcours de `FUNCTIONAL_MAP.md` §9 ; couverture cible > 80 %

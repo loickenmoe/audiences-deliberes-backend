@@ -155,15 +155,29 @@ sauf besoin de vérification ponctuelle.**
 - **Ne pas ajouter de ligne `Co-Authored-By: Claude ...` aux messages de commit** (préférence
   utilisateur explicite, 2026-09-04) — déroge à la convention par défaut de l'outil.
 
-## 9. État actuel (2026-09-07, après le jalon M12)
+## 9. État actuel (2026-09-07, après le jalon M13)
 
 - **Documentation** : complète et validée en amont (8 documents).
 - **Code métier** : modules **Dossiers + Clients** (M4, Épic 1), **Alertes + Configurations**
   (M5, Épic 7), **Audiences + Alarmes** (M6, Épic 2), **Délibérés** (M7, Épic 3), **GED** (M8,
   Épic 6), **Intervenants** (M9, volet constitutions/répertoire de l'Épic 5), **Frais** (M10,
-  Épic 4), **Publications** (M11, volet publications de l'Épic 5) et **Décisions définitives**
-  (M12, volet adjudications/condamnations/jurisprudence de l'Épic 8) livrés. Seul le volet
-  reporting (Épic 8, US 8.4-8.6) reste à construire, à partir de M13.
+  Épic 4), **Publications** (M11, volet publications de l'Épic 5), **Décisions définitives**
+  (M12, volet adjudications/condamnations/jurisprudence de l'Épic 8) et **Reporting** (M13, volet
+  rapports/tableau de bord de l'Épic 8) livrés. **Les 8 épics fonctionnels sont désormais
+  implémentés** ; seul M14 (durcissement et vérification finale) reste à faire.
+- **Module `reporting`** : ✅ posé au jalon **M13** : constat de périmètre — US 8.6 (vue
+  consolidée par client) était déjà couverte depuis M4 (`GET /clients/{clientId}/dossiers`),
+  erreur de suivi corrigée à cette occasion ; le périmètre réel de M13 se limitait donc à US
+  8.4/8.5. `ReportingService.tableauDeBord()` : 6 indicateurs temps réel (RG-REP-03),
+  `tauxSuccesRecouvrement`/`provisionsReprises` définis en Q-64 (non précisés par le contrat).
+  `ReportingService.genererRapport(...)` : mêmes indicateurs restreints à une période (FR-REP-01
+  ne nomme aucun champ, contenu dérivé du tableau de bord — Q-63), 204 si aucune donnée, export
+  JSON/PDF/Excel/CSV (`RapportExportService`, même stack PDFBox/POI que le calendrier des
+  audiences). 2 endpoints — **100 % de la surface OpenAPI et « à proposer » du contrat désormais
+  implémentés**. Validé de bout en bout (curl + JWT Keycloak réels : tableau de bord cohérent avec
+  les données de test M12, rapport avec/sans activité, les 4 formats d'export, restrictions de
+  rôle) et par 4 tests automatisés dédiés. Voir `DEVELOPMENT_ROADMAP.md` §M13 et
+  `DECISIONS_AND_OPEN_QUESTIONS.md` (Q-63, Q-64).
 - **Module `decision`** : ✅ posé au jalon **M12** : hiérarchie `DecisionDefinitive`/
   `Adjudication`/`CondamnationPecuniaire` (`JOINED`, même principe que `Publication`/
   `Intervenant`), entité `Jurisprudence` indépendante. Dépend de `dossier` et `ged`
@@ -289,24 +303,24 @@ sauf besoin de vérification ponctuelle.**
   `AlarmeEcheanceScheduler`, en M7 avec `DelaiRecoursScheduler`, puis en M8 avec
   `SuppressionRelanceScheduler`). Consommé par les modules `dossier` (M4), `alerte` (M5),
   `audience` (M6), `delibere` (M7), `ged` (M8), `intervenant` (M9), `frais` (M10),
-  `publication` (M11) et `decision` (M12).
-- **Tests** : **175 tests au total après M12** (20 socle M1-M3 + 31 M4 + 15 M5 + 24 M6 + 14 M7 +
+  `publication` (M11), `decision` (M12) et `reporting` (M13, lecture seule).
+- **Tests** : **179 tests au total après M13** (20 socle M1-M3 + 31 M4 + 15 M5 + 24 M6 + 14 M7 +
   16 M8 + 11 M9 (`ConstitutionServiceTest`, `RepertoireAvocatsServiceTest`,
   `LettreConstitutionServiceTest`) + 17 M10 (`FraisServiceTest`) + 16 M11
-  (`PublicationServiceTest`) + 13 nouveaux M12 (`DecisionDefinitiveServiceTest`,
-  `JurisprudenceServiceTest`)), aucune régression. `contextLoads()` intermittent dans cet
-  environnement de session (R-07, pré-existant, sans lien avec le code applicatif) — vert lors de
-  la dernière exécution complète de M12.
+  (`PublicationServiceTest`) + 13 M12 (`DecisionDefinitiveServiceTest`,
+  `JurisprudenceServiceTest`) + 4 nouveaux M13 (`ReportingServiceTest`)), aucune régression.
+  `contextLoads()` intermittent dans cet environnement de session (R-07, pré-existant, sans lien
+  avec le code applicatif) — vert lors de la dernière exécution complète de M13.
 - **Risques** : voir `DECISIONS_AND_OPEN_QUESTIONS.md` §Risques — R-01 (secrets exposés)
   résolu dans les fichiers versionnés, mais la rotation des secrets déjà exposés côté
   Neon/iDrive e2 reste une action utilisateur en attente ; R-02, R-03, R-04 résolus par M1 ;
   R-05 (schéma non versionné) résolu par M2 ; R-06 (provisionnement d'un utilisateur en première
   connexion incompatible avec un endpoint `@Transactional(readOnly = true)`) découvert en
-  validation manuelle M7, non corrigé (défaut du socle M3, hors périmètre de M7-M12) ; R-07
+  validation manuelle M7, non corrigé (défaut du socle M3, hors périmètre de M7-M13) ; R-07
   (démarrage intermittent de l'application dans cet environnement de session,
   `NoClassDefFoundError` sur `AlerteMapperImpl`, reproduit sur `dev` non modifié, sans impact final
-  sur M10/M11/M12 — les trois validations manuelles ont pu être menées à bien) découvert en
-  validation manuelle M10, non corrigé (indépendant du code applicatif, hors périmètre).
+  sur M10 à M13 — chaque validation manuelle a pu être menée à bien) découvert en validation
+  manuelle M10, non corrigé (indépendant du code applicatif, hors périmètre).
 
 ## 10. Où aller ensuite
 

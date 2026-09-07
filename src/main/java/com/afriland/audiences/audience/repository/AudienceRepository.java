@@ -17,4 +17,10 @@ public interface AudienceRepository extends JpaRepository<Audience, Long> {
 
     /** RG-AUD-03 (rappels J-7/J-3/J-1) : audiences encore planifiées à une date donnée. */
     List<Audience> findByStatutAndDatePlanifiee(StatutAudience statut, LocalDate datePlanifiee);
+
+    /** FR-REP-02 (tableau de bord, M13) : audiences encore à venir, tous dossiers confondus. */
+    long countByStatut(StatutAudience statut);
+
+    /** FR-REP-01 (rapport périodique, M13) : audiences tenues dans la période. */
+    long countByStatutAndDateTenueBetween(StatutAudience statut, LocalDate debut, LocalDate fin);
 }

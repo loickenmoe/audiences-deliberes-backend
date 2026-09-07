@@ -1,7 +1,7 @@
 # API_IMPLEMENTATION_STATUS
 
 > Inventaire exhaustif des endpoints et état d'implémentation.
-> Dernière mise à jour : 2026-09-07 (après jalon M12 — module Décisions définitives).
+> Dernière mise à jour : 2026-09-07 (après jalon M13 — module Reporting, tous jalons fonctionnels terminés).
 
 **Base URL** : `http://localhost:8080/api/v1` — aligné sur le contrat REF-07 depuis M1 (Q-16 résolue).
 **Authentification** : `Authorization: Bearer <JWT Keycloak>` sur tous les endpoints sauf health checks.
@@ -17,11 +17,15 @@
 
 | Catégorie | Nombre | Implémentés |
 |---|---|---|
-| 📋 Spécifiés dans l'OpenAPI | 37 | **37 (100 %)** (§1-2, §3 #13-15, #18-21, §5 #23-27, §6 #29-33, §8 #38-40 #42, §9 #44-48) |
+| 📋 Spécifiés dans l'OpenAPI | 37 | **37 (100 %)** (§1-2, §3 #13-15, #18-21, §5 #23-27, §6 #29-33, §8 #38-40 #42, §9 #44-45 #47-50) |
 | 📄 Cités §2 mais absents de l'OpenAPI | 3 | 3 (§3 #16-17 alarmes, #22 expédition — Q-13, close) |
 | 💡 « À proposer » (user stories) | 10 | **10 (100 %)** (§6 #34 correspondance ; §7 #35-37 constitutions/répertoire ; §8 #41 approbation-suppression, #46 traiter alerte ; §10 #51-54 décisions définitives) |
 | 🆕 Manquants dans toute la documentation | 2 | 1 (`POST /clients`) |
 | **Surface cible totale (inventaire initial)** | **~52** | **51 (98 %)** |
+
+**Tous les endpoints spécifiés (OpenAPI + « à proposer ») sont désormais implémentés** ; seul
+`POST /clients` (🆕, manquant de toute documentation source, cf. Q-23) atteint la barre des 100 %
+qu'après une décision d'ajout — traité comme tel dès M4.
 
 **+ 4 endpoints hors inventaire initial**, ajoutés en cours d'implémentation faute d'alternative
 dans le contrat : `POST /dossiers/{id}/etapes` (Q-34, M4), `GET /dossiers/{id}/documents` (#43, M8),
@@ -235,8 +239,8 @@ rapport journalier correct (actif et à zéro). 16 tests automatisés dédiés. 
 | 46 | PATCH | `/alertes/{id}/traiter` | destinataire | US 7.4 | 💡 | ✅ M5 |
 | 47 | GET | `/configurations` | `ROLE_CONSULTATION` | CONF01-07 | 📋 | ✅ M5 |
 | 48 | PUT | `/configurations/{cle}` | `ROLE_DJ` | CONF01-07 | 📋 | ✅ M5 |
-| 49 | GET | `/rapports` | `ROLE_JURISTE` | FR-REP-01 / US 8.4 | 📋 | ❌ |
-| 50 | GET | `/tableau-de-bord` | `ROLE_DJ` | FR-REP-02 / US 8.5 | 📋 | ❌ |
+| 49 | GET | `/rapports` | `ROLE_JURISTE` | FR-REP-01 / US 8.4 | 📋 | ✅ |
+| 50 | GET | `/tableau-de-bord` | `ROLE_DJ` | FR-REP-02 / US 8.5 | 📋 | ✅ |
 
 > **#44** : `type` doit valoir `CHARGE_MAX_AVOCAT` (400 sinon) — seul type d'alerte du contrat
 > adossé à un seuil configurable (RG-ALR-02) ; délègue à `PUT /configurations/{cle}` en interne.
@@ -246,6 +250,16 @@ rapport journalier correct (actif et à zéro). 16 tests automatisés dédiés. 
 > anti-doublon, doublon d'affectation M4→M5, traitement par le seul destinataire, push WebSocket
 > best-effort) + 15 tests automatisés (`AlerteServiceTest`, `ChargeMaxAvocatSchedulerTest`,
 > `ConfigurationServiceTest`). Voir Q-22, Q-32, Q-36, Q-37, Q-38.
+>
+> **#49/#50 (M13)** : US 8.6 (vue consolidée par client) était déjà couverte depuis M4 par
+> `GET /clients/{clientId}/dossiers` (#11) — seuls le rapport périodique et le tableau de bord
+> restaient réellement à construire. `GET /rapports` : FR-REP-01 ne nomme aucun champ de sortie
+> (contrairement à FR-REP-02) — indicateurs dérivés de ceux du tableau de bord mais restreints à la
+> période demandée (Q-63) ; 204 si les quatre compteurs sont nuls ; formats JSON/PDF/EXCEL/CSV
+> (PDFBox + Apache POI, même stack que le calendrier des audiences, Épic 2). `GET /tableau-de-bord` :
+> les 6 indicateurs de RG-REP-03, calculés en temps réel (`tauxSuccesRecouvrement`/
+> `provisionsReprises` définis en Q-64). 4 tests automatisés (`ReportingServiceTest`) + validation
+> manuelle de bout en bout. Voir Q-63, Q-64.
 
 ## 10. Décisions définitives
 
