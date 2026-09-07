@@ -7,6 +7,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
+import java.util.List;
+
 @Repository
 public interface DemandeFraisRepository extends JpaRepository<DemandeFrais, Long> {
 
@@ -23,4 +26,10 @@ public interface DemandeFraisRepository extends JpaRepository<DemandeFrais, Long
     Page<DemandeFrais> findByAvocatIdAndStatutCircuit(Long avocatId, StatutCircuitFrais statut, Pageable pageable);
 
     Page<DemandeFrais> findByStatutCircuit(StatutCircuitFrais statut, Pageable pageable);
+
+    /** FR-REP-02 (tableau de bord, M13) : demandes non encore soldées (ni payées, ni rejetées). */
+    long countByStatutCircuitNotIn(List<StatutCircuitFrais> statuts);
+
+    /** FR-REP-01 (rapport périodique, M13) : demandes déposées dans la période. */
+    long countByCreatedAtBetween(LocalDateTime debut, LocalDateTime fin);
 }

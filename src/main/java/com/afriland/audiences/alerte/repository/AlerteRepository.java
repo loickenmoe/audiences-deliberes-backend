@@ -32,4 +32,7 @@ public interface AlerteRepository extends JpaRepository<Alerte, Long> {
      */
     boolean existsByTypeAndDestinataireIdAndDeclencheurStartingWith(
             TypeAlerte type, Long destinataireId, String marqueur);
+
+    /** FR-REP-02 (tableau de bord, M13) : alertes de prorogation encore non traitées, tous destinataires confondus. */
+    long countByTypeAndStatut(TypeAlerte type, StatutAlerte statut);
 }
