@@ -2,7 +2,7 @@
 
 > Feuille de route séquentielle du backend. Un jalon = un objectif, un périmètre fermé,
 > une validation manuelle par le porteur du projet avant passage au suivant.
-> Dernière mise à jour : 2026-09-06 (M1 à M9 terminés et validés — M10 en attente d'autorisation).
+> Dernière mise à jour : 2026-09-07 (M1 à M10 terminés et validés — M11 en attente d'autorisation).
 
 ---
 
@@ -33,8 +33,8 @@
 | **M7** | Module Délibérés | Q-13 ✅, Q-17 ✅, Q-18 ✅, Q-19 ✅, Q-35 ✅, Q-42 ✅, Q-43 ✅ | ✅ **Terminé et validé manuellement** (2026-09-06, commit `5a99400`, PR #6 mergée dans `dev`) |
 | **M8** | Module GED | Q-02 ✅, Q-07 ✅, Q-45 ✅, Q-46 ✅, Q-47 ✅, Q-48 ✅, Q-49 ✅ | ✅ **Terminé et validé manuellement** (2026-09-06) |
 | **M9** | Module Intervenants (avocats, répertoire, constitutions) | Q-03 ✅, Q-28 ✅, Q-52 ✅, Q-53 ✅ | ✅ **Terminé et validé manuellement** (2026-09-06) |
-| **M10** | Module Frais (circuit de validation) | Q-05, Q-24, Q-26 | ⏸️ **prêt à démarrer, en attente d'autorisation explicite** |
-| **M11** | Module Publications et correspondances | Q-20, Q-24, Q-25 | ⏸️ |
+| **M10** | Module Frais (circuit de validation) | Q-05 ✅, Q-24 🟡, Q-26 ✅, Q-54 ✅ | ✅ **Terminé et validé manuellement** (2026-09-07) |
+| **M11** | Module Publications et correspondances | Q-20, Q-24, Q-25 | ⏸️ **prêt à démarrer, en attente d'autorisation explicite** |
 | **M12** | Module Décisions définitives et jurisprudence | — | ⏸️ |
 | **M13** | Module Reporting et tableau de bord | Q-14 | ⏸️ |
 | **M14** | Durcissement, tests d'intégration, vérification finale de l'API | toutes | ⏸️ |
@@ -479,9 +479,65 @@ comptes rendus, correspondances) différé à M11.
 
 ---
 
-## M10 — Module Frais
-Épic 4 (6 US). Circuit complet dépôt → conformité → opportunité → validation conjointe → paiement,
-anti-doublon de facture, résolution du seuil applicable, traçabilité par étape (Q-05).
+## M10 — Module Frais ✅ **Terminé**
+
+**Objectif.** Épic 4 (6 US). Circuit complet dépôt → conformité → opportunité → validation
+conjointe → paiement, anti-doublon de facture, résolution du seuil applicable, traçabilité par
+étape (Q-05).
+
+### Réalisé
+- Module `frais` : entités `DemandeFrais`/`ValidationFrais` (tables déjà créées en M2, Q-05),
+  enums `StatutCircuitFrais`, `StatutPaiementFrais`, `EtapeValidationFrais`,
+  `DecisionValidationFrais`. Dépend de `dossier` (affectation `dossier_avocat`) et `referentiel`
+  (`Avocat`, `ConfigurationService`), **pas** de `intervenant` — correction du schéma de
+  dépendances de `FUNCTIONAL_MAP.md` §0 (Q-54).
+- `FraisService` : `deposer` (avocat affecté au dossier, anti-doublon `referenceFacture` ERR-006,
+  notifie l'Assistante), `controlerConformite` (Assistante, conforme → notifie DJA / rejet → motif
+  obligatoire + notifie l'avocat), `controlerOpportunite` (DJA, sensible ou montant > seuil →
+  `OPPORTUNITE` + notifie DJ/DJA, sinon `VALIDEE` directe), `validerConjointement` (DJ **et** DJA,
+  accord individuel tracé, anti double-vote, deux accords → `VALIDEE`, un refus → `REJETEE`),
+  `enregistrerPaiement` (Assistante, `VALIDEE` requis, notifie avocat + DJ/DJA), `lister` (endpoint
+  🆕 `GET /frais/demandes?statut=`, Q-24 — propre à l'avocat pour `ROLE_AVOCAT`, transverse pour le
+  personnel interne).
+- 6 endpoints (5 du contrat formel + 1 🆕).
+
+### Décisions prises en implémentation (documentées dans `DECISIONS_AND_OPEN_QUESTIONS.md`)
+Q-05 (traçabilité, déjà tranchée en M2), Q-24 (file de travail frais résolue, autres volets
+toujours ouverts), Q-26 (seuil dossier/global, déjà tranchée en M4), Q-54 (« avocat constitué »
+interprété comme affectation `dossier_avocat`, anti-doublon de facture unique dès le dépôt tous
+statuts confondus, notification systématique de l'avocat sur tout rejet quelle que soit l'étape).
+
+### Validation
+17 tests automatisés dédiés (`FraisServiceTest`) + 146 tests au total après M10, tous verts sauf le
+test de fumée `AudiencesApplicationTests.contextLoads`, qui échoue systématiquement en `mvn test`
+pour une cause **pré-existante et sans lien avec ce module** — reproduite à l'identique sur `dev`
+non modifié (R-07). Le démarrage de l'application via `mvn spring-boot:run` a lui aussi échoué à
+trois reprises avec la même erreur avant de réussir à la quatrième tentative (comportement
+intermittent, pas un blocage dur — R-07) ; une fois démarrée, l'application a fonctionné normalement
+et la **validation manuelle de bout en bout par `curl` (JWT Keycloak réels) a été réalisée** :
+- dépôt sans pièces (400), dépôt nominal (201), facture en double (409/ERR-006) ;
+- contrôle de conformité par un rôle non autorisé (403), conforme → notifie le DJA, demande déjà
+  traitée (409) ;
+- opportunité non sensible sous seuil → `VALIDEE` directe (DJA seul) ; dossier rendu sensible →
+  `OPPORTUNITE` + notifie DJ et DJA ;
+- validation conjointe : un seul accord ne valide pas, double-vote refusé (409), le second accord
+  (DJA) valide ; un seul refus (DJ) → `REJETEE` immédiate ;
+- rejet sans motif refusé (400), rejet avec motif → notifie l'avocat (vérifié à chaque étape :
+  conformité et opportunité) ;
+- paiement par un rôle non autorisé (403), paiement d'une demande non validée (400), paiement
+  nominal → `PAYEE` + notifie l'avocat (`PAIEMENT_EFFECTUE`) ;
+- `GET /frais/demandes` : avocat ne voit que ses propres demandes (filtrable par statut), personnel
+  interne (Assistante) voit toutes les demandes.
+
+Toutes les preuves attendues (`FUNCTIONAL_MAP.md` §4 « Tests attendus ») sont couvertes, en direct
+comme en tests automatisés.
+
+### Commit
+Module livré en un seul commit (docs de contexte incluses, comme pour M5 à M9).
+
+### Restant
+Reste de l'Épic 8 (Décisions définitives, Reporting) et Épic 5 (publications) différés aux jalons
+suivants. R-07 (intermittence de démarrage, sans impact final sur ce jalon) à surveiller en M14.
 
 ## M11 — Module Publications
 US 5.1 à 5.5. Comptes rendus d'avocat + validation Assistante, autres publications, restriction

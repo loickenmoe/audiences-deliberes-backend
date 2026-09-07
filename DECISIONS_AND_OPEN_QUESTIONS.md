@@ -2,7 +2,7 @@
 
 > Contradictions documentaires, ambiguïtés et lacunes nécessitant un **arbitrage explicite**.
 > Aucune de ces questions n'a été tranchée silencieusement.
-> Dernière mise à jour : 2026-09-06 (après jalon M9 — voir statuts R-01 à R-06, Q-01/02/03/04/07/10/11/12/13/17-19/22/23/26/28/32/34-53).
+> Dernière mise à jour : 2026-09-07 (après jalon M10 — voir statuts R-01 à R-07, Q-01/02/03/04/07/10/11/12/13/17-19/22/23/26/28/32/34-54).
 
 **Convention de lecture de chaque fiche :**
 - **A — Ce que la documentation exige** (avec la source exacte)
@@ -139,6 +139,35 @@ mode de la transaction appelante.
 module M7 n'y touche). Contourné pour la validation manuelle (provisionnement direct en base du
 test `dja.test`). **Recommandé en correction dès que possible**, un premier appel en lecture de
 n'importe quel nouvel utilisateur (DJA, ASSISTANTE, SH, AVOCAT dans cette session) y étant exposé.
+
+### R-07 🟡 Démarrage complet de l'application intermittent dans cet environnement de session — non lié au code applicatif, découvert en validation M10
+`mvn test` échoue systématiquement sur `AudiencesApplicationTests.contextLoads` (le seul test à
+démarrer le contexte Spring complet) avec `NoClassDefFoundError: Alerte` lors de l'introspection de
+`AlerteMapperImpl` (généré par MapStruct) par `AutowiredAnnotationBeanPostProcessor` —
+`ClassNotFoundException: Alerte` en cause racine, alors que
+`com.afriland.audiences.alerte.domain.Alerte` est bien présent, non corrompu (taille normale), sur
+le classpath compilé (`target/classes`), et que `AlerteMapperImpl` fonctionne normalement dans tous
+les autres tests (`AlerteServiceTest`, etc., qui le mockent plutôt que de charger tout le contexte).
+`mvn spring-boot:run` a échoué à l'identique sur **trois tentatives successives** (avec puis sans
+DevTools/`RestartClassLoader`, puis en réutilisant les classes déjà compilées) avant qu'une
+**quatrième tentative démarre normalement** et reste stable — comportement **intermittent**, pas un
+blocage dur : une fois démarrée, l'application fonctionne normalement (validation manuelle complète
+réalisée dans la foulée, voir ci-dessous).
+**Reproduit à l'identique sur `dev` non modifié** (`fa52178`, avant tout code M10) pour le test
+`contextLoads` — donc **structurel à cet environnement de session**, pas une régression introduite
+par un module applicatif. Signature typique d'une classe ayant échoué à s'initialiser une première
+fois dans la JVM (le nom court sans package dans `NoClassDefFoundError` en est l'indice classique) ;
+le caractère intermittent suggère une cause transitoire (verrouillage antivirus/OneDrive d'un
+fichier `.class` fraîchement écrit, ou concurrence de classloading) plutôt qu'un défaut de code.
+**C — Recommandation** : investigation dédiée hors périmètre d'un module fonctionnel si le problème
+persiste ; en pratique, **réessayer le démarrage** (`mvn spring-boot:run`) suffit à contourner
+l'échec quand il se produit.
+**Statut (2026-09-07, M10)** : non corrigé — pré-existant (reproduit sur `dev`), hors périmètre.
+Impact sur ce jalon : nul au final — après plusieurs tentatives, l'application a démarré
+normalement et la **validation manuelle complète de bout en bout a été réalisée** (voir §M10 de
+`DEVELOPMENT_ROADMAP.md`). Reste un point de vigilance pour M14 (durcissement final) : fiabiliser
+`contextLoads` (qui échoue, lui, de façon systématique dans les runs `mvn test`) et surveiller la
+récurrence de l'intermittence au démarrage.
 
 ---
 
@@ -535,12 +564,16 @@ conditions réelles. `PUT /clients/{id}` **non implémenté** — aucune US ni c
 l'exigeait explicitement (seule la création bloquait `POST /dossiers`) ; à réévaluer si un besoin
 de modification client émerge dans un module ultérieur.
 
-### Q-24 — Files de travail (listes) non spécifiées — `P1`
+### Q-24 🟡 Files de travail (listes) non spécifiées — `P1`
 UC-INT-02/03/04, UC-GED-03, UC-INT-06/10 supposent tous des **listes d'éléments en attente**
 (« aucune demande en attente de contrôle »). Aucun endpoint de liste n'est spécifié pour les
 demandes de frais, les publications, les demandes de suppression, les constitutions.
 **C** : ajouter un `GET` de liste filtrable par statut pour chacun de ces workflows.
-**Décision attendue :** …
+**Statut (2026-09-07, M10)** : volet **frais** résolu — `GET /frais/demandes?statut=` (endpoint 🆕),
+transverse au personnel interne (Assistante/DJA/DJ), restreint à ses propres demandes pour
+`ROLE_AVOCAT`. Volets publications, demandes de suppression (GED) et constitutions **toujours
+ouverts**, différés aux jalons correspondants (M11 pour les publications ; suppression/constitution
+hors périmètre M10, à réévaluer si redemandé).
 
 ### Q-25 — Schémas OpenAPI référencés mais non définis — `P1`
 `Publication`, `CompteRenduAudience`, `AutrePublication` sont utilisés en `$ref` dans les réponses
@@ -876,6 +909,42 @@ croissante, recherche par nom (`?nom=`). Extension de dépendance du module `int
 `delibere` (`DelibereRepository.calculerPerformanceParAvocat`, nouvelle méthode) — non déclarée
 dans `FUNCTIONAL_MAP.md` §5 à l'origine, mise à jour en conséquence. Vérifié en conditions
 réelles : charge et performance corrects sur un dossier actif, tri croissant sur plusieurs avocats.
+
+### Q-54 ✅ Frais : « avocat constitué », anti-doublon de facture et notifications de rejet — tranché (M10)
+FR-INT-01 exige un avocat « **constitué** sur le dossier », mais Q-28 a déjà établi qu'un avocat
+peut être **affecté** en interne (`dossier_avocat`) avant même l'envoi de sa lettre de constitution
+formelle (module `intervenant`, M9) — les deux notions (affectation, constitution signée) sont
+distinctes et il n'existe aucune contrainte documentaire imposant que la seconde ait eu lieu avant
+qu'un avocat puisse déposer des frais.
+**C — Recommandation** : retenir `dossier_avocat` (affectation) comme critère opérationnel de
+« constitué sur le dossier », par cohérence avec Q-28 plutôt que d'ajouter une dépendance dure au
+statut `VALIDEE` d'une `demande_constitution` (qui n'est même pas obligatoire pour tous les
+prestataires, cf. `AutrePrestataire`).
+**Statut (2026-09-07, M10)** : appliqué — `FraisService.deposer` vérifie
+`DossierAvocatRepository.existsByDossierIdAndAvocatId`.
+
+Par ailleurs, FR-INT-02 mentionne un second contrôle « facture en double → blocage 409 » au niveau
+de l'endpoint de conformité, alors que FR-INT-01 impose déjà l'unicité de `referenceFacture` au
+dépôt (contrainte SQL `UNIQUE`, portant sur **toutes** les demandes quel que soit leur statut, y
+compris `REJETEE` — US 4.3). Comme `referenceFacture` est fixée au dépôt et jamais modifiée
+ensuite, un doublon ne peut structurellement plus être détecté à l'étape de conformité (il aurait
+déjà bloqué le dépôt) — même situation que Q-44 (précondition déjà garantie en amont).
+**Statut** : la mention de FR-INT-02 est traitée comme une reformulation de la même contrainte, pas
+comme un second contrôle distinct ; aucune vérification supplémentaire n'est implémentée à
+`PUT /frais/demandes/{id}/conformite`.
+
+Enfin, seul FR-INT-02 mentionne explicitement « notifie l'avocat » lors d'un rejet ; FR-INT-03 et
+FR-INT-04 se limitent à « rejet → motif obligatoire » sans préciser de destinataire, bien que les
+trois renvoient à la **même** règle RG-INT-03. Ne notifier l'avocat qu'au premier des trois rejets
+possibles laisserait le déposant sans nouvelle de sa demande dans les deux autres cas.
+**C — Recommandation** : notifier systématiquement l'avocat sur **toute** issue `REJETEE`, quelle
+que soit l'étape, par cohérence de traitement de RG-INT-03 (complète le texte plutôt que de le
+contredire).
+**Statut (2026-09-07, M10)** : appliqué — `FraisService.rejeter` (méthode commune aux trois
+branches de rejet) notifie systématiquement l'avocat, type `NOUVELLE_DEMANDE_FRAIS` (réutilisation
+du type unique du workflow frais, même principe que Q-48/Q-52). `DOUBLON_FACTURE` reste défini
+dans l'énumération `TypeAlerte` (Q-22) mais **inutilisé** par ce jalon : aucun texte fonctionnel ne
+décrit de destinataire à notifier pour l'anti-doublon (simple blocage HTTP 409, pas d'alerte).
 
 ### Q-27 ✅ `dossier.parties` défini deux fois — tranché (M2)
 Le dictionnaire REF-06 §2.1.2 déclare `parties JSONB` **deux fois**, avec deux structures

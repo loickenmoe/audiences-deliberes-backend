@@ -1,7 +1,7 @@
 # API_IMPLEMENTATION_STATUS
 
 > Inventaire exhaustif des endpoints et état d'implémentation.
-> Dernière mise à jour : 2026-09-06 (après jalon M9 — module Intervenants).
+> Dernière mise à jour : 2026-09-07 (après jalon M10 — module Frais).
 
 **Base URL** : `http://localhost:8080/api/v1` — aligné sur le contrat REF-07 depuis M1 (Q-16 résolue).
 **Authentification** : `Authorization: Bearer <JWT Keycloak>` sur tous les endpoints sauf health checks.
@@ -17,12 +17,12 @@
 
 | Catégorie | Nombre | Implémentés |
 |---|---|---|
-| 📋 Spécifiés dans l'OpenAPI | 37 | **27** (§1-2, §3 #13-15, #18-21, §8 #38-40 #42, §9 #44-48) |
+| 📋 Spécifiés dans l'OpenAPI | 37 | **32** (§1-2, §3 #13-15, #18-21, §5 #23-27, §8 #38-40 #42, §9 #44-48) |
 | 📄 Cités §2 mais absents de l'OpenAPI | 3 | 3 (§3 #16-17 alarmes, #22 expédition — Q-13, close) |
 | 💡 « À proposer » (user stories) | 10 | 4 (§8 #41 approbation-suppression ; §7 #35-37 constitutions/répertoire) |
 | 🆕 Manquants dans toute la documentation | 2 | 1 (`POST /clients`) |
-| 🆕 Ajoutés en cours d'implémentation (hors inventaire initial) | 1 | 2 (`POST /dossiers/{id}/etapes` — Q-34 ; `GET /dossiers/{id}/documents` — #43) |
-| **Surface cible totale** | **~53** | **37 (≈70 %)** |
+| 🆕 Ajoutés en cours d'implémentation (hors inventaire initial) | 1 | 3 (`POST /dossiers/{id}/etapes` — Q-34 ; `GET /dossiers/{id}/documents` — #43 ; `GET /frais/demandes` — #28, Q-24) |
+| **Surface cible totale** | **~53** | **43 (≈81 %)** |
 
 Le squelette de starter hors périmètre (Template/Admin/Staff/Dashboard/Chat, auth JWT maison) a
 été intégralement supprimé en M1 (cf. `DECISIONS_AND_OPEN_QUESTIONS.md` R-03/R-04) — l'ancienne
@@ -126,16 +126,23 @@ d'expédition (403 hors rôle JURISTE / 200 sinon). 14 tests automatisés dédi�
 
 | # | Méthode | Endpoint | Rôle requis | FR / US | Src | Statut |
 |---|---|---|---|---|---|---|
-| 23 | POST | `/frais/demandes` | `ROLE_AVOCAT` | FR-INT-01 / US 4.1 | 📋 | ❌ |
-| 24 | PUT | `/frais/demandes/{id}/conformite` | `ROLE_ASSISTANTE` | FR-INT-02 / US 4.2 | 📋 | ❌ |
-| 25 | PUT | `/frais/demandes/{id}/opportunite` | `ROLE_DJA` | FR-INT-03 / US 4.4 | 📋 | ❌ |
-| 26 | POST | `/frais/demandes/{id}/validation-conjointe` | `ROLE_DJ` **et** `ROLE_DJA` | FR-INT-04 / US 4.5 | 📋 | ❌ |
-| 27 | PATCH | `/frais/demandes/{id}/paiement` | `ROLE_ASSISTANTE` | FR-INT-05 / US 4.6 | 📋 | ❌ |
-| 28 | GET | `/frais/demandes` | selon profil | UC-INT-02/03/04 (« liste des demandes en attente ») | 🆕 | ❌ |
+| 23 | POST | `/frais/demandes` | `ROLE_AVOCAT` | FR-INT-01 / US 4.1 | 📋 | ✅ |
+| 24 | PUT | `/frais/demandes/{id}/conformite` | `ROLE_ASSISTANTE` | FR-INT-02 / US 4.2 | 📋 | ✅ |
+| 25 | PUT | `/frais/demandes/{id}/opportunite` | `ROLE_DJA` | FR-INT-03 / US 4.4 | 📋 | ✅ |
+| 26 | POST | `/frais/demandes/{id}/validation-conjointe` | `ROLE_DJ` **et** `ROLE_DJA` | FR-INT-04 / US 4.5 | 📋 | ✅ |
+| 27 | PATCH | `/frais/demandes/{id}/paiement` | `ROLE_ASSISTANTE` | FR-INT-05 / US 4.6 | 📋 | ✅ |
+| 28 | GET | `/frais/demandes` | selon profil | UC-INT-02/03/04 (« liste des demandes en attente ») | 🆕 | ✅ |
 
 > **#28** : les UC-INT-02/03/04 supposent tous une **file de travail** (« le système affiche la liste
-> des demandes validées en attente de paiement », « aucune demande en attente »). Aucun endpoint de
-> liste n'est spécifié. Cf. Q-24.
+> des demandes validées en attente de paiement », « aucune demande en attente »). Implémenté en M10
+> — `GET /frais/demandes?statut=`, filtré sur les propres demandes pour `ROLE_AVOCAT`, transverse
+> pour le personnel interne. Cf. Q-24.
+
+**Circuit implémenté (M10)** : `FraisService` — dépôt (avocat affecté au dossier, RG-INT-01/Q-54),
+anti-doublon de facture (`ERR-006`, unique tous statuts confondus, y compris `REJETEE` — US 4.3),
+conformité (Assistante), opportunité (DJA, seuil dossier/global — Q-26), validation conjointe DJ+DJA
+si sensible ou montant > seuil, paiement (Assistante). Traçabilité complète via `validation_frais`
+(Q-05). 17 tests automatisés dédiés. Voir `DECISIONS_AND_OPEN_QUESTIONS.md` Q-05, Q-24, Q-26, Q-54.
 
 ## 6. Publications
 
@@ -242,7 +249,7 @@ rapport journalier correct (actif et à zéro). 16 tests automatisés dédiés. 
 | `ERR-003` | 409 | Doublon d'affectation | `PUT /dossiers/{id}/affectation` | ✅ M4 (`forcer` — Q-12) |
 | `ERR-004` | 400 | Transition non autorisée | `PATCH …/statut` | ✅ M4 |
 | `ERR-005` | 409 | Doublon d'audience | `POST /dossiers/{id}/audiences` | ✅ M6 (`forcer` — Q-12) |
-| `ERR-006` | 409 | Facture en double | `POST /frais/demandes` | ❌ M8 |
+| `ERR-006` | 409 | Facture en double | `POST /frais/demandes` | ✅ M10 |
 | `ERR-007` | 409 / 422 / 201 ? | Plus de 10 prorogations | `POST /deliberes/{id}/prorogations` — **Q-17** | ❌ M7 |
 | `ERR-008` | 400 | Format ou poids du document non conforme | `POST /ged/documents` | ❌ M9 |
 | `ERR-009` | 403 | Accès restreint à la publication | `GET /publications/{id}` | ❌ M9 |
