@@ -2,7 +2,7 @@
 
 > Contradictions documentaires, ambiguïtés et lacunes nécessitant un **arbitrage explicite**.
 > Aucune de ces questions n'a été tranchée silencieusement.
-> Dernière mise à jour : 2026-09-07 (après jalon M12 — voir statuts R-01 à R-07, Q-01/02/03/04/07/10/11/12/13/17-20/22/23/25/26/28/32/34-62).
+> Dernière mise à jour : 2026-09-07 (après jalon M14 — voir statuts R-01 à R-08, Q-01 à Q-67).
 
 **Convention de lecture de chaque fiche :**
 - **A — Ce que la documentation exige** (avec la source exacte)
@@ -168,6 +168,27 @@ normalement et la **validation manuelle complète de bout en bout a été réali
 `DEVELOPMENT_ROADMAP.md`). Reste un point de vigilance pour M14 (durcissement final) : fiabiliser
 `contextLoads` (qui échoue, lui, de façon systématique dans les runs `mvn test`) et surveiller la
 récurrence de l'intermittence au démarrage.
+**Suivi (2026-09-07, M14)** : l'intermittence ne s'est **plus manifestée** sur les jalons M11 à M14
+(`contextLoads` vert à chaque exécution complète, et le nouveau
+`ParcoursEndToEndIntegrationTest` démarre lui aussi le contexte complet, 10/10 verts). Risque
+maintenu en veille — aucune correction n'a été apportée, la cause racine n'ayant jamais été
+identifiée ; sa disparition n'est pas expliquée non plus.
+
+### R-08 🟡 Documentation d'API exposée sans authentification — relevé par la revue de sécurité M14
+`SecurityConfig.PUBLIC_PATHS` laisse `/v3/api-docs/**`, `/swagger-ui/**` et `/swagger-ui.html`
+en accès **anonyme**. En développement c'est le comportement attendu ; en production, cela publie
+à tout visiteur la surface complète de l'API (56 endpoints, schémas de requêtes/réponses, rôles
+attendus) — une aide directe à la reconnaissance pour un attaquant, sans qu'aucune donnée métier
+ne soit exposée pour autant.
+**C — Recommandation** : conditionner ces chemins à un profil Spring (`@Profile("!prod")` sur une
+configuration dédiée, ou `springdoc.api-docs.enabled=false` en production), ou les protéger par
+authentification. Correction hors périmètre de M14 (elle suppose de trancher la stratégie de
+profils d'exécution, non définie à ce stade du projet) — mais **à traiter avant toute mise en
+production**.
+**Statut (2026-09-07, M14)** : non corrigé, documenté. Aucun autre défaut d'autorisation relevé :
+les 56 endpoints métier portent tous un `@PreAuthorize` explicite, `anyRequest().authenticated()`
+couvre le reste, et l'endpoint WebSocket public (`/ws/**`, nécessaire aux transports de repli
+SockJS) est authentifié au niveau de la trame STOMP `CONNECT` par `WebSocketAuthInterceptor`.
 
 ---
 
@@ -592,8 +613,11 @@ que `PATCH /dossiers/{id}/etapes/{etapeId}/statut`, qui exige structurellement u
 **existant** — il ne peut donc pas créer une étape qui n'existe pas encore.
 **C — Recommandation** : ajouter un nouvel endpoint, hors des 12 endpoints du contrat formel
 (`API_IMPLEMENTATION_STATUS.md` §1), clairement marqué 🆕.
-**Statut (2026-09-04, M4)** : implémenté — `POST /dossiers/{id}/etapes`
-(`CreerEtapeRequest{type, statutCycleVie}`, `ROLE_SAISIE`). `DossierService.creerEtape` crée
+**Statut (2026-09-04, M4 ; rôle corrigé en M14)** : implémenté — `POST /dossiers/{id}/etapes`
+(`CreerEtapeRequest{type, statutCycleVie}`, **`ROLE_JURISTE`** — cette fiche annonçait
+`ROLE_SAISIE`, écart relevé par l'audit de conformité M14 et tranché en faveur du code, cohérent
+avec l'endpoint frère `PATCH …/etapes/{etapeId}/statut` du même UC-DOS-04, cf. Q-66).
+`DossierService.creerEtape` crée
 automatiquement, à `OUVERTURE`, toute étape intermédiaire manquante entre `INSTANCE` et l'étape
 demandée (ex. demander directement `RECOURS_2` crée aussi `RECOURS_1` si absente), chacune tracée
 dans l'historique. Vérifié en conditions réelles (dossier 4 : positionnement direct sur
@@ -1075,6 +1099,57 @@ FR-REP-02 nomme ces deux indicateurs sans en définir le mode de calcul.
   seule donnée monétaire liée à une « reprise de provision » disponible dans le schéma (M12).
 **Statut (2026-09-07, M13)** : appliqué — `DelibereRepository.calculerTauxSuccesRecouvrement(Periode)`,
 `DecisionDefinitiveRepository.sommeProvisionsReprises(Periode)`.
+
+### Q-65 ✅ Tests d'intégration bout en bout : deux substitutions assumées — tranché (M14)
+Les 9 parcours de `FUNCTIONAL_MAP.md` §9 sont testés contre le **contexte Spring complet** et un
+**PostgreSQL réel** (Testcontainers, migré par Flyway), via des appels HTTP réels (`MockMvc`).
+Deux dépendances externes ne sont pas conteneurisées :
+- **Keycloak** : l'authentification passe par un JWT simulé (`spring-security-test`). Les claims
+  produits sont identiques à ceux du vrai jeton (`sub`, `roles`, `given_name`, `family_name`,
+  `email`) ; seule la vérification cryptographique est court-circuitée. Motif : le démarrage à
+  froid de l'image Keycloak dépasse 5 minutes (mesuré en session), incompatible avec une suite de
+  tests. **Conséquence** : le `JwtAuthenticationConverter` applicatif n'étant pas exécuté par le
+  post-processeur `jwt()`, les autorités sont fournies explicitement dans le test — le mapping
+  claim `roles` → autorité est donc couvert par la validation manuelle (curl + vrais jetons
+  Keycloak, faite à chaque jalon), pas par ces tests.
+- **MinIO** : `MinioClient` est mocké. Le stockage objet lui-même a été vérifié en conditions
+  réelles à chaque jalon concerné (M8 à M12, y compris URL pré-signées et signatures de fichiers).
+**C — Recommandation** : substitutions acceptées, périmètre explicite — ces tests valident le
+**câblage** (routes, sécurité, transactions, interactions inter-modules, persistance réelle), pas
+les intégrations externes ni les règles métier unitaires (déjà couvertes par les tests de service).
+**Statut (2026-09-07, M14)** : appliqué — `ParcoursEndToEndIntegrationTest`.
+
+### Q-66 ✅ Audit de conformité endpoint par endpoint : 2 écarts doc/code — corrigés (M14)
+L'audit systématique des 56 endpoints (annotations `@PreAuthorize` du code vs tableau
+`API_IMPLEMENTATION_STATUS.md`) a relevé **2 divergences**, de même nature : la documentation
+annonçait `ROLE_SAISIE`, le code exige `ROLE_JURISTE` (plus strict — `ROLE_JURISTE` est un rôle
+composite qui **contient** `ROLE_SAISIE`, l'écart est donc restrictif, jamais permissif) :
+- `POST /dossiers/{id}/etapes` (Q-34, M4) ;
+- `DELETE /ged/documents/{id}`, branche « demande de suppression » (FR-GED-03, M8).
+**C — Recommandation** : aligner la **documentation sur le code** dans les deux cas — le texte
+fonctionnel appuie `ROLE_JURISTE` (FR-GED-03 : « Juriste **auteur du chargement** → crée une
+demande » ; UC-DOS-04 : la gestion des étapes est l'acte du juriste, comme son endpoint frère
+`PATCH …/etapes/{etapeId}/statut`, déjà `ROLE_JURISTE` des deux côtés). Aucun changement de
+comportement, donc aucun risque de régression.
+**Statut (2026-09-07, M14)** : appliqué — lignes corrigées dans `API_IMPLEMENTATION_STATUS.md`
+§1/§8 et dans la fiche Q-34. **Les 54 autres endpoints sont conformes** (chemin, méthode, rôle).
+
+### Q-67 ✅ `DossierResponse.documents` toujours vide : dette de M4 non résorbée en M8 — tranché (M14)
+`DossierResponse` porte un champ `documents` depuis M4, dont la Javadoc annonçait « reste vide tant
+que le module GED n'existe pas, **M8** ». M8 a livré la GED mais ce champ n'a **jamais** été
+raccordé : `GET /dossiers/{id}` renvoie toujours `documents: []`, alors que FR-DOS-03 énonce
+« Métadonnées + étapes + historique + **documents** ». Défaut invisible des tests unitaires (le
+mapper est mocké) et de la validation manuelle (le champ n'avait jamais été inspecté avec une pièce
+réellement chargée) — relevé par les tests bout en bout de M14.
+**C — Recommandation** : ne **pas** raccorder le champ. Le faire imposerait une dépendance
+`dossier → ged`, inversant la hiérarchie de couches tenue depuis M6 (Q-49, Q-53, Q-54, Q-56) pour
+une information déjà servie par l'endpoint dédié `GET /dossiers/{id}/documents` (#43), créé en M8
+précisément pour ce besoin. Le champ est conservé (aucune rupture du contrat de réponse déjà
+publié) mais documenté comme **vide par construction, à ne pas consommer**.
+**Statut (2026-09-07, M14)** : appliqué — Javadoc de `DossierResponse` corrigée, ligne FR-DOS-03 de
+`FUNCTIONAL_MAP.md` précisée, assertion explicite dans `ParcoursEndToEndIntegrationTest` (P1).
+**Décision attendue :** confirmer que la consommation par l'endpoint dédié convient au frontend ;
+à défaut, le champ devra être retiré du contrat de réponse (rupture assumée) plutôt que raccordé.
 
 ### Q-27 ✅ `dossier.parties` défini deux fois — tranché (M2)
 Le dictionnaire REF-06 §2.1.2 déclare `parties JSONB` **deux fois**, avec deux structures

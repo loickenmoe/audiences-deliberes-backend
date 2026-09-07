@@ -2,7 +2,7 @@
 
 > Feuille de route séquentielle du backend. Un jalon = un objectif, un périmètre fermé,
 > une validation manuelle par le porteur du projet avant passage au suivant.
-> Dernière mise à jour : 2026-09-07 (M1 à M13 terminés et validés — M14 en attente d'autorisation).
+> Dernière mise à jour : 2026-09-07 (M0 à M14 terminés et validés — feuille de route achevée).
 
 ---
 
@@ -37,7 +37,13 @@
 | **M11** | Module Publications et correspondances | Q-20 ✅, Q-24 🟡, Q-25 | ✅ **Terminé et validé manuellement** (2026-09-07) |
 | **M12** | Module Décisions définitives et jurisprudence | Q-58 ✅, Q-59 🟡, Q-60 🟡, Q-61 ✅, Q-62 ✅ | ✅ **Terminé et validé manuellement** (2026-09-07) |
 | **M13** | Module Reporting et tableau de bord | Q-14 (sans impact code), Q-63 ✅, Q-64 ✅ | ✅ **Terminé et validé manuellement** (2026-09-07) |
-| **M14** | Durcissement, tests d'intégration, vérification finale de l'API | toutes | ⏸️ **prêt à démarrer, en attente d'autorisation explicite** |
+| **M14** | Durcissement, tests d'intégration, vérification finale de l'API | Q-65 ✅, Q-66 ✅, Q-67 ✅, R-08 🟡 | ✅ **Terminé et validé manuellement** (2026-09-07) |
+
+**Feuille de route achevée** — les 8 épics fonctionnels et le durcissement final sont livrés.
+Points ouverts avant mise en production : R-01 (rotation des secrets déjà exposés), R-06
+(provisionnement en transaction lecture seule), R-08 (documentation d'API publique), campagne de
+performance outillée sur volumétrie réelle, et les questions `🟡` restées à confirmer par la
+Direction Juridique (Q-24, Q-59, Q-60, Q-67).
 
 ---
 
@@ -692,11 +698,100 @@ Plus aucun module fonctionnel. Seul M14 (durcissement, tests d'intégration bout
 vérification finale de conformité au contrat, campagne de performance, revue de sécurité) reste à
 faire.
 
-## M14 — Durcissement et vérification finale
-Tests d'intégration bout en bout des 9 parcours de `FUNCTIONAL_MAP.md` §9 ; couverture cible > 80 %
-(REF-02 §10.2) ; vérification de conformité endpoint par endpoint au contrat d'API ; campagne de
-performance (< 2 s / 50 utilisateurs simultanés) ; revue de sécurité ; documentation technique et
-mise à jour finale des fichiers de contexte.
+## M14 — Durcissement et vérification finale ✅ **Terminé**
+
+**Objectif.** Tests d'intégration bout en bout des 9 parcours de `FUNCTIONAL_MAP.md` §9 ; couverture
+cible > 80 % (REF-02 §10.2) ; vérification de conformité endpoint par endpoint au contrat d'API ;
+campagne de performance (< 2 s / 50 utilisateurs simultanés) ; revue de sécurité ; documentation
+technique et mise à jour finale des fichiers de contexte.
+
+### 1. Tests d'intégration bout en bout — ✅ 9 parcours sur 9
+`ParcoursEndToEndIntegrationTest` : contexte Spring **complet** (sécurité incluse) + PostgreSQL
+**réel** migré par Flyway (Testcontainers), appels HTTP réels (`MockMvc`). 10 tests verts couvrant
+P1 à P9 plus un contrôle transverse (401 au format du contrat sans jeton). Premier test du projet à
+traverser toute la pile — les 179 tests antérieurs étaient unitaires (services mockés) ou limités à
+la couche JPA. Deux substitutions assumées et documentées (Q-65) : JWT simulé au lieu d'un Keycloak
+conteneurisé (démarrage à froid > 5 min, incompatible avec une suite de tests) et `MinioClient`
+mocké (stockage objet vérifié en conditions réelles à chaque jalon M8-M12).
+
+### 2. Couverture — ✅ 84,9 %, cible > 80 % atteinte
+JaCoCo ajouté au `pom.xml` (DTO, entités et code généré exclus : sans logique propre, ils fausseraient
+la mesure).
+
+| Étape | Instructions | Branches |
+|---|---|---|
+| Avant M14 (179 tests unitaires) | 79,2 % (6831/8622) | 69,6 % (295/424) |
+| **Après M14 (213 tests)** | **84,9 % (7319/8622)** | **75,9 % (322/424)** |
+
+Le gain vient d'abord des tests bout en bout (qui traversent contrôleurs, sécurité et mappers,
+jusque-là non couverts), puis de quatre composants sans **aucun** test, choisis pour leur valeur de
+durcissement et non pour le chiffre : `WebSocketAuthInterceptor` (4 % — **seul chemin
+d'authentification non couvert**, les tests bout en bout passant par HTTP), `RapportExportService`
+(1 % — génération PDF/Excel/CSV, vérifiée jusque-là uniquement en manuel), `ClientService` (23 %) et
+`DossierSpecifications` (0 %). La couverture de branches (75,9 %) reste sous les 80 % : l'essentiel
+du reste tient aux nombreuses branches de validation conditionnelle de `DossierService` (création de
+dossier par catégorie), déjà couvertes fonctionnellement par 31 tests mais pas exhaustivement
+combinatoirement.
+
+### 3. Conformité endpoint par endpoint — ✅ 56/56 vérifiés, 2 écarts corrigés
+Audit systématique des 56 `@PreAuthorize` du code contre le tableau d'inventaire. **54 endpoints
+strictement conformes** (chemin, méthode, rôle). **2 écarts** relevés, de même nature — la
+documentation annonçait `ROLE_SAISIE` là où le code exige `ROLE_JURISTE`, plus strict (`ROLE_JURISTE`
+étant un rôle composite contenant `ROLE_SAISIE`, l'écart est restrictif, jamais permissif) :
+`POST /dossiers/{id}/etapes` et `DELETE /ged/documents/{id}`. Tranchés en faveur du code, appuyé par
+le texte fonctionnel ; documentation alignée (Q-66).
+
+### 4. Campagne de performance — ✅ toutes les cibles tenues
+50 requêtes **simultanées** par endpoint, jetons Keycloak réels, application et PostgreSQL locaux :
+
+| Endpoint | Cible | Moyenne | p95 | Max | Codes |
+|---|---|---|---|---|---|
+| `GET /tableau-de-bord` | < 2 s (RG-REP-03) | 0,844 s | 1,512 s | 1,730 s | 50 × 200 |
+| `GET /dossiers` | < 2 s (RG-DOS-06) | 0,722 s | 0,953 s | 1,028 s | 50 × 200 |
+| `GET /rapports` | < 10 s (RG-REP-01) | 0,600 s | 0,985 s | 1,113 s | 50 × 200 |
+
+**Limites assumées** : mesure par un script `curl` parallèle, pas une campagne outillée (ni JMeter,
+ni Gatling, ni k6 disponibles dans cet environnement) ; volumétrie de test réduite (quelques dizaines
+de lignes par table, là où REF-02 vise un volume représentatif) ; poste de développement partagé
+avec les conteneurs. Les marges sont confortables (p95 à 76 % de la cible dans le pire cas), mais
+une campagne outillée sur volumétrie réelle reste à faire avant mise en production.
+
+### 5. Revue de sécurité — ✅ 1 constat, aucun défaut d'autorisation
+- **Autorisation** : les 56 endpoints métier portent tous un `@PreAuthorize` explicite ; aucune
+  route métier n'est laissée à `permitAll` ; `anyRequest().authenticated()` couvre le reste.
+- **WebSocket** : `/ws/**` est public au niveau HTTP (contrainte des transports de repli SockJS,
+  qui ne peuvent pas porter d'en-tête `Authorization`) mais **authentifié à la trame STOMP
+  `CONNECT`**, et toute trame ultérieure hors session authentifiée est rejetée — comportement
+  désormais verrouillé par 7 tests dédiés.
+- **Secrets** : `.env` ignoré par Git, aucun secret en dur dans le code. Les identifiants présents
+  dans `README.md`, `docker-compose.yml`, `env.template` et `keycloak/audiences-realm.json` sont des
+  valeurs de développement local — à ne jamais réutiliser en production (R-01 pour le volet cloud).
+- **Injection** : aucune concaténation SQL ; requêtes JPQL/natives toutes paramétrées (`:param`).
+- **Constat ouvert (R-08)** : `/v3/api-docs/**` et `/swagger-ui/**` sont accessibles **sans
+  authentification**. Acceptable en développement, à fermer avant production (profil Spring ou
+  `springdoc.api-docs.enabled=false`).
+
+### 6. Constat fonctionnel révélé par les tests bout en bout (Q-67)
+`GET /dossiers/{id}` renvoie **toujours** `documents: []` : le champ, ajouté en M4 avec la mention
+« à remplir quand la GED existera, M8 », n'a jamais été raccordé. Invisible des tests unitaires (le
+mapper est mocké) et de la validation manuelle (le champ n'avait jamais été inspecté avec une pièce
+réellement chargée). **Décision : ne pas le raccorder** — cela imposerait une dépendance
+`dossier → ged` inversant la hiérarchie de couches tenue depuis M6, pour une information déjà servie
+par l'endpoint dédié `GET /dossiers/{id}/documents` (#43, créé en M8 pour ce besoin). Champ conservé
+(aucune rupture de contrat) mais documenté comme vide par construction.
+
+### Décisions prises (documentées dans `DECISIONS_AND_OPEN_QUESTIONS.md`)
+Q-65 (substitutions des tests bout en bout), Q-66 (2 écarts de conformité corrigés), Q-67 (champ
+`documents` vide par construction), R-08 (documentation d'API exposée sans authentification).
+
+### Commit
+Jalon livré en un seul commit (docs de contexte incluses, comme pour M5 à M13).
+
+### Restant
+Avant mise en production : fermer R-08 (documentation d'API), corriger R-06 (provisionnement en
+transaction lecture seule), mener une campagne de performance outillée sur volumétrie réelle, et
+trancher les questions restées ouvertes (Q-59, Q-60, Q-67 côté frontend, Q-21, Q-24 pour les volets
+publications/suppressions/constitutions).
 
 ---
 
