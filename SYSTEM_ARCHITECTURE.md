@@ -1,7 +1,8 @@
 # SYSTEM_ARCHITECTURE
 
 > Architecture documentée (A), architecture réellement implémentée (B), architecture cible proposée (C).
-> Dernière mise à jour : 2026-09-04 (audit initial).
+> Dernière mise à jour : 2026-09-07 (après jalon M12 — module Décisions définitives).
+> (Audit initial : 2026-09-04.)
 
 ---
 
@@ -129,16 +130,25 @@ web,mapper}` (dépendance directe vers `dossier` et `referentiel`, **pas** `inte
 M11 a livré `publication/{domain,repository,service,web,mapper}` (hiérarchie `JOINED` `Publication`/
 `CompteRenduAudience`/`AutrePublication`, dépendance directe vers `dossier`, `audience` et `ged`
 — réutilisation du `MinioStorageService` sans création de `document` GED, Q-56 —, **pas**
-`intervenant` non plus, même raisonnement que Q-54).
+`intervenant` non plus, même raisonnement que Q-54) ; M12 a livré
+`decision/{domain,repository,service,web,mapper}` (hiérarchie `JOINED` `DecisionDefinitive`/
+`Adjudication`/`CondamnationPecuniaire` + entité `Jurisprudence` indépendante, dépendance directe
+vers `dossier` et `ged` uniquement — même raisonnement que Q-54/Q-56 — MinIO généralisé à un
+préfixe de clé au lieu d'un `dossierId` obligatoire pour couvrir le cas sans dossier, Q-58) —
+avec, en cours de route, la correction d'un bug de schéma pré-existant (Q-62,
+`decision_definitive.type VARCHAR(20)` trop étroite pour sa propre contrainte `CHECK`).
 
 **Verdict : le schéma de données et le socle transversal sont complets et validés, et les modules
 Dossiers/Clients (M4), Alertes/Configurations (M5), Audiences/Alarmes (M6), Délibérés (M7), GED
-(M8), Intervenants (M9), Frais (M10) et Publications (M11) sont livrés et testés — 49 des ~53
-endpoints du contrat d'API sont implémentés, soit 100 % de la surface OpenAPI formelle** (162 tests
-automatisés, dont un test d'intégration Testcontainers ; le test de fumée `contextLoads` est
-intermittent dans cet environnement de session — vert lors de la dernière exécution complète —
-pour une cause d'environnement pré-existante et sans lien avec le code applicatif, R-07). Seul
-l'Épic 8 (Décisions définitives, Reporting) n'a pas commencé (M12+).
+(M8), Intervenants (M9), Frais (M10), Publications (M11) et Décisions définitives (M12) sont
+livrés et testés — 55 des ~52 endpoints de l'inventaire initial sont implémentés (100 % des
+endpoints spécifiés dans l'OpenAPI formel et des endpoints « à proposer » ; le dépassement de
+l'estimation initiale vient de 4 endpoints ajoutés en cours de route, faute d'alternative dans le
+contrat — cf. API_IMPLEMENTATION_STATUS.md §Synthèse)** (175 tests automatisés, dont un test
+d'intégration Testcontainers ; le test de fumée `contextLoads` est intermittent dans cet
+environnement de session — vert lors de la dernière exécution complète — pour une cause
+d'environnement pré-existante et sans lien avec le code applicatif, R-07). Seul le volet reporting
+de l'Épic 8 (US 8.4-8.6) n'a pas commencé (M13+).
 
 ### 2.2 Infrastructure réellement configurée
 
@@ -264,9 +274,8 @@ REF-05 §12.1, **plus 8 tables/colonnes ajoutées** lors de l'audit (§4.2). Voi
 
 Héritage : `intervenant`→(`avocat`|`autre_prestataire`), `decision_definitive`→
 (`adjudication`|`condamnation_pecuniaire`), `publication`→(`compte_rendu_audience`|`autre_publication`)
-— **table-par-type avec PK partagée** (JPA : `@Inheritance(JOINED)`). Seule la hiérarchie
-`Intervenant` a ses entités JPA à ce stade (M2) ; les deux autres suivront avec leurs modules
-respectifs (M11 publications, M12 décisions).
+— **table-par-type avec PK partagée** (JPA : `@Inheritance(JOINED)`). Les trois hiérarchies ont
+désormais leurs entités JPA : `Intervenant` (M2), `Publication` (M11), `DecisionDefinitive` (M12).
 
 ### 4.2 Tables et colonnes ajoutées lors de l'audit — ✅ créées (M2)
 
