@@ -539,9 +539,55 @@ Module livré en un seul commit (docs de contexte incluses, comme pour M5 à M9)
 Reste de l'Épic 8 (Décisions définitives, Reporting) et Épic 5 (publications) différés aux jalons
 suivants. R-07 (intermittence de démarrage, sans impact final sur ce jalon) à surveiller en M14.
 
-## M11 — Module Publications
-US 5.1 à 5.5. Comptes rendus d'avocat + validation Assistante, autres publications, restriction
-d'accès, commentaires centralisés et correspondance DJ/DJA.
+## M11 — Module Publications ✅ **Terminé**
+
+**Objectif.** US 5.1 à 5.5. Comptes rendus d'avocat + validation Assistante, autres publications,
+restriction d'accès, commentaires centralisés et correspondance DJ/DJA.
+
+### Réalisé
+- Module `publication` : hiérarchie `Publication`/`CompteRenduAudience`/`AutrePublication`
+  (`JOINED`, même principe que `Intervenant`/`Avocat`, M2), `CommentairePublication`,
+  `CorrespondanceAvocat` (tables ajoutées en M11, `V4__publication_commentaires_correspondances.sql`
+  — `autre_publication.chemin_stockage` manquant au schéma initial, Q-56 ; aucune table pour les
+  commentaires/correspondances, Q-20). Dépend de `dossier`, `audience` (rattachement du compte
+  rendu) et `ged` (`MinioStorageService`, réutilisé sans créer de `document` GED — Q-56) — **pas**
+  de `intervenant` (même raisonnement que Q-54 pour `frais`).
+- `PublicationService` : `deposerCompteRendu` (avocat, audience rattachée au dossier — 404 sinon),
+  `deposerAutre` (multipart, fichier obligatoire), `valider` (point d'entrée unique pour les deux
+  sous-types — Q-55, motif obligatoire au rejet, notifie l'avocat), `obtenir` (seule une publication
+  `VALIDE` est consultable, restriction d'accès individuelle optionnelle → 403/ERR-009 — Q-57),
+  `commenter` (juriste → notifie DJ et DJA, jamais l'avocat directement, RG-INT-07),
+  `transmettreCorrespondance` (DJ/DJA → avocat, unique par publication, 409 si déjà transmise —
+  Q-20).
+- 6 endpoints (5 du contrat formel + 1 💡 « à proposer » déjà prévu par le contrat pour la
+  correspondance) — 100 % des endpoints OpenAPI du contrat sont désormais implémentés.
+
+### Décisions prises en implémentation (documentées dans `DECISIONS_AND_OPEN_QUESTIONS.md`)
+Q-20 (correspondance unique, implémentée), Q-55 (point de validation unique généralisé aux deux
+sous-types, chemin sans le segment `cr-audience`), Q-56 (`autre_publication.chemin_stockage`
+ajoutée, réutilisation du `MinioStorageService` sans document GED), Q-57 (`restrictionAcces`
+renseignée par l'avocat au dépôt, aucun endpoint de modification a posteriori).
+
+### Validation
+16 tests automatisés dédiés (`PublicationServiceTest`) + 162 tests au total après M11, tous verts
+sauf le test de fumée `AudiencesApplicationTests.contextLoads` (R-07, pré-existant, sans lien avec
+ce module). Validation manuelle de bout en bout par `curl` (JWT Keycloak réels) réalisée sur le
+dossier de test déjà constitué en M10 :
+- dépôt d'un compte rendu sur une audience d'un autre dossier (404), dépôt nominal (201) ;
+- dépôt d'une autre publication (PIECE) avec fichier, sans fichier (400) ;
+- validation par un rôle non autorisé (403), déjà traitée (409), rejet sans motif (400) puis avec
+  motif → notifie l'avocat, validation d'une « autre » publication via le même endpoint (Q-55) ;
+- consultation d'une publication non validée (404), rejetée (404), restriction d'accès respectée/
+  refusée (403/ERR-009) ;
+- commentaire d'un juriste → notifie DJ et DJA (jamais l'avocat) ;
+- correspondance unique DJ/DJA → avocat, tentative de doublon (409).
+
+### Commit
+Module livré en un seul commit (docs de contexte incluses, comme pour M5 à M10).
+
+### Restant
+Épic 8 (Décisions définitives, Reporting) différé aux jalons suivants (M12/M13). R-07
+(intermittence de démarrage, sans impact sur ce jalon) à surveiller en M14.
 
 ## M12 — Module Décisions définitives
 Épic 8 partiel (US 8.1, 8.2, 8.3). Adjudications, condamnations pécuniaires, base jurisprudentielle
