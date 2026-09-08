@@ -54,6 +54,13 @@ public class AudienceController {
         return audienceService.enregistrerCompteRendu(id, request);
     }
 
+    /** M15 (Q-68) : onglet « Audiences » de la fiche dossier — endpoint 🆕. */
+    @GetMapping("${api.prefix}/dossiers/{id}/audiences")
+    @PreAuthorize("hasRole('CONSULTATION')")
+    public List<AudienceResponse> listerAudiencesDossier(@PathVariable Long id) {
+        return audienceService.listerParDossier(id);
+    }
+
     @GetMapping("${api.prefix}/audiences/calendrier")
     @PreAuthorize("hasAnyRole('JURISTE', 'DJ')")
     public ResponseEntity<?> calendrier(@RequestParam PeriodeCalendrier periode,

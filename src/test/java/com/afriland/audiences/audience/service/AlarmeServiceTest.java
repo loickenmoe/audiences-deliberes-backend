@@ -126,4 +126,27 @@ class AlarmeServiceTest {
         assertThat(result.objet()).isEqualTo("Relancer");
         assertThat(result.alarmePrecedenteId()).isEqualTo(3L);
     }
+
+    /** M15 (Q-68) : onglet « alarmes » d'un dossier. */
+    @Test
+    void listerParDossier_retourneLesAlarmesTrieesParEcheance() {
+        when(dossierRepository.existsById(1L)).thenReturn(true);
+        when(alarmeRepository.findByDossierIdOrderByDateEcheanceAsc(1L)).thenReturn(java.util.List.of(
+                Alarme.builder().id(1L).dossier(dossier).objet("Proche").statut(StatutAlarme.ACTIVE)
+                        .dateEcheance(LocalDateTime.now().plusDays(1)).createdBy(juriste).build(),
+                Alarme.builder().id(2L).dossier(dossier).objet("Lointaine").statut(StatutAlarme.ACTIVE)
+                        .dateEcheance(LocalDateTime.now().plusDays(9)).createdBy(juriste).build()));
+
+        assertThat(service.listerParDossier(1L)).extracting(AlarmeResponse::objet)
+                .containsExactly("Proche", "Lointaine");
+    }
+
+    @Test
+    void listerParDossier_dossierInconnu_retourne404() {
+        when(dossierRepository.existsById(999L)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.listerParDossier(999L))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("Dossier introuvable");
+    }
 }

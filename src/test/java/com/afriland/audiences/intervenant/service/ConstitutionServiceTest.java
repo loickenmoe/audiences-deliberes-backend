@@ -183,4 +183,34 @@ class ConstitutionServiceTest {
         verify(alerteService, never()).declencher(any(), any(), any(), any());
         verify(utilisateurRepository, never()).findByKeycloakId(any());
     }
+
+    // ------------------------------------------------------------------ lister (M15, Q-68)
+
+    @Test
+    void lister_filtreParStatut_alimenteLaFileDuSh() {
+        Intervenant prestataire = AutrePrestataire.builder().id(5L).nom("Notaire").build();
+        when(demandeConstitutionRepository.findByStatutOrderByDateDemandeAsc(StatutConstitution.EN_ATTENTE))
+                .thenReturn(List.of(DemandeConstitution.builder().id(100L).dossier(dossier)
+                        .prestataire(prestataire).demandeur(juriste).motif("Acte notarié")
+                        .statut(StatutConstitution.EN_ATTENTE).build()));
+
+        var result = service.lister(StatutConstitution.EN_ATTENTE);
+
+        assertThat(result).singleElement()
+                .satisfies(d -> assertThat(d.statut()).isEqualTo(StatutConstitution.EN_ATTENTE));
+        verify(demandeConstitutionRepository, never()).findByOrderByDateDemandeDesc();
+    }
+
+    @Test
+    void lister_sansFiltre_retourneToutLHistorique() {
+        Intervenant prestataire = AutrePrestataire.builder().id(5L).nom("Notaire").build();
+        when(demandeConstitutionRepository.findByOrderByDateDemandeDesc()).thenReturn(List.of(
+                DemandeConstitution.builder().id(101L).dossier(dossier).prestataire(prestataire)
+                        .demandeur(juriste).statut(StatutConstitution.VALIDEE).validePar(sh).build(),
+                DemandeConstitution.builder().id(100L).dossier(dossier).prestataire(prestataire)
+                        .demandeur(juriste).statut(StatutConstitution.REJETEE).validePar(sh)
+                        .motifRejet("Hors budget").build()));
+
+        assertThat(service.lister(null)).extracting(DemandeConstitutionResponse::id).containsExactly(101L, 100L);
+    }
 }

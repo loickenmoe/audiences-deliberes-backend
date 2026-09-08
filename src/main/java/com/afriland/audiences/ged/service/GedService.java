@@ -190,6 +190,18 @@ public class GedService {
         return toResponse(document, null);
     }
 
+    /**
+     * M15 (Q-68) : file de travail « demandes de suppression en attente » du DJ/DJA — endpoint 🆕.
+     * Sans filtre, retourne l'historique complet (plus récentes d'abord).
+     */
+    @Transactional(readOnly = true)
+    public List<DemandeSuppressionResponse> listerDemandesSuppression(StatutSuppression statut) {
+        var demandes = statut == null
+                ? demandeSuppressionRepository.findByOrderByDateDemandeDesc()
+                : demandeSuppressionRepository.findByStatutOrderByDateDemandeAsc(statut);
+        return demandes.stream().map(demandeSuppressionMapper::toResponse).toList();
+    }
+
     @Transactional
     public DemandeSuppressionResponse approuverOuRejeter(Long documentId, ApprobationSuppressionRequest request) {
         Document document = getDocumentActifOrThrow(documentId);

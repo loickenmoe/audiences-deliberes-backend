@@ -173,4 +173,29 @@ class AudienceServiceTest {
         assertThat(result.compteRendu()).isEqualTo("Compte rendu");
         assertThat(result.dateTenue()).isEqualTo(LocalDate.now());
     }
+
+    /** M15 (Q-68) : onglet « audiences » d'un dossier. */
+    @Test
+    void listerParDossier_retourneLesAudiencesDuDossier() {
+        when(dossierRepository.findById(dossier.getId())).thenReturn(Optional.of(dossier));
+        when(audienceRepository.findByDossierIdOrderByDatePlanifieeDesc(dossier.getId())).thenReturn(List.of(
+                Audience.builder().id(2L).dossier(dossier).datePlanifiee(LocalDate.now().plusDays(5))
+                        .statut(StatutAudience.PLANIFIEE).build(),
+                Audience.builder().id(1L).dossier(dossier).datePlanifiee(LocalDate.now().minusDays(5))
+                        .statut(StatutAudience.TENUE).build()));
+
+        List<AudienceResponse> result = service.listerParDossier(dossier.getId());
+
+        assertThat(result).extracting(AudienceResponse::id).containsExactly(2L, 1L);
+    }
+
+    @Test
+    void listerParDossier_dossierInconnu_retourne404() {
+        when(dossierRepository.findById(999L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.listerParDossier(999L))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("Dossier introuvable");
+        verify(audienceRepository, never()).findByDossierIdOrderByDatePlanifieeDesc(any());
+    }
 }

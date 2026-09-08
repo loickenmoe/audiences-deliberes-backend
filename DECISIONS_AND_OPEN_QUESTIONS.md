@@ -2,7 +2,8 @@
 
 > Contradictions documentaires, ambiguïtés et lacunes nécessitant un **arbitrage explicite**.
 > Aucune de ces questions n'a été tranchée silencieusement.
-> Dernière mise à jour : 2026-09-07 (après jalon M14 — voir statuts R-01 à R-08, Q-01 à Q-67).
+> Dernière mise à jour : 2026-09-07 (après jalon M15 — voir statuts R-01 à R-08, Q-01 à Q-69 ;
+> **R-06 corrigé**, **Q-24 close**, et **Q-59/Q-60/Q-67 arbitrées** à ce jalon).
 
 **Convention de lecture de chaque fiche :**
 - **A — Ce que la documentation exige** (avec la source exacte)
@@ -118,7 +119,7 @@ objet du jalon **M2 — Schéma de base et référentiels**.
 
 ---
 
-### R-06 🔴 Provisionnement d'un utilisateur en première connexion incompatible avec un endpoint en lecture seule — découvert en validation manuelle M7
+### R-06 ✅ Provisionnement d'un utilisateur en première connexion incompatible avec un endpoint en lecture seule — découvert en validation manuelle M7, **corrigé en M15**
 
 `CurrentUserService.getCurrentUser()` (M3) **provisionne** (INSERT) l'utilisateur en base à sa
 toute première requête authentifiée (aucun compte n'étant créé côté Keycloak par l'application).
@@ -139,6 +140,19 @@ mode de la transaction appelante.
 module M7 n'y touche). Contourné pour la validation manuelle (provisionnement direct en base du
 test `dja.test`). **Recommandé en correction dès que possible**, un premier appel en lecture de
 n'importe quel nouvel utilisateur (DJA, ASSISTANTE, SH, AVOCAT dans cette session) y étant exposé.
+**✅ Statut final (2026-09-07, M15)** : **corrigé**. La création est extraite dans
+`UtilisateurProvisioningService`, porteur de `@Transactional(propagation = REQUIRES_NEW)` — une
+classe distincte étant nécessaire, un appel interne n'aurait pas traversé le proxy transactionnel.
+`CurrentUserService` reste en lecture seule et délègue. Le service reteste l'existence dans la
+nouvelle transaction (deux requêtes concurrentes du même nouvel utilisateur ne créent qu'une ligne).
+Non-régression verrouillée par `ProvisionnementLectureSeuleIntegrationTest` : un appelant
+`@Transactional(readOnly = true)` provisionne désormais avec succès contre un PostgreSQL **réel**
+— seul contexte où le défaut se manifeste, ce qui explique qu'il ait survécu à 8 jalons de tests
+unitaires (repository mocké) et de validations manuelles (utilisateurs déjà provisionnés).
+**Confirmé en conditions réelles** lors de la validation manuelle M15, la base étant repartie
+vierge : la première requête de `sh.test` (jamais provisionné) sur `GET /alertes/mes-notifications`
+— endpoint en lecture seule — a répondu **200**, et la table `utilisateur` contenait ensuite
+exactement une ligne, créée par cet appel.
 
 ### R-07 🟡 Démarrage complet de l'application intermittent dans cet environnement de session — non lié au code applicatif, découvert en validation M10
 `mvn test` échoue systématiquement sur `AudiencesApplicationTests.contextLoads` (le seul test à
@@ -585,7 +599,7 @@ conditions réelles. `PUT /clients/{id}` **non implémenté** — aucune US ni c
 l'exigeait explicitement (seule la création bloquait `POST /dossiers`) ; à réévaluer si un besoin
 de modification client émerge dans un module ultérieur.
 
-### Q-24 🟡 Files de travail (listes) non spécifiées — `P1`
+### Q-24 ✅ Files de travail (listes) non spécifiées — close (M15)
 UC-INT-02/03/04, UC-GED-03, UC-INT-06/10 supposent tous des **listes d'éléments en attente**
 (« aucune demande en attente de contrôle »). Aucun endpoint de liste n'est spécifié pour les
 demandes de frais, les publications, les demandes de suppression, les constitutions.
@@ -595,6 +609,10 @@ transverse au personnel interne (Assistante/DJA/DJ), restreint à ses propres de
 `ROLE_AVOCAT`. Volets publications, demandes de suppression (GED) et constitutions **toujours
 ouverts**, différés aux jalons correspondants (M11 pour les publications ; suppression/constitution
 hors périmètre M10, à réévaluer si redemandé).
+**✅ Statut final (2026-09-07, M15)** : **close** — les trois volets restants sont livrés (Q-68) :
+`GET /publications?statut=` (Assistante), `GET /ged/demandes-suppression?statut=` (DJ/DJA),
+`GET /constitutions/prestataires?statut=` (SH). Chaque écran « … en attente » de
+`FUNCTIONAL_MAP.md` a désormais sa source de données.
 
 ### Q-25 — Schémas OpenAPI référencés mais non définis — `P1`
 `Publication`, `CompteRenduAudience`, `AutrePublication` sont utilisés en `$ref` dans les réponses
@@ -1021,7 +1039,7 @@ de `dossiers/{id}/`) plutôt que de forcer un `dossierId` arbitraire.
 préfixe de clé en paramètre au lieu d'un `dossierId`, sans changer le format de clé des appelants
 existants).
 
-### Q-59 — Adjudication vs condamnation : précondition d'étape non symétrique — `P2`
+### Q-59 ✅ Adjudication vs condamnation : précondition d'étape non symétrique — tranché (M12, **confirmé M15**)
 FR-DEF-01 (adjudication) exige explicitement une étape `CLOTURE` et un `etapeId`. FR-DEF-02
 (condamnation) ne mentionne ni précondition d'étape ni `etapeId` dans son texte, alors que le
 parcours P5 (§9) présente les deux comme des alternatives équivalentes suivant l'épuisement des
@@ -1033,9 +1051,14 @@ condamnation, à la différence de l'adjudication. Une condamnation pécuniaire 
 indépendamment de la clôture complète du dossier (ex. jugement exécutoire par provision).
 **Statut (2026-09-07, M12)** : appliqué tel quel (asymétrie assumée, pas une omission de code) —
 `DecisionDefinitiveService.creerCondamnation` n'impose aucune précondition d'étape.
-**Décision attendue :** confirmer avec la Direction Juridique si cette asymétrie est intentionnelle.
+**✅ Statut final (2026-09-07, M15)** : **close** — recommandation **retenue par le porteur du
+projet**. L'asymétrie est donc intentionnelle et devient la règle : une condamnation pécuniaire
+peut naître indépendamment de la clôture du dossier, `etapeId` restant optionnel. Aucune
+modification de code (le comportement livré en M12 est déjà celui-ci, revérifié en M15). Si la
+Direction Juridique demandait plus tard l'harmonisation, elle constituerait un **durcissement** de
+l'API (des appels aujourd'hui acceptés seraient refusés) et devrait être versionnée comme telle.
 
-### Q-60 — Adjudication/condamnation n'archivent pas automatiquement l'étape — `P2`
+### Q-60 ✅ Adjudication/condamnation n'archivent pas automatiquement l'étape — tranché (M12, **confirmé M15**)
 P5 (§9) enchaîne « adjudication/condamnation → archivage jurisprudentiel → étape `ARCHIVE` », ce qui
 pourrait suggérer un effet de bord automatique. Aucune FR-DEF-0x ne décrit explicitement cette
 transition comme résultant de l'enregistrement d'une décision définitive.
@@ -1044,7 +1067,12 @@ générique existant (`PATCH /dossiers/{id}/etapes/{etapeId}/statut`, M4) reste 
 faire passer l'étape à `ARCHIVE` une fois la décision et l'archivage jurisprudentiel effectués.
 **Statut (2026-09-07, M12)** : appliqué tel quel — aucun effet de bord ajouté sur `EtapeProcedure`
 lors de la création d'une adjudication ou d'une condamnation.
-**Décision attendue :** confirmer si une automatisation est souhaitée pour un jalon ultérieur.
+**✅ Statut final (2026-09-07, M15)** : **close** — recommandation **retenue par le porteur du
+projet**. Le passage à `ARCHIVE` reste **manuel**, via `PATCH /dossiers/{id}/etapes/{etapeId}/statut`
+(M4) : le parcours P5 décrit un enchaînement métier, pas un automatisme, et l'archivage
+jurisprudentiel qu'il intercale est lui-même une action distincte (`POST /jurisprudences`).
+Aucune modification de code. Une automatisation reste possible en jalon ultérieur si le besoin est
+exprimé ; elle ne casserait aucun contrat existant (ajout d'un effet de bord, pas d'une contrainte).
 
 ### Q-61 ✅ Jurisprudence : contraintes de format/poids littérales, sans clé `configuration_systeme` — tranché (M12)
 FR-DEF-03 fixe « fichier PDF ≤ 10 Mo » directement dans le texte fonctionnel, contrairement à GED
@@ -1148,8 +1176,96 @@ précisément pour ce besoin. Le champ est conservé (aucune rupture du contrat 
 publié) mais documenté comme **vide par construction, à ne pas consommer**.
 **Statut (2026-09-07, M14)** : appliqué — Javadoc de `DossierResponse` corrigée, ligne FR-DOS-03 de
 `FUNCTIONAL_MAP.md` précisée, assertion explicite dans `ParcoursEndToEndIntegrationTest` (P1).
-**Décision attendue :** confirmer que la consommation par l'endpoint dédié convient au frontend ;
-à défaut, le champ devra être retiré du contrat de réponse (rupture assumée) plutôt que raccordé.
+**✅ Statut final (2026-09-07, M15)** : **close** — recommandation **retenue par le porteur du
+projet**. Le champ `documents` reste présent et **vide par construction** ; les pièces d'un dossier
+se consomment exclusivement via `GET /dossiers/{id}/documents` (#43). Aucune modification de code.
+Le champ n'est **pas** retiré du contrat de réponse : le supprimer serait une rupture pour un gain
+nul, la hiérarchie de couches interdisant de toute façon de le peupler. **Point d'attention pour
+l'équipe frontend** : ne pas lire `dossier.documents`, appeler l'endpoint dédié.
+
+### Q-68 ✅ Habilitation du frontend : jalon M15 ajouté hors feuille de route initiale — tranché (M15)
+La feuille de route s'arrêtait à M14. À la question « le frontend fonctionnerait-il branché en
+l'état ? », l'analyse du code a répondu **non** : la surface exposée couvrait strictement la liste
+d'endpoints du contrat, laquelle omet plusieurs lectures qu'une interface réelle exige. Trois
+familles de manques, toutes vérifiées dans le code avant décision :
+
+1. **Blocage à la première connexion** — R-06 : le provisionnement (INSERT) héritait de la
+   transaction de l'appelant ; or un frontend appelle d'abord des endpoints en lecture
+   (`GET /alertes/mes-notifications`, `GET /dossiers`). **Tout nouvel utilisateur se prenait un
+   500 à sa première connexion.** Défaut connu depuis M7, resté hors périmètre à chaque jalon.
+2. **Écrans sans source de données** — `FUNCTIONAL_MAP.md` décrit des écrans (onglets Audiences et
+   Délibérés de la fiche dossier, files de travail de l'Assistante, du DJ/DJA et du SH) qu'aucun
+   endpoint n'alimente : on pouvait **créer** une audience ou un délibéré, jamais les **relire**
+   par dossier. Q-24 n'avait été refermée que pour le volet `frais` (M10).
+3. **Impasses fonctionnelles** — aucun endpoint ne permettait de créer un avocat ou un prestataire
+   (insertion SQL manuelle à chaque validation de jalon), ni de lire la taxonomie
+   `nature_dossier` alors que le backend rejette (400) toute nature hors taxonomie : le formulaire
+   de création de dossier ne pouvait pas peupler sa liste déroulante.
+
+**C — Recommandation** : ouvrir un jalon **M15 « habilitation frontend »** plutôt que d'étendre
+M14 (déjà clos et mergé) ou de laisser ces manques au frontend. Périmètre strictement limité au
+correctif R-06 et aux lectures/administrations manquantes — **aucune règle métier nouvelle**, aucun
+changement de comportement des endpoints existants.
+**Statut (2026-09-07, M15)** : appliqué — 1 correctif (R-06) et 10 endpoints 🆕 ; Q-24 est
+désormais **entièrement close** (les trois volets restants — publications, suppressions,
+constitutions — ont leur file de travail). 247 tests verts (couverture 85,8 %) et validation
+manuelle de bout en bout sur base vierge avec jetons Keycloak réels : R-06 prouvé corrigé (la ligne
+`utilisateur` est créée par une requête sur un endpoint en lecture seule), les 10 endpoints servis
+au bon profil et refusés (403) aux autres, filtres et 404 conformes.
+
+**Deux invariants tranchés ici**, faute de user story les décrivant :
+- **Création d'un intervenant** — les règles existantes du modèle sont portées par le service :
+  un `AVOCAT` exige un compte Keycloak **unique** (400 s'il manque, 409 s'il est déjà pris,
+  RG-INT-01) et refuse `notification` ; un `AUTRE_PRESTATAIRE` refuse tout compte applicatif
+  (RG-INT-02). Ni modification ni suppression : aucune user story ne les demande.
+- **`GET /publications`** — la liste **n'applique pas** la restriction d'accès individuelle de
+  Q-57 (que `GET /publications/{id}` applique) : elle sert des profils internes chargés
+  d'instruire les publications et n'expose que des métadonnées ; le contenu détaillé reste soumis
+  au contrôle unitaire. **À confirmer par la Direction Juridique** si la restriction devait
+  s'étendre aux listes.
+
+### Q-69 ✅ Aucun endpoint ne renvoyait les utilisateurs internes : création de dossier impossible depuis une interface — tranché (M15)
+Découvert en revisitant la question « le frontend peut-il consommer l'API ? » **après** la
+livraison de M15 — c'est-à-dire par le même contrôle qui avait produit Q-68, mais poussé plus loin.
+
+**A — Ce que la documentation exige.** `POST /dossiers` (FR-DOS-01) et
+`PUT /dossiers/{id}/affectation` (FR-DOS-02) prennent une liste de juristes affectés ; RG-DOS-03
+impose au moins un juriste par dossier. L'écran « Création de dossier » de `FUNCTIONAL_MAP.md` §1
+comporte une « section affectation ».
+
+**B — Ce que le code implémente.** `CreerDossierRequest.juristesAffectes` est `@NotEmpty` et attend
+des `utilisateur.id` (`DossierService.affecterJuristes` les résout par
+`utilisateurRepository.findById`). Or **aucun endpoint n'exposait la table `utilisateur`** : ni
+`UtilisateurController`, ni DTO, ni requête. Un frontend ne pouvait donc **pas construire un appel
+de création de dossier valide** — le point d'entrée de toute l'application. Symétriquement,
+`DossierResponse.juristesAffectes` est un `List<Long>` nu : une fiche dossier ne pouvait afficher
+que des identifiants opaques.
+
+Le manque est de la même nature que ceux de Q-68 : M15 avait traité les **avocats**
+(`GET /intervenants`) et omis le **personnel interne**. Il n'avait été révélé ni par les tests
+(qui lisent l'identifiant en base) ni par les validations manuelles (qui font de même).
+
+**C — Recommandation** : exposer `GET /utilisateurs?profil=` en lecture seule, pendant de
+`GET /intervenants`. **Ne pas** exposer de création/modification : les comptes naissent du
+provisionnement au premier appel authentifié, Keycloak restant la source de vérité des identités
+(REF-05 §1.3).
+
+**Statut (2026-09-07, M15)** : appliqué — `UtilisateurService`/`UtilisateurController`,
+`GET /utilisateurs?profil=&inclureInactifs=` (#66), `ROLE_CONSULTATION`. Trois choix tranchés ici :
+- **`keycloakId` n'est pas exposé** — identifiant d'authentification sans usage pour le frontend,
+  qui ne manipule que l'`id` applicatif attendu par `juristesAffectes`.
+- **Comptes actifs seulement par défaut** (`inclureInactifs=false`) : seuls des comptes actifs sont
+  affectables à un dossier ; l'historique reste consultable à la demande.
+- **`ROLE_CONSULTATION`**, porté par les six profils internes mais **pas par `AVOCAT`** : un
+  intervenant externe ne doit pas pouvoir énumérer le personnel de la Direction Juridique. Vérifié
+  par un test d'intégration (403).
+
+**Non retenu à ce stade — enrichir `DossierResponse.juristesAffectes`** en objets `{id, nom,
+prenom}` plutôt qu'en identifiants nus. Ce serait une **rupture du contrat de réponse déjà publié**
+(REF-07), pour un besoin que le frontend couvre en appelant `GET /utilisateurs` une fois et en
+mettant la correspondance en cache. **Décision attendue :** si l'équipe frontend juge ce
+double-appel gênant, l'enrichissement devra être arbitré et versionné comme une rupture assumée —
+même raisonnement que Q-67.
 
 ### Q-27 ✅ `dossier.parties` défini deux fois — tranché (M2)
 Le dictionnaire REF-06 §2.1.2 déclare `parties JSONB` **deux fois**, avec deux structures

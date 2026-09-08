@@ -68,6 +68,21 @@ public class PublicationController {
         return publicationService.obtenir(id);
     }
 
+    /**
+     * M15 (Q-68) : file de travail des publications — endpoint 🆕. {@code statut=DEPOSE} alimente
+     * l'écran « File des publications à valider » de l'Assistante ; {@code dossierId} l'onglet
+     * publications d'une fiche dossier.
+     */
+    @GetMapping
+    @PreAuthorize("hasAnyRole('ASSISTANTE', 'JURISTE', 'DJ', 'DJA')")
+    public com.afriland.audiences.common.web.PageResponse<PublicationResponse> lister(
+            @RequestParam(required = false) Long dossierId,
+            @RequestParam(required = false) com.afriland.audiences.publication.domain.StatutPublication statut,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return publicationService.lister(dossierId, statut, org.springframework.data.domain.PageRequest.of(page, size));
+    }
+
     @PostMapping("/{id}/commentaires")
     @PreAuthorize("hasRole('JURISTE')")
     public ResponseEntity<CommentaireResponse> commenter(@PathVariable Long id, @Valid @RequestBody CommentaireRequest request) {

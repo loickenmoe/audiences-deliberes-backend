@@ -13,4 +13,7 @@ public interface AlarmeRepository extends JpaRepository<Alarme, Long> {
 
     /** Échéance atteinte (AlarmeEcheanceScheduler) : alarmes encore actives à traiter. */
     List<Alarme> findByStatutAndDateEcheanceLessThanEqual(StatutAlarme statut, LocalDateTime maintenant);
+
+    /** M15 : alarmes d'un dossier, échéance la plus proche d'abord (Q-68). */
+    List<Alarme> findByDossierIdOrderByDateEcheanceAsc(Long dossierId);
 }

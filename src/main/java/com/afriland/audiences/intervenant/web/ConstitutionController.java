@@ -31,6 +31,15 @@ public class ConstitutionController {
         return ResponseEntity.status(HttpStatus.CREATED).body(constitutionService.creerDemande(request));
     }
 
+    /** M15 (Q-68) : file de travail « constitutions à signer » du SH — endpoint 🆕. */
+    @org.springframework.web.bind.annotation.GetMapping("${api.prefix}/constitutions/prestataires")
+    @PreAuthorize("hasAnyRole('SH', 'JURISTE')")
+    public java.util.List<DemandeConstitutionResponse> lister(
+            @org.springframework.web.bind.annotation.RequestParam(required = false)
+            com.afriland.audiences.intervenant.domain.StatutConstitution statut) {
+        return constitutionService.lister(statut);
+    }
+
     @PutMapping("${api.prefix}/constitutions/prestataires/{id}/validation")
     @PreAuthorize("hasRole('SH')")
     public DemandeConstitutionResponse valider(@PathVariable Long id, @Valid @RequestBody ValiderConstitutionRequest request) {

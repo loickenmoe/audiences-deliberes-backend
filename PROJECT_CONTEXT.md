@@ -155,7 +155,26 @@ sauf besoin de vérification ponctuelle.**
 - **Ne pas ajouter de ligne `Co-Authored-By: Claude ...` aux messages de commit** (préférence
   utilisateur explicite, 2026-09-04) — déroge à la convention par défaut de l'outil.
 
-## 9. État actuel (2026-09-07, après le jalon M14 — feuille de route achevée)
+## 9. État actuel (2026-09-07, après le jalon M15 — feuille de route achevée)
+
+> **M15 (habilitation frontend)** : jalon hors roadmap initiale, ouvert après vérification que le
+> backend n'était **pas** consommable en l'état par un frontend. Correctif **R-06** (la toute
+> première requête de tout nouvel utilisateur retombait en 500 dès qu'elle touchait un endpoint en
+> lecture seule) + **11 endpoints de lecture/administration** : trois onglets d'une fiche dossier,
+> trois files de travail (fermant **Q-24**), l'administration du référentiel des intervenants —
+> sans laquelle aucun avocat ne pouvait exister alors qu'il est obligatoire à la création d'un
+> dossier —, les deux référentiels de formulaire que le backend impose en écriture sans les exposer
+> en lecture, et le **répertoire des utilisateurs internes** (`GET /utilisateurs`, Q-69) sans lequel
+> `POST /dossiers` était inconstructible depuis une interface, son champ obligatoire
+> `juristesAffectes` attendant des `utilisateur.id` qu'aucun endpoint ne fournissait.
+> **Aucune règle métier nouvelle.** Voir `DEVELOPMENT_ROADMAP.md` §M15.
+>
+> **Toutes les questions fonctionnelles sont désormais tranchées.** Q-59 (asymétrie de précondition
+> adjudication/condamnation), Q-60 (archivage d'étape non automatique) et Q-67 (`DossierResponse.
+> documents` vide par construction) ont été **arbitrées le 2026-09-07 en faveur des recommandations
+> émises**, sans modification de code — le comportement livré était déjà celui recommandé. Les
+> points restants (R-01, R-08, campagne de performance outillée) relèvent **exclusivement de la
+> mise en production** ; le projet est encore en développement.
 
 > **M14 (durcissement final)** : les 9 parcours utilisateurs sont couverts de bout en bout
 > (contexte Spring complet + PostgreSQL réel), les 56 endpoints ont été audités un par un
@@ -298,34 +317,47 @@ sauf besoin de vérification ponctuelle.**
   réel — migrations idempotentes, correspondance Hibernate/schéma confirmée.
 - **Module `referentiel`** : entités JPA + repositories pour `Profil`, `Utilisateur`, `Client`,
   `ConfigurationSysteme`, `TypeClientSensible`, `NatureDossier`, `Intervenant`/`Avocat`/
-  `AutrePrestataire` ; `ClientService`/`Controller` (M4) et `ConfigurationService`/`Controller`
-  (M5) pour les parties exposées à ce jour.
+  `AutrePrestataire` ; `ClientService`/`Controller` (M4), `ConfigurationService`/`Controller`
+  (M5) et, depuis **M15**, `ReferentielController` (natures de dossier filtrables par catégorie et
+  types de client sensible, en lecture seule — ces référentiels restent administrés par le DJ via
+  la base, CONF02), `UtilisateurService`/`Controller` (répertoire des utilisateurs internes en
+  lecture seule, `?profil=` — Q-69 ; Keycloak reste la source de vérité des identités, aucune
+  écriture exposée) ainsi que `IntervenantService`/`Controller` côté module `intervenant`
+  (création et liste du répertoire — Q-68).
 - **Socle transversal** : ✅ posé au jalon **M3** (commit `57e75c3`) : `common/error`
   (`ApiException`, `GlobalExceptionHandler`, format `{code, message, details}` uniforme y
-  compris au niveau du filtre de sécurité), `common/security/CurrentUserService` (provisioning
-  utilisateur depuis Keycloak), `common/audit/HistoriqueActionService`,
+  compris au niveau du filtre de sécurité), `common/security/CurrentUserService` (résolution de
+  l'utilisateur courant depuis Keycloak ; la **création** est déléguée depuis M15 au bean dédié
+  `UtilisateurProvisioningService`, `Propagation.REQUIRES_NEW` — correctif R-06),
+  `common/audit/HistoriqueActionService`,
   `common/web/PageResponse<T>`, `common/config/SchedulingConfig` (dont l'usage `@Scheduled`
   effectif depuis M5, `ChargeMaxAvocatScheduler`, étendu en M6 avec `RappelAudienceScheduler`/
   `AlarmeEcheanceScheduler`, en M7 avec `DelaiRecoursScheduler`, puis en M8 avec
   `SuppressionRelanceScheduler`). Consommé par les modules `dossier` (M4), `alerte` (M5),
   `audience` (M6), `delibere` (M7), `ged` (M8), `intervenant` (M9), `frais` (M10),
   `publication` (M11), `decision` (M12) et `reporting` (M13, lecture seule).
-- **Tests** : **213 tests au total après M14** (20 socle M1-M3 + 31 M4 + 15 M5 + 24 M6 + 14 M7 +
-  16 M8 + 11 M9 + 17 M10 + 16 M11 + 13 M12 + 4 M13 + **34 nouveaux M14** :
-  `ParcoursEndToEndIntegrationTest` (10 — les 9 parcours de bout en bout + contrôle 401),
-  `WebSocketAuthInterceptorTest` (7), `ClientServiceTest` (7), `DossierSpecificationsTest` (6),
-  `RapportExportServiceTest` (4)), aucune régression. **Couverture JaCoCo : 84,9 % des instructions
-  (7319/8622) et 75,9 % des branches** — cible REF-02 §10.2 (> 80 %) atteinte sur les instructions
-  (DTO, entités et code généré exclus de la mesure). Voir `DEVELOPMENT_ROADMAP.md` §M14.
+- **Tests** : **255 tests au total après M15** (20 socle M1-M3 + 31 M4 + 15 M5 + 24 M6 + 14 M7 +
+  16 M8 + 11 M9 + 17 M10 + 16 M11 + 13 M12 + 4 M13 + 34 M14 — dont
+  `ParcoursEndToEndIntegrationTest` (10 — les 9 parcours de bout en bout + contrôle 401) — +
+  **42 nouveaux M15** : `HabilitationFrontendIntegrationTest` (13), `IntervenantServiceTest` (8),
+  `UtilisateurServiceTest` (6),
+  `UtilisateurProvisioningServiceTest` (4 — dont 3 déplacés depuis `CurrentUserServiceTest` avec le
+  code qu'ils couvrent) et `ProvisionnementLectureSeuleIntegrationTest` (2), plus 11 ajouts dans
+  les classes de test existantes (listes par dossier, files de travail). Aucune régression. **Couverture JaCoCo : 85,9 % des instructions (7852/9139) et 77,7 % des branches** —
+  cible REF-02 §10.2 (> 80 %) atteinte sur les instructions (DTO, entités et code généré exclus de
+  la mesure). Voir `DEVELOPMENT_ROADMAP.md` §M14 et §M15.
 - **Risques** : voir `DECISIONS_AND_OPEN_QUESTIONS.md` §Risques — R-01 (secrets exposés)
   résolu dans les fichiers versionnés, mais la rotation des secrets déjà exposés côté
   Neon/iDrive e2 reste une action utilisateur en attente ; R-02, R-03, R-04 résolus par M1 ;
   R-05 (schéma non versionné) résolu par M2 ; **R-06** (provisionnement d'un utilisateur en
   première connexion incompatible avec un endpoint `@Transactional(readOnly = true)`) découvert en
-  validation manuelle M7, **toujours non corrigé** — à traiter avant production ; R-07 (démarrage
+  validation manuelle M7, **corrigé en M15** (`UtilisateurProvisioningService`,
+  `Propagation.REQUIRES_NEW`, prouvé par un test rouge-avant/vert-après contre PostgreSQL réel) ;
+  R-07 (démarrage
   intermittent, `NoClassDefFoundError` sur `AlerteMapperImpl`) ne s'est plus manifesté depuis M11,
   maintenu en veille ; **R-08** (documentation d'API `/v3/api-docs`, `/swagger-ui` accessible sans
-  authentification) relevé par la revue de sécurité M14, **à fermer avant production**.
+  authentification) relevé par la revue de sécurité M14, **à fermer avant production** — assumé
+  tant que le projet reste en développement (arbitrage du 2026-09-07).
 
 ## 10. Où aller ensuite
 

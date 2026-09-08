@@ -1,8 +1,8 @@
 # SYSTEM_ARCHITECTURE
 
 > Architecture documentée (A), architecture réellement implémentée (B), architecture cible proposée (C).
-> Dernière mise à jour : 2026-09-07 (après jalon M14 — durcissement final ; feuille de route
-> achevée, les 8 épics fonctionnels sont implémentés et vérifiés).
+> Dernière mise à jour : 2026-09-07 (après jalon M15 — habilitation frontend ; feuille de route
+> achevée, les 8 épics fonctionnels sont implémentés et vérifiés, R-06 corrigé).
 > (Audit initial : 2026-09-04.)
 
 ---
@@ -146,13 +146,27 @@ structurelle). US 8.6 (vue consolidée par client) était déjà couverte depuis
 **Verdict : le schéma de données et le socle transversal sont complets et validés, et les 8 épics
 fonctionnels (Dossiers/Clients M4, Alertes/Configurations M5, Audiences/Alarmes M6, Délibérés M7,
 GED M8, Intervenants M9, Frais M10, Publications M11, Décisions définitives M12, Reporting M13)
-sont livrés et testés — 57 des ~52 endpoints de l'inventaire initial sont implémentés, soit
-**100 % des endpoints spécifiés dans l'OpenAPI formel et des endpoints « à proposer »** (le
-dépassement de l'estimation initiale vient de 4 endpoints ajoutés en cours de route, faute
-d'alternative dans le contrat — cf. API_IMPLEMENTATION_STATUS.md §Synthèse).
+sont livrés et testés — **100 % des endpoints spécifiés dans l'OpenAPI formel et des endpoints
+« à proposer »** sont implémentés. La surface exposée atteint **66 endpoints** : les ~52 de
+l'inventaire initial, plus 4 ajoutés en cours de route faute d'alternative dans le contrat, plus
+les 11 du jalon M15 (cf. API_IMPLEMENTATION_STATUS.md §Synthèse).
 
-**Durcissement final (M14)** : **213 tests automatisés** (84,9 % des instructions couvertes,
-JaCoCo), dont les **9 parcours utilisateurs de bout en bout** (`ParcoursEndToEndIntegrationTest` :
+**Habilitation frontend (M15)** : jalon hors roadmap initiale. Le correctif **R-06** a extrait la
+création d'utilisateur de `CurrentUserService` vers un bean dédié `UtilisateurProvisioningService`
+annoté `@Transactional(propagation = REQUIRES_NEW)` — une classe distincte étant nécessaire,
+`@Transactional` reposant sur un proxy Spring qu'un appel interne n'aurait pas franchi. Sans cela,
+tout endpoint en lecture seule propageait son mode à l'`INSERT` de provisionnement, que PostgreSQL
+rejette : la toute première requête de chaque nouvel utilisateur échouait en 500. Les 11 endpoints
+ajoutés sont **exclusivement en lecture**, à l'exception de `POST /intervenants` (administration du
+référentiel) ; aucun n'introduit de dépendance inter-modules nouvelle — chacun est servi par le
+module qui possède déjà l'entité concernée. Les trois onglets d'une fiche dossier en sont
+l'illustration : bien que leur chemin commence par `/dossiers/{id}`, ils sont servis par `audience`
+et `delibere`, jamais par `dossier` — le sens des dépendances tenu depuis M6 interdit à `dossier`
+de connaître les modules qui le consomment.
+
+**Durcissement final (M14)**, chiffres actualisés après M15 : **255 tests automatisés** (85,9 % des
+instructions et 77,7 % des branches couvertes, JaCoCo), dont les **9 parcours utilisateurs de bout
+en bout** (`ParcoursEndToEndIntegrationTest` :
 contexte Spring complet + PostgreSQL réel via Testcontainers, appels HTTP réels). Audit de
 conformité des 56 endpoints : 54 strictement conformes, 2 écarts de documentation corrigés (Q-66).
 Campagne de performance : 50 requêtes simultanées par endpoint, toutes les cibles tenues (p95

@@ -2,9 +2,11 @@
 
 > Carte fonctionnelle complète : Exigence → User Story → Cas d'utilisation → Règles de gestion →
 > Domaine/Données → Module backend → Endpoint(s) → Comportement attendu → Tests.
-> Dernière mise à jour : 2026-09-07 (après le jalon M14 — feuille de route achevée : les 8 épics
-> sont implémentés, et les **9 parcours du §9 sont couverts par des tests de bout en bout**
-> — contexte Spring complet + PostgreSQL réel, cf. `ParcoursEndToEndIntegrationTest`).
+> Dernière mise à jour : 2026-09-07 (après le jalon M15 — les 8 épics sont implémentés, les
+> **9 parcours du §9 sont couverts par des tests de bout en bout** (contexte Spring complet +
+> PostgreSQL réel, cf. `ParcoursEndToEndIntegrationTest`), et **chaque écran décrit ici dispose
+> désormais d'une source de données** : M15 a ajouté les 11 endpoints de lecture qui manquaient,
+> cf. §10).
 
 **Légende statut** : ❌ non implémenté · 🟡 partiel · ✅ implémenté et testé
 **Épics 1 (Dossiers, M4), 2 (Audiences, M6), 3 (Délibérés, M7), 4 (Frais, M10), 5 (Intervenants,
@@ -62,7 +64,7 @@ FR-AUD-01, FR-AUD-03, FR-DEL-02, FR-DEL-04, FR-INT-01, FR-INT-05, FR-GED-01, FR-
 |---|---|---|---|---|---|---|---|
 | FR-DOS-01 | 1.1, 1.5, 1.7 | UC-DOS-01 | RG-DOS-01,02,03,07,08,09 | `dossier`, `client`, `etape_procedure`, `historique_action`, **`dossier_juriste`/`dossier_avocat` (Q-01)** | `POST /dossiers` | Valide les champs obligatoires ; référence unique (409/ERR-002) ; `clientId` existant (404) ; champs conditionnels selon `categorie` (Q-11) ; crée l'étape `INSTANCE` au statut `OUVERTURE` ; historise ; **201**. Si `estSensible=true` → circuit de validation DJ/DJA (Q-10) | ✅ |
 | FR-DOS-01 | 1.3 | UC-DOS-03 | RG-DOS-06 | idem | `GET /dossiers` (filtres nature/catégorie/juridiction + pagination) | Liste paginée `{content,totalPages,totalElements}` | ✅ |
-| FR-DOS-03 | 1.3 | UC-DOS-03 | RG-DOS-06 | + `document`, `historique_action` | `GET /dossiers/{id}` | Métadonnées + étapes avec statuts + historique chronologique, < 2 s ; 404 si absent. **Les documents sont servis par l'endpoint dédié `GET /dossiers/{id}/documents` (#43)** — le champ `documents` de la réponse reste vide par construction, le module `dossier` ne pouvant dépendre de `ged` (Q-67, tranché en M14) | ✅ |
+| FR-DOS-03 | 1.3 | UC-DOS-03 | RG-DOS-06 | + `document`, `historique_action` | `GET /dossiers/{id}` | Métadonnées + étapes avec statuts + historique chronologique, < 2 s ; 404 si absent. **Les documents sont servis par l'endpoint dédié `GET /dossiers/{id}/documents` (#43)** — le champ `documents` de la réponse reste vide par construction, le module `dossier` ne pouvant dépendre de `ged` (Q-67, tranché en M14, **close en M15** : ne pas le consommer côté frontend) | ✅ |
 | FR-DOS-02 | 1.2, 1.7 | UC-DOS-02 | RG-DOS-03, RG-DOS-07 | `dossier_juriste`, `dossier_avocat`, `historique_action` | `PUT /dossiers/{id}/affectation` | Détecte les doublons → **409/ERR-003 avec possibilité de confirmer** (Q-12) ; historise ancienne + nouvelle affectation | ✅ |
 | FR-DOS-04 | 1.4 | UC-DOS-04 | RG-DOS-04, RG-DOS-06 | `etape_procedure`, `historique_action` | `PATCH /dossiers/{id}/etapes/{etapeId}/statut` | Vérifie que la transition est autorisée (400/ERR-004 sinon) ; création directe d'une étape ultérieure → crée les étapes intermédiaires en `OUVERTURE` ; `DELIBERE_VIDE` + recours → ouvre automatiquement `RECOURS_1`/`RECOURS_2` | ✅ |
 | — | — | — | RG-DOS-09 | `dossier`, `audit_seuil_dossier` | `POST /dossiers/{id}/seuil-derogation` | Juriste propose un nouveau seuil + motif obligatoire → `EN_ATTENTE` ; 400 si dossier non sensible ; **201** | ✅ |
@@ -279,7 +281,7 @@ pris en compte immédiatement, relance 72 h des demandes de suppression.
 | FR | US | UC | RG | Entités | Endpoint | Comportement attendu | Statut |
 |---|---|---|---|---|---|---|---|
 | FR-DEF-01 | 8.1 | UC-DEF-01 | RG-DEF-01, RG-DEF-02 | `decision_definitive`, `adjudication` | `POST /dossiers/{id}/adjudications` (à proposer) | Étape `CLOTURE` requise ; `beneficiaire`, `statutComptabilisation`, `repriseProvision`, `restitutionSoulte`, `mutation`, `reliquat ≥ 0`, `dateDecision`, `etapeId` ; 201 | ✅ |
-| FR-DEF-02 | 8.2 | UC-DEF-02 | RG-DEF-03, RG-DEF-04 | `decision_definitive`, `condamnation_pecuniaire` | `POST /dossiers/{id}/condamnations` + `PATCH /condamnations/{id}/statut` (à proposer) | `sens` ∈ {BANQUE_REDEVABLE, TIERS_REDEVABLE} ; `statutPaiement` ∈ {EN_ATTENTE, PAYE, RECOUVREMENT_FORCE} ; mise à jour du statut au fil du suivi ; **aucune précondition d'étape** (asymétrie avec FR-DEF-01, Q-59) | ✅ |
+| FR-DEF-02 | 8.2 | UC-DEF-02 | RG-DEF-03, RG-DEF-04 | `decision_definitive`, `condamnation_pecuniaire` | `POST /dossiers/{id}/condamnations` + `PATCH /condamnations/{id}/statut` (à proposer) | `sens` ∈ {BANQUE_REDEVABLE, TIERS_REDEVABLE} ; `statutPaiement` ∈ {EN_ATTENTE, PAYE, RECOUVREMENT_FORCE} ; mise à jour du statut au fil du suivi ; **aucune précondition d'étape** (asymétrie avec FR-DEF-01 confirmée intentionnelle, Q-59, close en M15) | ✅ |
 | FR-DEF-03 | 8.3 | UC-DEF-03 | RG-DEF-05 | `jurisprudence` | `POST /jurisprudences` (à proposer, multipart) | `typeArchive` ∈ {EXTRAIT_MINUTE, EXPEDITION, GROSSE} ; **indexation obligatoire** (`motsCles`, `natureDecision`, `juridiction`, `dateDecision`) ; fichier PDF ≤ 10 Mo (littéral, Q-61) ; `dossierId` optionnel (stockage dédié sans dossier, Q-58) | ✅ |
 | — | 8.3 | UC-DEF-03 | RG-DEF-05 | `jurisprudence` | `GET /jurisprudences` (🆕) | Recherche paginée par mots-clés/nature/juridiction, chaque filtre optionnel ; URL de téléchargement pré-signée | ✅ |
 | FR-REP-01 | 8.4 | UC-REP-01 | RG-REP-01, RG-REP-02 | toutes | `GET /rapports` | `type` ∈ {JOURNALIER…ANNUEL}, `dateDebut`, `dateFin`, `format` ∈ {JSON, PDF, EXCEL, CSV} ; **< 10 s** ; **204** si aucune donnée ; contenu dérivé du tableau de bord, restreint à la période (Q-63) | ✅ |
@@ -337,3 +339,17 @@ bout en bout, y compris les 4 formats d'export du rapport.
 | 7 — Alertes | 4 | 2 | 2 | 5 | **✅ 5** (M5, 🟡 déclencheurs futurs) |
 | 8 — Décisions & reporting | 6 | 4 | 2 | 9 (+ 1 🆕, hors #11 déjà compté Épic 1) | **✅ 7** (M12 décisions définitives + M13 rapports/tableau de bord) |
 | **Total** | **49** | **39** | **10** | **~57** | **57** |
+
+**+ 11 endpoints d'habilitation frontend (M15, Q-68 et Q-69)**, sans règle métier nouvelle : les écrans
+« … en attente » listés dans les épics 5 et 6 et le volet « File des demandes à arbitrer » de
+l'épic 4 n'avaient, pour trois d'entre eux, **aucune source de données** — `GET /publications`,
+`GET /ged/demandes-suppression` et `GET /constitutions/prestataires` les alimentent désormais
+(dernier volet de Q-24, close). S'y ajoutent les trois onglets d'une fiche dossier
+(`/dossiers/{id}/audiences|deliberes|alarmes`), l'administration du référentiel des intervenants
+(`POST`/`GET /intervenants` — sans quoi aucun avocat ne pouvait exister) et les deux référentiels
+de formulaire (`/referentiels/natures-dossier`, `/referentiels/types-client-sensible`), que le
+backend impose en écriture mais n'exposait pas en lecture, enfin le répertoire des utilisateurs
+internes (`GET /utilisateurs?profil=`, Q-69) — sans lequel la « section affectation » de l'écran
+« Création de dossier » ne pouvait pas être renseignée, alors que `juristesAffectes` est
+obligatoire (RG-DOS-03). Soit **66 endpoints exposés au total** ; cf.
+`API_IMPLEMENTATION_STATUS.md` §11 et #56-#66.

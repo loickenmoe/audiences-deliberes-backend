@@ -23,4 +23,7 @@ public interface AudienceRepository extends JpaRepository<Audience, Long> {
 
     /** FR-REP-01 (rapport périodique, M13) : audiences tenues dans la période. */
     long countByStatutAndDateTenueBetween(StatutAudience statut, LocalDate debut, LocalDate fin);
+
+    /** M15 : onglet « Audiences » de la fiche dossier (Q-68), plus récente d'abord. */
+    List<Audience> findByDossierIdOrderByDatePlanifieeDesc(Long dossierId);
 }

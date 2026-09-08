@@ -33,7 +33,10 @@ import com.afriland.audiences.referentiel.domain.Avocat;
 import com.afriland.audiences.referentiel.domain.Utilisateur;
 import com.afriland.audiences.referentiel.repository.AvocatRepository;
 import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
+import com.afriland.audiences.common.web.PageResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -220,6 +223,29 @@ public class PublicationService {
                         "Une correspondance a été transmise concernant votre publication " + id + " (RG-INT-07)."));
 
         return new CorrespondanceResponse(correspondance.getId(), id, auteur.getId(), correspondance.getContenu(), correspondance.getCreatedAt());
+    }
+
+    /**
+     * M15 (Q-68) : file de travail des publications — écran « File des publications à valider » de
+     * l'Assistante (filtre {@code statut=DEPOSE}) et onglet publications d'un dossier.
+     * <p>
+     * Contrairement à {@link #obtenir(Long)}, cette liste **n'applique pas** la restriction d'accès
+     * individuelle (Q-57) : elle sert des profils internes chargés d'instruire les publications, et
+     * n'expose que les métadonnées — le contenu détaillé reste soumis au contrôle unitaire.
+     */
+    @Transactional(readOnly = true)
+    public PageResponse<PublicationResponse> lister(Long dossierId, StatutPublication statut, Pageable pageable) {
+        Page<Publication> page;
+        if (dossierId != null && statut != null) {
+            page = publicationRepository.findByDossierIdAndStatutValidation(dossierId, statut, pageable);
+        } else if (dossierId != null) {
+            page = publicationRepository.findByDossierId(dossierId, pageable);
+        } else if (statut != null) {
+            page = publicationRepository.findByStatutValidation(statut, pageable);
+        } else {
+            page = publicationRepository.findAll(pageable);
+        }
+        return PageResponse.of(page, publicationMapper::toResponse);
     }
 
     private Utilisateur resoudreRestrictionAcces(Long utilisateurId) {

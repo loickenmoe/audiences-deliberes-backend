@@ -310,4 +310,34 @@ class GedServiceTest {
         assertThat(result.affairesNouvelles()).isZero();
         assertThat(result.planificationActes()).isEmpty();
     }
+
+    // ------------------------------------------------------------------ listerDemandesSuppression (M15, Q-68)
+
+    @Test
+    void listerDemandesSuppression_filtreParStatut() {
+        Document document = Document.builder().id(1L).dossier(dossier).nomFichier("piece.pdf").build();
+        when(demandeSuppressionRepository.findByStatutOrderByDateDemandeAsc(StatutSuppression.EN_ATTENTE))
+                .thenReturn(List.of(DemandeSuppression.builder().id(9L).document(document).demandeur(juriste)
+                        .motif("Doublon").statut(StatutSuppression.EN_ATTENTE).build()));
+
+        var result = service.listerDemandesSuppression(StatutSuppression.EN_ATTENTE);
+
+        assertThat(result).singleElement()
+                .satisfies(d -> assertThat(d.statut()).isEqualTo(StatutSuppression.EN_ATTENTE));
+        verify(demandeSuppressionRepository, never()).findByOrderByDateDemandeDesc();
+    }
+
+    @Test
+    void listerDemandesSuppression_sansFiltre_retourneToutLHistorique() {
+        Document document = Document.builder().id(1L).dossier(dossier).nomFichier("piece.pdf").build();
+        when(demandeSuppressionRepository.findByOrderByDateDemandeDesc())
+                .thenReturn(List.of(
+                        DemandeSuppression.builder().id(9L).document(document).demandeur(juriste)
+                                .motif("Doublon").statut(StatutSuppression.APPROUVEE).validePar(dj).build(),
+                        DemandeSuppression.builder().id(8L).document(document).demandeur(juriste)
+                                .motif("Erreur").statut(StatutSuppression.REJETEE).validePar(dj)
+                                .motifRejet("Pièce utile").build()));
+
+        assertThat(service.listerDemandesSuppression(null)).hasSize(2);
+    }
 }

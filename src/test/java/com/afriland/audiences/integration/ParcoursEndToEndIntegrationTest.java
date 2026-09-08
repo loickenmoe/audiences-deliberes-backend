@@ -96,9 +96,11 @@ class ParcoursEndToEndIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        // Les utilisateurs sont pré-provisionnés : R-06 (provisionnement au premier appel
-        // incompatible avec un endpoint @Transactional(readOnly = true)) est un défaut connu du
-        // socle M3, hors périmètre — il ne doit pas rendre ces parcours non déterministes.
+        // Les utilisateurs sont pré-provisionnés pour que les parcours restent déterministes
+        // (identifiants et profils connus d'avance). R-06 — provisionnement au premier appel
+        // incompatible avec un endpoint @Transactional(readOnly = true) — a été corrigé en M15
+        // (UtilisateurProvisioningService, propagation REQUIRES_NEW) et est couvert par
+        // ProvisionnementLectureSeuleIntegrationTest.
         provisionner("kc-juriste", "JURISTE");
         provisionner("kc-dj", "DJ");
         provisionner("kc-dja", "DJA");
