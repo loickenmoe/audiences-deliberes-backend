@@ -46,7 +46,8 @@ public class ClientService {
     @Transactional
     public ClientResponse creerClient(CreerClientRequest request) {
         if (clientRepository.findByReference(request.reference()).isPresent()) {
-            throw ApiException.conflict(ErrorCodes.CONFLIT, "La référence client '" + request.reference() + "' est déjà utilisée");
+            throw ApiException.conflictSurChamp(ErrorCodes.CONFLIT,
+                    "La référence client '" + request.reference() + "' est déjà utilisée", "reference");
         }
         Client client = clientMapper.toEntity(request);
         client = clientRepository.save(client);

@@ -74,7 +74,10 @@ class IntervenantServiceTest {
         assertThatThrownBy(() -> service.creer(new CreerIntervenantRequest(
                 TypeIntervenant.AVOCAT, "Me Doublon", null, null, "kc-1", null)))
                 .isInstanceOf(ApiException.class)
-                .hasMessageContaining("déjà rattaché");
+                .hasMessageContaining("déjà rattaché")
+                .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.type(ApiException.class))
+                .extracting(ApiException::getChamp)
+                .isEqualTo("compteKeycloak");
     }
 
     @Test

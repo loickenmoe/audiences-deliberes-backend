@@ -104,7 +104,12 @@ class ClientServiceTest {
 
         assertThatThrownBy(() -> service.creerClient(new CreerClientRequest("CLI-001", "Autre", null, null)))
                 .isInstanceOf(ApiException.class)
-                .hasMessageContaining("déjà utilisée");
+                .hasMessageContaining("déjà utilisée")
+                // ERR-CONFLICT couvre une dizaine de conflits : sans ce champ, un client ne peut pas
+                // savoir lequel des siens signaler à l'utilisateur.
+                .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.type(ApiException.class))
+                .extracting(ApiException::getChamp)
+                .isEqualTo("reference");
     }
 
     @Test

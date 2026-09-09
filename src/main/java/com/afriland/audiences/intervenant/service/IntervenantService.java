@@ -51,8 +51,8 @@ public class IntervenantService {
                     "Le champ notification ne s'applique qu'à un autre prestataire (RG-INT-02)");
         }
         if (avocatRepository.findByCompteKeycloak(request.compteKeycloak()).isPresent()) {
-            throw ApiException.conflict(ErrorCodes.CONFLIT,
-                    "Un avocat est déjà rattaché au compte « " + request.compteKeycloak() + " »");
+            throw ApiException.conflictSurChamp(ErrorCodes.CONFLIT,
+                    "Un avocat est déjà rattaché au compte « " + request.compteKeycloak() + " »", "compteKeycloak");
         }
 
         Avocat avocat = avocatRepository.save(Avocat.builder()

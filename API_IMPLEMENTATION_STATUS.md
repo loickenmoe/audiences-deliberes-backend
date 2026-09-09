@@ -366,6 +366,18 @@ transition automatique d'étape vers `ARCHIVE` (Q-60, reste manuelle via l'endpo
 Codes génériques : 400 requête invalide · 401 non authentifié · 403 droits insuffisants ·
 404 non trouvé · 409 conflit d'unicité · 422 règle métier violée.
 
+**Champ fautif (M16, Q-70).** `ERR-CONFLICT` est partagé par neuf conflits sans rapport entre eux ;
+le code seul ne dit donc pas quel champ corriger. Le corps d'erreur porte pour cela un champ `champ`,
+distinct de `details` et **absent du JSON** lorsque l'erreur ne vise aucun champ :
+
+```json
+{"code":"ERR-CONFLICT","message":"La référence client 'CLI-001' est déjà utilisée","details":null,"champ":"reference"}
+```
+
+Renseigné par `ApiException.conflictSurChamp` sur : référence client, `compteKeycloak` d'un avocat,
+`ERR-002` référence de dossier, `type` d'une étape déjà ouverte, `ERR-006` référence de facture. Les
+conflits d'**état** (« cette demande a déjà été traitée ») n'en nomment aucun, volontairement.
+
 ---
 
 ## 13. Hors périmètre V1 (REF-07 §6.2)

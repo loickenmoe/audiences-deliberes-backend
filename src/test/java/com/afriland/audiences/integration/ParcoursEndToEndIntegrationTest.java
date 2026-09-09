@@ -343,7 +343,10 @@ class ParcoursEndToEndIntegrationTest {
                                 "piecesJustificatives", List.of("facture2.pdf"), "referenceFacture", referenceFacture)))
                         .with(role("kc-avocat", "ROLE_AVOCAT")))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("ERR-006"));
+                .andExpect(jsonPath("$.code").value("ERR-006"))
+                // Le corps nomme le champ fautif : c'est ce qui permet au client de le signaler sur
+                // le bon champ plutôt que dans un bandeau générique (QF-21 du frontend).
+                .andExpect(jsonPath("$.champ").value("referenceFacture"));
 
         mockMvc.perform(put(api("/frais/demandes/" + demandeId + "/conformite"))
                         .contentType(MediaType.APPLICATION_JSON)
