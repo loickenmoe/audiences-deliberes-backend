@@ -24,7 +24,7 @@ import java.util.List;
  */
 public record CreerDossierRequest(
         @NotBlank @Size(max = 50) String reference,
-        @NotBlank @Size(max = 50) String nature,
+        @NotBlank @Size(max = 255) String nature,
         CategorieDossier categorie,
         @NotBlank @Size(max = 100) String juridictionSaisie,
         @NotNull Long clientId,

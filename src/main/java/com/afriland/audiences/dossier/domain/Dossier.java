@@ -52,8 +52,13 @@ public class Dossier {
     private String reference;
 
     @NotBlank
-    @Size(max = 50)
-    @Column(nullable = false, length = 50)
+    /**
+     * Libellé de la nature, repris du référentiel {@code nature_dossier} (RG-DOS-02). Largeur
+     * alignée sur celle de ce référentiel (V7) : trois libellés de la taxonomie dépassent
+     * 50 caractères et ne pouvaient pas être enregistrés.
+     */
+    @Size(max = 255)
+    @Column(nullable = false, length = 255)
     private String nature;
 
     @NotNull
