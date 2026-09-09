@@ -76,8 +76,9 @@ public class FraisService {
                     "Seul un avocat affecté à ce dossier peut y déposer une demande de frais (RG-INT-01)");
         }
         if (demandeFraisRepository.existsByReferenceFacture(request.referenceFacture())) {
-            throw ApiException.conflict(ErrorCodes.FACTURE_EN_DOUBLE,
-                    "Une demande de frais porte déjà la référence de facture « " + request.referenceFacture() + " »");
+            throw ApiException.conflictSurChamp(ErrorCodes.FACTURE_EN_DOUBLE,
+                    "Une demande de frais porte déjà la référence de facture « " + request.referenceFacture() + " »",
+                    "referenceFacture");
         }
 
         DemandeFrais demande = demandeFraisRepository.save(DemandeFrais.builder()

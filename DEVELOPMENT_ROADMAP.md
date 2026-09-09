@@ -972,6 +972,40 @@ d'arbitrage.
 
 ---
 
+## M16 — Corrections issues de l'intégration frontend ✅ **Terminé**
+
+**Origine.** Jalon **hors feuille de route initiale**, ouvert le 2026-09-09 sur autorisation
+explicite du porteur du projet. Il recueille les défauts que seule la consommation réelle de l'API
+par un client révèle — ceux qu'aucun test backend ne pouvait voir, puisqu'ils portent sur ce que la
+réponse **ne dit pas**.
+
+### 1. `ERR-CONFLICT` ne nommait pas le champ fautif (Q-70) ✅
+
+Remonté par le jalon F5 du frontend, en provoquant un doublon de référence client pour de vrai. Un
+client recevant `ERR-CONFLICT` — code partagé par neuf conflits sans rapport, avec `details: null` —
+ne pouvait pas savoir quel champ signaler à l'utilisateur, et devait le déduire de l'endpoint appelé.
+
+**Implémenté** : `ErrorResponse` gagne un champ `champ`, distinct de `details` (qui porte du texte
+pour un humain) et **absent du JSON** quand aucun champ n'est visé — l'ajout ne modifie donc aucune
+réponse existante. `ApiException.conflictSurChamp` le renseigne sur cinq sites : référence client,
+`compteKeycloak` d'un avocat, référence de dossier (`ERR-002`), `type` d'une étape déjà ouverte,
+référence de facture (`ERR-006`). Les conflits d'**état** conservent `ApiException.conflict` et ne
+nomment rien — désigner un champ au hasard serait pire que se taire.
+
+**Testé** : 258 tests au vert (`BUILD SUCCESS`), dont 2 tests neufs sur le gestionnaire d'exceptions
+(présence **et** absence de la clé), 3 assertions renforcées sur `ClientService`, `IntervenantService`
+et `DossierService`, une assertion sur le corps JSON de `ERR-006`, et un test d'intégration dédié qui
+contrôle `$.champ` sur un doublon puis son absence sur une erreur de validation.
+
+**Vérifié en réel** contre l'instance locale : `champ: "reference"` sur un doublon client,
+`champ: "compteKeycloak"` sur un compte d'avocat déjà pris, clé absente sur `ERR-FORBIDDEN` et sur
+`ERR-VALIDATION`.
+
+**Validation manuelle** : créer deux fois un client de même référence depuis le frontend — le message
+doit apparaître **sous le champ Référence**, jamais dans un bandeau en haut du formulaire.
+
+---
+
 ## Chemin critique
 
 ```

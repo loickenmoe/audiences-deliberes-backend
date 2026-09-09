@@ -30,6 +30,14 @@ public final class ErrorCodes {
     public static final String NON_AUTHENTIFIE = "ERR-UNAUTHENTICATED";
     public static final String DROITS_INSUFFISANTS = "ERR-FORBIDDEN";
     public static final String RESSOURCE_INTROUVABLE = "ERR-NOT-FOUND";
+    /**
+     * Conflit générique. Employé par une dizaine de cas sans rapport entre eux — référence client
+     * déjà prise, compte déjà rattaché, étape déjà ouverte, accord déjà enregistré, publication
+     * déjà traitée… Le code seul ne dit donc rien du champ à corriger : lorsqu'un champ est en
+     * cause, lever l'exception avec {@link ApiException#conflictSurChamp} pour le nommer dans la
+     * réponse. Les conflits d'état (« cette demande a déjà été traitée ») n'en visent aucun et
+     * restent sur {@link ApiException#conflict}.
+     */
     public static final String CONFLIT = "ERR-CONFLICT";
     public static final String REGLE_METIER_VIOLEE = "ERR-BUSINESS-RULE";
     public static final String ERREUR_INTERNE = "ERR-INTERNAL";

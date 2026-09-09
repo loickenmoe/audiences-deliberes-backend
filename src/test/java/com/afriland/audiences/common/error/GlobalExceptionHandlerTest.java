@@ -34,6 +34,30 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void handleApiException_nommeLeChampFautifQuandIlEstConnu() {
+        ApiException ex = ApiException.conflictSurChamp(ErrorCodes.CONFLIT,
+                "La référence client 'CLI-001' est déjà utilisée", "reference");
+
+        ResponseEntity<ErrorResponse> response = handler.handleApiException(ex);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody()).isNotNull();
+        // Sans ce champ, un client recevant ERR-CONFLICT devrait deviner la cible depuis l'endpoint.
+        assertThat(response.getBody().champ()).isEqualTo("reference");
+    }
+
+    @Test
+    void handleApiException_laisseLeChampNulPourUnConflitDEtat() {
+        ApiException ex = ApiException.conflict(ErrorCodes.CONFLIT, "Cette demande a déjà été traitée");
+
+        ResponseEntity<ErrorResponse> response = handler.handleApiException(ex);
+
+        assertThat(response.getBody()).isNotNull();
+        // Un conflit d'état ne vise aucun champ : mieux vaut ne rien dire que de désigner au hasard.
+        assertThat(response.getBody().champ()).isNull();
+    }
+
+    @Test
     void handleApiException_propagatesDetailsWhenProvided() {
         ApiException ex = new ApiException(HttpStatus.BAD_REQUEST, ErrorCodes.METADONNEES_MANQUANTES,
                 "Champs manquants", "reference, nature");

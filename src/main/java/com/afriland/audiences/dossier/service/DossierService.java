@@ -88,8 +88,8 @@ public class DossierService {
     @Transactional
     public DossierResponse creerDossier(CreerDossierRequest request) {
         if (dossierRepository.existsByReference(request.reference())) {
-            throw ApiException.conflict(ErrorCodes.REFERENCE_DOSSIER_DUPLIQUEE,
-                    "La référence '" + request.reference() + "' est déjà utilisée");
+            throw ApiException.conflictSurChamp(ErrorCodes.REFERENCE_DOSSIER_DUPLIQUEE,
+                    "La référence '" + request.reference() + "' est déjà utilisée", "reference");
         }
         Client client = clientRepository.findById(request.clientId())
                 .orElseThrow(() -> ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE,
@@ -375,8 +375,8 @@ public class DossierService {
     public EtapeProcedureResponse creerEtape(Long dossierId, CreerEtapeRequest request) {
         Dossier dossier = getDossierOrThrow(dossierId);
         if (etapeProcedureRepository.existsByDossierIdAndType(dossierId, request.type())) {
-            throw ApiException.conflict(ErrorCodes.CONFLIT,
-                    "L'étape " + request.type() + " existe déjà pour ce dossier");
+            throw ApiException.conflictSurChamp(ErrorCodes.CONFLIT,
+                    "L'étape " + request.type() + " existe déjà pour ce dossier", "type");
         }
         // Positionnement direct (UC-DOS-04 alt. 3-b) : crée les étapes intermédiaires manquantes
         // au statut OUVERTURE, sans historique détaillé pour celles-ci (RG-DOS-04).

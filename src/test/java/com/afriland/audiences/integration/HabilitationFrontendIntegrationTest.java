@@ -408,6 +408,42 @@ class HabilitationFrontendIntegrationTest {
                         .toArray(GrantedAuthority[]::new));
     }
 
+    @Test
+    @DisplayName("QF-21 : un conflit de champ nomme le champ, un conflit d'état n'en nomme aucun")
+    void conflit_nommeLeChampFautif() throws Exception {
+        int n = COMPTEUR.incrementAndGet();
+        String reference = "CLI-QF21-" + n;
+        RequestPostProcessor juriste = role("kc-juriste-qf21", "ROLE_JURISTE", "ROLE_SAISIE");
+
+        mockMvc.perform(post(api("/clients"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("nom", "Client QF21 " + n, "reference", reference)))
+                        .with(juriste))
+                .andExpect(status().isCreated());
+
+        /*
+         * ERR-CONFLICT sert à une dizaine de conflits sans rapport entre eux. Sans « champ », un
+         * frontend recevant ce code devait deviner la cible depuis l'endpoint appelé — et se
+         * trompait dès qu'un endpoint en gagnait un second.
+         */
+        mockMvc.perform(post(api("/clients"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("nom", "Doublon QF21", "reference", reference)))
+                        .with(juriste))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ERR-CONFLICT"))
+                .andExpect(jsonPath("$.champ").value("reference"));
+
+        // Une erreur qui ne vise aucun champ n'en invente pas : la clé est absente du corps, pas
+        // présente à null — c'est ce qui rend l'ajout rétrocompatible.
+        mockMvc.perform(post(api("/clients"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("nom", "Sans référence")))
+                        .with(juriste))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.champ").doesNotExist());
+    }
+
     private String api(String chemin) {
         return "/api/v1" + chemin;
     }

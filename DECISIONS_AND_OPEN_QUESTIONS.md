@@ -1267,6 +1267,47 @@ mettant la correspondance en cache. **Décision attendue :** si l'équipe fronte
 double-appel gênant, l'enrichissement devra être arbitré et versionné comme une rupture assumée —
 même raisonnement que Q-67.
 
+### Q-70 ✅ `ERR-CONFLICT` ne nommait jamais le champ fautif : un client devait le deviner — tranché (M16)
+
+Remonté par le développement du frontend (**QF-21** de son dépôt), en provoquant pour de vrai un
+doublon de référence client plutôt qu'en lisant le contrat d'API.
+
+**A — Le constat.** `POST /clients` avec une référence existante renvoyait :
+
+```json
+{"code":"ERR-CONFLICT","message":"La référence client 'CLI-001' est déjà utilisée","details":null}
+```
+
+`ERR-002`, que le contrat associe à une référence dupliquée, est en réalité réservé aux **dossiers**
+(`DossierService`). Les clients — comme huit autres cas — tombaient sur le code générique
+`ERR-CONFLICT` : compte Keycloak déjà rattaché, étape déjà ouverte, accord de frais déjà enregistré,
+suppression déjà demandée, publication déjà traitée, correspondance déjà transmise, constitution déjà
+traitée, statut de demande inattendu. `details` valait toujours `null`.
+
+**B — Pourquoi c'est un défaut du backend et pas du client.** Le champ à corriger n'était déductible
+que de l'endpoint appelé. Un frontend devait donc maintenir une table endpoint → champ, correcte
+aujourd'hui et fausse le jour où un endpoint gagne un second conflit possible — **sans que rien
+n'échoue**, l'utilisateur voyant simplement le mauvais champ surligné.
+
+**C — Ce qui a été écarté.** Mettre le nom du champ dans `details` : ce champ porte déjà du texte
+destiné à un humain (`"reference: must not be blank"`, produit par `handleMethodArgumentNotValid`).
+Lui confier en plus un identifiant machine aurait rendu les deux inexploitables.
+
+**D — Tranché.** `ErrorResponse` gagne un champ **`champ`**, distinct, annoté
+`@JsonInclude(NON_NULL)` : il est **absent** du JSON quand l'erreur ne vise aucun champ. L'ajout est
+donc rétrocompatible — aucune réponse existante ne change. `ApiException.conflictSurChamp(code,
+message, champ)` le renseigne ; `ApiException.conflict` reste pour les conflits d'**état**, qui ne
+visent légitimement rien : désigner un champ au hasard serait pire que se taire.
+
+Cinq sites nomment leur champ : référence client, `compteKeycloak` d'un avocat, référence de dossier
+(`ERR-002`), `type` d'une étape déjà ouverte, référence de facture (`ERR-006`).
+
+**Vérifié** par deux tests unitaires sur le gestionnaire (présence et absence), trois assertions
+renforcées sur les services concernés, une assertion sur le corps JSON de `ERR-006`, et un test
+d'intégration dédié qui contrôle `$.champ` **et** son absence sur une erreur de validation. 258
+tests au vert, plus une vérification manuelle contre l'instance locale.
+
+
 ### Q-27 ✅ `dossier.parties` défini deux fois — tranché (M2)
 Le dictionnaire REF-06 §2.1.2 déclare `parties JSONB` **deux fois**, avec deux structures
 différentes : `{demandeur, defendeur}` et `{demandeur, defendeur, client}`. Le contrat d'API et

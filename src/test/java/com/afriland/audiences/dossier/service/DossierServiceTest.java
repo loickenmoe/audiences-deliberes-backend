@@ -108,7 +108,10 @@ class DossierServiceTest {
 
         assertThatThrownBy(() -> service.creerDossier(baseRequest(false)))
                 .isInstanceOf(ApiException.class)
-                .hasMessageContaining("déjà utilisée");
+                .hasMessageContaining("déjà utilisée")
+                .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.type(ApiException.class))
+                .extracting(ApiException::getChamp)
+                .isEqualTo("reference");
     }
 
     @Test
