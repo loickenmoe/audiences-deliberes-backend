@@ -36,6 +36,7 @@ import com.afriland.audiences.referentiel.domain.Utilisateur;
 import com.afriland.audiences.referentiel.repository.AvocatRepository;
 import com.afriland.audiences.referentiel.repository.ClientRepository;
 import com.afriland.audiences.referentiel.repository.NatureDossierRepository;
+import com.afriland.audiences.referentiel.repository.TypeClientSensibleRepository;
 import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -65,6 +66,7 @@ class DossierServiceTest {
     @Mock private UtilisateurRepository utilisateurRepository;
     @Mock private AvocatRepository avocatRepository;
     @Mock private NatureDossierRepository natureDossierRepository;
+    @Mock private TypeClientSensibleRepository typeClientSensibleRepository;
     @Mock private HistoriqueActionService historiqueActionService;
     @Mock private CurrentUserService currentUserService;
     @Mock private AlerteService alerteService;
@@ -84,7 +86,8 @@ class DossierServiceTest {
     void setUp() {
         service = new DossierService(dossierRepository, etapeProcedureRepository, dossierJuristeRepository,
                 dossierAvocatRepository, auditSeuilDossierRepository, historiqueActionRepository, clientRepository,
-                utilisateurRepository, avocatRepository, natureDossierRepository, transitionValidator, dossierMapper,
+                utilisateurRepository, avocatRepository, natureDossierRepository, typeClientSensibleRepository,
+                transitionValidator, dossierMapper,
                 etapeProcedureMapper, auditSeuilMapper, historiqueActionMapper, historiqueActionService, currentUserService,
                 alerteService);
 
@@ -165,6 +168,26 @@ class DossierServiceTest {
         assertThatThrownBy(() -> service.creerDossier(sansPieces))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("dossierCreditOrigine");
+    }
+
+    @Test
+    void creerDossier_rejetteUnTypeClientSensibleHorsReferentiel() {
+        when(dossierRepository.existsByReference(any())).thenReturn(false);
+        when(clientRepository.findById(1L)).thenReturn(Optional.of(client));
+        when(natureDossierRepository.findByLibelleIgnoreCase(any()))
+                .thenReturn(Optional.of(NatureDossier.builder().categorie(CategorieDossier.RECOUVREMENT).build()));
+        when(typeClientSensibleRepository.findByCodeIgnoreCase("VIPP")).thenReturn(Optional.empty());
+
+        var faute = new CreerDossierRequest(
+                "DOS-2026-001", "Saisie immobilière", null, "Tribunal de Yaoundé", 1L,
+                null, 15_000_000d, null, null, null, null, "CREDIT-1", "PV-1",
+                null, null, null, true, 60_000_000d, "VIPP", List.of(10L), List.of());
+
+        // Q-06 laisse la colonne libre de toute clé étrangère, mais confie ce contrôle au service :
+        // sans lui, une faute de frappe était enregistrée en silence et ressortait dans les rapports.
+        assertThatThrownBy(() -> service.creerDossier(faute))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("Type de client sensible inconnu");
     }
 
     @Test

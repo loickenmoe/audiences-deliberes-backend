@@ -1308,6 +1308,89 @@ d'intégration dédié qui contrôle `$.champ` **et** son absence sur une erreur
 tests au vert, plus une vérification manuelle contre l'instance locale.
 
 
+### Q-71 ✅ Trois natures de la taxonomie rendaient la création de dossier impossible — tranché (M16)
+
+Remonté par le jalon F6 du frontend, en sondant l'endpoint plutôt qu'en lisant le contrat.
+
+**A — Le constat.** `dossier.nature` est `VARCHAR(50)` depuis `V1__schema_initial.sql`, et
+`CreerDossierRequest.nature` porte le `@Size(max = 50)` correspondant. Or le service résout la
+nature par `findByLibelleIgnoreCase` — c'est-à-dire sur `nature_dossier.libelle`, colonne
+`VARCHAR(255)`. La contrainte imposée à l'entrée était donc **plus étroite que le référentiel qui
+l'alimente**.
+
+Trois des dix-sept natures de l'Annexe A dépassent 50 caractères :
+
+| Longueur | Libellé |
+|---|---|
+| 71 | Hypothèque judiciaire (inscription provisoire, définitive, réalisation) |
+| 67 | Autres procédures spécifiques (arbitral, contentieux administratif) |
+| 54 | Requête aux fins de saisie de créances ou contestation |
+
+Les choisir renvoyait `400 ERR-VALIDATION — nature: size must be between 0 and 50`. « Hypothèque
+judiciaire » n'est pas un cas marginal en recouvrement bancaire.
+
+**B — Pourquoi les tests ne l'avaient pas vu.** Tous les tests de création utilisent
+« Assignation en paiement » (25 caractères). Aucun ne parcourait la taxonomie ; le défaut ne
+pouvait apparaître qu'en construisant un formulaire à partir du référentiel réel.
+
+**C — Ce qui a été écarté.** Faire porter le `code` plutôt que le libellé : cela changerait la
+sémantique de l'endpoint, romprait les appels existants, et stockerait dans `dossier.nature` une
+valeur différente de celle affichée partout ailleurs.
+
+**D — Tranché.** Migration `V7__dossier_nature_largeur.sql` alignant la colonne sur sa source
+(`VARCHAR(255)`), avec les annotations correspondantes sur l'entité et le DTO. C'est un alignement,
+pas un élargissement de confort — même nature de correctif que `V6` pour
+`decision_definitive.type`.
+
+**Vérifié** par un test d'intégration créant un dossier avec le libellé de 71 caractères et
+contrôlant la catégorie déduite, plus une vérification manuelle contre l'instance locale (201).
+
+### Q-72 ✅ `GET /dossiers` ne permettait pas de retrouver un dossier — tranché (M16)
+
+**A — Le constat.** L'endpoint n'acceptait que `nature`, `categorie` et `juridiction`. Ni référence,
+ni client, ni « mes dossiers ». Un juriste suivant plusieurs dizaines de dossiers n'avait aucun
+moyen direct de retrouver le sien, alors que la liste des dossiers est l'écran d'entrée du métier
+(`FUNCTIONAL_MAP.md` §1, écran 05).
+
+**B — Pourquoi le frontend ne pouvait pas compenser.** Filtrer côté navigateur sur une liste
+paginée n'aurait cherché que dans la page affichée : l'utilisateur aurait reçu « aucun résultat »
+pour un dossier bien présent en base. Un filtre faux est pire qu'un filtre absent.
+
+**C — Tranché.** Trois paramètres optionnels ajoutés à `DossierSpecifications` et au contrôleur :
+· `reference` — recherche **partielle**, insensible à la casse : une référence se retient rarement
+  en entier ;
+· `clientId` — tous les dossiers portés contre un client ;
+· `mesDossiers` — booléen, résolu sur **l'utilisateur authentifié** et non sur un identifiant reçu.
+  Ce choix n'est pas cosmétique : il rend impossible de consulter le portefeuille d'un collègue par
+  ce biais.
+
+L'appartenance au portefeuille passe par une sous-requête `EXISTS` sur `dossier_juriste`, et non par
+une jointure : `Dossier` ne mappe aucune collection d'affectations, et une jointure aurait fait
+remonter un dossier autant de fois qu'il compte de juristes — faussant le total de la pagination.
+
+**Vérifié** par trois assertions unitaires sur la composition des prédicats et un test d'intégration
+qui contrôle, sur PostgreSQL réel, qu'un second juriste ne voit rien via `mesDossiers`.
+
+### Q-73 ✅ `typeClientSensible` n'était jamais confronté à son référentiel — tranché (M16)
+
+**A — Le constat.** Q-06 a délibérément laissé `dossier.type_client_sensible` en `VARCHAR` libre,
+sans clé étrangère — mais en confiant la validation au service applicatif, comme pour
+`dossier.nature`. Elle a été faite pour `nature`, oubliée pour `typeClientSensible` : n'importe
+quelle chaîne de 50 caractères était enregistrée en silence, y compris une faute de frappe, et
+ressortait telle quelle dans les écrans et les rapports.
+
+**B — Code ou libellé ?** Le contrôle porte sur le **code**. Il est unique, reste valable si le
+libellé est reformulé, et tient dans la colonne cible — un libellé peut atteindre 100 caractères
+pour une colonne de 50, ce qui reproduirait exactement le défaut de Q-71.
+
+**C — Tranché.** `TypeClientSensibleRepository.findByCodeIgnoreCase` et un contrôle dans
+`DossierService`, appliqué **dès que le champ est renseigné** — et non seulement dans la branche
+sensible, puisque le champ est enregistré dans tous les cas. Le même contrôle couvre l'ajustement
+du type par le DJ au moment de valider la sensibilité.
+
+**Vérifié** par un test unitaire de rejet et un test d'intégration contrôlant le 400 sur un code
+inconnu, plus une vérification manuelle : `Type de client sensible inconnu du référentiel : VIPP`.
+
 ### Q-27 ✅ `dossier.parties` défini deux fois — tranché (M2)
 Le dictionnaire REF-06 §2.1.2 déclare `parties JSONB` **deux fois**, avec deux structures
 différentes : `{demandeur, defendeur}` et `{demandeur, defendeur, client}`. Le contrat d'API et

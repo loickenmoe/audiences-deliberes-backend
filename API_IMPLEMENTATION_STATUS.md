@@ -354,7 +354,7 @@ transition automatique d'étape vers `ARCHIVE` (Q-60, reste manuelle via l'endpo
 | Code | HTTP | Description | Endpoint | Statut |
 |---|---|---|---|---|
 | `ERR-001` | 400 | Métadonnées manquantes | `POST /dossiers` | ✅ M4 |
-| `ERR-002` | 409 | Référence de dossier déjà utilisée | `POST /dossiers` | ✅ M4 |
+| `ERR-002` | 409 | Référence de dossier déjà utilisée | `POST /dossiers` | ✅ M4 (`champ: reference` depuis M16) |
 | `ERR-003` | 409 | Doublon d'affectation | `PUT /dossiers/{id}/affectation` | ✅ M4 (`forcer` — Q-12) |
 | `ERR-004` | 400 | Transition non autorisée | `PATCH …/statut` | ✅ M4 |
 | `ERR-005` | 409 | Doublon d'audience | `POST /dossiers/{id}/audiences` | ✅ M6 (`forcer` — Q-12) |

@@ -47,15 +47,25 @@ public class DossierController {
         return ResponseEntity.status(HttpStatus.CREATED).body(dossierService.creerDossier(request));
     }
 
+    /**
+     * {@code reference}, {@code clientId} et {@code mesDossiers} ont été ajoutés en M16 (Q-72) :
+     * sans eux, un juriste ne pouvait retrouver un dossier qu'en parcourant les pages.
+     * {@code mesDossiers} se résout sur l'utilisateur authentifié — il n'y a donc pas d'identifiant
+     * de juriste à passer, et pas de moyen de consulter le portefeuille d'un autre par ce biais.
+     */
     @GetMapping
     @PreAuthorize("hasRole('CONSULTATION')")
     public PageResponse<DossierResponse> listerDossiers(
             @RequestParam(required = false) String nature,
             @RequestParam(required = false) CategorieDossier categorie,
             @RequestParam(required = false) String juridiction,
+            @RequestParam(required = false) String reference,
+            @RequestParam(required = false) Long clientId,
+            @RequestParam(defaultValue = "false") boolean mesDossiers,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return dossierService.listerDossiers(nature, categorie, juridiction, PageRequest.of(page, size));
+        return dossierService.listerDossiers(nature, categorie, juridiction, reference, clientId,
+                mesDossiers, PageRequest.of(page, size));
     }
 
     @GetMapping("/{id}")

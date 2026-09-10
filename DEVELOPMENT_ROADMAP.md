@@ -1004,6 +1004,54 @@ contrôle `$.champ` sur un doublon puis son absence sur une erreur de validation
 **Validation manuelle** : créer deux fois un client de même référence depuis le frontend — le message
 doit apparaître **sous le champ Référence**, jamais dans un bandeau en haut du formulaire.
 
+### 2. Trois natures de dossier étaient inutilisables (Q-71) ✅
+
+`dossier.nature` était `VARCHAR(50)` quand le référentiel qui l'alimente est `VARCHAR(255)`, et le
+service résout la nature **par son libellé**. Trois des dix-sept natures de l'Annexe A dépassent
+50 caractères — dont « Hypothèque judiciaire », qui n'est pas un cas marginal en recouvrement — et
+renvoyaient `400 nature: size must be between 0 and 50`.
+
+**Implémenté** : migration `V7__dossier_nature_largeur.sql` alignant la colonne sur sa source, plus
+les annotations de l'entité et du DTO. Aucun test ne l'avait vu : tous créaient des dossiers avec
+« Assignation en paiement », 25 caractères.
+
+**Testé** : un test d'intégration crée un dossier avec le libellé de 71 caractères et vérifie la
+catégorie déduite. **Vérifié en réel** : `201`.
+
+### 3. La liste des dossiers n'était pas cherchable (Q-72) ✅
+
+`GET /dossiers` n'acceptait que `nature`, `categorie` et `juridiction` : impossible de retrouver un
+dossier par sa référence, par son client, ou de n'afficher que son propre portefeuille. Le frontend
+ne pouvait pas compenser — filtrer une liste paginée côté navigateur n'aurait cherché que dans la
+page affichée.
+
+**Implémenté** : `reference` (recherche partielle, insensible à la casse), `clientId`, et
+`mesDossiers` — ce dernier résolu sur **l'utilisateur authentifié**, ce qui interdit de consulter le
+portefeuille d'un collègue. L'appartenance passe par une sous-requête `EXISTS`, pas une jointure,
+qui aurait dupliqué les lignes et faussé le total de la pagination.
+
+**Testé** : trois assertions unitaires sur les prédicats, un test d'intégration sur PostgreSQL réel
+vérifiant qu'un second juriste ne voit rien. **Vérifié en réel** sur les trois filtres.
+
+### 4. `typeClientSensible` acceptait n'importe quelle chaîne (Q-73) ✅
+
+Q-06 confie la validation de ce champ au service, comme pour `nature`. Elle avait été faite pour
+l'un, oubliée pour l'autre : une faute de frappe était enregistrée en silence et ressortait dans les
+rapports.
+
+**Implémenté** : contrôle sur le **code** du référentiel — unique, stable si le libellé est
+reformulé, et tenant dans la colonne — appliqué dès que le champ est renseigné, ainsi qu'à
+l'ajustement par le DJ lors de la validation de sensibilité.
+
+**Testé** : rejet en unitaire, 400 en intégration. **Vérifié en réel** :
+`Type de client sensible inconnu du référentiel : VIPP`.
+
+**Vérifications du jalon** : **265 tests au vert**, `BUILD SUCCESS`.
+
+**Validation manuelle** : depuis le frontend, créer un dossier en choisissant « Hypothèque
+judiciaire (inscription provisoire, définitive, réalisation) » — il doit être accepté ; puis
+rechercher ce dossier par sa référence dans la liste, et cocher « Mes dossiers uniquement ».
+
 ---
 
 ## Chemin critique

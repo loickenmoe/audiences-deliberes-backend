@@ -34,6 +34,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -442,6 +443,158 @@ class HabilitationFrontendIntegrationTest {
                         .with(juriste))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.champ").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("M16 : les trois natures longues de la taxonomie sont creables (Q-71)")
+    void naturesLongues_sontDesormaisAcceptees() throws Exception {
+        int n = COMPTEUR.incrementAndGet();
+        RequestPostProcessor juriste = role("kc-juriste-m16", "ROLE_JURISTE", "ROLE_SAISIE", "ROLE_CONSULTATION");
+
+        long clientId = extraireId(mockMvc.perform(post(api("/clients"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("nom", "Client M16 " + n, "reference", "CLI-M16-" + n)))
+                        .with(juriste))
+                .andExpect(status().isCreated())
+                .andReturn());
+        // Un compte n'existe en base qu'apres son premier appel authentifie (correctif R-06) :
+        // creer un client ne suffit pas, il faut une lecture qui passe par getCurrentUser.
+        mockMvc.perform(get(api("/alertes/mes-notifications")).with(juriste)).andExpect(status().isOk());
+        Long juristeId = utilisateurRepository.findByKeycloakId("kc-juriste-m16").orElseThrow().getId();
+        long avocatId = avocatRepository.save(Avocat.builder().nom("Me M16 " + n)
+                .compteKeycloak("kc-avocat-m16-nature-" + n).build()).getId();
+
+        /*
+         * 71 caracteres : au-dela de l'ancienne limite de 50 imposee a `dossier.nature`, alors meme
+         * que ce libelle vient du referentiel que le service interroge. Trois des dix-sept natures
+         * etaient dans ce cas et rendaient la creation impossible.
+         */
+        String natureLongue = "Hypothèque judiciaire (inscription provisoire, définitive, réalisation)";
+        assertThat(natureLongue.length()).isGreaterThan(50);
+
+        mockMvc.perform(post(api("/dossiers"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.ofEntries(
+                                Map.entry("reference", "DOS-M16-" + n),
+                                Map.entry("nature", natureLongue),
+                                Map.entry("juridictionSaisie", "TGI Douala"),
+                                Map.entry("clientId", clientId),
+                                Map.entry("risqueEncouru", 1_000_000),
+                                Map.entry("dossierCreditOrigine", "CRD-" + n),
+                                Map.entry("pvTransfert", "PV-" + n),
+                                Map.entry("estSensible", true),
+                                Map.entry("seuilMontant", 60_000_000),
+                                Map.entry("typeClientSensible", "VIP"),
+                                Map.entry("juristesAffectes", List.of(juristeId)),
+                                Map.entry("avocatsAffectes", List.of(avocatId)))))
+                        .with(juriste))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.nature").value(natureLongue))
+                // La categorie n'a pas ete soumise : elle est deduite de la nature (RG-DOS-02).
+                .andExpect(jsonPath("$.categorie").value("RECOUVREMENT"))
+                .andExpect(jsonPath("$.typeClientSensible").value("VIP"));
+    }
+
+    @Test
+    @DisplayName("M16 : un type de client sensible hors referentiel est refuse (Q-73)")
+    void typeClientSensibleInconnu_estRefuse() throws Exception {
+        int n = COMPTEUR.incrementAndGet();
+        RequestPostProcessor juriste = role("kc-juriste-m16b", "ROLE_JURISTE", "ROLE_SAISIE");
+
+        long clientId = extraireId(mockMvc.perform(post(api("/clients"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("nom", "Client M16b " + n, "reference", "CLI-M16B-" + n)))
+                        .with(juriste))
+                .andExpect(status().isCreated())
+                .andReturn());
+        // Un compte n'existe en base qu'apres son premier appel authentifie (correctif R-06) :
+        // creer un client ne suffit pas, il faut une lecture qui passe par getCurrentUser.
+        mockMvc.perform(get(api("/alertes/mes-notifications")).with(juriste)).andExpect(status().isOk());
+        Long juristeId = utilisateurRepository.findByKeycloakId("kc-juriste-m16b").orElseThrow().getId();
+        long avocatId = avocatRepository.save(Avocat.builder().nom("Me M16b " + n)
+                .compteKeycloak("kc-avocat-m16b-" + n).build()).getId();
+
+        mockMvc.perform(post(api("/dossiers"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.ofEntries(
+                                Map.entry("reference", "DOS-M16B-" + n),
+                                Map.entry("nature", "Assignation en paiement"),
+                                Map.entry("juridictionSaisie", "TGI Douala"),
+                                Map.entry("clientId", clientId),
+                                Map.entry("risqueEncouru", 1_000_000),
+                                Map.entry("dossierCreditOrigine", "CRD-" + n),
+                                Map.entry("pvTransfert", "PV-" + n),
+                                Map.entry("estSensible", true),
+                                Map.entry("seuilMontant", 60_000_000),
+                                Map.entry("typeClientSensible", "VIPP"),
+                                Map.entry("juristesAffectes", List.of(juristeId)),
+                                Map.entry("avocatsAffectes", List.of(avocatId)))))
+                        .with(juriste))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(containsString("inconnu du référentiel")));
+    }
+
+    @Test
+    @DisplayName("M16 : recherche par reference, par client et « mes dossiers » (Q-72)")
+    void rechercheDeDossiers_parReferenceClientEtPortefeuille() throws Exception {
+        int n = COMPTEUR.incrementAndGet();
+        RequestPostProcessor juriste = role("kc-juriste-m16c", "ROLE_JURISTE", "ROLE_SAISIE", "ROLE_CONSULTATION");
+
+        long clientId = extraireId(mockMvc.perform(post(api("/clients"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("nom", "Client M16c " + n, "reference", "CLI-M16C-" + n)))
+                        .with(juriste))
+                .andExpect(status().isCreated())
+                .andReturn());
+        // Un compte n'existe en base qu'apres son premier appel authentifie (correctif R-06) :
+        // creer un client ne suffit pas, il faut une lecture qui passe par getCurrentUser.
+        mockMvc.perform(get(api("/alertes/mes-notifications")).with(juriste)).andExpect(status().isOk());
+        Long juristeId = utilisateurRepository.findByKeycloakId("kc-juriste-m16c").orElseThrow().getId();
+        long avocatId = avocatRepository.save(Avocat.builder().nom("Me M16c " + n)
+                .compteKeycloak("kc-avocat-m16c-" + n).build()).getId();
+
+        String reference = "DOS-RECH-" + n;
+        mockMvc.perform(post(api("/dossiers"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.ofEntries(
+                                Map.entry("reference", reference),
+                                Map.entry("nature", "Assignation en paiement"),
+                                Map.entry("juridictionSaisie", "TGI Douala"),
+                                Map.entry("clientId", clientId),
+                                Map.entry("risqueEncouru", 1_000_000),
+                                Map.entry("dossierCreditOrigine", "CRD-" + n),
+                                Map.entry("pvTransfert", "PV-" + n),
+                                Map.entry("juristesAffectes", List.of(juristeId)),
+                                Map.entry("avocatsAffectes", List.of(avocatId)))))
+                        .with(juriste))
+                .andExpect(status().isCreated());
+
+        // Reference : recherche partielle, on ne retient jamais une reference en entier.
+        mockMvc.perform(get(api("/dossiers")).param("reference", "RECH-" + n).with(juriste))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].reference").value(reference));
+
+        // Client : tous les dossiers portes contre lui.
+        mockMvc.perform(get(api("/dossiers")).param("clientId", String.valueOf(clientId)).with(juriste))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1));
+
+        /*
+         * « Mes dossiers » se resout sur l'utilisateur authentifie. Le meme appel joue par un autre
+         * juriste ne doit donc rien renvoyer : c'est ce qui garantit que le filtre ne sert pas a
+         * consulter le portefeuille d'un collegue.
+         */
+        mockMvc.perform(get(api("/dossiers")).param("mesDossiers", "true")
+                        .param("reference", "RECH-" + n).with(juriste))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1));
+
+        mockMvc.perform(get(api("/dossiers")).param("mesDossiers", "true")
+                        .param("reference", "RECH-" + n)
+                        .with(role("kc-juriste-m16d", "ROLE_JURISTE", "ROLE_CONSULTATION")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(0));
     }
 
     private String api(String chemin) {

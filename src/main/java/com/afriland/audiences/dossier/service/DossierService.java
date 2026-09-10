@@ -47,6 +47,7 @@ import com.afriland.audiences.referentiel.domain.Utilisateur;
 import com.afriland.audiences.referentiel.repository.AvocatRepository;
 import com.afriland.audiences.referentiel.repository.ClientRepository;
 import com.afriland.audiences.referentiel.repository.NatureDossierRepository;
+import com.afriland.audiences.referentiel.repository.TypeClientSensibleRepository;
 import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
 import com.afriland.audiences.referentiel.web.dto.VueClientDossiersResponse;
 import lombok.RequiredArgsConstructor;
@@ -74,6 +75,7 @@ public class DossierService {
     private final UtilisateurRepository utilisateurRepository;
     private final AvocatRepository avocatRepository;
     private final NatureDossierRepository natureDossierRepository;
+    private final TypeClientSensibleRepository typeClientSensibleRepository;
     private final EtapeTransitionValidator transitionValidator;
     private final DossierMapper dossierMapper;
     private final EtapeProcedureMapper etapeProcedureMapper;
@@ -97,6 +99,11 @@ public class DossierService {
 
         CategorieDossier categorie = resoudreCategorie(request);
         validerChampsConditionnels(request, categorie);
+        // Le champ est enregistré qu'il soit ou non accompagné de `estSensible` : le valider
+        // seulement dans la branche sensible laisserait passer une valeur fantaisiste.
+        if (StringUtils.hasText(request.typeClientSensible())) {
+            validerTypeClientSensible(request.typeClientSensible());
+        }
 
         Dossier dossier = Dossier.builder()
                 .reference(request.reference())
@@ -141,6 +148,22 @@ public class DossierService {
                 Map.of("reference", dossier.getReference(), "categorie", categorie.name()));
 
         return construireReponse(dossier, List.of(instance), juristesAffectes, avocatsAffectes, List.of());
+    }
+
+    /**
+     * Q-06 laisse {@code dossier.type_client_sensible} en VARCHAR libre, non contraint par une clé
+     * étrangère — mais confie explicitement la validation au service, comme pour {@code nature}.
+     * Elle avait été omise ici : n'importe quelle chaîne était enregistrée en silence, y compris une
+     * faute de frappe, et se retrouvait telle quelle dans les écrans et les rapports.
+     * <p>
+     * Le contrôle porte sur le <b>code</b> et non sur le libellé : il est unique, stable si le
+     * libellé est reformulé, et tient dans la colonne — un libellé peut atteindre 100 caractères
+     * pour une colonne cible de 50, ce qui reproduirait le défaut corrigé par V7 sur {@code nature}.
+     */
+    private void validerTypeClientSensible(String code) {
+        typeClientSensibleRepository.findByCodeIgnoreCase(code)
+                .orElseThrow(() -> ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
+                        "Type de client sensible inconnu du référentiel : " + code));
     }
 
     private CategorieDossier resoudreCategorie(CreerDossierRequest request) {
@@ -209,9 +232,15 @@ public class DossierService {
 
     @Transactional(readOnly = true)
     public PageResponse<DossierResponse> listerDossiers(String nature, CategorieDossier categorie,
-                                                          String juridiction, Pageable pageable) {
+                                                          String juridiction, String reference,
+                                                          Long clientId, boolean mesDossiers,
+                                                          Pageable pageable) {
+        // « Mes dossiers » se lit sur l'utilisateur authentifié, jamais sur un identifiant reçu :
+        // le filtre ne peut donc pas servir à consulter le portefeuille d'un collègue.
+        Long juristeId = mesDossiers ? currentUserService.getCurrentUser().getId() : null;
         var page = dossierRepository.findAll(
-                DossierSpecifications.withFilters(nature, categorie, juridiction), pageable);
+                DossierSpecifications.withFilters(nature, categorie, juridiction, reference, clientId, juristeId),
+                pageable);
         return PageResponse.of(page, dossier -> construireReponse(dossier,
                 etapeProcedureRepository.findByDossierIdOrderByTypeAsc(dossier.getId()),
                 dossierJuristeRepository.findByDossierId(dossier.getId()).stream()
@@ -489,6 +518,8 @@ public class DossierService {
 
         if (request.statut() == StatutValidation.VALIDEE) {
             if (request.typeClientSensibleAjuste() != null) {
+                // Le DJ ajuste le type au moment de valider : même référentiel, même contrôle.
+                validerTypeClientSensible(request.typeClientSensibleAjuste());
                 dossier.setTypeClientSensible(request.typeClientSensibleAjuste());
             }
             var propositionInitiale = auditSeuilDossierRepository
