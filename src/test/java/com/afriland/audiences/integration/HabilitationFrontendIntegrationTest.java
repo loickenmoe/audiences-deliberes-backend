@@ -37,6 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -595,6 +596,124 @@ class HabilitationFrontendIntegrationTest {
                         .with(role("kc-juriste-m16d", "ROLE_JURISTE", "ROLE_CONSULTATION")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(0));
+    }
+
+    @Test
+    @DisplayName("M16 : une dérogation demandée se lit, puis s'arbitre ; la proposition initiale ne s'arbitre pas (Q-74)")
+    void derogation_lueEtArbitrable() throws Exception {
+        int n = COMPTEUR.incrementAndGet();
+        RequestPostProcessor juriste = role("kc-juriste-q74", "ROLE_JURISTE", "ROLE_SAISIE", "ROLE_CONSULTATION");
+        RequestPostProcessor dj = role("kc-dj-q74", "ROLE_DJ", "ROLE_CONSULTATION");
+
+        long clientId = extraireId(mockMvc.perform(post(api("/clients"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("nom", "Client Q74 " + n, "reference", "CLI-Q74-" + n)))
+                        .with(juriste))
+                .andExpect(status().isCreated())
+                .andReturn());
+        mockMvc.perform(get(api("/alertes/mes-notifications")).with(juriste)).andExpect(status().isOk());
+        Long juristeId = utilisateurRepository.findByKeycloakId("kc-juriste-q74").orElseThrow().getId();
+        long avocatId = avocatRepository.save(Avocat.builder().nom("Me Q74 " + n)
+                .compteKeycloak("kc-avocat-q74-" + n).build()).getId();
+
+        long dossierId = extraireId(mockMvc.perform(post(api("/dossiers"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.ofEntries(
+                                Map.entry("reference", "DOS-Q74-" + n),
+                                Map.entry("nature", "Assignation en paiement"),
+                                Map.entry("juridictionSaisie", "TGI Douala"),
+                                Map.entry("clientId", clientId),
+                                Map.entry("risqueEncouru", 1_000_000),
+                                Map.entry("dossierCreditOrigine", "CRD-" + n),
+                                Map.entry("pvTransfert", "PV-" + n),
+                                Map.entry("estSensible", true),
+                                Map.entry("seuilMontant", 60_000_000),
+                                Map.entry("typeClientSensible", "VIP"),
+                                Map.entry("juristesAffectes", List.of(juristeId)),
+                                Map.entry("avocatsAffectes", List.of(avocatId)))))
+                        .with(juriste))
+                .andExpect(status().isCreated())
+                .andReturn());
+
+        // Avant validation : la seule demande est la proposition initiale — lisible, mais pas
+        // arbitrable comme une dérogation. Elle se tranche par la validation de sensibilité.
+        JsonNode initiales = lireJson(mockMvc.perform(get(api("/dossiers/" + dossierId + "/seuil-derogation")).with(dj))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(initiales).hasSize(1);
+        long propositionInitiale = initiales.get(0).get("id").asLong();
+        mockMvc.perform(put(api("/dossiers/" + dossierId + "/seuil-derogation/" + propositionInitiale))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("statut", "VALIDEE")))
+                        .with(dj))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post(api("/dossiers/" + dossierId + "/sensibilite/validation"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("statut", "VALIDEE")))
+                        .with(dj))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post(api("/dossiers/" + dossierId + "/seuil-derogation"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("nouveauSeuil", 80_000_000, "motif", "Client stratégique")))
+                        .with(juriste))
+                .andExpect(status().isCreated());
+
+        // Le DJ lit la file d'arbitrage : c'est ce qui manquait (QF-23).
+        JsonNode enAttente = lireJson(mockMvc.perform(get(api("/dossiers/" + dossierId + "/seuil-derogation"))
+                        .param("statut", "EN_ATTENTE").with(dj))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(enAttente).hasSize(1);
+        assertThat(enAttente.get(0).get("nouveauSeuil").asDouble()).isEqualTo(80_000_000d);
+        long demande = enAttente.get(0).get("id").asLong();
+
+        mockMvc.perform(put(api("/dossiers/" + dossierId + "/seuil-derogation/" + demande))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("statut", "VALIDEE")))
+                        .with(dj))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statut").value("VALIDEE"));
+
+        mockMvc.perform(get(api("/dossiers/" + dossierId + "/seuil-derogation")).param("statut", "EN_ATTENTE").with(dj))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+        mockMvc.perform(get(api("/dossiers/" + dossierId + "/seuil-derogation")).with(dj))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2));
+    }
+
+    @Test
+    @DisplayName("M16 : l'affectation ne peut plus vider un dossier de ses juristes ni de ses avocats (Q-75)")
+    void affectation_exigeUnJuristeEtUnAvocat() throws Exception {
+        long dossierId = creerDossier();
+        RequestPostProcessor juriste = role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_SAISIE");
+        Long juristeId = utilisateurRepository.findByKeycloakId("kc-juriste-m15").orElseThrow().getId();
+
+        // L'endpoint remplace les listes : une liste vide retirait tout le monde, contre RG-DOS-03.
+        mockMvc.perform(put(api("/dossiers/" + dossierId + "/affectation"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("juristesAffectes", List.of(), "avocatsAffectes", List.of(avocatId))))
+                        .with(juriste))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("ERR-VALIDATION"))
+                .andExpect(jsonPath("$.details").value(containsString("juristesAffectes")));
+
+        // Une liste absente vaut une liste vide : même refus.
+        mockMvc.perform(put(api("/dossiers/" + dossierId + "/affectation"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("juristesAffectes", List.of(juristeId))))
+                        .with(juriste))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.details").value(containsString("avocatsAffectes")));
+
+        // Le cas nominal passe toujours, confirmation du doublon comprise.
+        mockMvc.perform(put(api("/dossiers/" + dossierId + "/affectation")).param("forcer", "true")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("juristesAffectes", List.of(juristeId), "avocatsAffectes", List.of(avocatId))))
+                        .with(juriste))
+                .andExpect(status().isOk());
     }
 
     private String api(String chemin) {

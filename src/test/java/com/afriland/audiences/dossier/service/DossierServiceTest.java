@@ -1,5 +1,9 @@
 package com.afriland.audiences.dossier.service;
 
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import com.afriland.audiences.dossier.web.dto.AuditSeuilResponse;
+import com.afriland.audiences.dossier.web.dto.ValiderDerogationRequest;
 import com.afriland.audiences.alerte.domain.TypeAlerte;
 import com.afriland.audiences.alerte.service.AlerteService;
 import com.afriland.audiences.common.audit.HistoriqueAction;
@@ -302,6 +306,35 @@ class DossierServiceTest {
                 .declencher(org.mockito.ArgumentMatchers.eq(TypeAlerte.DOUBLON_AFFECTATION),
                         org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.eq(dj),
                         org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
+    void validerDerogationSeuil_refuseDeTrancherLaPropositionInitiale() {
+        // Sensibilité encore en attente : le seul audit en attente est la proposition initiale.
+        Dossier dossier = Dossier.builder().id(1L).estSensible(true)
+                .sensibiliteStatut(StatutValidation.EN_ATTENTE).build();
+        when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
+
+        assertThatThrownBy(() -> service.validerDerogationSeuil(1L, 5L,
+                new ValiderDerogationRequest(StatutValidation.VALIDEE, null)))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("validation de sensibilité");
+        verify(auditSeuilDossierRepository, never()).save(any());
+    }
+
+    @Test
+    void listerDerogationsSeuil_filtreSurLeStatutDemande() {
+        when(dossierRepository.findById(1L)).thenReturn(Optional.of(Dossier.builder().id(1L).build()));
+        when(auditSeuilDossierRepository.findByDossierIdAndStatutOrderByDateActionDesc(1L, StatutValidation.EN_ATTENTE))
+                // Un audit est toujours rattaché à un dossier et à son auteur : le mapper s'y fie.
+                .thenReturn(List.of(AuditSeuilDossier.builder().id(9L).dossier(Dossier.builder().id(1L).build())
+                        .utilisateur(juriste).nouveauSeuil(80_000_000d)
+                        .motif("Client stratégique").statut(StatutValidation.EN_ATTENTE).build()));
+
+        var demandes = service.listerDerogationsSeuil(1L, StatutValidation.EN_ATTENTE);
+
+        assertThat(demandes).extracting(AuditSeuilResponse::id).containsExactly(9L);
+        verify(auditSeuilDossierRepository, never()).findByDossierIdOrderByDateActionDesc(any());
     }
 
     @Test

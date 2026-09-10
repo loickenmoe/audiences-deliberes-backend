@@ -467,9 +467,39 @@ public class DossierService {
         return audit;
     }
 
+    /**
+     * Demandes de seuil d'un dossier, la plus récente d'abord (Q-74).
+     * <p>
+     * Ajouté parce que l'arbitrage (#7) exige l'identifiant d'une demande, que rien n'exposait une
+     * fois celle-ci créée : ni endpoint de lecture, ni champ du dossier, ni détail d'historique. Le
+     * DJ/DJA, seul habilité à arbitrer, ne pouvait donc pas le faire (QF-23 du frontend).
+     * <p>
+     * La liste contient aussi la proposition initiale faite à la création du dossier : c'est
+     * l'historique complet des seuils demandés, pas seulement celui des dérogations.
+     */
+    @Transactional(readOnly = true)
+    public List<AuditSeuilResponse> listerDerogationsSeuil(Long dossierId, StatutValidation statut) {
+        getDossierOrThrow(dossierId);
+        List<AuditSeuilDossier> audits = statut == null
+                ? auditSeuilDossierRepository.findByDossierIdOrderByDateActionDesc(dossierId)
+                : auditSeuilDossierRepository.findByDossierIdAndStatutOrderByDateActionDesc(dossierId, statut);
+        return audits.stream().map(auditSeuilMapper::toResponse).toList();
+    }
+
     @Transactional
     public AuditSeuilResponse validerDerogationSeuil(Long dossierId, Long auditId, ValiderDerogationRequest request) {
         Dossier dossier = getDossierOrThrow(dossierId);
+        /*
+         * Q-74 : tant que la sensibilité n'est pas validée, le seul audit en attente est la
+         * proposition initiale de la création. Elle se tranche par la validation de sensibilité
+         * (#8), qui met aussi à jour le statut du dossier. L'arbitrer ici comme une dérogation
+         * fixerait un seuil en laissant la sensibilité en attente. Latent tant qu'aucun identifiant
+         * n'était exposé, ce contournement devenait atteignable avec la lecture ci-dessus.
+         */
+        if (dossier.getSensibiliteStatut() != StatutValidation.VALIDEE) {
+            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
+                    "La proposition initiale se tranche par la validation de sensibilité, pas comme une dérogation");
+        }
         AuditSeuilDossier audit = auditSeuilDossierRepository.findById(auditId)
                 .filter(a -> a.getDossier().getId().equals(dossierId))
                 .orElseThrow(() -> ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE,

@@ -366,6 +366,11 @@ transition automatique d'étape vers `ARCHIVE` (Q-60, reste manuelle via l'endpo
 Codes génériques : 400 requête invalide · 401 non authentifié · 403 droits insuffisants ·
 404 non trouvé · 409 conflit d'unicité · 422 règle métier violée.
 
+**Lecture des demandes de seuil (M16, Q-74).** `GET /dossiers/{id}/seuil-derogation[?statut=]`
+(`ROLE_CONSULTATION`) renvoie les `AuditSeuilResponse` du dossier, la plus récente d'abord — seule
+source de l'`auditId` qu'exige l'arbitrage. L'arbitrage n'est recevable que sur une sensibilité
+validée.
+
 **Champ fautif (M16, Q-70).** `ERR-CONFLICT` est partagé par neuf conflits sans rapport entre eux ;
 le code seul ne dit donc pas quel champ corriger. Le corps d'erreur porte pour cela un champ `champ`,
 distinct de `details` et **absent du JSON** lorsque l'erreur ne vise aucun champ :

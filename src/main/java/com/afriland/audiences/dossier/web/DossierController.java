@@ -13,6 +13,8 @@ import com.afriland.audiences.dossier.web.dto.ModifierStatutEtapeRequest;
 import com.afriland.audiences.dossier.web.dto.ValiderDerogationRequest;
 import com.afriland.audiences.dossier.web.dto.ValiderSensibiliteRequest;
 import com.afriland.audiences.referentiel.domain.CategorieDossier;
+import java.util.List;
+import com.afriland.audiences.dossier.domain.StatutValidation;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -77,7 +79,7 @@ public class DossierController {
     @PutMapping("/{id}/affectation")
     @PreAuthorize("hasAnyRole('JURISTE', 'DJ')")
     public DossierResponse modifierAffectation(@PathVariable Long id,
-                                                @RequestBody ModifierAffectationRequest request,
+                                                @Valid @RequestBody ModifierAffectationRequest request,
                                                 @RequestParam(defaultValue = "false") boolean forcer) {
         return dossierService.modifierAffectation(id, request, forcer);
     }
@@ -101,6 +103,17 @@ public class DossierController {
     public ResponseEntity<AuditSeuilResponse> demanderDerogationSeuil(@PathVariable Long id,
                                                                        @Valid @RequestBody DemandeDerogationSeuilRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(dossierService.demanderDerogationSeuil(id, request));
+    }
+
+    /**
+     * Q-74 — demandes de seuil d'un dossier. {@code statut=EN_ATTENTE} donne la file à arbitrer.
+     * Lecture seule, sous {@code ROLE_CONSULTATION} comme la fiche dont elle dépend.
+     */
+    @GetMapping("/{id}/seuil-derogation")
+    @PreAuthorize("hasRole('CONSULTATION')")
+    public List<AuditSeuilResponse> listerDerogationsSeuil(@PathVariable Long id,
+                                                            @RequestParam(required = false) StatutValidation statut) {
+        return dossierService.listerDerogationsSeuil(id, statut);
     }
 
     @PutMapping("/{id}/seuil-derogation/{auditId}")

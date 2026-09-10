@@ -1391,6 +1391,55 @@ du type par le DJ au moment de valider la sensibilité.
 **Vérifié** par un test unitaire de rejet et un test d'intégration contrôlant le 400 sur un code
 inconnu, plus une vérification manuelle : `Type de client sensible inconnu du référentiel : VIPP`.
 
+### Q-74 ✅ Une dérogation de seuil demandée ne pouvait pas être arbitrée — tranché (M16)
+
+Remonté par le jalon F7 du frontend (QF-23), et vérifié sur le contrat OpenAPI réel.
+
+**A — Le constat.** L'arbitrage (`PUT /dossiers/{id}/seuil-derogation/{auditId}`) exige
+l'identifiant de la demande. Une fois celle-ci créée, cet identifiant n'était exposé **nulle part** :
+aucun `GET` des demandes, aucun champ dans `DossierResponse`, et l'historique n'en consigne que
+`{nouveauSeuil, motif}`. Seul le demandeur le recevait, dans la réponse du `POST` — or c'est le
+DJ/DJA, et lui seul, qui arbitre. L'endpoint était donc inatteignable depuis une interface, et une
+demande restait bloquée pour toujours.
+
+**B — Tranché.** `GET /dossiers/{id}/seuil-derogation[?statut=]`, sous `ROLE_CONSULTATION`, renvoie
+les demandes de seuil du dossier, la plus récente d'abord. `statut=EN_ATTENTE` donne la file à
+arbitrer. C'est une lecture, sans règle métier nouvelle.
+
+**C — Défaut latent révélé par cet ajout, corrigé dans le même geste.** La proposition initiale de
+sensibilité, créée avec le dossier, est **elle aussi** un `AuditSeuilDossier` en `EN_ATTENTE`. Tant
+que la sensibilité n'était pas validée, `validerDerogationSeuil` acceptait de l'arbitrer comme une
+dérogation : il fixait le seuil et l'origine `DEROGATION` en laissant la sensibilité en attente, et la
+validation de sensibilité ne retrouvait plus sa proposition. Inatteignable tant qu'aucun identifiant
+n'était exposé, ce contournement devenait atteignable avec la lecture. L'arbitrage exige désormais
+une sensibilité **validée** — exactement la condition déjà imposée à la demande.
+
+**Vérifié** par deux tests unitaires (garde, filtre de statut) et un test d'intégration de bout en
+bout sur PostgreSQL réel : proposition initiale lisible mais non arbitrable (400), validation de
+sensibilité, demande de dérogation, lecture de la file, arbitrage, file vide ensuite.
+
+### Q-75 ✅ L'affectation pouvait vider un dossier de ses juristes — tranché (M16)
+
+Remonté par le jalon F7 du frontend (QF-25).
+
+**A — Le constat.** `PUT /dossiers/{id}/affectation` **remplace** les deux listes, et
+`ModifierAffectationRequest` ne portait aucune contrainte — le contrôleur n'avait d'ailleurs pas
+`@Valid`, si bien qu'une annotation aurait été ignorée. Une liste vide ou absente retirait donc tous
+les juristes, ou tous les avocats, d'un dossier : contre RG-DOS-03, alors que la création exige déjà
+les deux listes non vides (`CreerDossierRequest`).
+
+**B — Tranché.** `@NotEmpty` sur les deux listes et `@Valid` sur le paramètre : même règle à la
+création et à la modification. Le refus prend la forme standard `ERR-VALIDATION`, avec le champ en
+cause dans `details`.
+
+**C — Non traité, volontairement.** Conserver une personne déjà affectée déclenche `ERR-003`, puis
+sur confirmation une alerte au DJ (RG-DOS-07). L'endpoint remplaçant tout, presque toute modification
+conserve quelqu'un : le DJ risque d'être alerté à chaque changement. C'est une règle métier, à
+confirmer avec la Direction Juridique avant d'y toucher.
+
+**Vérifié** par un test d'intégration : liste vide refusée, liste absente refusée, cas nominal
+accepté.
+
 ### Q-27 ✅ `dossier.parties` défini deux fois — tranché (M2)
 Le dictionnaire REF-06 §2.1.2 déclare `parties JSONB` **deux fois**, avec deux structures
 différentes : `{demandeur, defendeur}` et `{demandeur, defendeur, client}`. Le contrat d'API et

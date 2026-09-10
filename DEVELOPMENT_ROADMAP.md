@@ -1048,6 +1048,21 @@ l'ajustement par le DJ lors de la validation de sensibilité.
 
 **Vérifications du jalon** : **265 tests au vert**, `BUILD SUCCESS`.
 
+### 5. Une dérogation demandée ne pouvait pas être arbitrée (Q-74) ✅
+
+L'arbitrage exigeait l'identifiant d'une demande que rien n'exposait. **Implémenté** :
+`GET /dossiers/{id}/seuil-derogation[?statut=]`. Au passage, l'arbitrage refuse désormais la
+proposition initiale de sensibilité, qu'il acceptait à tort tant que la sensibilité n'était pas
+validée — défaut latent que la nouvelle lecture rendait atteignable.
+
+**Testé** : deux tests unitaires, un test d'intégration de bout en bout.
+
+### 6. L'affectation pouvait vider un dossier (Q-75) ✅
+
+`PUT /affectation` remplace les listes sans minimum, et sans `@Valid` : un dossier pouvait perdre
+tous ses juristes. **Implémenté** : `@NotEmpty` sur les deux listes, `@Valid` sur le contrôleur —
+même règle qu'à la création. **Testé** : un test d'intégration (liste vide, liste absente, nominal).
+
 **Validation manuelle** : depuis le frontend, créer un dossier en choisissant « Hypothèque
 judiciaire (inscription provisoire, définitive, réalisation) » — il doit être accepté ; puis
 rechercher ce dossier par sa référence dans la liste, et cocher « Mes dossiers uniquement ».
