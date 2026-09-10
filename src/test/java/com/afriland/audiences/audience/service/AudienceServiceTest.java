@@ -3,9 +3,11 @@ package com.afriland.audiences.audience.service;
 import com.afriland.audiences.alerte.domain.TypeAlerte;
 import com.afriland.audiences.alerte.service.AlerteService;
 import com.afriland.audiences.audience.domain.Audience;
+import com.afriland.audiences.audience.domain.PeriodeCalendrier;
 import com.afriland.audiences.audience.domain.StatutAudience;
 import com.afriland.audiences.audience.mapper.AudienceMapper;
 import com.afriland.audiences.audience.repository.AudienceRepository;
+import com.afriland.audiences.audience.web.dto.AnnulerAudienceRequest;
 import com.afriland.audiences.audience.web.dto.AudienceResponse;
 import com.afriland.audiences.audience.web.dto.EnregistrerCompteRenduRequest;
 import com.afriland.audiences.audience.web.dto.PlanifierAudienceRequest;
@@ -28,6 +30,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -56,7 +59,7 @@ class AudienceServiceTest {
             audience.getDossier() != null ? audience.getDossier().getId() : null,
             audience.getEtape() != null ? audience.getEtape().getId() : null,
             audience.getDatePlanifiee(), audience.getDateTenue(), audience.getCompteRendu(),
-            audience.getStatut(), audience.getCreatedAt());
+            audience.getStatut(), audience.getCreatedAt(), audience.getMotifAnnulation(), audience.getDateAnnulation());
 
     private AudienceService service;
     private Dossier dossier;
@@ -101,7 +104,7 @@ class AudienceServiceTest {
     void planifierAudience_rejectsDuplicateWithoutForcer() {
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
         when(etapeProcedureRepository.findById(10L)).thenReturn(Optional.of(etapeEnCours));
-        when(audienceRepository.existsByEtapeIdAndDatePlanifiee(10L, LocalDate.now().plusDays(5))).thenReturn(true);
+        when(audienceRepository.existsByEtapeIdAndDatePlanifieeAndStatutNot(10L, LocalDate.now().plusDays(5), StatutAudience.ANNULEE)).thenReturn(true);
 
         assertThatThrownBy(() -> service.planifierAudience(1L,
                 new PlanifierAudienceRequest(10L, LocalDate.now().plusDays(5)), false))
@@ -115,7 +118,7 @@ class AudienceServiceTest {
         Utilisateur dj = Utilisateur.builder().id(20L).build();
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
         when(etapeProcedureRepository.findById(10L)).thenReturn(Optional.of(etapeEnCours));
-        when(audienceRepository.existsByEtapeIdAndDatePlanifiee(10L, LocalDate.now().plusDays(5))).thenReturn(true);
+        when(audienceRepository.existsByEtapeIdAndDatePlanifieeAndStatutNot(10L, LocalDate.now().plusDays(5), StatutAudience.ANNULEE)).thenReturn(true);
         when(audienceRepository.save(any(Audience.class))).thenAnswer(inv -> {
             Audience a = inv.getArgument(0);
             a.setId(99L);
@@ -132,7 +135,7 @@ class AudienceServiceTest {
     void planifierAudience_nominalCreatesPlanifieeAudience() {
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
         when(etapeProcedureRepository.findById(10L)).thenReturn(Optional.of(etapeEnCours));
-        when(audienceRepository.existsByEtapeIdAndDatePlanifiee(any(), any())).thenReturn(false);
+        when(audienceRepository.existsByEtapeIdAndDatePlanifieeAndStatutNot(any(), any(), any())).thenReturn(false);
         when(audienceRepository.save(any(Audience.class))).thenAnswer(inv -> {
             Audience a = inv.getArgument(0);
             if (a.getId() == null) {
@@ -197,5 +200,55 @@ class AudienceServiceTest {
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("Dossier introuvable");
         verify(audienceRepository, never()).findByDossierIdOrderByDatePlanifieeDesc(any());
+    }
+
+    /** Q-76 : annulation motivée d'une audience planifiée. */
+    @Test
+    void annulerAudience_nominalPasseAnnuleeAvecMotifEtDate() {
+        Audience audience = Audience.builder().id(5L).dossier(dossier).datePlanifiee(LocalDate.now().plusDays(4))
+                .statut(StatutAudience.PLANIFIEE).build();
+        when(audienceRepository.findById(5L)).thenReturn(Optional.of(audience));
+        when(audienceRepository.save(any(Audience.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        AudienceResponse result = service.annulerAudience(5L, new AnnulerAudienceRequest("  Renvoi du tribunal  "));
+
+        assertThat(result.statut()).isEqualTo(StatutAudience.ANNULEE);
+        assertThat(result.motifAnnulation()).isEqualTo("Renvoi du tribunal");
+        assertThat(result.dateAnnulation()).isNotNull();
+        verify(historiqueActionService).enregistrer(eq(1L), eq("Annulation d'une audience"), any());
+    }
+
+    @Test
+    void annulerAudience_refuseUneAudienceQuiNEstPlusPlanifiee() {
+        Audience tenue = Audience.builder().id(5L).dossier(dossier).datePlanifiee(LocalDate.now().minusDays(1))
+                .statut(StatutAudience.TENUE).build();
+        when(audienceRepository.findById(5L)).thenReturn(Optional.of(tenue));
+
+        assertThatThrownBy(() -> service.annulerAudience(5L, new AnnulerAudienceRequest("Erreur")))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("Seule une audience planifiée");
+        verify(audienceRepository, never()).save(any());
+    }
+
+    @Test
+    void enregistrerCompteRendu_refuseUneAudienceAnnulee() {
+        Audience annulee = Audience.builder().id(5L).dossier(dossier).datePlanifiee(LocalDate.now().minusDays(1))
+                .statut(StatutAudience.ANNULEE).motifAnnulation("Renvoi").dateAnnulation(LocalDateTime.now()).build();
+        when(audienceRepository.findById(5L)).thenReturn(Optional.of(annulee));
+
+        assertThatThrownBy(() -> service.enregistrerCompteRendu(5L, new EnregistrerCompteRenduRequest("CR")))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("annulée");
+        verify(audienceRepository, never()).save(any());
+    }
+
+    /** Q-76 : le calendrier et ses exports écartent les audiences annulées (stub strict : autre appel = échec). */
+    @Test
+    void calendrier_ecarteLesAudiencesAnnulees() {
+        LocalDate debut = LocalDate.of(2026, 9, 7);
+        when(audienceRepository.findByDatePlanifieeBetweenAndStatutNot(
+                debut, PeriodeCalendrier.HEBDOMADAIRE.dateFin(debut), StatutAudience.ANNULEE)).thenReturn(List.of());
+
+        assertThat(service.calendrier(PeriodeCalendrier.HEBDOMADAIRE, debut)).isEmpty();
     }
 }

@@ -28,6 +28,8 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -36,7 +38,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -595,6 +599,235 @@ class HabilitationFrontendIntegrationTest {
                         .with(role("kc-juriste-m16d", "ROLE_JURISTE", "ROLE_CONSULTATION")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(0));
+    }
+
+    @Test
+    @DisplayName("M16 : une dérogation demandée se lit, puis s'arbitre ; la proposition initiale ne s'arbitre pas (Q-74)")
+    void derogation_lueEtArbitrable() throws Exception {
+        int n = COMPTEUR.incrementAndGet();
+        RequestPostProcessor juriste = role("kc-juriste-q74", "ROLE_JURISTE", "ROLE_SAISIE", "ROLE_CONSULTATION");
+        RequestPostProcessor dj = role("kc-dj-q74", "ROLE_DJ", "ROLE_CONSULTATION");
+
+        long clientId = extraireId(mockMvc.perform(post(api("/clients"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("nom", "Client Q74 " + n, "reference", "CLI-Q74-" + n)))
+                        .with(juriste))
+                .andExpect(status().isCreated())
+                .andReturn());
+        mockMvc.perform(get(api("/alertes/mes-notifications")).with(juriste)).andExpect(status().isOk());
+        Long juristeId = utilisateurRepository.findByKeycloakId("kc-juriste-q74").orElseThrow().getId();
+        long avocatId = avocatRepository.save(Avocat.builder().nom("Me Q74 " + n)
+                .compteKeycloak("kc-avocat-q74-" + n).build()).getId();
+
+        long dossierId = extraireId(mockMvc.perform(post(api("/dossiers"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.ofEntries(
+                                Map.entry("reference", "DOS-Q74-" + n),
+                                Map.entry("nature", "Assignation en paiement"),
+                                Map.entry("juridictionSaisie", "TGI Douala"),
+                                Map.entry("clientId", clientId),
+                                Map.entry("risqueEncouru", 1_000_000),
+                                Map.entry("dossierCreditOrigine", "CRD-" + n),
+                                Map.entry("pvTransfert", "PV-" + n),
+                                Map.entry("estSensible", true),
+                                Map.entry("seuilMontant", 60_000_000),
+                                Map.entry("typeClientSensible", "VIP"),
+                                Map.entry("juristesAffectes", List.of(juristeId)),
+                                Map.entry("avocatsAffectes", List.of(avocatId)))))
+                        .with(juriste))
+                .andExpect(status().isCreated())
+                .andReturn());
+
+        // Avant validation : la seule demande est la proposition initiale — lisible, mais pas
+        // arbitrable comme une dérogation. Elle se tranche par la validation de sensibilité.
+        JsonNode initiales = lireJson(mockMvc.perform(get(api("/dossiers/" + dossierId + "/seuil-derogation")).with(dj))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(initiales).hasSize(1);
+        long propositionInitiale = initiales.get(0).get("id").asLong();
+        mockMvc.perform(put(api("/dossiers/" + dossierId + "/seuil-derogation/" + propositionInitiale))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("statut", "VALIDEE")))
+                        .with(dj))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post(api("/dossiers/" + dossierId + "/sensibilite/validation"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("statut", "VALIDEE")))
+                        .with(dj))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post(api("/dossiers/" + dossierId + "/seuil-derogation"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("nouveauSeuil", 80_000_000, "motif", "Client stratégique")))
+                        .with(juriste))
+                .andExpect(status().isCreated());
+
+        // Le DJ lit la file d'arbitrage : c'est ce qui manquait (QF-23).
+        JsonNode enAttente = lireJson(mockMvc.perform(get(api("/dossiers/" + dossierId + "/seuil-derogation"))
+                        .param("statut", "EN_ATTENTE").with(dj))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(enAttente).hasSize(1);
+        assertThat(enAttente.get(0).get("nouveauSeuil").asDouble()).isEqualTo(80_000_000d);
+        long demande = enAttente.get(0).get("id").asLong();
+
+        mockMvc.perform(put(api("/dossiers/" + dossierId + "/seuil-derogation/" + demande))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("statut", "VALIDEE")))
+                        .with(dj))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statut").value("VALIDEE"));
+
+        mockMvc.perform(get(api("/dossiers/" + dossierId + "/seuil-derogation")).param("statut", "EN_ATTENTE").with(dj))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+        mockMvc.perform(get(api("/dossiers/" + dossierId + "/seuil-derogation")).with(dj))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2));
+    }
+
+    @Test
+    @DisplayName("M16 : l'affectation ne peut plus vider un dossier de ses juristes ni de ses avocats (Q-75)")
+    void affectation_exigeUnJuristeEtUnAvocat() throws Exception {
+        long dossierId = creerDossier();
+        RequestPostProcessor juriste = role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_SAISIE");
+        Long juristeId = utilisateurRepository.findByKeycloakId("kc-juriste-m15").orElseThrow().getId();
+
+        // L'endpoint remplace les listes : une liste vide retirait tout le monde, contre RG-DOS-03.
+        mockMvc.perform(put(api("/dossiers/" + dossierId + "/affectation"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("juristesAffectes", List.of(), "avocatsAffectes", List.of(avocatId))))
+                        .with(juriste))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("ERR-VALIDATION"))
+                .andExpect(jsonPath("$.details").value(containsString("juristesAffectes")));
+
+        // Une liste absente vaut une liste vide : même refus.
+        mockMvc.perform(put(api("/dossiers/" + dossierId + "/affectation"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("juristesAffectes", List.of(juristeId))))
+                        .with(juriste))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.details").value(containsString("avocatsAffectes")));
+
+        // Le cas nominal passe toujours, confirmation du doublon comprise.
+        mockMvc.perform(put(api("/dossiers/" + dossierId + "/affectation")).param("forcer", "true")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("juristesAffectes", List.of(juristeId), "avocatsAffectes", List.of(avocatId))))
+                        .with(juriste))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("M16 : une audience annulée quitte le calendrier, ne compte plus comme doublon et ne reçoit pas de compte rendu (Q-76)")
+    void audienceAnnulee_sortDuCalendrierEtDesDoublons() throws Exception {
+        long dossierId = creerDossier();
+        RequestPostProcessor juriste = role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_CONSULTATION");
+        long etapeId = etapeEnCours(dossierId, juriste);
+
+        String planification = json(Map.of("etapeId", etapeId, "datePlanifiee", LocalDate.now().plusDays(10).toString()));
+        long audienceId = extraireId(mockMvc.perform(post(api("/dossiers/" + dossierId + "/audiences"))
+                        .contentType(MediaType.APPLICATION_JSON).content(planification).with(juriste))
+                .andExpect(status().isCreated())
+                .andReturn());
+
+        // Le motif est obligatoire, et l'annulation réservée au juriste, comme la planification.
+        mockMvc.perform(patch(api("/audiences/" + audienceId + "/annulation"))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(Map.of("motif", " "))).with(juriste))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(patch(api("/audiences/" + audienceId + "/annulation"))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(Map.of("motif", "Renvoi")))
+                        .with(role("kc-dj-m15", "ROLE_DJ", "ROLE_CONSULTATION")))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(patch(api("/audiences/" + audienceId + "/annulation"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("motif", "Renvoi prononcé par le tribunal"))).with(juriste))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statut").value("ANNULEE"))
+                .andExpect(jsonPath("$.motifAnnulation").value("Renvoi prononcé par le tribunal"))
+                .andExpect(jsonPath("$.dateAnnulation").isNotEmpty());
+
+        // Une audience déjà annulée ne s'annule pas une seconde fois.
+        mockMvc.perform(patch(api("/audiences/" + audienceId + "/annulation"))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(Map.of("motif", "Encore"))).with(juriste))
+                .andExpect(status().isBadRequest());
+
+        /*
+         * Replanifier à la même date après un renvoi n'est pas un doublon : 201 direct, sans
+         * ?forcer — l'audience annulée aurait sinon déclenché ERR-005 et une alerte au DJ.
+         */
+        long nouvelleId = extraireId(mockMvc.perform(post(api("/dossiers/" + dossierId + "/audiences"))
+                        .contentType(MediaType.APPLICATION_JSON).content(planification).with(juriste))
+                .andExpect(status().isCreated())
+                .andReturn());
+
+        // Le calendrier — donc ses exports, qui en reprennent les entrées — écarte l'annulée et garde
+        // la replanifiée : le filtre ne se contente pas de tout vider.
+        JsonNode calendrier = lireJson(mockMvc.perform(get(api("/audiences/calendrier"))
+                        .param("periode", "TRIMESTRIELLE").param("dateDebut", LocalDate.now().toString())
+                        .with(juriste))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(calendrier.findValues("audienceId").stream().map(JsonNode::asLong).toList())
+                .contains(nouvelleId)
+                .doesNotContain(audienceId);
+
+        // Une audience annulée ne reçoit pas de compte rendu — refus propre, avant même la règle de date.
+        mockMvc.perform(put(api("/audiences/" + audienceId + "/compte-rendu"))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(Map.of("compteRendu", "CR")))
+                        .with(juriste))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(containsString("annulée")));
+    }
+
+    @Test
+    @DisplayName("M16 : une alarme se clôt sans être remplacée, une seule fois, par un juriste (Q-77)")
+    void alarme_traiteeSansRemplacante() throws Exception {
+        long dossierId = creerDossier();
+        RequestPostProcessor juriste = role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_CONSULTATION");
+        long etapeId = etapeEnCours(dossierId, juriste);
+
+        long alarmeId = extraireId(mockMvc.perform(post(api("/dossiers/" + dossierId + "/alarmes"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("etapeId", etapeId, "objet", "Relancer le greffe",
+                                "dateEcheance", LocalDateTime.now().plusDays(3).withNano(0).toString())))
+                        .with(juriste))
+                .andExpect(status().isCreated())
+                .andReturn());
+
+        mockMvc.perform(patch(api("/alarmes/" + alarmeId + "/traiter"))
+                        .with(role("kc-dj-m15", "ROLE_DJ", "ROLE_CONSULTATION")))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(patch(api("/alarmes/" + alarmeId + "/traiter")).with(juriste))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(alarmeId))
+                .andExpect(jsonPath("$.statut").value("TRAITEE"))
+                .andExpect(jsonPath("$.dateTraitement").isNotEmpty());
+
+        mockMvc.perform(patch(api("/alarmes/" + alarmeId + "/traiter")).with(juriste))
+                .andExpect(status().isBadRequest());
+
+        // Contrairement à la reprogrammation, aucune alarme de remplacement n'a été créée.
+        mockMvc.perform(get(api("/dossiers/" + dossierId + "/alarmes")).with(juriste))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1));
+    }
+
+    /** Passe la première étape du dossier « en cours » : la condition d'une audience (RG-AUD-01). */
+    private long etapeEnCours(long dossierId, RequestPostProcessor juriste) throws Exception {
+        long etapeId = lireJson(mockMvc.perform(get(api("/dossiers/" + dossierId)).with(juriste))
+                        .andExpect(status().isOk())
+                        .andReturn())
+                .get("etapes").get(0).get("id").asLong();
+        mockMvc.perform(patch(api("/dossiers/" + dossierId + "/etapes/" + etapeId + "/statut"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("nouveauStatut", "EN_COURS")))
+                        .with(juriste))
+                .andExpect(status().isOk());
+        return etapeId;
     }
 
     private String api(String chemin) {

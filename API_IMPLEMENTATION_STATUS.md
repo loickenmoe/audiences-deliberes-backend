@@ -1,7 +1,7 @@
 # API_IMPLEMENTATION_STATUS
 
 > Inventaire exhaustif des endpoints et état d'implémentation.
-> Dernière mise à jour : 2026-09-07 (après jalon M15 — habilitation frontend, 11 endpoints ajoutés).
+> Dernière mise à jour : 2026-09-10 (M16 — annulation d'audience et traitement d'alarme, Q-76, Q-77).
 > **Conformité vérifiée endpoint par endpoint en M14** : les 56 endpoints du code ont été audités
 > contre ce tableau — 54 strictement conformes, 2 écarts de rôle corrigés ici (`POST
 > /dossiers/{id}/etapes` et `DELETE /ged/documents/{id}` : `ROLE_JURISTE`, non `ROLE_SAISIE`) — Q-66.
@@ -42,7 +42,12 @@ qu'après une décision d'ajout — traité comme tel dès M4.
   des intervenants (#61, #62), les deux référentiels de formulaire (#64, #65) et le répertoire des
   utilisateurs internes (#66, Q-69).
 
-Soit **66 endpoints exposés au total**.
+- **M16 (3)** — corrections issues de l'intégration frontend : `GET /dossiers/{id}/seuil-derogation`
+  (Q-74), `PATCH /audiences/{id}/annulation` (Q-76), `PATCH /alarmes/{id}/traiter` (Q-77).
+
+Soit **70 endpoints HTTP exposés au total** : les 66 numérotés, `POST /dossiers/{id}/etapes` et les
+trois ajouts de M16 — décompte des annotations de mapping du code, le 2026-09-10 (le « 66 » inscrit
+ici jusqu'alors n'avait pas suivi les ajouts non numérotés).
 
 Le squelette de starter hors périmètre (Template/Admin/Staff/Dashboard/Chat, auth JWT maison) a
 été intégralement supprimé en M1 (cf. `DECISIONS_AND_OPEN_QUESTIONS.md` R-03/R-04) — l'ancienne
@@ -102,6 +107,16 @@ Q-10, Q-11, Q-12, Q-26, Q-34, Q-35 pour le détail des arbitrages pris pendant l
 | 17 | PUT | `/alarmes/{id}/reprogrammer` | `ROLE_JURISTE` | FR-AUD-04 / US 2.4 | **📄** | ✅ M6 |
 | 56 | GET | `/dossiers/{id}/audiences` | `ROLE_CONSULTATION` | US 1.3 (onglet « Audiences ») | 🆕 | ✅ M15 |
 | 57 | GET | `/dossiers/{id}/alarmes` | `ROLE_CONSULTATION` | US 2.3/2.4 (onglet « Alarmes ») | 🆕 | ✅ M15 |
+| — | PATCH | `/audiences/{id}/annulation` | `ROLE_JURISTE` | Q-76 (renvoi, date erronée) | 🆕 | ✅ M16 |
+| — | PATCH | `/alarmes/{id}/traiter` | `ROLE_JURISTE` | Q-77 | 🆕 | ✅ M16 |
+
+> **Annulation d'audience (M16, Q-76).** Motif obligatoire ; seule une audience `PLANIFIEE`
+> s'annule. L'audience annulée sort du calendrier et de ses exports (#15), ne reçoit plus ses
+> rappels, ne compte plus comme doublon (#13) et refuse un compte rendu (#14). Un report = annuler,
+> puis planifier la nouvelle date. `AudienceResponse` gagne `motifAnnulation` et `dateAnnulation`.
+>
+> **Traitement d'alarme (M16, Q-77).** Sans corps : une alarme `ACTIVE` passe `TRAITEE` sans être
+> remplacée — jusqu'ici, seule la reprogrammation (#17) pouvait la clore.
 
 > **#56/#57 (M15, Q-68)** : aucune lecture des audiences ni des alarmes d'un dossier n'existait —
 > elles ne pouvaient être créées puis jamais relues. 404 si le dossier est inconnu ; audiences
@@ -365,6 +380,11 @@ transition automatique d'étape vers `ARCHIVE` (Q-60, reste manuelle via l'endpo
 
 Codes génériques : 400 requête invalide · 401 non authentifié · 403 droits insuffisants ·
 404 non trouvé · 409 conflit d'unicité · 422 règle métier violée.
+
+**Lecture des demandes de seuil (M16, Q-74).** `GET /dossiers/{id}/seuil-derogation[?statut=]`
+(`ROLE_CONSULTATION`) renvoie les `AuditSeuilResponse` du dossier, la plus récente d'abord — seule
+source de l'`auditId` qu'exige l'arbitrage. L'arbitrage n'est recevable que sur une sensibilité
+validée.
 
 **Champ fautif (M16, Q-70).** `ERR-CONFLICT` est partagé par neuf conflits sans rapport entre eux ;
 le code seul ne dit donc pas quel champ corriger. Le corps d'erreur porte pour cela un champ `champ`,

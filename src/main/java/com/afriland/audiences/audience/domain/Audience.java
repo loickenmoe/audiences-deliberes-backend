@@ -69,6 +69,13 @@ public class Audience {
     @Column(length = 20)
     private StatutAudience statut = StatutAudience.PLANIFIEE;
 
+    /** Q-76 : motif obligatoire d'une annulation (renvoi, date erronée). */
+    @Column(name = "motif_annulation")
+    private String motifAnnulation;
+
+    @Column(name = "date_annulation")
+    private LocalDateTime dateAnnulation;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

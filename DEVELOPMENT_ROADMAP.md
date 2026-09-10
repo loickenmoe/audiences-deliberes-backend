@@ -1048,9 +1048,44 @@ l'ajustement par le DJ lors de la validation de sensibilité.
 
 **Vérifications du jalon** : **265 tests au vert**, `BUILD SUCCESS`.
 
+### 5. Une dérogation demandée ne pouvait pas être arbitrée (Q-74) ✅
+
+L'arbitrage exigeait l'identifiant d'une demande que rien n'exposait. **Implémenté** :
+`GET /dossiers/{id}/seuil-derogation[?statut=]`. Au passage, l'arbitrage refuse désormais la
+proposition initiale de sensibilité, qu'il acceptait à tort tant que la sensibilité n'était pas
+validée — défaut latent que la nouvelle lecture rendait atteignable.
+
+**Testé** : deux tests unitaires, un test d'intégration de bout en bout.
+
+### 6. L'affectation pouvait vider un dossier (Q-75) ✅
+
+`PUT /affectation` remplace les listes sans minimum, et sans `@Valid` : un dossier pouvait perdre
+tous ses juristes. **Implémenté** : `@NotEmpty` sur les deux listes, `@Valid` sur le contrôleur —
+même règle qu'à la création. **Testé** : un test d'intégration (liste vide, liste absente, nominal).
+
 **Validation manuelle** : depuis le frontend, créer un dossier en choisissant « Hypothèque
 judiciaire (inscription provisoire, définitive, réalisation) » — il doit être accepté ; puis
 rechercher ce dossier par sa référence dans la liste, et cocher « Mes dossiers uniquement ».
+
+### 7. Une audience ne pouvait être ni annulée ni reportée (Q-76) ✅
+
+Remonté par le jalon F8 du frontend (QF-30). `ANNULEE` existait sans endpoint : une audience
+renvoyée par le tribunal restait au calendrier et déclenchait ses rappels. **Implémenté** :
+`PATCH /audiences/{id}/annulation`, motif obligatoire, migration `V8__audience_annulation.sql`
+(motif et date d'annulation, contrainte de cohérence). L'audience annulée sort du calendrier et des
+exports, ne compte plus comme doublon, et refuse un compte rendu ; les rappels l'ignoraient déjà.
+
+### 8. Une alarme n'était close qu'en la reprogrammant (Q-77) ✅
+
+Remonté par le jalon F8 du frontend (QF-29). **Implémenté** : `PATCH /alarmes/{id}/traiter`, qui
+clôt une alarme active sans en créer de nouvelle.
+
+**Testé (§7-8)** : 6 tests unitaires (`AudienceServiceTest`, `AlarmeServiceTest`) et 2 tests
+d'intégration sur PostgreSQL réel (`HabilitationFrontendIntegrationTest` : motif exigé, rôle,
+double annulation refusée, calendrier sans l'annulée mais avec la replanifiée, replanification à la
+même date sans `ERR-005`, compte rendu refusé ; alarme close une fois, sans remplaçante). **277 tests
+au vert, `BUILD SUCCESS`.** **Vérifié en réel** : V8 appliquée à la base locale (`flyway_schema_history`,
+rang 8), colonnes et contrainte présentes.
 
 ---
 

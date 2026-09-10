@@ -7,6 +7,7 @@ import com.afriland.audiences.audience.domain.PeriodeCalendrier;
 import com.afriland.audiences.audience.domain.StatutAudience;
 import com.afriland.audiences.audience.mapper.AudienceMapper;
 import com.afriland.audiences.audience.repository.AudienceRepository;
+import com.afriland.audiences.audience.web.dto.AnnulerAudienceRequest;
 import com.afriland.audiences.audience.web.dto.AudienceResponse;
 import com.afriland.audiences.audience.web.dto.CalendrierEntreeResponse;
 import com.afriland.audiences.audience.web.dto.EnregistrerCompteRenduRequest;
@@ -28,6 +29,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -63,7 +65,8 @@ public class AudienceService {
                     "La date planifiée doit être future (RG-AUD-07)");
         }
 
-        boolean doublon = audienceRepository.existsByEtapeIdAndDatePlanifiee(request.etapeId(), request.datePlanifiee());
+        boolean doublon = audienceRepository.existsByEtapeIdAndDatePlanifieeAndStatutNot(
+                request.etapeId(), request.datePlanifiee(), StatutAudience.ANNULEE);
         if (doublon && !forcer) {
             throw ApiException.conflict(ErrorCodes.DOUBLON_AUDIENCE,
                     "Une audience existe déjà pour cette étape à cette date ; ajoutez ?forcer=true pour confirmer (RG-AUD-06)");
@@ -100,6 +103,10 @@ public class AudienceService {
     @Transactional
     public AudienceResponse enregistrerCompteRendu(Long audienceId, EnregistrerCompteRenduRequest request) {
         Audience audience = getAudienceOrThrow(audienceId);
+        if (audience.getStatut() == StatutAudience.ANNULEE) {
+            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
+                    "Une audience annulée ne reçoit pas de compte rendu (Q-76)");
+        }
         if (audience.getDatePlanifiee().isAfter(LocalDate.now())) {
             throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
                     "Le compte rendu ne peut être saisi qu'après la tenue de l'audience (RG-AUD-01)");
@@ -111,6 +118,32 @@ public class AudienceService {
 
         historiqueActionService.enregistrer(audience.getDossier().getId(), "Compte rendu d'audience enregistré",
                 Map.of("audienceId", audience.getId()));
+
+        return audienceMapper.toResponse(audience);
+    }
+
+    /**
+     * Q-76 : annulation d'une audience planifiée — renvoi prononcé par le tribunal ou date erronée.
+     * Le motif est obligatoire. L'audience sort du calendrier et de ses exports, ne reçoit plus ses
+     * rappels J-7/J-3/J-1 (qui ne visent que {@code PLANIFIEE}) et ne compte plus comme doublon.
+     * Un report consiste à annuler, puis à planifier la nouvelle date.
+     */
+    @Transactional
+    public AudienceResponse annulerAudience(Long audienceId, AnnulerAudienceRequest request) {
+        Audience audience = getAudienceOrThrow(audienceId);
+        if (audience.getStatut() != StatutAudience.PLANIFIEE) {
+            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
+                    "Seule une audience planifiée peut être annulée (statut actuel : " + audience.getStatut() + ")");
+        }
+        String motif = request.motif().trim();
+        audience.setStatut(StatutAudience.ANNULEE);
+        audience.setMotifAnnulation(motif);
+        audience.setDateAnnulation(LocalDateTime.now());
+        audience = audienceRepository.save(audience);
+
+        historiqueActionService.enregistrer(audience.getDossier().getId(), "Annulation d'une audience",
+                Map.of("audienceId", audience.getId(), "datePlanifiee", audience.getDatePlanifiee().toString(),
+                        "motif", motif));
 
         return audienceMapper.toResponse(audience);
     }
@@ -137,7 +170,7 @@ public class AudienceService {
     @Transactional(readOnly = true)
     public List<CalendrierEntreeResponse> calendrier(PeriodeCalendrier periode, LocalDate dateDebut) {
         LocalDate dateFin = periode.dateFin(dateDebut);
-        return audienceRepository.findByDatePlanifieeBetween(dateDebut, dateFin).stream()
+        return audienceRepository.findByDatePlanifieeBetweenAndStatutNot(dateDebut, dateFin, StatutAudience.ANNULEE).stream()
                 .map(this::construireEntreeCalendrier)
                 .toList();
     }

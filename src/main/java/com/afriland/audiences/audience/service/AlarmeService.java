@@ -97,6 +97,29 @@ public class AlarmeService {
         return alarmeMapper.toResponse(nouvelle);
     }
 
+    /**
+     * Q-77 : l'alarme a été traitée. Elle passe {@code TRAITEE} sans être remplacée, et sort donc
+     * de la surveillance d'échéance — jusqu'ici, seule une reprogrammation pouvait la clore.
+     */
+    @Transactional
+    public AlarmeResponse traiterAlarme(Long alarmeId) {
+        Alarme alarme = alarmeRepository.findById(alarmeId)
+                .orElseThrow(() -> ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE, "Alarme introuvable : " + alarmeId));
+        if (alarme.getStatut() != StatutAlarme.ACTIVE) {
+            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE, "Cette alarme a déjà été reprogrammée ou traitée");
+        }
+
+        Utilisateur auteur = currentUserService.getCurrentUser();
+        alarme.setStatut(StatutAlarme.TRAITEE);
+        alarme.setDateTraitement(LocalDateTime.now());
+        alarme = alarmeRepository.save(alarme);
+
+        historiqueActionService.enregistrerPour(auteur, alarme.getDossier().getId(), "Traitement d'une alarme",
+                Map.of("alarmeId", alarmeId, "objet", alarme.getObjet()));
+
+        return alarmeMapper.toResponse(alarme);
+    }
+
     /** M15 (Q-68) : alarmes d'un dossier — 404 si le dossier n'existe pas. */
     @Transactional(readOnly = true)
     public java.util.List<AlarmeResponse> listerParDossier(Long dossierId) {
