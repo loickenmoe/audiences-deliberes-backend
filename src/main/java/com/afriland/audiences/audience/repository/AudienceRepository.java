@@ -11,9 +11,14 @@ import java.util.List;
 @Repository
 public interface AudienceRepository extends JpaRepository<Audience, Long> {
 
-    boolean existsByEtapeIdAndDatePlanifiee(Long etapeId, LocalDate datePlanifiee);
+    /**
+     * RG-AUD-06 : doublon d'audience. Appelé avec {@code ANNULEE} (Q-76) — une audience annulée ne
+     * compte pas : replanifier à la même date après un renvoi n'est pas un doublon.
+     */
+    boolean existsByEtapeIdAndDatePlanifieeAndStatutNot(Long etapeId, LocalDate datePlanifiee, StatutAudience statut);
 
-    List<Audience> findByDatePlanifieeBetween(LocalDate debut, LocalDate fin);
+    /** FR-AUD-05 : calendrier et exports. Appelé avec {@code ANNULEE} (Q-76) : ils l'écartent. */
+    List<Audience> findByDatePlanifieeBetweenAndStatutNot(LocalDate debut, LocalDate fin, StatutAudience statut);
 
     /** RG-AUD-03 (rappels J-7/J-3/J-1) : audiences encore planifiées à une date donnée. */
     List<Audience> findByStatutAndDatePlanifiee(StatutAudience statut, LocalDate datePlanifiee);

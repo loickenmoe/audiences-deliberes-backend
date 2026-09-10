@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -46,5 +47,12 @@ public class AlarmeController {
     public AlarmeResponse reprogrammerAlarme(@PathVariable Long id,
                                               @Valid @RequestBody ReprogrammerAlarmeRequest request) {
         return alarmeService.reprogrammerAlarme(id, request);
+    }
+
+    /** Q-77 : clore une alarme traitée, sans la remplacer — endpoint 🆕. */
+    @PatchMapping("${api.prefix}/alarmes/{id}/traiter")
+    @PreAuthorize("hasRole('JURISTE')")
+    public AlarmeResponse traiterAlarme(@PathVariable Long id) {
+        return alarmeService.traiterAlarme(id);
     }
 }

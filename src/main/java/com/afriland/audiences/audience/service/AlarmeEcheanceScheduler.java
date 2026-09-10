@@ -14,9 +14,9 @@ import java.time.LocalDateTime;
 
 /**
  * Échéance d'une alarme (Q-04) : génère une {@link TypeAlerte#ALARME} destinée à son créateur.
- * L'alarme reste {@code ACTIVE} après le déclenchement — seule une reprogrammation
- * (FR-AUD-04) la marque {@code TRAITEE} ; l'anti-doublon ({@link AlerteService#aDejaEteDeclenchee})
- * évite donc de la resignaler à chaque cycle tant qu'elle n'a pas été reprogrammée.
+ * L'alarme reste {@code ACTIVE} après le déclenchement — elle n'est close ({@code TRAITEE}) que par
+ * une reprogrammation (FR-AUD-04) ou un traitement explicite (Q-77) ; l'anti-doublon
+ * ({@link AlerteService#aDejaEteDeclenchee}) évite donc de la resignaler à chaque cycle d'ici là.
  */
 @Component
 @RequiredArgsConstructor

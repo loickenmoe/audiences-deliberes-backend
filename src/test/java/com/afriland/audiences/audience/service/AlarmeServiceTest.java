@@ -28,6 +28,10 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -125,6 +129,37 @@ class AlarmeServiceTest {
         assertThat(result.statut()).isEqualTo(StatutAlarme.ACTIVE);
         assertThat(result.objet()).isEqualTo("Relancer");
         assertThat(result.alarmePrecedenteId()).isEqualTo(3L);
+    }
+
+    /** Q-77 : clore une alarme traitée, sans la remplacer. */
+    @Test
+    void traiterAlarme_passeTraiteeSansCreerDeNouvelleAlarme() {
+        Alarme active = Alarme.builder().id(3L).dossier(dossier).etape(etape).objet("Relancer le greffe")
+                .dateEcheance(LocalDateTime.now().minusHours(2)).statut(StatutAlarme.ACTIVE).createdBy(juriste).build();
+        when(alarmeRepository.findById(3L)).thenReturn(Optional.of(active));
+        when(currentUserService.getCurrentUser()).thenReturn(juriste);
+        when(alarmeRepository.save(any(Alarme.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        AlarmeResponse result = service.traiterAlarme(3L);
+
+        assertThat(result.id()).isEqualTo(3L);
+        assertThat(result.statut()).isEqualTo(StatutAlarme.TRAITEE);
+        assertThat(result.dateTraitement()).isNotNull();
+        // Un seul enregistrement : l'alarme elle-même, aucune remplaçante.
+        verify(alarmeRepository, times(1)).save(any(Alarme.class));
+        verify(historiqueActionService).enregistrerPour(eq(juriste), eq(1L), eq("Traitement d'une alarme"), any());
+    }
+
+    @Test
+    void traiterAlarme_refuseUneAlarmeDejaClose() {
+        Alarme traitee = Alarme.builder().id(3L).dossier(dossier).objet("x")
+                .dateEcheance(LocalDateTime.now().minusDays(1)).statut(StatutAlarme.TRAITEE).createdBy(juriste).build();
+        when(alarmeRepository.findById(3L)).thenReturn(Optional.of(traitee));
+
+        assertThatThrownBy(() -> service.traiterAlarme(3L))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("déjà été reprogrammée ou traitée");
+        verify(alarmeRepository, never()).save(any());
     }
 
     /** M15 (Q-68) : onglet « alarmes » d'un dossier. */

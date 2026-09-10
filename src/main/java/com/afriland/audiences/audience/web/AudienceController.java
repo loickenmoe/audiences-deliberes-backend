@@ -3,6 +3,7 @@ package com.afriland.audiences.audience.web;
 import com.afriland.audiences.audience.domain.PeriodeCalendrier;
 import com.afriland.audiences.audience.service.AudienceService;
 import com.afriland.audiences.audience.service.CalendrierExportService;
+import com.afriland.audiences.audience.web.dto.AnnulerAudienceRequest;
 import com.afriland.audiences.audience.web.dto.AudienceResponse;
 import com.afriland.audiences.audience.web.dto.CalendrierEntreeResponse;
 import com.afriland.audiences.audience.web.dto.EnregistrerCompteRenduRequest;
@@ -16,6 +17,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -52,6 +54,17 @@ public class AudienceController {
     public AudienceResponse enregistrerCompteRendu(@PathVariable Long id,
                                                      @Valid @RequestBody EnregistrerCompteRenduRequest request) {
         return audienceService.enregistrerCompteRendu(id, request);
+    }
+
+    /**
+     * Q-76 : annulation motivée d'une audience planifiée (renvoi, date erronée) — endpoint 🆕. Le
+     * statut {@code ANNULEE} existait sans qu'aucun endpoint ne le pose.
+     */
+    @PatchMapping("${api.prefix}/audiences/{id}/annulation")
+    @PreAuthorize("hasRole('JURISTE')")
+    public AudienceResponse annulerAudience(@PathVariable Long id,
+                                            @Valid @RequestBody AnnulerAudienceRequest request) {
+        return audienceService.annulerAudience(id, request);
     }
 
     /** M15 (Q-68) : onglet « Audiences » de la fiche dossier — endpoint 🆕. */

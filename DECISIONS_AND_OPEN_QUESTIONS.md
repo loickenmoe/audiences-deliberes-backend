@@ -1440,6 +1440,49 @@ confirmer avec la Direction Juridique avant d'y toucher.
 **Vérifié** par un test d'intégration : liste vide refusée, liste absente refusée, cas nominal
 accepté.
 
+### Q-76 ✅ Une audience ne pouvait être ni annulée ni reportée — tranché (M16)
+
+Remonté par le jalon F8 du frontend (QF-30), décidé par le porteur du projet le 2026-09-10.
+
+**A — Le constat.** `StatutAudience` prévoit `ANNULEE` (et `chk_audience_statut` l'autorise), mais
+aucun endpoint ne le posait, et aucun ne modifiait la date d'une audience. Une audience planifiée à
+la mauvaise date, ou renvoyée par le tribunal — cas très fréquent —, restait `PLANIFIEE` : au
+calendrier, dans ses exports, et déclenchant ses rappels J-7/J-3/J-1 à une date qui n'avait plus
+lieu d'être. Planifier la nouvelle date n'y changeait rien : les deux coexistaient.
+
+**B — Tranché.** `PATCH /audiences/{id}/annulation` (`ROLE_JURISTE`, comme la planification), motif
+obligatoire (`@NotBlank`, 1 000 caractères au plus). Seule une audience `PLANIFIEE` s'annule ; son
+motif et sa date d'annulation sont conservés (`V8__audience_annulation.sql`, contrainte : une
+audience `ANNULEE` porte les deux). Un **report** consiste à annuler, puis à planifier la nouvelle
+date — pas d'endpoint dédié : le lien entre les deux resterait à définir avec la Direction Juridique.
+
+**C — Ce que l'annulation entraîne, vérifié site par site.** Une annulation qui ne serait qu'un
+statut resterait à moitié faite :
+- **rappels** : `RappelAudienceScheduler` ne vise que `PLANIFIEE` — rien à changer ;
+- **calendrier et exports** : l'audience annulée en est écartée (`findByDatePlanifieeBetweenAndStatutNot`) ;
+- **doublon** (RG-AUD-06) : une audience annulée ne compte plus — sans cela, replanifier à la même
+  date après un renvoi aurait demandé confirmation **et alerté le DJ** ;
+- **compte rendu** : refusé sur une audience annulée, qui serait sinon passée `TENUE`.
+
+**Vérifié** : 4 tests unitaires et un test d'intégration de bout en bout sur PostgreSQL réel
+(chacun des quatre effets ci-dessus, plus le motif exigé et le rôle).
+
+### Q-77 ✅ Une alarme n'était close qu'en la reprogrammant — tranché (M16)
+
+Remonté par le jalon F8 du frontend (QF-29), décidé par le porteur du projet le 2026-09-10.
+
+**A — Le constat.** Une alarme n'avait que deux actions : la créer, la reprogrammer (qui clôt
+l'ancienne et en crée une nouvelle). À l'échéance, `AlarmeEcheanceScheduler` la **signale** sans la
+clore. Une alarme traitée par le juriste restait donc `ACTIVE` pour toujours, et la liste mêlait ce
+qui reste à faire et ce qui est fait.
+
+**B — Tranché.** `PATCH /alarmes/{id}/traiter` (`ROLE_JURISTE`, sans corps) : une alarme `ACTIVE`
+passe `TRAITEE` avec sa date de traitement, **sans** en créer de nouvelle. Une alarme déjà close est
+refusée (`REQUETE_INVALIDE`, même message que la reprogrammation). Le scheduler, qui ne surveille
+que les alarmes actives, n'a pas eu à changer.
+
+**Vérifié** : 2 tests unitaires et un test d'intégration (rôle, clôture unique, aucune remplaçante).
+
 ### Q-27 ✅ `dossier.parties` défini deux fois — tranché (M2)
 Le dictionnaire REF-06 §2.1.2 déclare `parties JSONB` **deux fois**, avec deux structures
 différentes : `{demandeur, defendeur}` et `{demandeur, defendeur, client}`. Le contrat d'API et

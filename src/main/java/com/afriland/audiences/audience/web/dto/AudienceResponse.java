@@ -13,5 +13,7 @@ public record AudienceResponse(
         LocalDate dateTenue,
         String compteRendu,
         StatutAudience statut,
-        LocalDateTime createdAt) {
+        LocalDateTime createdAt,
+        String motifAnnulation,
+        LocalDateTime dateAnnulation) {
 }

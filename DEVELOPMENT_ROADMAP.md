@@ -1067,6 +1067,26 @@ même règle qu'à la création. **Testé** : un test d'intégration (liste vide
 judiciaire (inscription provisoire, définitive, réalisation) » — il doit être accepté ; puis
 rechercher ce dossier par sa référence dans la liste, et cocher « Mes dossiers uniquement ».
 
+### 7. Une audience ne pouvait être ni annulée ni reportée (Q-76) ✅
+
+Remonté par le jalon F8 du frontend (QF-30). `ANNULEE` existait sans endpoint : une audience
+renvoyée par le tribunal restait au calendrier et déclenchait ses rappels. **Implémenté** :
+`PATCH /audiences/{id}/annulation`, motif obligatoire, migration `V8__audience_annulation.sql`
+(motif et date d'annulation, contrainte de cohérence). L'audience annulée sort du calendrier et des
+exports, ne compte plus comme doublon, et refuse un compte rendu ; les rappels l'ignoraient déjà.
+
+### 8. Une alarme n'était close qu'en la reprogrammant (Q-77) ✅
+
+Remonté par le jalon F8 du frontend (QF-29). **Implémenté** : `PATCH /alarmes/{id}/traiter`, qui
+clôt une alarme active sans en créer de nouvelle.
+
+**Testé (§7-8)** : 6 tests unitaires (`AudienceServiceTest`, `AlarmeServiceTest`) et 2 tests
+d'intégration sur PostgreSQL réel (`HabilitationFrontendIntegrationTest` : motif exigé, rôle,
+double annulation refusée, calendrier sans l'annulée mais avec la replanifiée, replanification à la
+même date sans `ERR-005`, compte rendu refusé ; alarme close une fois, sans remplaçante). **277 tests
+au vert, `BUILD SUCCESS`.** **Vérifié en réel** : V8 appliquée à la base locale (`flyway_schema_history`,
+rang 8), colonnes et contrainte présentes.
+
 ---
 
 ## Chemin critique
