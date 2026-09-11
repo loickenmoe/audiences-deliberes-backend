@@ -1664,6 +1664,59 @@ existe pour toute création soumise à une contrainte d'unicité (facture, réf�
 (SQLState `23505`), avec un message générique qui ne divulgue rien de la base ; toute autre violation
 d'intégrité reste une erreur interne. **Vérifié** : 2 tests unitaires (23505 → 409, 23503 → 500).
 
+### Q-86 ✅ Publications et constitutions : illisibles pour qui devait les instruire — tranché (M16)
+
+Remonté par l'audit du jalon F12 du frontend, décidé par le porteur du projet le 2026-09-11.
+
+**A — Les constats, vérifiés dans le code et les sources.**
+1. Le fichier d'une autre publication (pièce, décision, conclusion) n'était exposé nulle part :
+   `cheminStockage` enregistré, aucune URL de téléchargement — l'Assistante validait un fichier
+   qu'elle ne pouvait pas lire, les juristes ne le liraient jamais.
+2. `GET /publications/{id}` rendait 404 tant que la publication n'était pas `VALIDE` — y compris à
+   l'Assistante, qui doit la voir pour la valider (UC-INT-10 étape 3).
+3. Les commentaires des juristes n'étaient lisibles par personne : le DJ et la DJA étaient notifiés,
+   sans pouvoir lire ce qu'ils devaient centraliser (RG-INT-07) ; la correspondance transmise n'était
+   visible que par le 409 d'un second envoi.
+4. Publications et demandes de constitution ne portaient que des identifiants (dossier, avocat,
+   audience, prestataire, demandeur, signataire) ; la liste des publications n'avait pas d'ordre
+   stable.
+5. Aucune notification n'annonçait aux juristes une publication validée (UC-INT-08 étape 1, avec
+   restriction au seul destinataire désigné, alt. 3-a).
+
+**B — Tranché.**
+- `PublicationResponse` porte `referenceDossier`, `avocatNom`, `audienceDate`,
+  `restrictionAccesNom`, `nomFichier` ; sur le **détail** seulement, `urlTelechargement`
+  (pré-signée, 10 minutes), `commentaires` (auteur nommé) et `correspondance`.
+- L'Assistante lit une publication `DEPOSE` ou `REJETE`. La restriction d'accès, qui désigne un
+  juriste lecteur (RG-INT-06), ne s'oppose pas aux profils qui instruisent la publication :
+  l'Assistante (validation) et le DJ/DJA (centralisation, RG-INT-07).
+- File des publications : `statut=DEPOSE` en ordre d'arrivée, sinon la plus récente d'abord.
+- `DemandeConstitutionResponse` porte `referenceDossier`, `prestataireNom`, `prestataireType`,
+  `demandeurNom`, `valideParNom`.
+- À la validation, les juristes affectés au dossier sont notifiés (`NOUVELLE_PUBLICATION`) — ou le
+  seul destinataire désigné si l'accès est restreint.
+- Hors périmètre, reporté au portail avocat (F16) : l'observation du DJ/DJA de sa propre initiative,
+  sans publication (UC-INT-08 étapes 8 à 12), et la lecture de ses correspondances par l'avocat.
+
+**Vérifié** : 5 tests unitaires (`PublicationServiceTest` : Assistante et fichier d'une pièce
+déposée, DJ sur une publication restreinte, commentaires et correspondance nommés, notification des
+juristes du dossier, du seul destinataire désigné) ; parcours d'intégration `p2` et `p7` étendus sur
+PostgreSQL réel (détail lu par l'Assistante avant validation et refusé au juriste, juriste notifié
+après validation, constitution nommée).
+
+### Q-87 ✅ Un avocat constitué n'était jamais notifié — corrigé (M16)
+
+Constaté en lisant le code pendant l'audit F12. `DemandeConstitution.prestataire` est une
+association `LAZY` vers la classe abstraite `Intervenant` (héritage `JOINED`) : chargée à la
+demande, elle est un **proxy d'`Intervenant`**, jamais une instance d'`Avocat`. Or
+`ConstitutionService.notifierPrestataire` testait `prestataire instanceof Avocat` sur une demande
+relue par `findById` — test toujours faux : la signature du SH ne prévenait jamais l'avocat
+(FR-INT-07 critère 3). **Corrigé** : `Hibernate.unproxy` avant le test, dans le service et dans le
+calcul de `prestataireType`. **Vérifié** : parcours d'intégration `p7` sur PostgreSQL réel — après
+la signature, l'avocat a bien une alerte `CONSTITUTION_A_SIGNER`, et la demande se dit `AVOCAT`.
+Le défaut a été établi à la lecture du code ; le parcours n'a pas été rejoué sur le code d'avant le
+correctif.
+
 ### Q-27 ✅ `dossier.parties` défini deux fois — tranché (M2)
 Le dictionnaire REF-06 §2.1.2 déclare `parties JSONB` **deux fois**, avec deux structures
 différentes : `{demandeur, defendeur}` et `{demandeur, defendeur, client}`. Le contrat d'API et

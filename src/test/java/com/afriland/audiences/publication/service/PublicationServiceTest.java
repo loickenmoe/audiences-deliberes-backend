@@ -8,7 +8,10 @@ import com.afriland.audiences.common.audit.HistoriqueActionService;
 import com.afriland.audiences.common.error.ApiException;
 import com.afriland.audiences.common.security.CurrentUserService;
 import com.afriland.audiences.dossier.domain.Dossier;
+import com.afriland.audiences.dossier.domain.DossierJuriste;
+import com.afriland.audiences.dossier.repository.DossierJuristeRepository;
 import com.afriland.audiences.dossier.repository.DossierRepository;
+import com.afriland.audiences.publication.domain.CommentairePublication;
 import com.afriland.audiences.ged.service.MinioStorageService;
 import com.afriland.audiences.publication.domain.AutrePublication;
 import com.afriland.audiences.publication.domain.CompteRenduAudience;
@@ -64,6 +67,7 @@ class PublicationServiceTest {
     @Mock private HistoriqueActionService historiqueActionService;
     @Mock private AlerteService alerteService;
     @Mock private MinioStorageService minioStorageService;
+    @Mock private DossierJuristeRepository dossierJuristeRepository;
 
     private final PublicationMapper mapper = new PublicationMapper();
 
@@ -81,7 +85,7 @@ class PublicationServiceTest {
                 correspondanceAvocatRepository, dossierRepository, audienceRepository,
                 new CompteAvocatService(avocatRepository, utilisateurRepository),
                 utilisateurRepository, currentUserService, historiqueActionService, alerteService,
-                minioStorageService, mapper);
+                minioStorageService, mapper, dossierJuristeRepository);
 
         dossier = Dossier.builder().id(1L).reference("DOS-2026-001").build();
         avocat = Avocat.builder().id(5L).nom("Me Fotso").compteKeycloak("kc-avocat").build();
@@ -264,6 +268,83 @@ class PublicationServiceTest {
 
         assertThat(result.statutValidation()).isEqualTo(StatutPublication.VALIDE);
         verify(currentUserService, never()).getCurrentUser();
+    }
+
+    @Test
+    void obtenir_letsTheAssistanteReadADeposePublicationAndItsFile() {
+        String cle = "dossiers/1/123e4567-e89b-12d3-a456-426614174000-piece.pdf";
+        Publication publication = AutrePublication.builder().id(101L).dossier(dossier).avocat(avocat)
+                .typeDocument(TypeAutrePublication.PIECE).cheminStockage(cle).statutValidation(StatutPublication.DEPOSE).build();
+        when(publicationRepository.findById(101L)).thenReturn(Optional.of(publication));
+        when(currentUserService.getCurrentUser()).thenReturn(assistante);
+        when(minioStorageService.urlTelechargement(cle)).thenReturn("http://minio/piece.pdf?signature");
+
+        PublicationResponse result = service.obtenir(101L);
+
+        assertThat(result.statutValidation()).isEqualTo(StatutPublication.DEPOSE);
+        assertThat(result.urlTelechargement()).isEqualTo("http://minio/piece.pdf?signature");
+        assertThat(result.nomFichier()).isEqualTo("piece.pdf");
+        assertThat(result.referenceDossier()).isEqualTo("DOS-2026-001");
+        assertThat(result.avocatNom()).isEqualTo("Me Fotso");
+    }
+
+    @Test
+    void obtenir_letsTheDjReadARestrictedPublication() {
+        Utilisateur destinataire = Utilisateur.builder().id(60L).build();
+        Publication publication = CompteRenduAudience.builder().id(100L).dossier(dossier).avocat(avocat)
+                .statutValidation(StatutPublication.VALIDE).restrictionAcces(destinataire).build();
+        when(publicationRepository.findById(100L)).thenReturn(Optional.of(publication));
+        when(currentUserService.getCurrentUser()).thenReturn(dj);
+
+        assertThat(service.obtenir(100L).restrictionAccesId()).isEqualTo(60L);
+    }
+
+    @Test
+    void obtenir_exposesTheCommentsAndTheCorrespondence() {
+        Utilisateur juristeNomme = Utilisateur.builder().id(10L).prenom("Jean").nom("Juriste").build();
+        Utilisateur djNomme = Utilisateur.builder().id(40L).prenom("Marie").nom("Directrice").build();
+        Publication publication = CompteRenduAudience.builder().id(100L).dossier(dossier).avocat(avocat)
+                .statutValidation(StatutPublication.VALIDE).build();
+        when(publicationRepository.findById(100L)).thenReturn(Optional.of(publication));
+        when(commentairePublicationRepository.findByPublicationIdOrderByCreatedAtAsc(100L)).thenReturn(List.of(
+                CommentairePublication.builder().id(200L).publication(publication).auteur(juristeNomme).contenu("Pièce incomplète").build()));
+        when(correspondanceAvocatRepository.findByPublicationId(100L)).thenReturn(Optional.of(
+                CorrespondanceAvocat.builder().id(300L).publication(publication).auteur(djNomme).contenu("Merci de compléter").build()));
+
+        PublicationResponse result = service.obtenir(100L);
+
+        assertThat(result.commentaires()).singleElement().satisfies(c -> {
+            assertThat(c.auteurNom()).isEqualTo("Jean Juriste");
+            assertThat(c.contenu()).isEqualTo("Pièce incomplète");
+        });
+        assertThat(result.correspondance().auteurNom()).isEqualTo("Marie Directrice");
+    }
+
+    @Test
+    void valider_notifiesTheJuristesOfTheDossier() {
+        Publication publication = CompteRenduAudience.builder().id(100L).dossier(dossier).avocat(avocat)
+                .statutValidation(StatutPublication.DEPOSE).build();
+        when(publicationRepository.findById(100L)).thenReturn(Optional.of(publication));
+        when(publicationRepository.save(any(Publication.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(dossierJuristeRepository.findByDossierId(1L)).thenReturn(List.of(DossierJuriste.builder().utilisateur(juriste).build()));
+
+        service.valider(100L, new ValiderPublicationRequest(StatutPublication.VALIDE, null));
+
+        verify(alerteService).declencher(eq(TypeAlerte.NOUVELLE_PUBLICATION), eq(1L), eq(juriste), any());
+    }
+
+    @Test
+    void valider_notifiesOnlyTheDesignatedReaderOfARestrictedPublication() {
+        Utilisateur destinataire = Utilisateur.builder().id(60L).build();
+        Publication publication = CompteRenduAudience.builder().id(100L).dossier(dossier).avocat(avocat)
+                .statutValidation(StatutPublication.DEPOSE).restrictionAcces(destinataire).build();
+        when(publicationRepository.findById(100L)).thenReturn(Optional.of(publication));
+        when(publicationRepository.save(any(Publication.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.valider(100L, new ValiderPublicationRequest(StatutPublication.VALIDE, null));
+
+        verify(alerteService).declencher(eq(TypeAlerte.NOUVELLE_PUBLICATION), eq(1L), eq(destinataire), any());
+        verify(dossierJuristeRepository, never()).findByDossierId(any());
     }
 
     // --- Commentaire / correspondance (US 5.5) ---

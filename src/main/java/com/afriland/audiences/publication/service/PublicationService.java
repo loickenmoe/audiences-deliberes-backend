@@ -9,6 +9,8 @@ import com.afriland.audiences.common.error.ApiException;
 import com.afriland.audiences.common.error.ErrorCodes;
 import com.afriland.audiences.common.security.CurrentUserService;
 import com.afriland.audiences.dossier.domain.Dossier;
+import com.afriland.audiences.dossier.domain.DossierJuriste;
+import com.afriland.audiences.dossier.repository.DossierJuristeRepository;
 import com.afriland.audiences.dossier.repository.DossierRepository;
 import com.afriland.audiences.ged.service.MinioStorageService;
 import com.afriland.audiences.publication.domain.AutrePublication;
@@ -44,6 +46,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Épic 5, volet publications (FR-INT-09, RG-INT-06/07/09/10) — cf. FUNCTIONAL_MAP.md §5,
@@ -67,6 +70,14 @@ public class PublicationService {
     private final AlerteService alerteService;
     private final MinioStorageService minioStorageService;
     private final PublicationMapper publicationMapper;
+    private final DossierJuristeRepository dossierJuristeRepository;
+
+    /**
+     * Q-86 : profils qui instruisent une publication — l'Assistante la valide (RG-INT-10), le DJ et
+     * la DJA centralisent les échanges avec l'avocat (RG-INT-07). La restriction d'accès, qui désigne
+     * un juriste lecteur (RG-INT-06), ne s'oppose pas à eux.
+     */
+    private static final Set<String> PROFILS_INSTRUCTEURS = Set.of("ASSISTANTE", "DJ", "DJA");
 
     /** FR-INT-09/US 5.1 : l'audience doit être rattachée au dossier indiqué (404 sinon). */
     @Transactional
@@ -140,6 +151,7 @@ public class PublicationService {
 
         if (request.statut() == StatutPublication.VALIDE) {
             publication.setStatutValidation(StatutPublication.VALIDE);
+            notifierLecteurs(publication);
         } else if (request.statut() == StatutPublication.REJETE) {
             if (!StringUtils.hasText(request.motifRejet())) {
                 throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE, "Le motif de rejet est obligatoire");
@@ -161,22 +173,45 @@ public class PublicationService {
         return publicationMapper.toResponse(publication);
     }
 
-    /** US 5.4 : seule une publication VALIDE est consultable ; restriction d'accès individuelle possible. */
+    /**
+     * US 5.4 : seule une publication VALIDE est consultable ; restriction d'accès individuelle possible.
+     * <p>
+     * Q-86 : l'Assistante lit aussi une publication DEPOSE ou REJETE — elle doit voir ce qu'elle valide
+     * (UC-INT-10 étape 3) ; la restriction d'accès ne s'oppose pas aux profils instructeurs. Le détail
+     * porte l'URL pré-signée du fichier d'une autre publication, les commentaires des juristes et la
+     * correspondance transmise.
+     */
     @Transactional(readOnly = true)
     public PublicationResponse obtenir(Long id) {
         Publication publication = getPublicationOrThrow(id);
-        if (publication.getStatutValidation() != StatutPublication.VALIDE) {
-            throw ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE, "Publication introuvable ou non consultable : " + id);
-        }
+        boolean valide = publication.getStatutValidation() == StatutPublication.VALIDE;
         Utilisateur restriction = publication.getRestrictionAcces();
-        if (restriction != null) {
+        if (!valide || restriction != null) {
             Utilisateur utilisateur = currentUserService.getCurrentUser();
-            if (!restriction.getId().equals(utilisateur.getId())) {
+            String profil = utilisateur != null && utilisateur.getProfil() != null ? utilisateur.getProfil().getCode() : null;
+            if (!valide && !"ASSISTANTE".equals(profil)) {
+                throw ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE, "Publication introuvable ou non consultable : " + id);
+            }
+            // Set.of(...).contains(null) lève une exception : un profil inconnu n'instruit pas.
+            boolean instructeur = profil != null && PROFILS_INSTRUCTEURS.contains(profil);
+            if (restriction != null && !instructeur
+                    && (utilisateur == null || !restriction.getId().equals(utilisateur.getId()))) {
                 throw ApiException.forbidden(ErrorCodes.ACCES_RESTREINT_PUBLICATION,
                         "Cette publication est restreinte à un autre destinataire");
             }
         }
-        return publicationMapper.toResponse(publication);
+
+        String url = publication instanceof AutrePublication autre && autre.getCheminStockage() != null
+                ? minioStorageService.urlTelechargement(autre.getCheminStockage())
+                : null;
+        List<CommentaireResponse> commentaires = commentairePublicationRepository.findByPublicationIdOrderByCreatedAtAsc(id)
+                .stream()
+                .map(commentaire -> versReponse(id, commentaire))
+                .toList();
+        CorrespondanceResponse correspondance = correspondanceAvocatRepository.findByPublicationId(id)
+                .map(c -> versReponse(id, c))
+                .orElse(null);
+        return publicationMapper.toResponse(publication, url, commentaires, correspondance);
     }
 
     /** US 5.5/RG-INT-07 : le juriste ne commente jamais directement l'avocat — le commentaire est transmis au DJ/DJA. */
@@ -198,7 +233,7 @@ public class PublicationService {
         notifierProfil("DJA", publication.getDossier().getId(), "Nouveau commentaire du juriste sur la publication "
                 + id + " du dossier " + publication.getDossier().getReference() + " (RG-INT-07).");
 
-        return new CommentaireResponse(commentaire.getId(), id, juriste.getId(), commentaire.getContenu(), commentaire.getCreatedAt());
+        return versReponse(id, commentaire);
     }
 
     /** US 5.5/RG-INT-07 : correspondance unique par publication (409 si déjà transmise). */
@@ -222,7 +257,7 @@ public class PublicationService {
                 .ifPresent(u -> alerteService.declencher(TypeAlerte.NOUVELLE_PUBLICATION, publication.getDossier().getId(), u,
                         "Une correspondance a été transmise concernant votre publication " + id + " (RG-INT-07)."));
 
-        return new CorrespondanceResponse(correspondance.getId(), id, auteur.getId(), correspondance.getContenu(), correspondance.getCreatedAt());
+        return versReponse(id, correspondance);
     }
 
     /**
@@ -246,6 +281,34 @@ public class PublicationService {
             page = publicationRepository.findAll(pageable);
         }
         return PageResponse.of(page, publicationMapper::toResponse);
+    }
+
+    /**
+     * Q-86 (UC-INT-08 étape 1, alt. 3-a) : une publication validée est signalée aux juristes du
+     * dossier — au seul destinataire désigné si l'avocat en a restreint l'accès.
+     */
+    private void notifierLecteurs(Publication publication) {
+        Dossier dossier = publication.getDossier();
+        List<Utilisateur> lecteurs = publication.getRestrictionAcces() != null
+                ? List.of(publication.getRestrictionAcces())
+                : dossierJuristeRepository.findByDossierId(dossier.getId()).stream()
+                        .map(DossierJuriste::getUtilisateur)
+                        .toList();
+        String declencheur = "Nouvelle publication de l'avocat consultable sur le dossier "
+                + dossier.getReference() + " (RG-INT-06).";
+        lecteurs.forEach(lecteur -> alerteService.declencher(TypeAlerte.NOUVELLE_PUBLICATION, dossier.getId(), lecteur, declencheur));
+    }
+
+    private static CommentaireResponse versReponse(Long publicationId, CommentairePublication commentaire) {
+        Utilisateur auteur = commentaire.getAuteur();
+        return new CommentaireResponse(commentaire.getId(), publicationId, auteur != null ? auteur.getId() : null,
+                PublicationMapper.nomComplet(auteur), commentaire.getContenu(), commentaire.getCreatedAt());
+    }
+
+    private static CorrespondanceResponse versReponse(Long publicationId, CorrespondanceAvocat correspondance) {
+        Utilisateur auteur = correspondance.getAuteur();
+        return new CorrespondanceResponse(correspondance.getId(), publicationId, auteur != null ? auteur.getId() : null,
+                PublicationMapper.nomComplet(auteur), correspondance.getContenu(), correspondance.getCreatedAt());
     }
 
     private Utilisateur resoudreRestrictionAcces(Long utilisateurId) {

@@ -26,6 +26,7 @@ import com.afriland.audiences.referentiel.repository.IntervenantRepository;
 import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
 import com.afriland.audiences.referentiel.service.CompteAvocatService;
 import lombok.RequiredArgsConstructor;
+import org.hibernate.Hibernate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -152,7 +153,8 @@ public class ConstitutionService {
      * fournie au projet (même limitation que Q-37) — non implémenté, documenté (Q-52).
      */
     private void notifierPrestataire(DemandeConstitution demande) {
-        if (!(demande.getPrestataire() instanceof Avocat avocat)) {
+        // Q-87 : le prestataire chargé à la demande est un proxy d'Intervenant, jamais « instanceof Avocat ».
+        if (!(Hibernate.unproxy(demande.getPrestataire()) instanceof Avocat avocat)) {
             return;
         }
         compteAvocatService.utilisateurDe(avocat).ifPresent(destinataire ->

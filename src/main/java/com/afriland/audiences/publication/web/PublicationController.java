@@ -1,5 +1,6 @@
 package com.afriland.audiences.publication.web;
 
+import com.afriland.audiences.publication.domain.StatutPublication;
 import com.afriland.audiences.publication.domain.TypeAutrePublication;
 import com.afriland.audiences.publication.service.PublicationService;
 import com.afriland.audiences.publication.web.dto.CommentaireRequest;
@@ -11,6 +12,8 @@ import com.afriland.audiences.publication.web.dto.PublicationResponse;
 import com.afriland.audiences.publication.web.dto.ValiderPublicationRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -80,7 +83,9 @@ public class PublicationController {
             @RequestParam(required = false) com.afriland.audiences.publication.domain.StatutPublication statut,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return publicationService.lister(dossierId, statut, org.springframework.data.domain.PageRequest.of(page, size));
+        // Q-86 : la file à valider se traite dans l'ordre d'arrivée ; ailleurs, la plus récente d'abord.
+        Sort.Direction sens = statut == StatutPublication.DEPOSE ? Sort.Direction.ASC : Sort.Direction.DESC;
+        return publicationService.lister(dossierId, statut, PageRequest.of(page, size, Sort.by(sens, "dateDepot", "id")));
     }
 
     @PostMapping("/{id}/commentaires")

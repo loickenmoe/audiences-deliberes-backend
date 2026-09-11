@@ -1168,6 +1168,21 @@ facture…) rendent 409 et non plus 500 : `GlobalExceptionHandler` traite la vio
 (+2), `HabilitationFrontendIntegrationTest` (+1, PostgreSQL réel). **310 tests au vert,
 `BUILD SUCCESS`.**
 
+### 14. Publications et constitutions lisibles par qui les instruit ; avocat constitué notifié (Q-86, Q-87) ✅
+
+Remonté par l'audit du jalon F12 du frontend, décidé par le porteur du projet le 2026-09-11.
+**Implémenté** : `GET /publications/{id}` lisible par l'Assistante avant validation, avec l'URL
+pré-signée du fichier, les commentaires nommés et la correspondance ; restriction d'accès sans effet
+sur les profils instructeurs (Assistante, DJ, DJA) ; publications et demandes de constitution
+nommées ; file des publications triée ; notification des juristes du dossier (ou du seul destinataire
+désigné) à la validation. **Q-87** : `Hibernate.unproxy` sur le prestataire d'une constitution — un
+proxy d'`Intervenant` n'était jamais reconnu comme avocat, qui n'était donc jamais notifié.
+
+**Testé** : `PublicationServiceTest` (+5), parcours d'intégration `p2` et `p7` étendus sur
+PostgreSQL réel. **315 tests au vert, `BUILD SUCCESS`.** Un premier passage avait révélé un défaut du
+nouveau code (`Set.of(...).contains(null)` lève une exception pour un utilisateur sans profil),
+corrigé avant ce résultat.
+
 ---
 
 ## Chemin critique

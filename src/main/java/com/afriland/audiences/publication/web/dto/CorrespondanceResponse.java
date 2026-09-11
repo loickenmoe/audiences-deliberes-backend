@@ -2,5 +2,6 @@ package com.afriland.audiences.publication.web.dto;
 
 import java.time.LocalDateTime;
 
-public record CorrespondanceResponse(Long id, Long publicationId, Long auteurId, String contenu, LocalDateTime createdAt) {
+/** {@code auteurNom} depuis Q-86. */
+public record CorrespondanceResponse(Long id, Long publicationId, Long auteurId, String auteurNom, String contenu, LocalDateTime createdAt) {
 }
