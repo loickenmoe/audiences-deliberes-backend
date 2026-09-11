@@ -28,6 +28,8 @@ public interface DelibereRepository extends JpaRepository<Delibere, Long> {
             + "SUM(CASE WHEN d.resultat = com.afriland.audiences.delibere.domain.ResultatDelibere.FAVORABLE THEN 1L ELSE 0L END) AS favorables, "
             + "COUNT(d) AS total "
             + "FROM Delibere d JOIN com.afriland.audiences.dossier.domain.DossierAvocat da ON da.dossier = d.dossier "
+            // Q-78 : un délibéré en attente ou rabattu n'est ni un succès ni un échec.
+            + "WHERE d.resultat IS NOT NULL "
             + "GROUP BY da.avocat.id")
     List<PerformanceAvocat> calculerPerformanceParAvocat();
 
@@ -42,14 +44,15 @@ public interface DelibereRepository extends JpaRepository<Delibere, Long> {
     /** FR-REP-02 (tableau de bord, M13) : taux de succès recouvrement, toutes périodes confondues. */
     @Query("SELECT SUM(CASE WHEN d.resultat = com.afriland.audiences.delibere.domain.ResultatDelibere.FAVORABLE THEN 1L ELSE 0L END) AS favorables, "
             + "COUNT(d) AS total FROM Delibere d "
-            + "WHERE d.dossier.categorie = com.afriland.audiences.referentiel.domain.CategorieDossier.RECOUVREMENT")
+            + "WHERE d.dossier.categorie = com.afriland.audiences.referentiel.domain.CategorieDossier.RECOUVREMENT "
+            + "AND d.resultat IS NOT NULL")
     PerformanceGlobale calculerTauxSuccesRecouvrement();
 
     /** FR-REP-01 (rapport périodique, M13) : même indicateur, restreint aux délibérés rendus dans la période. */
     @Query("SELECT SUM(CASE WHEN d.resultat = com.afriland.audiences.delibere.domain.ResultatDelibere.FAVORABLE THEN 1L ELSE 0L END) AS favorables, "
             + "COUNT(d) AS total FROM Delibere d "
             + "WHERE d.dossier.categorie = com.afriland.audiences.referentiel.domain.CategorieDossier.RECOUVREMENT "
-            + "AND d.dateDeliberee BETWEEN :debut AND :fin")
+            + "AND d.resultat IS NOT NULL AND d.dateDeliberee BETWEEN :debut AND :fin")
     PerformanceGlobale calculerTauxSuccesRecouvrementPeriode(@Param("debut") LocalDate debut, @Param("fin") LocalDate fin);
 
     interface PerformanceGlobale {
@@ -58,9 +61,12 @@ public interface DelibereRepository extends JpaRepository<Delibere, Long> {
         Long getTotal();
     }
 
-    /** FR-REP-01 (rapport périodique, M13) : délibérés enregistrés dans la période. */
-    long countByDateDelibereeBetween(LocalDate debut, LocalDate fin);
+    /** FR-REP-01 (rapport périodique, M13) : délibérés rendus dans la période — hors mises en délibéré en attente (Q-78). */
+    long countByDateDelibereeBetweenAndResultatIsNotNull(LocalDate debut, LocalDate fin);
 
     /** M15 : onglet « Délibérés » de la fiche dossier (Q-68), plus récent d'abord. */
     List<Delibere> findByDossierIdOrderByDateDelibereeDesc(Long dossierId);
+
+    /** Q-78 : au plus un délibéré en attente (ni vidé, ni rabattu) par étape. */
+    boolean existsByEtapeIdAndResultatIsNullAndDateRabattementIsNull(Long etapeId);
 }

@@ -1,10 +1,15 @@
 package com.afriland.audiences.delibere.service;
 
+import com.afriland.audiences.alerte.domain.TypeAlerte;
+import com.afriland.audiences.alerte.service.AlerteService;
+import com.afriland.audiences.common.audit.HistoriqueActionService;
+import com.afriland.audiences.common.error.ApiException;
+import com.afriland.audiences.common.error.ErrorCodes;
 import com.afriland.audiences.delibere.domain.Delibere;
+import com.afriland.audiences.delibere.domain.EtatDelibere;
 import com.afriland.audiences.delibere.domain.Prorogation;
 import com.afriland.audiences.delibere.domain.ResultatDelibere;
 import com.afriland.audiences.delibere.domain.StatutExpedition;
-import com.afriland.audiences.delibere.mapper.DelibereMapper;
 import com.afriland.audiences.delibere.repository.DelibereRepository;
 import com.afriland.audiences.delibere.repository.ProrogationRepository;
 import com.afriland.audiences.delibere.web.dto.CreerProrogationRequest;
@@ -14,11 +19,7 @@ import com.afriland.audiences.delibere.web.dto.ExpeditionRequest;
 import com.afriland.audiences.delibere.web.dto.ProrogationResponse;
 import com.afriland.audiences.delibere.web.dto.RabattementRequest;
 import com.afriland.audiences.delibere.web.dto.RecoursResponse;
-import com.afriland.audiences.alerte.domain.TypeAlerte;
-import com.afriland.audiences.alerte.service.AlerteService;
-import com.afriland.audiences.common.audit.HistoriqueActionService;
-import com.afriland.audiences.common.error.ApiException;
-import com.afriland.audiences.common.error.ErrorCodes;
+import com.afriland.audiences.delibere.web.dto.ViderDelibereRequest;
 import com.afriland.audiences.dossier.domain.Dossier;
 import com.afriland.audiences.dossier.domain.EtapeProcedure;
 import com.afriland.audiences.dossier.domain.StatutCycleVie;
@@ -39,7 +40,14 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
-/** Épic 3 (RG-DEL-01/02/03/04/06/07) — cf. FUNCTIONAL_MAP.md §3, API_IMPLEMENTATION_STATUS.md §4. */
+/**
+ * Épic 3 (RG-DEL-01/02/03/04/06/07) — cf. FUNCTIONAL_MAP.md §3, API_IMPLEMENTATION_STATUS.md §4.
+ * <p>
+ * <b>Cycle d'un délibéré (Q-78)</b>, conforme aux sources (US 3.2/3.4, UC-DEL-04/05, RG-DEL-06/07) :
+ * mise en délibéré (sans résultat, étape {@code EN_DELIBERE}) → prorogations et rabattement
+ * <b>pendant</b> cette attente → résultat, qui vide le délibéré (étape {@code DELIBERE_VIDE}).
+ * Un délibéré déjà rendu peut encore s'enregistrer d'un seul geste, résultat compris (FR-DEL-01).
+ */
 @Service
 @RequiredArgsConstructor
 public class DelibereService {
@@ -53,8 +61,11 @@ public class DelibereService {
     private final HistoriqueActionService historiqueActionService;
     private final AlerteService alerteService;
     private final ConfigurationService configurationService;
-    private final DelibereMapper delibereMapper;
 
+    /**
+     * Sans résultat : mise en délibéré, l'étape reste {@code EN_DELIBERE} (Q-78). Avec résultat :
+     * délibéré déjà rendu, enregistré et vidé d'un même geste — comportement historique (FR-DEL-01).
+     */
     @Transactional
     public DelibereResponse enregistrerDelibere(Long dossierId, EnregistrerDelibereRequest request) {
         Dossier dossier = getDossierOrThrow(dossierId);
@@ -67,24 +78,59 @@ public class DelibereService {
             throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
                     "Un délibéré ne peut être enregistré que sur une étape EN_DELIBERE (RG-DEL-01)");
         }
-        validerEcheanceRecours(request.resultat(), request.dateDeliberee(), request.dateEcheanceRecours());
+        if (delibereRepository.existsByEtapeIdAndResultatIsNullAndDateRabattementIsNull(etape.getId())) {
+            throw ApiException.conflict(ErrorCodes.CONFLIT,
+                    "Un délibéré est déjà en attente sur cette étape : prorogez-le, rabattez-le ou videz-le (Q-78)");
+        }
+        // Tout se valide avant d'écrire : un délibéré n'est jamais créé puis refusé.
+        if (request.resultat() != null) {
+            validerEcheanceRecours(request.resultat(), request.dateDeliberee(), request.dateEcheanceRecours());
+        } else if (request.dateEcheanceRecours() != null) {
+            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
+                    "L'échéance du délai de recours se saisit avec le résultat du délibéré");
+        }
 
         Delibere delibere = delibereRepository.save(Delibere.builder()
                 .dossier(dossier)
                 .etape(etape)
                 .dateDeliberee(request.dateDeliberee())
-                .resultat(request.resultat())
-                .statutExpedition(StatutExpedition.A_LEVER)
-                .dateEcheanceRecours(request.dateEcheanceRecours())
                 .build());
 
-        etape.setStatutCycleVie(StatutCycleVie.DELIBERE_VIDE);
-        etapeProcedureRepository.save(etape);
+        if (request.resultat() == null) {
+            historiqueActionService.enregistrer(dossierId, "Mise en délibéré",
+                    Map.of("delibereId", delibere.getId(), "dateDeliberee", request.dateDeliberee().toString()));
+            return versReponse(delibere);
+        }
 
+        appliquerResultat(delibere, request.resultat(), request.dateEcheanceRecours());
         historiqueActionService.enregistrer(dossierId, "Enregistrement d'un délibéré",
                 Map.of("delibereId", delibere.getId(), "resultat", request.resultat().name()));
+        return versReponse(delibere);
+    }
 
-        return delibereMapper.toResponse(delibere);
+    /** Q-78 : le tribunal a rendu sa décision — le délibéré en attente est vidé. */
+    @Transactional
+    public DelibereResponse viderDelibere(Long delibereId, ViderDelibereRequest request) {
+        Delibere delibere = getDelibereOrThrow(delibereId);
+        exigerEnAttente(delibere, "vidé");
+        validerEcheanceRecours(request.resultat(), delibere.getDateDeliberee(), request.dateEcheanceRecours());
+
+        appliquerResultat(delibere, request.resultat(), request.dateEcheanceRecours());
+        historiqueActionService.enregistrer(delibere.getDossier().getId(), "Délibéré vidé",
+                Map.of("delibereId", delibereId, "resultat", request.resultat().name()));
+        return versReponse(delibere);
+    }
+
+    /** RG-DEL-01 : pose le résultat (déjà validé), ouvre l'expédition et fait passer l'étape « Délibéré vidé ». */
+    private void appliquerResultat(Delibere delibere, ResultatDelibere resultat, LocalDateTime dateEcheanceRecours) {
+        delibere.setResultat(resultat);
+        delibere.setDateEcheanceRecours(dateEcheanceRecours);
+        delibere.setStatutExpedition(StatutExpedition.A_LEVER);
+        delibereRepository.save(delibere);
+
+        EtapeProcedure etape = delibere.getEtape();
+        etape.setStatutCycleVie(StatutCycleVie.DELIBERE_VIDE);
+        etapeProcedureRepository.save(etape);
     }
 
     /** RG-DEL-01 : seuls DEFAVORABLE/MIXTE ouvrent une voie de recours (Q-42) — échéance requise et postérieure au délibéré, absente sinon. */
@@ -105,15 +151,38 @@ public class DelibereService {
     }
 
     /**
-     * RG-DEL-06 : aucune contrainte sur le statut de l'étape — {@code prorogation.delibere_id}
-     * référence nécessairement un délibéré déjà enregistré (schéma M2), lui-même déjà passé par
-     * {@link #enregistrerDelibere} (qui a fait basculer l'étape en {@code DELIBERE_VIDE}) ; « l'étape
-     * reste EN_DELIBERE » (FR-DEL-04) décrit donc l'absence d'effet de bord de cette opération sur
-     * l'étape, pas une précondition d'entrée (Q-44, DECISIONS_AND_OPEN_QUESTIONS.md).
+     * Q-78 : prorogation, rabattement et vidage ne portent que sur un délibéré <b>en attente</b>,
+     * étape {@code EN_DELIBERE} — c'est pendant la délibération que le tribunal proroge ou rabat
+     * (US 3.2/3.4, UC-DEL-04/05). Remplace la lecture de Q-44, qui les plaçait après la décision.
+     */
+    private void exigerEnAttente(Delibere delibere, String action) {
+        if (delibere.getDateRabattement() != null) {
+            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
+                    "Ce délibéré a été rabattu : il ne peut plus être " + action + " (RG-DEL-07)");
+        }
+        if (delibere.getResultat() != null) {
+            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
+                    "Ce délibéré est déjà vidé : il ne peut plus être " + action + " (Q-78)");
+        }
+        EtapeProcedure etape = delibere.getEtape();
+        if (etape == null || etape.getStatutCycleVie() != StatutCycleVie.EN_DELIBERE) {
+            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
+                    "Un délibéré ne peut être " + action + " que tant que l'étape est EN_DELIBERE (Q-78)");
+        }
+    }
+
+    /**
+     * RG-DEL-06 : « DÉLIBÉRÉ PROROGÉ AU [date] » — nombre illimité, jamais écrasé. La nouvelle date,
+     * future (US 3.2), devient la date annoncée du délibéré ; l'étape reste {@code EN_DELIBERE}.
      */
     @Transactional
     public ProrogationResponse proroger(Long delibereId, CreerProrogationRequest request) {
         Delibere delibere = getDelibereOrThrow(delibereId);
+        exigerEnAttente(delibere, "prorogé");
+        if (!request.date().isAfter(LocalDate.now())) {
+            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
+                    "La nouvelle date du délibéré doit être future (US 3.2)");
+        }
 
         int compteur = (int) prorogationRepository.countByDelibereId(delibereId) + 1;
         Prorogation prorogation = prorogationRepository.save(Prorogation.builder()
@@ -123,17 +192,34 @@ public class DelibereService {
                 .compteur(compteur)
                 .build());
 
-        historiqueActionService.enregistrer(delibere.getDossier().getId(), "Prorogation d'un délibéré",
-                Map.of("delibereId", delibereId, "compteur", compteur));
+        delibere.setDateDeliberee(request.date());
+        delibereRepository.save(delibere);
 
-        int seuil = Integer.parseInt(configurationService.getOrThrow("SEUIL_PROROGATIONS").getValeur());
-        boolean alerte = compteur > seuil;
+        historiqueActionService.enregistrer(delibere.getDossier().getId(), "Prorogation d'un délibéré",
+                Map.of("delibereId", delibereId, "compteur", compteur, "date", request.date().toString()));
+
+        boolean alerte = compteur > seuilProrogations();
         if (alerte) {
             signalerProrogation(delibere, compteur);
         }
 
         return new ProrogationResponse(prorogation.getId(), delibereId, prorogation.getDate(), prorogation.getMotif(),
                 compteur, alerte, prorogation.getCreatedAt());
+    }
+
+    /** Q-78, FR-DEL-04 critère 2 : historique des prorogations, dans l'ordre où elles ont été prononcées. */
+    @Transactional(readOnly = true)
+    public List<ProrogationResponse> listerProrogations(Long delibereId) {
+        getDelibereOrThrow(delibereId);
+        int seuil = seuilProrogations();
+        return prorogationRepository.findByDelibereIdOrderByCompteurAsc(delibereId).stream()
+                .map(p -> new ProrogationResponse(p.getId(), delibereId, p.getDate(), p.getMotif(),
+                        p.getCompteur(), p.getCompteur() > seuil, p.getCreatedAt()))
+                .toList();
+    }
+
+    private int seuilProrogations() {
+        return Integer.parseInt(configurationService.getOrThrow("SEUIL_PROROGATIONS").getValeur());
     }
 
     /** RG-DEL-06/RG-ALR-01 (Q-18) : franchissement du seuil signalé une seule fois, au DJ et au DJA. */
@@ -151,25 +237,27 @@ public class DelibereService {
     }
 
     /**
-     * RG-DEL-07/FR-DEL-05 : le délibéré est rabattu tant que l'étape est encore {@code DELIBERE_VIDE}
-     * et qu'aucun recours n'a été exercé (transition distincte de {@code DELIBERE_VIDE → EN_COURS}
-     * via l'endpoint générique, réservée à l'exercice d'un recours — Q-42). Aucune étape suivante
-     * n'est ouverte : contrairement au recours, le rabattement rejoue la même étape.
+     * RG-DEL-07/FR-DEL-05 : « DÉLIBÉRÉ RABATTU LE [date, motif] » — le juge rouvre les débats avant
+     * de statuer. Le délibéré en attente est marqué rabattu et l'étape revient {@code EN_COURS} :
+     * de nouvelles audiences sont planifiables, et l'étape pourra repasser en délibéré. Aucune étape
+     * suivante n'est ouverte — c'est ce qui le distingue de l'exercice d'un recours (Q-42).
      */
     @Transactional
     public EtapeProcedureResponse rabattre(Long delibereId, RabattementRequest request) {
         Delibere delibere = getDelibereOrThrow(delibereId);
-        EtapeProcedure etape = delibere.getEtape();
-        if (etape == null || etape.getStatutCycleVie() != StatutCycleVie.DELIBERE_VIDE) {
-            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
-                    "Un rabattement ne peut être enregistré que sur une étape DELIBERE_VIDE (RG-DEL-07)");
-        }
+        exigerEnAttente(delibere, "rabattu");
 
+        String motif = request.motif().trim();
+        delibere.setDateRabattement(request.date());
+        delibere.setMotifRabattement(motif);
+        delibereRepository.save(delibere);
+
+        EtapeProcedure etape = delibere.getEtape();
         etape.setStatutCycleVie(StatutCycleVie.EN_COURS);
         etape = etapeProcedureRepository.save(etape);
 
         historiqueActionService.enregistrer(delibere.getDossier().getId(), "Rabattement du délibéré",
-                Map.of("delibereId", delibereId, "date", request.date().toString(), "motif", request.motif()));
+                Map.of("delibereId", delibereId, "date", request.date().toString(), "motif", motif));
 
         return etapeProcedureMapper.toResponse(etape);
     }
@@ -200,9 +288,14 @@ public class DelibereService {
         return etapeProcedureRepository.existsByDossierIdAndType(dossierId, etape.getType().suivante());
     }
 
+    /** RG-DEL-03 : la grosse ne se lève qu'une fois la décision rendue (Q-78). */
     @Transactional
     public DelibereResponse modifierExpedition(Long delibereId, ExpeditionRequest request) {
         Delibere delibere = getDelibereOrThrow(delibereId);
+        if (delibere.getResultat() == null) {
+            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
+                    "L'expédition ne se lève qu'une fois le délibéré vidé (Q-78)");
+        }
         StatutExpedition ancien = delibere.getStatutExpedition();
         delibere.setStatutExpedition(request.statutExpedition());
         delibere = delibereRepository.save(delibere);
@@ -210,7 +303,7 @@ public class DelibereService {
         historiqueActionService.enregistrer(delibere.getDossier().getId(), "Modification du statut d'expédition",
                 Map.of("delibereId", delibereId, "ancienStatut", ancien.name(), "nouveauStatut", request.statutExpedition().name()));
 
-        return delibereMapper.toResponse(delibere);
+        return versReponse(delibere);
     }
 
     private Delibere getDelibereOrThrow(Long id) {
@@ -223,8 +316,28 @@ public class DelibereService {
     public List<DelibereResponse> listerParDossier(Long dossierId) {
         getDossierOrThrow(dossierId);
         return delibereRepository.findByDossierIdOrderByDateDelibereeDesc(dossierId).stream()
-                .map(delibereMapper::toResponse)
+                .map(this::versReponse)
                 .toList();
+    }
+
+    /** L'état est dérivé, jamais stocké : il ne peut pas diverger des données qui le fondent. */
+    private DelibereResponse versReponse(Delibere delibere) {
+        EtatDelibere etat = delibere.getDateRabattement() != null ? EtatDelibere.RABATTU
+                : delibere.getResultat() != null ? EtatDelibere.VIDE
+                : EtatDelibere.EN_ATTENTE;
+        return new DelibereResponse(
+                delibere.getId(),
+                delibere.getDossier() != null ? delibere.getDossier().getId() : null,
+                delibere.getEtape() != null ? delibere.getEtape().getId() : null,
+                delibere.getDateDeliberee(),
+                etat,
+                delibere.getResultat(),
+                delibere.getStatutExpedition(),
+                delibere.getDateEcheanceRecours(),
+                delibere.getId() != null ? prorogationRepository.countByDelibereId(delibere.getId()) : 0L,
+                delibere.getDateRabattement(),
+                delibere.getMotifRabattement(),
+                delibere.getCreatedAt());
     }
 
     private Dossier getDossierOrThrow(Long id) {

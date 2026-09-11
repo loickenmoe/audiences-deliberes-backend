@@ -8,6 +8,7 @@ import com.afriland.audiences.delibere.web.dto.ExpeditionRequest;
 import com.afriland.audiences.delibere.web.dto.ProrogationResponse;
 import com.afriland.audiences.delibere.web.dto.RabattementRequest;
 import com.afriland.audiences.delibere.web.dto.RecoursResponse;
+import com.afriland.audiences.delibere.web.dto.ViderDelibereRequest;
 import com.afriland.audiences.dossier.web.dto.EtapeProcedureResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -65,6 +66,20 @@ public class DelibereController {
     @PreAuthorize("hasRole('JURISTE')")
     public RecoursResponse consulterRecours(@PathVariable Long id) {
         return delibereService.consulterRecours(id);
+    }
+
+    /** Q-78 : vider le délibéré en attente — la décision est rendue, l'étape passe « Délibéré vidé ». Endpoint 🆕. */
+    @PutMapping("${api.prefix}/deliberes/{id}/resultat")
+    @PreAuthorize("hasRole('JURISTE')")
+    public DelibereResponse viderDelibere(@PathVariable Long id, @Valid @RequestBody ViderDelibereRequest request) {
+        return delibereService.viderDelibere(id, request);
+    }
+
+    /** Q-78, FR-DEL-04 critère 2 : historique des prorogations d'un délibéré — endpoint 🆕. */
+    @GetMapping("${api.prefix}/deliberes/{id}/prorogations")
+    @PreAuthorize("hasRole('CONSULTATION')")
+    public java.util.List<ProrogationResponse> listerProrogations(@PathVariable Long id) {
+        return delibereService.listerProrogations(id);
     }
 
     @PutMapping("${api.prefix}/deliberes/{id}/expedition")

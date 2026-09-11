@@ -71,7 +71,8 @@ public class ReportingService {
         long nbNouveauxDossiers = dossierRepository.countByCreatedAtBetween(debutJour, finJour);
         long nbAudiencesTenues = audienceRepository.countByStatutAndDateTenueBetween(StatutAudience.TENUE, dateDebut, dateFin);
         long nbDemandesFraisDeposees = demandeFraisRepository.countByCreatedAtBetween(debutJour, finJour);
-        long nbDeliberesEnregistres = delibereRepository.countByDateDelibereeBetween(dateDebut, dateFin);
+        // Délibérés rendus dans la période : une mise en délibéré sans résultat n'en est pas un (Q-78).
+        long nbDeliberesEnregistres = delibereRepository.countByDateDelibereeBetweenAndResultatIsNotNull(dateDebut, dateFin);
         DelibereRepository.PerformanceGlobale performance = delibereRepository.calculerTauxSuccesRecouvrementPeriode(dateDebut, dateFin);
         double tauxSuccesRecouvrement = tauxSucces(performance.getFavorables(), performance.getTotal());
         double provisionsReprises = valeurOuZero(decisionDefinitiveRepository.sommeProvisionsReprisesPeriode(dateDebut, dateFin));

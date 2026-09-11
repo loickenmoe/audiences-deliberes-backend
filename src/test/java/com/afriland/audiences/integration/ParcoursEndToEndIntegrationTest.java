@@ -210,37 +210,90 @@ class ParcoursEndToEndIntegrationTest {
     // ---------------------------------------------------------------- P3
 
     @Test
-    @DisplayName("P3 — Cycle d'un délibéré : mise en délibéré, prorogation, rabattement, second délibéré")
+    @DisplayName("P3 — Cycle d'un délibéré (Q-78) : mise en délibéré, prorogation, rabattement, nouvelle mise en délibéré, vidage")
     void p3_cycleDelibere() throws Exception {
         long dossierId = creerDossierRecouvrement();
         long etapeId = premiereEtape(dossierId);
         passerEtape(dossierId, etapeId, "EN_COURS");
         passerEtape(dossierId, etapeId, "EN_DELIBERE");
+        LocalDate annoncee = LocalDate.now().plusDays(7);
+        LocalDate prorogee = LocalDate.now().plusDays(14);
 
-        long delibereId = extraireId(mockMvc.perform(post(api("/dossiers/" + dossierId + "/deliberes"))
+        // Mise en délibéré : pas de résultat, l'étape reste EN_DELIBERE.
+        long premier = extraireId(mockMvc.perform(post(api("/dossiers/" + dossierId + "/deliberes"))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("etapeId", etapeId, "dateDeliberee", LocalDate.now().toString(),
-                                "resultat", "FAVORABLE")))
+                        .content(json(Map.of("etapeId", etapeId, "dateDeliberee", annoncee.toString())))
                         .with(role("kc-juriste", "ROLE_JURISTE")))
                 .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.etat").value("EN_ATTENTE"))
                 .andReturn());
 
-        // Prorogation : le compteur s'incrémente, l'étape n'est pas modifiée (Q-44)
-        mockMvc.perform(post(api("/deliberes/" + delibereId + "/prorogations"))
+        // Un seul délibéré en attente par étape.
+        mockMvc.perform(post(api("/dossiers/" + dossierId + "/deliberes"))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("date", LocalDate.now().toString(), "motif", "Complément d'instruction")))
+                        .content(json(Map.of("etapeId", etapeId, "dateDeliberee", annoncee.toString())))
+                        .with(role("kc-juriste", "ROLE_JURISTE")))
+                .andExpect(status().isConflict());
+
+        // « DÉLIBÉRÉ PROROGÉ AU [date] » : pendant l'attente, date future, qui devient la date annoncée.
+        mockMvc.perform(post(api("/deliberes/" + premier + "/prorogations"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("date", prorogee.toString(), "motif", "Juge empêché")))
                         .with(role("kc-juriste", "ROLE_JURISTE")))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.compteur").value(1))
                 .andExpect(jsonPath("$.alerte").value(false));
 
-        // Rabattement : retour EN_COURS sur la même étape (RG-DEL-07)
-        mockMvc.perform(post(api("/deliberes/" + delibereId + "/rabattement"))
+        mockMvc.perform(get(api("/deliberes/" + premier + "/prorogations")).with(role("kc-juriste", "ROLE_CONSULTATION")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].date").value(prorogee.toString()));
+
+        // « DÉLIBÉRÉ RABATTU LE [date, motif] » : le juge rouvre les débats avant de statuer.
+        mockMvc.perform(post(api("/deliberes/" + premier + "/rabattement"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("date", LocalDate.now().toString(), "motif", "Réouverture des débats")))
                         .with(role("kc-juriste", "ROLE_JURISTE")))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.statutCycleVie").value("EN_COURS"));
+
+        // Un délibéré rabattu ne se proroge plus.
+        mockMvc.perform(post(api("/deliberes/" + premier + "/prorogations"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("date", prorogee.toString())))
+                        .with(role("kc-juriste", "ROLE_JURISTE")))
+                .andExpect(status().isBadRequest());
+
+        // Nouvelle mise en délibéré, puis la décision est rendue : le délibéré est vidé.
+        passerEtape(dossierId, etapeId, "EN_DELIBERE");
+        long second = extraireId(mockMvc.perform(post(api("/dossiers/" + dossierId + "/deliberes"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("etapeId", etapeId, "dateDeliberee", LocalDate.now().plusDays(21).toString())))
+                        .with(role("kc-juriste", "ROLE_JURISTE")))
+                .andExpect(status().isCreated())
+                .andReturn());
+        mockMvc.perform(put(api("/deliberes/" + second + "/resultat"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("resultat", "FAVORABLE")))
+                        .with(role("kc-juriste", "ROLE_JURISTE")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.etat").value("VIDE"))
+                .andExpect(jsonPath("$.statutExpedition").value("A_LEVER"));
+
+        // Après la décision, ni prorogation ni rabattement.
+        mockMvc.perform(post(api("/deliberes/" + second + "/rabattement"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("date", LocalDate.now().toString(), "motif", "Trop tard")))
+                        .with(role("kc-juriste", "ROLE_JURISTE")))
+                .andExpect(status().isBadRequest());
+
+        // L'onglet du dossier retrace les deux passages : le vidé, puis le rabattu avec son motif.
+        mockMvc.perform(get(api("/dossiers/" + dossierId + "/deliberes")).with(role("kc-juriste", "ROLE_CONSULTATION")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].etat").value("VIDE"))
+                .andExpect(jsonPath("$[1].etat").value("RABATTU"))
+                .andExpect(jsonPath("$[1].motifRabattement").value("Réouverture des débats"))
+                .andExpect(jsonPath("$[1].nombreProrogations").value(1));
     }
 
     // ---------------------------------------------------------------- P4

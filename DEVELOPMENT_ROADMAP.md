@@ -1087,6 +1087,26 @@ même date sans `ERR-005`, compte rendu refusé ; alarme close une fois, sans re
 au vert, `BUILD SUCCESS`.** **Vérifié en réel** : V8 appliquée à la base locale (`flyway_schema_history`,
 rang 8), colonnes et contrainte présentes.
 
+### 9. Prorogation et rabattement placés après la décision (Q-78) ✅
+
+Remonté par l'audit du jalon F9 du frontend (QF-33) : toutes les sources placent prorogation et
+rabattement **pendant** « En délibéré », le backend les plaçait après la décision — pour proroger,
+il fallait saisir un résultat. **Implémenté** : le délibéré naît à la mise en délibéré, sans
+résultat ; prorogation (date future) et rabattement (date, motif conservés sur le délibéré) ne
+portent que sur un délibéré en attente ; 🆕 `PUT /deliberes/{id}/resultat` le vide ; 🆕 `GET
+/deliberes/{id}/prorogations` en donne l'historique ; `etat` dérivé dans la réponse. Migration
+`V9__delibere_cycle.sql`. Indicateurs de succès et compteur du rapport limités aux délibérés
+rendus ; expédition refusée avant la décision. L'enregistrement d'un délibéré déjà rendu, en un
+seul geste, reste possible.
+
+**Testé** : `DelibereServiceTest` réécrit (24 tests : mise en délibéré, second délibéré en attente
+refusé, vidage, prorogation et rabattement refusés après la décision, date de prorogation future,
+expédition avant la décision, historique) ; parcours d'intégration `p3` réécrit sur PostgreSQL
+réel (mise en délibéré, 409 sur un second, prorogation et historique, rabattement, prorogation
+refusée sur un rabattu, nouvelle mise en délibéré, vidage, rabattement refusé après décision,
+états `VIDE`/`RABATTU` dans la liste). **287 tests au vert, `BUILD SUCCESS`.** **Vérifié en réel** :
+V9 appliquée à la base locale (rang 9), `resultat` facultatif, colonnes de rabattement présentes.
+
 ---
 
 ## Chemin critique
