@@ -416,6 +416,72 @@ class HabilitationFrontendIntegrationTest {
                 .andExpect(status().isForbidden());
     }
 
+    @Test
+    @DisplayName("Q-88 : les décisions d'un dossier se relisent, statut de paiement compris ; 404 si le dossier est inconnu")
+    void decisionsDuDossier_seRelisent() throws Exception {
+        long dossierId = creerDossier();
+        RequestPostProcessor juriste = role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_CONSULTATION");
+        RequestPostProcessor assistante = role("kc-assistante-m15", "ROLE_ASSISTANTE", "ROLE_CONSULTATION");
+
+        long condamnationId = extraireId(mockMvc.perform(post(api("/dossiers/" + dossierId + "/condamnations"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("sens", "TIERS_REDEVABLE", "naturePaiement", "Dommages et intérêts",
+                                "dateDecision", LocalDate.now().toString())))
+                        .with(juriste))
+                .andExpect(status().isCreated())
+                .andReturn());
+        mockMvc.perform(patch(api("/condamnations/" + condamnationId + "/statut"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("statutPaiement", "RECOUVREMENT_FORCE")))
+                        .with(juriste))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get(api("/dossiers/" + dossierId + "/decisions")).with(assistante))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.adjudications.length()").value(0))
+                .andExpect(jsonPath("$.condamnations.length()").value(1))
+                .andExpect(jsonPath("$.condamnations[0].id").value(condamnationId))
+                .andExpect(jsonPath("$.condamnations[0].statutPaiement").value("RECOUVREMENT_FORCE"));
+
+        mockMvc.perform(get(api("/dossiers/999999/decisions")).with(assistante))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("Q-89 : la recherche jurisprudentielle est partielle, insensible à la casse, et filtrable par dossier")
+    void jurisprudences_rechercheSouple() throws Exception {
+        long dossierId = creerDossier();
+        String marque = "Q89M" + COMPTEUR.incrementAndGet();
+        RequestPostProcessor consultation = role("kc-assistante-m15", "ROLE_CONSULTATION");
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart(api("/jurisprudences"))
+                        .file(new org.springframework.mock.web.MockMultipartFile("file", "decision.pdf", "application/pdf", new byte[]{1, 2, 3}))
+                        .param("dossierId", String.valueOf(dossierId))
+                        .param("typeArchive", "GROSSE")
+                        .param("motsCles", "Saisie immobilière " + marque)
+                        .param("motsCles", "Adjudication")
+                        .param("natureDecision", "Jugement")
+                        .param("juridiction", "TGI Douala")
+                        .param("dateDecision", "2026-01-15")
+                        .with(role("kc-juriste-m15", "ROLE_JURISTE")))
+                .andExpect(status().isCreated());
+
+        // Un fragment de mot-clé, en minuscules, suffit.
+        mockMvc.perform(get(api("/jurisprudences")).param("motCle", marque.toLowerCase()).with(consultation))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1));
+        // Juridiction en minuscules, restreinte au dossier.
+        mockMvc.perform(get(api("/jurisprudences")).param("motCle", marque).param("juridiction", "tgi douala")
+                        .param("dossierId", String.valueOf(dossierId)).with(consultation))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1));
+        // Un autre dossier ne la contient pas.
+        mockMvc.perform(get(api("/jurisprudences")).param("motCle", marque).param("dossierId", "999999").with(consultation))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(0));
+    }
+
     /** Jeton d'avocat tel que Keycloak l'émet : avec son identifiant de connexion (Q-84). */
     private RequestPostProcessor avocatConnecte(String sub, String identifiant) {
         return SecurityMockMvcRequestPostProcessors.jwt()

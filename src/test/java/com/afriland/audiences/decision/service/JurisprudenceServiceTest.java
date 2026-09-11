@@ -129,11 +129,29 @@ class JurisprudenceServiceTest {
         Jurisprudence jurisprudence = Jurisprudence.builder().id(1L).typeArchive(TypeArchiveJurisprudence.GROSSE)
                 .motsCles(List.of("saisie")).natureDecision("Recouvrement").juridiction("TGI Douala").dateDecision(LocalDate.now()).build();
         Page<Jurisprudence> page = new PageImpl<>(List.of(jurisprudence));
-        when(jurisprudenceRepository.rechercher(eq("saisie"), eq(null), eq(null), any())).thenReturn(page);
+        // Q-89 : le terme devient un motif « contient », en minuscules.
+        when(jurisprudenceRepository.rechercher(eq("%saisie%"), eq(null), eq(null), eq(null), any())).thenReturn(page);
 
-        var result = service.rechercher("saisie", null, null, PageRequest.of(0, 20));
+        var result = service.rechercher("Saisie", null, null, null, PageRequest.of(0, 20));
 
         assertThat(result.content()).hasSize(1);
         assertThat(result.content().get(0).natureDecision()).isEqualTo("Recouvrement");
+    }
+
+    @Test
+    void rechercher_passesTheDossierAndIgnoresBlankFilters() {
+        when(jurisprudenceRepository.rechercher(eq(null), eq(null), eq("%tgi douala%"), eq(3L), any()))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        var result = service.rechercher("  ", "", " TGI Douala ", 3L, PageRequest.of(0, 20));
+
+        assertThat(result.content()).isEmpty();
+    }
+
+    @Test
+    void motif_escapesTheLikeWildcardsTypedByTheUser() {
+        assertThat(JurisprudenceService.motif("50%_a\\b")).isEqualTo("%50\\%\\_a\\\\b%");
+        assertThat(JurisprudenceService.motif(null)).isNull();
+        assertThat(JurisprudenceService.motif("   ")).isNull();
     }
 }

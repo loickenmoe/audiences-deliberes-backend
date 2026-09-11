@@ -1183,6 +1183,17 @@ PostgreSQL réel. **315 tests au vert, `BUILD SUCCESS`.** Un premier passage ava
 nouveau code (`Set.of(...).contains(null)` lève une exception pour un utilisateur sans profil),
 corrigé avant ce résultat.
 
+### 15. Décisions définitives relisibles ; recherche jurisprudentielle souple (Q-88, Q-89) ✅
+
+Ouverture du jalon F13 du frontend, décidé par le porteur du projet le 2026-09-11 (QF-03).
+**Implémenté** : `GET /dossiers/{id}/decisions` — adjudications et condamnations du dossier ;
+`GET /jurisprudences` partiel et insensible à la casse sur mots-clés, nature et juridiction, avec un
+filtre `dossierId`. **Laissé ouvert (Q-90)** : la mise à jour d'une adjudication et le statut
+initial d'une condamnation, à confirmer avec la Direction Juridique.
+
+**Testé** : `JurisprudenceServiceTest` (+2, un mis à jour), `HabilitationFrontendIntegrationTest`
+(+2, PostgreSQL réel). **319 tests au vert, `BUILD SUCCESS`.**
+
 ---
 
 ## Chemin critique

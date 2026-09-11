@@ -12,6 +12,7 @@ import com.afriland.audiences.decision.web.dto.AdjudicationResponse;
 import com.afriland.audiences.decision.web.dto.CondamnationResponse;
 import com.afriland.audiences.decision.web.dto.CreerAdjudicationRequest;
 import com.afriland.audiences.decision.web.dto.CreerCondamnationRequest;
+import com.afriland.audiences.decision.web.dto.DecisionsDossierResponse;
 import com.afriland.audiences.decision.web.dto.ModifierStatutCondamnationRequest;
 import com.afriland.audiences.dossier.domain.Dossier;
 import com.afriland.audiences.dossier.domain.EtapeProcedure;
@@ -38,6 +39,19 @@ public class DecisionDefinitiveService {
     private final HistoriqueActionService historiqueActionService;
     private final AdjudicationMapper adjudicationMapper;
     private final CondamnationMapper condamnationMapper;
+
+    /**
+     * 🆕 M16 (Q-88, QF-03 du frontend) : décisions d'un dossier — aucune lecture n'existait, l'onglet
+     * de la fiche restait en écriture seule et la mise à jour d'une condamnation (#53) inatteignable
+     * après un rechargement. 404 si le dossier est inconnu, comme #56/#57/#58.
+     */
+    @Transactional(readOnly = true)
+    public DecisionsDossierResponse lister(Long dossierId) {
+        getDossierOrThrow(dossierId);
+        return new DecisionsDossierResponse(
+                decisionDefinitiveRepository.adjudicationsDuDossier(dossierId).stream().map(adjudicationMapper::toResponse).toList(),
+                decisionDefinitiveRepository.condamnationsDuDossier(dossierId).stream().map(condamnationMapper::toResponse).toList());
+    }
 
     /** FR-DEF-01/RG-DEF-01 : l'étape indiquée doit être {@code CLOTURE}. */
     @Transactional
