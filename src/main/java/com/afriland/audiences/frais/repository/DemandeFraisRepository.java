@@ -27,6 +27,9 @@ public interface DemandeFraisRepository extends JpaRepository<DemandeFrais, Long
 
     Page<DemandeFrais> findByStatutCircuit(StatutCircuitFrais statut, Pageable pageable);
 
+    /** CONF04 (Q-83) : demandes en attente de validation conjointe, pour la relance. */
+    List<DemandeFrais> findAllByStatutCircuit(StatutCircuitFrais statut);
+
     /** FR-REP-02 (tableau de bord, M13) : demandes non encore soldées (ni payées, ni rejetées). */
     long countByStatutCircuitNotIn(List<StatutCircuitFrais> statuts);
 

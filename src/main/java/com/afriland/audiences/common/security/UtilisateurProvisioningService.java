@@ -47,6 +47,9 @@ public class UtilisateurProvisioningService {
     private static final List<String> PRIORITE_PROFILS = List.of(
             "DJ", "DJA", "SH", "ASSISTANTE", "JURISTE", "AVOCAT");
 
+    /** Q-84 : claim Keycloak de l'identifiant de connexion. */
+    static final String CLAIM_IDENTIFIANT = "preferred_username";
+
     private final UtilisateurRepository utilisateurRepository;
     private final ProfilRepository profilRepository;
 
@@ -61,10 +64,23 @@ public class UtilisateurProvisioningService {
                 .orElseGet(() -> creer(jwt));
     }
 
+    /**
+     * Q-84 : enregistre l'identifiant de connexion d'un utilisateur déjà provisionné — avant Q-84,
+     * ou renommé dans Keycloak. Transaction à part, pour la même raison que la création (R-06).
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void synchroniserIdentifiant(Long utilisateurId, String identifiant) {
+        utilisateurRepository.findById(utilisateurId).ifPresent(utilisateur -> {
+            utilisateur.setIdentifiant(identifiant);
+            utilisateurRepository.save(utilisateur);
+        });
+    }
+
     private Utilisateur creer(Jwt jwt) {
         Profil profil = resolveProfil(jwt);
         Utilisateur saved = utilisateurRepository.save(Utilisateur.builder()
                 .keycloakId(jwt.getSubject())
+                .identifiant(jwt.getClaimAsString(CLAIM_IDENTIFIANT))
                 .nom(jwt.getClaimAsString("family_name"))
                 .prenom(jwt.getClaimAsString("given_name"))
                 .email(jwt.getClaimAsString("email"))

@@ -31,6 +31,7 @@ import com.afriland.audiences.referentiel.domain.Profil;
 import com.afriland.audiences.referentiel.domain.Utilisateur;
 import com.afriland.audiences.referentiel.repository.AvocatRepository;
 import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
+import com.afriland.audiences.referentiel.service.CompteAvocatService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -77,7 +78,8 @@ class PublicationServiceTest {
     @BeforeEach
     void setUp() {
         service = new PublicationService(publicationRepository, commentairePublicationRepository,
-                correspondanceAvocatRepository, dossierRepository, audienceRepository, avocatRepository,
+                correspondanceAvocatRepository, dossierRepository, audienceRepository,
+                new CompteAvocatService(avocatRepository, utilisateurRepository),
                 utilisateurRepository, currentUserService, historiqueActionService, alerteService,
                 minioStorageService, mapper);
 

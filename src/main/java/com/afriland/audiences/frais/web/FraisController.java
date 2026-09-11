@@ -11,6 +11,7 @@ import com.afriland.audiences.frais.web.dto.ValidationConjointeRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -27,7 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * Épic 4 (FR-INT-01 à 05) — cf. FUNCTIONAL_MAP.md §4, API_IMPLEMENTATION_STATUS.md §5.
  * {@code GET /frais/demandes} : endpoint 🆕, absent du contrat formel — ajouté pour la file de
- * travail de chaque profil (Q-24).
+ * travail de chaque profil (Q-24). {@code GET /frais/demandes/{id}} : 🆕 M16, détail (Q-82).
  */
 @RestController
 @RequestMapping("${api.prefix}/frais/demandes")
@@ -66,12 +67,20 @@ public class FraisController {
         return fraisService.enregistrerPaiement(id);
     }
 
+    /** Plus récentes d'abord ; l'identifiant départage deux dépôts de la même seconde (Q-82). */
     @GetMapping
     @PreAuthorize("hasAnyRole('AVOCAT', 'ASSISTANTE', 'DJA', 'DJ')")
     public PageResponse<DemandeFraisResponse> lister(
             @RequestParam(required = false) StatutCircuitFrais statut,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return fraisService.lister(statut, PageRequest.of(page, size));
+        return fraisService.lister(statut, PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt", "id")));
+    }
+
+    /** Q-82 : détail d'une demande et décisions du circuit — l'avocat ne lit que les siennes. */
+    @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('AVOCAT', 'ASSISTANTE', 'DJA', 'DJ')")
+    public DemandeFraisResponse consulter(@PathVariable Long id) {
+        return fraisService.consulter(id);
     }
 }

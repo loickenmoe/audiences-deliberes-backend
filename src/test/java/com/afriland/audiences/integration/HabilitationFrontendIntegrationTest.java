@@ -400,6 +400,35 @@ class HabilitationFrontendIntegrationTest {
     }
 
     /** Cf. {@code ParcoursEndToEndIntegrationTest#role} : les autorités sont fournies explicitement. */
+    @Test
+    @DisplayName("Q-84 : un avocat est reconnu par son identifiant de connexion, et l'utilisateur le garde")
+    void avocat_estReconnuParSonIdentifiantDeConnexion() throws Exception {
+        String identifiant = "avocat.q84." + COMPTEUR.incrementAndGet();
+        avocatRepository.save(Avocat.builder().nom("Me Q84").compteKeycloak(identifiant).build());
+
+        mockMvc.perform(get(api("/frais/demandes")).with(avocatConnecte("kc-sub-" + identifiant, identifiant)))
+                .andExpect(status().isOk());
+        assertThat(utilisateurRepository.findByKeycloakId("kc-sub-" + identifiant))
+                .get().extracting(Utilisateur::getIdentifiant).isEqualTo(identifiant);
+
+        // Un compte sans avocat rattaché, ni par identifiant ni par sub, reste refusé.
+        mockMvc.perform(get(api("/frais/demandes")).with(avocatConnecte("kc-sub-inconnu-" + identifiant, "inconnu." + identifiant)))
+                .andExpect(status().isForbidden());
+    }
+
+    /** Jeton d'avocat tel que Keycloak l'émet : avec son identifiant de connexion (Q-84). */
+    private RequestPostProcessor avocatConnecte(String sub, String identifiant) {
+        return SecurityMockMvcRequestPostProcessors.jwt()
+                .jwt(jwt -> jwt
+                        .subject(sub)
+                        .claim("roles", List.of("ROLE_AVOCAT"))
+                        .claim("preferred_username", identifiant)
+                        .claim("given_name", "Test")
+                        .claim("family_name", identifiant)
+                        .claim("email", identifiant + "@test.cm"))
+                .authorities(new SimpleGrantedAuthority("ROLE_AVOCAT"));
+    }
+
     private RequestPostProcessor role(String keycloakId, String... roles) {
         return SecurityMockMvcRequestPostProcessors.jwt()
                 .jwt(jwt -> jwt

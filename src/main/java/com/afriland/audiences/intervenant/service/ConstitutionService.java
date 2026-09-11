@@ -24,6 +24,7 @@ import com.afriland.audiences.referentiel.domain.Intervenant;
 import com.afriland.audiences.referentiel.domain.Utilisateur;
 import com.afriland.audiences.referentiel.repository.IntervenantRepository;
 import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
+import com.afriland.audiences.referentiel.service.CompteAvocatService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,6 +50,7 @@ public class ConstitutionService {
     private final MinioStorageService minioStorageService;
     private final DocumentRepository documentRepository;
     private final DemandeConstitutionMapper demandeConstitutionMapper;
+    private final CompteAvocatService compteAvocatService;
 
     @Transactional
     public DemandeConstitutionResponse creerDemande(CreerConstitutionRequest request) {
@@ -153,7 +155,7 @@ public class ConstitutionService {
         if (!(demande.getPrestataire() instanceof Avocat avocat)) {
             return;
         }
-        utilisateurRepository.findByKeycloakId(avocat.getCompteKeycloak()).ifPresent(destinataire ->
+        compteAvocatService.utilisateurDe(avocat).ifPresent(destinataire ->
                 alerteService.declencher(TypeAlerte.CONSTITUTION_A_SIGNER, demande.getDossier().getId(), destinataire,
                         "Votre constitution sur le dossier " + demande.getDossier().getReference()
                                 + " a été validée ; la lettre de constitution est disponible dans la GED du dossier."));

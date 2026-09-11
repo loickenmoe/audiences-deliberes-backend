@@ -72,6 +72,33 @@ class CurrentUserServiceTest {
     }
 
     @Test
+    void resolveOrProvision_recordsTheLoginOfAnAlreadyProvisionedUser() {
+        Jwt jwt = Jwt.withTokenValue("token-value").header("alg", "none").subject("kc-q84")
+                .claim("preferred_username", "avocat.test").claim("roles", List.of("ROLE_AVOCAT"))
+                .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(3600)).build();
+        Utilisateur existing = Utilisateur.builder().id(9L).keycloakId("kc-q84").build();
+        when(utilisateurRepository.findByKeycloakId("kc-q84")).thenReturn(Optional.of(existing));
+
+        Utilisateur result = currentUserService.resolveOrProvision(jwt);
+
+        assertThat(result.getIdentifiant()).isEqualTo("avocat.test");
+        verify(provisioningService).synchroniserIdentifiant(9L, "avocat.test");
+    }
+
+    @Test
+    void resolveOrProvision_leavesAnUpToDateLoginAlone() {
+        Jwt jwt = Jwt.withTokenValue("token-value").header("alg", "none").subject("kc-q84b")
+                .claim("preferred_username", "avocat.test").claim("roles", List.of("ROLE_AVOCAT"))
+                .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(3600)).build();
+        Utilisateur existing = Utilisateur.builder().id(9L).keycloakId("kc-q84b").identifiant("avocat.test").build();
+        when(utilisateurRepository.findByKeycloakId("kc-q84b")).thenReturn(Optional.of(existing));
+
+        currentUserService.resolveOrProvision(jwt);
+
+        verify(provisioningService, never()).synchroniserIdentifiant(any(), any());
+    }
+
+    @Test
     void getCurrentUser_readsTheJwtFromTheSecurityContext() {
         Jwt jwt = jwtWithRoles("kc-111", List.of("ROLE_AVOCAT"));
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt));

@@ -82,6 +82,10 @@ public class DemandeFrais {
     @Column(name = "reference_facture", length = 50, unique = true)
     private String referenceFacture;
 
+    /** CONF04 (Q-83) : dernière relance de la validation conjointe, nulle tant qu'aucune n'a eu lieu. */
+    @Column(name = "date_derniere_relance")
+    private LocalDateTime dateDerniereRelance;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

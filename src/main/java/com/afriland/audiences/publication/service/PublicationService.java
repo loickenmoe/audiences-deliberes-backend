@@ -31,8 +31,8 @@ import com.afriland.audiences.publication.web.dto.PublicationResponse;
 import com.afriland.audiences.publication.web.dto.ValiderPublicationRequest;
 import com.afriland.audiences.referentiel.domain.Avocat;
 import com.afriland.audiences.referentiel.domain.Utilisateur;
-import com.afriland.audiences.referentiel.repository.AvocatRepository;
 import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
+import com.afriland.audiences.referentiel.service.CompteAvocatService;
 import com.afriland.audiences.common.web.PageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -60,7 +60,7 @@ public class PublicationService {
     private final CorrespondanceAvocatRepository correspondanceAvocatRepository;
     private final DossierRepository dossierRepository;
     private final AudienceRepository audienceRepository;
-    private final AvocatRepository avocatRepository;
+    private final CompteAvocatService compteAvocatService;
     private final UtilisateurRepository utilisateurRepository;
     private final CurrentUserService currentUserService;
     private final HistoriqueActionService historiqueActionService;
@@ -146,7 +146,7 @@ public class PublicationService {
             }
             publication.setStatutValidation(StatutPublication.REJETE);
             publication.setMotifRejet(request.motifRejet());
-            utilisateurRepository.findByKeycloakId(publication.getAvocat().getCompteKeycloak())
+            compteAvocatService.utilisateurDe(publication.getAvocat())
                     .ifPresent(u -> alerteService.declencher(TypeAlerte.NOUVELLE_PUBLICATION, publication.getDossier().getId(), u,
                             "Votre publication " + id + " sur le dossier " + publication.getDossier().getReference()
                                     + " a été rejetée : " + request.motifRejet()));
@@ -218,7 +218,7 @@ public class PublicationService {
 
         historiqueActionService.enregistrer(publication.getDossier().getId(), "Correspondance transmise à l'avocat",
                 Map.of("publicationId", id, "correspondanceId", correspondance.getId()));
-        utilisateurRepository.findByKeycloakId(publication.getAvocat().getCompteKeycloak())
+        compteAvocatService.utilisateurDe(publication.getAvocat())
                 .ifPresent(u -> alerteService.declencher(TypeAlerte.NOUVELLE_PUBLICATION, publication.getDossier().getId(), u,
                         "Une correspondance a été transmise concernant votre publication " + id + " (RG-INT-07)."));
 
@@ -263,7 +263,7 @@ public class PublicationService {
 
     private Avocat getAvocatCourantOrThrow() {
         Utilisateur utilisateur = currentUserService.getCurrentUser();
-        return avocatRepository.findByCompteKeycloak(utilisateur.getKeycloakId())
+        return compteAvocatService.avocatDe(utilisateur)
                 .orElseThrow(() -> ApiException.forbidden(ErrorCodes.DROITS_INSUFFISANTS, "Aucun avocat associé à cet utilisateur"));
     }
 
