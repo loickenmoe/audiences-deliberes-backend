@@ -9,6 +9,10 @@ import org.mapstruct.Mapping;
 public interface DemandeSuppressionMapper {
 
     @Mapping(source = "document.id", target = "documentId")
+    @Mapping(source = "document.nomFichier", target = "documentNom")
+    @Mapping(source = "document.typeDocument", target = "typeDocument")
+    @Mapping(source = "document.dossier.id", target = "dossierId")
+    @Mapping(source = "document.dossier.reference", target = "referenceDossier")
     @Mapping(source = "demandeur.id", target = "demandeurId")
     @Mapping(source = "validePar.id", target = "valideParId")
     DemandeSuppressionResponse toResponse(DemandeSuppression demande);

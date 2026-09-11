@@ -180,6 +180,16 @@ public class GedService {
         documentRepository.save(document);
         minioStorageService.supprimer(document.getCheminStockage());
 
+        // Q-79 : la demande en attente sur ce document est close avec lui. Laissée ouverte, elle
+        // restait dans la file, indécidable (document supprimé → 404) et relancée toutes les 72 h.
+        demandeSuppressionRepository.findByDocumentIdAndStatut(document.getId(), StatutSuppression.EN_ATTENTE)
+                .ifPresent(demande -> {
+                    demande.setStatut(StatutSuppression.APPROUVEE);
+                    demande.setValidePar(validePar);
+                    demande.setDateDecision(LocalDateTime.now());
+                    demandeSuppressionRepository.save(demande);
+                });
+
         historiqueActionService.enregistrerPour(validePar, document.getDossier().getId(),
                 "Suppression directe d'un document (DJ/DJA)", Map.of("documentId", document.getId()));
 

@@ -1107,6 +1107,37 @@ refusée sur un rabattu, nouvelle mise en délibéré, vidage, rabattement refus
 états `VIDE`/`RABATTU` dans la liste). **287 tests au vert, `BUILD SUCCESS`.** **Vérifié en réel** :
 V9 appliquée à la base locale (rang 9), `resultat` facultatif, colonnes de rabattement présentes.
 
+### 10. GED : demande de suppression orpheline, file anonyme, rapport trop fermé (Q-79, Q-80) ✅
+
+Remonté par l'audit du jalon F10 du frontend (QF-34, QF-35). Une suppression directe (DJ/DJA) laissait
+en attente la demande du juriste sur le même document — indécidable (404) et relancée toutes les
+72 h sans fin ; la file ne nommait ni le fichier ni le dossier ; le rapport journalier n'était servi
+qu'au rôle juriste. **Implémenté** : la suppression directe ferme la demande (`APPROUVEE`, validée par
+l'auteur de la suppression) ; `DemandeSuppressionResponse` porte `documentNom`, `typeDocument`,
+`dossierId`, `referenceDossier` ; migration `V10__demandes_suppression_orphelines.sql` pour les
+orphelines existantes ; rapport journalier ouvert au juriste, au DJ, à la DJA et à l'Assistante.
+Q-81 (le DJ et la DJA sans `ROLE_JURISTE`), constaté au même audit, est traité au §11.
+
+**Testé** : 2 tests unitaires (`GedServiceTest`) et 2 tests d'intégration sur PostgreSQL réel
+(`HabilitationFrontendIntegrationTest` : demande 202 déjà nommée, suppression directe, plus de
+demande en attente, historique `APPROUVEE` nommé ; rapport servi aux quatre profils, refusé au SH).
+**291 tests au vert, `BUILD SUCCESS`.** **Vérifié en réel** : V10 appliquée (rang 10), une demande
+orpheline fermée — laissée par un parcours e2e —, aucune restante.
+
+### 11. Le DJ et la DJA n'avaient pas les droits d'un juriste (Q-81) ✅
+
+Les sources donnent au DJ et à la DJA « tous les droits d'un juriste, plus les leurs » ; le realm
+ne leur donnait que `ROLE_SAISIE`. **Implémenté, sur décision du porteur du projet** : `ROLE_JURISTE`
+ajouté aux composites de `ROLE_DJ` et `ROLE_DJA`, dans `keycloak/audiences-realm.json` et dans le
+Keycloak en service (`kcadm add-roles` — l'import au démarrage ignore un realm existant).
+**Précaution** : `UtilisateurProvisioningService` déduit désormais le profil par priorité (DJ, DJA,
+SH, ASSISTANTE, JURISTE, AVOCAT) et non plus par le premier rôle du jeton, dont l'ordre n'est pas
+garanti — sans quoi un nouveau DJ aurait pu être enregistré comme juriste.
+
+**Testé** : 2 tests unitaires (jeton juriste + DJ → DJ ; juriste + DJA → DJA). **293 tests au vert,
+`BUILD SUCCESS`.** **Vérifié en réel** : composites de `ROLE_DJ` et `ROLE_DJA` = `ROLE_JURISTE`,
+`ROLE_SAISIE` dans le Keycloak local. Un jeton émis avant le changement exige une reconnexion.
+
 ---
 
 ## Chemin critique

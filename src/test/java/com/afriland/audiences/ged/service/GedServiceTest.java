@@ -64,7 +64,11 @@ class GedServiceTest {
     @Mock private MinioStorageService minioStorageService;
 
     private final DemandeSuppressionMapper demandeSuppressionMapper = demande -> new DemandeSuppressionResponse(
-            demande.getId(), demande.getDocument().getId(), demande.getDemandeur().getId(), demande.getMotif(),
+            demande.getId(), demande.getDocument().getId(), demande.getDocument().getNomFichier(),
+            demande.getDocument().getTypeDocument(),
+            demande.getDocument().getDossier() != null ? demande.getDocument().getDossier().getId() : null,
+            demande.getDocument().getDossier() != null ? demande.getDocument().getDossier().getReference() : null,
+            demande.getDemandeur().getId(), demande.getMotif(),
             demande.getStatut(), demande.getValidePar() != null ? demande.getValidePar().getId() : null,
             demande.getMotifRejet(), demande.getDateDemande(), demande.getDateDecision(), demande.getDateDerniereRelance());
 
@@ -191,6 +195,44 @@ class GedServiceTest {
         assertThat(result.document().estSupprime()).isTrue();
         verify(minioStorageService).supprimer("cle");
         verify(alerteService).declencher(eq(TypeAlerte.SUPPRESSION_DOCUMENT), eq(1L), eq(juriste), any());
+    }
+
+    /** Q-79 : sans cela, la demande restait EN_ATTENTE, indécidable (404) et relancée toutes les 72 h. */
+    @Test
+    void supprimerOuDemander_suppressionDirecteFermeLaDemandeEnAttente() {
+        Document document = Document.builder().id(5L).dossier(dossier).nomFichier("piece.pdf")
+                .auteurChargement(juriste).estSupprime(false).cheminStockage("cle").build();
+        DemandeSuppression enAttente = DemandeSuppression.builder().id(200L).document(document).demandeur(juriste)
+                .statut(StatutSuppression.EN_ATTENTE).build();
+        when(documentRepository.findById(5L)).thenReturn(Optional.of(document));
+        when(currentUserService.getCurrentUser()).thenReturn(dj);
+        when(documentRepository.save(any(Document.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(demandeSuppressionRepository.findByDocumentIdAndStatut(5L, StatutSuppression.EN_ATTENTE))
+                .thenReturn(Optional.of(enAttente));
+
+        service.supprimerOuDemander(5L);
+
+        assertThat(enAttente.getStatut()).isEqualTo(StatutSuppression.APPROUVEE);
+        assertThat(enAttente.getValidePar()).isEqualTo(dj);
+        assertThat(enAttente.getDateDecision()).isNotNull();
+        verify(demandeSuppressionRepository).save(enAttente);
+    }
+
+    /** Q-79 : la file dit quoi supprimer — le fichier et son dossier, pas un identifiant. */
+    @Test
+    void listerDemandesSuppression_nommeLeDocumentEtLeDossier() {
+        Document document = Document.builder().id(1L).dossier(dossier).nomFichier("pv-transfert.pdf")
+                .typeDocument("PV_TRANSFERT").build();
+        when(demandeSuppressionRepository.findByStatutOrderByDateDemandeAsc(StatutSuppression.EN_ATTENTE))
+                .thenReturn(List.of(DemandeSuppression.builder().id(9L).document(document).demandeur(juriste)
+                        .statut(StatutSuppression.EN_ATTENTE).build()));
+
+        DemandeSuppressionResponse demande = service.listerDemandesSuppression(StatutSuppression.EN_ATTENTE).get(0);
+
+        assertThat(demande.documentNom()).isEqualTo("pv-transfert.pdf");
+        assertThat(demande.typeDocument()).isEqualTo("PV_TRANSFERT");
+        assertThat(demande.dossierId()).isEqualTo(1L);
+        assertThat(demande.referenceDossier()).isEqualTo("DOS-2026-001");
     }
 
     @Test
