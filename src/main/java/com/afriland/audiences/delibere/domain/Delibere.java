@@ -38,6 +38,10 @@ import java.time.LocalDateTime;
  * <p>
  * Une étape peut porter plusieurs délibérés au fil du temps (rabattements successifs, RG-DEL-07) :
  * pas de contrainte d'unicité sur {@code etape_id}. Cf. dictionnaire des données §2.3.3.
+ * <p>
+ * <b>Cycle (Q-78)</b> : le délibéré naît à la mise en délibéré, sans résultat ({@link EtatDelibere#EN_ATTENTE}) ;
+ * il est prorogé ou rabattu pendant cette attente, puis vidé quand le résultat est connu. Au plus
+ * un délibéré en attente par étape.
  */
 @Getter
 @Setter
@@ -65,16 +69,22 @@ public class Delibere {
     @Column(name = "date_deliberee", nullable = false)
     private LocalDate dateDeliberee;
 
-    @NotNull
+    /** Q-78 : absent tant que le délibéré n'est pas vidé (mise en délibéré, prorogations). */
     @Enumerated(EnumType.STRING)
-    @Column(length = 20, nullable = false)
+    @Column(length = 20)
     private ResultatDelibere resultat;
 
-    @NotNull
-    @Builder.Default
+    /** Q-78 : n'existe qu'une fois la décision rendue — posé à {@code A_LEVER} quand le délibéré est vidé. */
     @Enumerated(EnumType.STRING)
     @Column(name = "statut_expedition", length = 20)
-    private StatutExpedition statutExpedition = StatutExpedition.A_LEVER;
+    private StatutExpedition statutExpedition;
+
+    /** Q-78, RG-DEL-07 : « DÉLIBÉRÉ RABATTU LE [date, motif] » — le juge a rouvert les débats. */
+    @Column(name = "date_rabattement")
+    private LocalDate dateRabattement;
+
+    @Column(name = "motif_rabattement")
+    private String motifRabattement;
 
     @Column(name = "date_echeance_recours")
     private LocalDateTime dateEcheanceRecours;

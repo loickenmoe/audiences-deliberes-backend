@@ -769,6 +769,10 @@ soit le résultat (une décision favorable peut aussi être rabattue pour compl�
 d'ouverture d'étape suivante ; testé négativement (étape non `DELIBERE_VIDE` → 400) et
 positivement (`verify(etapeProcedureRepository, never()).existsByDossierIdAndType(...)`, preuve
 qu'aucune étape suivante n'est consultée/ouverte).
+**Révisé par Q-78 (2026-09-11)** : le rabattement part désormais de « En délibéré », sur un délibéré
+en attente (US 3.4, UC-DEL-05, RG-DEL-07) — le juge rouvre les débats *avant* de statuer. La
+distinction avec l'exercice d'un recours demeure, et devient plus nette : `DELIBERE_VIDE → EN_COURS`
+n'a plus qu'un seul sens, le recours.
 
 ### Q-43 ✅ Bascule automatique en `CLOTURE` à l'expiration du délai de recours — tranché (M7)
 FR-DEL-02 : « à l'échéance sans recours : étape → `CLOTURE`, **bascule décisions définitives**,
@@ -805,6 +809,9 @@ de bord** (la prorogation ne touche jamais au cycle de vie de l'étape), pas com
 l'étape ; seul `prorogationRepository.findById`/`countByDelibereId` conditionnent l'opération.
 Revérifié en conditions réelles (curl) : 11 prorogations enregistrées avec succès sur un délibéré
 déjà `DELIBERE_VIDE`, alerte `PROROGATION` déclenchée à la 11e.
+**Révisé par Q-78 (2026-09-11)** : la précondition « En délibéré » est rétablie — elle était
+impossible tant qu'un délibéré naissait vidé ; il naît désormais à la mise en délibéré, sans
+résultat. Une prorogation ne porte plus que sur un délibéré en attente.
 
 ### Q-45 ✅ `document.type_document` : aucune taxonomie documentée (GED) — tranché (M8)
 Contrairement à `autre_publication.type_document` (fermé à {PIECE, DECISION, CONCLUSION} — table
@@ -1482,6 +1489,50 @@ refusée (`REQUETE_INVALIDE`, même message que la reprogrammation). Le schedule
 que les alarmes actives, n'a pas eu à changer.
 
 **Vérifié** : 2 tests unitaires et un test d'intégration (rôle, clôture unique, aucune remplaçante).
+
+### Q-78 ✅ Prorogation et rabattement placés après la décision, contre toutes les sources — tranché (M16)
+
+Remonté par l'audit du jalon F9 du frontend (QF-33), décidé par le porteur du projet le 2026-09-11.
+
+**A — Le constat, source par source.** Le backend ne créait un délibéré qu'**avec** son résultat, qui
+faisait aussitôt passer l'étape « Délibéré vidé » ; prorogation (Q-44) et rabattement (Q-42) ne
+portaient donc que sur une décision déjà rendue. Or toutes les sources les placent **pendant** la
+délibération :
+- **US 3.2** (prorogation) : « Given que l'étape est EN_DELIBERE et qu'un délibéré existe », date
+  **future** ; **UC-DEL-04** : précondition « l'étape concernée est au statut En délibéré » ;
+  **RG-DEL-06** : « Depuis l'étape En délibéré… mention DÉLIBÉRÉ PROROGÉ AU [date] » ;
+- **US 3.4 / UC-DEL-05 / RG-DEL-07** (rabattement) : précondition « En délibéré », « lorsque le juge
+  décide de réouvrir les débats », mention « DÉLIBÉRÉ RABATTU LE [date, motif] » ;
+- **diagramme d'états** (document d'analyse) : prorogations et rabattement « depuis l'état En
+  délibéré » ; classe *Délibéré* : « mise en délibéré d'une affaire, **son issue**, et l'étape ».
+Q-44 avait vu le paradoxe et l'avait levé en retirant la vérification — ce qui rendait l'appel
+*possible*, pas *juste* : pour noter « délibéré prorogé au 15 octobre », un juriste devait d'abord
+inventer un résultat. S'y ajoutaient deux manques : aucune lecture des prorogations (l'écran
+« Proroger, avec historique » de FUNCTIONAL_MAP §3 était irréalisable), et un délibéré rabattu
+indiscernable des autres.
+
+**B — Tranché : le délibéré en deux temps.**
+- `POST /dossiers/{id}/deliberes` **sans** résultat = mise en délibéré : `dateDeliberee` est la date
+  annoncée, l'étape reste `EN_DELIBERE`. **Avec** résultat, le délibéré déjà rendu est enregistré et
+  vidé d'un même geste (comportement historique, compatible avec les appels existants). Au plus un
+  délibéré en attente par étape (409 sinon).
+- `POST /deliberes/{id}/prorogations` : seulement sur un délibéré en attente, étape `EN_DELIBERE`,
+  date **future** (US 3.2), qui devient la date annoncée. Seuil et alerte inchangés (Q-17/Q-18).
+- `POST /deliberes/{id}/rabattement` : mêmes préconditions ; le délibéré garde sa date et son motif
+  de rabattement, l'étape revient `EN_COURS`. Une décision rendue ne se rabat plus : la voie qui
+  ramène « Délibéré vidé » à « En cours » est l'exercice d'un recours (Q-42, inchangé).
+- 🆕 `PUT /deliberes/{id}/resultat` : le tribunal a statué — résultat, échéance de recours (mêmes
+  règles qu'avant), expédition ouverte « à lever », étape `DELIBERE_VIDE`.
+- 🆕 `GET /deliberes/{id}/prorogations` (`ROLE_CONSULTATION`) : l'historique.
+- `DelibereResponse` gagne `etat` (`EN_ATTENTE`/`VIDE`/`RABATTU`, **dérivé**, jamais stocké),
+  `nombreProrogations`, `dateRabattement`, `motifRabattement`. Migration `V9__delibere_cycle.sql` :
+  `resultat` devient facultatif, colonnes de rabattement, trois contraintes de cohérence.
+
+**C — Ce que le changement entraîne.** Tout ce qui supposait « un délibéré a un résultat » a été
+repris : les trois indicateurs de succès (tableau de bord, rapport, performance des avocats) et le
+compteur de délibérés du rapport ignorent désormais les délibérés en attente ou rabattus — sans
+quoi ils compteraient comme des échecs ; l'expédition est refusée avant la décision. Le
+planificateur du délai de recours ne voit que des délibérés vidés : inchangé.
 
 ### Q-27 ✅ `dossier.parties` défini deux fois — tranché (M2)
 Le dictionnaire REF-06 §2.1.2 déclare `parties JSONB` **deux fois**, avec deux structures

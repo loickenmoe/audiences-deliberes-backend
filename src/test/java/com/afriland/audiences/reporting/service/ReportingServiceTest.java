@@ -92,7 +92,7 @@ class ReportingServiceTest {
         when(dossierRepository.countByCreatedAtBetween(any(), any())).thenReturn(0L);
         when(audienceRepository.countByStatutAndDateTenueBetween(eq(StatutAudience.TENUE), eq(debut), eq(fin))).thenReturn(0L);
         when(demandeFraisRepository.countByCreatedAtBetween(any(), any())).thenReturn(0L);
-        when(delibereRepository.countByDateDelibereeBetween(debut, fin)).thenReturn(0L);
+        when(delibereRepository.countByDateDelibereeBetweenAndResultatIsNotNull(debut, fin)).thenReturn(0L);
         when(delibereRepository.calculerTauxSuccesRecouvrementPeriode(debut, fin)).thenReturn(performanceGlobale);
         when(performanceGlobale.getFavorables()).thenReturn(0L);
         when(performanceGlobale.getTotal()).thenReturn(0L);
@@ -111,7 +111,7 @@ class ReportingServiceTest {
         when(dossierRepository.countByCreatedAtBetween(any(), any())).thenReturn(2L);
         when(audienceRepository.countByStatutAndDateTenueBetween(any(), any(), any())).thenReturn(0L);
         when(demandeFraisRepository.countByCreatedAtBetween(any(), any())).thenReturn(0L);
-        when(delibereRepository.countByDateDelibereeBetween(any(), any())).thenReturn(0L);
+        when(delibereRepository.countByDateDelibereeBetweenAndResultatIsNotNull(any(), any())).thenReturn(0L);
         when(delibereRepository.calculerTauxSuccesRecouvrementPeriode(any(), any())).thenReturn(performanceGlobale);
         when(performanceGlobale.getFavorables()).thenReturn(0L);
         when(performanceGlobale.getTotal()).thenReturn(0L);

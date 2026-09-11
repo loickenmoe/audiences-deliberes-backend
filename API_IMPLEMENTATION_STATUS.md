@@ -1,7 +1,7 @@
 # API_IMPLEMENTATION_STATUS
 
 > Inventaire exhaustif des endpoints et état d'implémentation.
-> Dernière mise à jour : 2026-09-10 (M16 — annulation d'audience et traitement d'alarme, Q-76, Q-77).
+> Dernière mise à jour : 2026-09-11 (M16 — cycle du délibéré aligné sur les sources, Q-78).
 > **Conformité vérifiée endpoint par endpoint en M14** : les 56 endpoints du code ont été audités
 > contre ce tableau — 54 strictement conformes, 2 écarts de rôle corrigés ici (`POST
 > /dossiers/{id}/etapes` et `DELETE /ged/documents/{id}` : `ROLE_JURISTE`, non `ROLE_SAISIE`) — Q-66.
@@ -42,12 +42,13 @@ qu'après une décision d'ajout — traité comme tel dès M4.
   des intervenants (#61, #62), les deux référentiels de formulaire (#64, #65) et le répertoire des
   utilisateurs internes (#66, Q-69).
 
-- **M16 (3)** — corrections issues de l'intégration frontend : `GET /dossiers/{id}/seuil-derogation`
-  (Q-74), `PATCH /audiences/{id}/annulation` (Q-76), `PATCH /alarmes/{id}/traiter` (Q-77).
+- **M16 (5)** — corrections issues de l'intégration frontend : `GET /dossiers/{id}/seuil-derogation`
+  (Q-74), `PATCH /audiences/{id}/annulation` (Q-76), `PATCH /alarmes/{id}/traiter` (Q-77),
+  `PUT /deliberes/{id}/resultat` et `GET /deliberes/{id}/prorogations` (Q-78).
 
-Soit **70 endpoints HTTP exposés au total** : les 66 numérotés, `POST /dossiers/{id}/etapes` et les
-trois ajouts de M16 — décompte des annotations de mapping du code, le 2026-09-10 (le « 66 » inscrit
-ici jusqu'alors n'avait pas suivi les ajouts non numérotés).
+Soit **72 endpoints HTTP exposés au total** : les 66 numérotés, `POST /dossiers/{id}/etapes` et les
+cinq ajouts de M16 — décompte des annotations de mapping du code, le 2026-09-11 (le « 66 » inscrit
+ici jusqu'au 2026-09-10 n'avait pas suivi les ajouts non numérotés).
 
 Le squelette de starter hors périmètre (Template/Admin/Staff/Dashboard/Chat, auth JWT maison) a
 été intégralement supprimé en M1 (cf. `DECISIONS_AND_OPEN_QUESTIONS.md` R-03/R-04) — l'ancienne
@@ -141,19 +142,28 @@ Q-10, Q-11, Q-12, Q-26, Q-34, Q-35 pour le détail des arbitrages pris pendant l
 | 21 | GET | `/deliberes/{id}/recours` | `ROLE_JURISTE` | FR-DEL-02 / US 3.5 | 📋 | ✅ M7 |
 | 22 | PUT | `/deliberes/{id}/expedition` | `ROLE_JURISTE` | FR-DEL-03 / US 3.6 | **📄** | ✅ M7 |
 | 58 | GET | `/dossiers/{id}/deliberes` | `ROLE_CONSULTATION` | US 1.3 (onglet « Délibérés ») | 🆕 | ✅ M15 |
+| — | PUT | `/deliberes/{id}/resultat` | `ROLE_JURISTE` | FR-DEL-01 / US 3.1 (vider le délibéré, Q-78) | 🆕 | ✅ M16 |
+| — | GET | `/deliberes/{id}/prorogations` | `ROLE_CONSULTATION` | FR-DEL-04 critère 2 (historique, Q-78) | 🆕 | ✅ M16 |
 
-> **#18** : `dateEcheanceRecours` requise et postérieure à `dateDeliberee` si `resultat` ∈
-> {DEFAVORABLE, MIXTE} (Q-42), absente sinon ; l'enregistrement fait basculer l'étape en
-> `DELIBERE_VIDE`.
+> **Cycle (M16, Q-78)** — conforme aux sources (US 3.2/3.4, UC-DEL-04/05, RG-DEL-06/07) : mise en
+> délibéré sans résultat → prorogations et rabattement pendant l'attente → résultat, qui vide le
+> délibéré. `DelibereResponse` porte `etat` (`EN_ATTENTE`/`VIDE`/`RABATTU`, dérivé),
+> `nombreProrogations`, `dateRabattement`, `motifRabattement` ; `resultat` et `statutExpedition`
+> sont nuls tant que le délibéré n'est pas vidé.
+> **#18** : **sans** `resultat`, mise en délibéré — l'étape reste `EN_DELIBERE`, aucune échéance
+> admise ; **avec** `resultat`, délibéré déjà rendu, enregistré et vidé d'un même geste
+> (`dateEcheanceRecours` requise et postérieure à `dateDeliberee` si DEFAVORABLE/MIXTE, Q-42,
+> absente sinon ; étape → `DELIBERE_VIDE`). Un seul délibéré en attente par étape (409).
 > **#19** : réponse toujours `201 Created`, corps `{...prorogation, alerte}` — `alerte:true` dès
-> que le compteur dépasse le seuil configurable `SEUIL_PROROGATIONS` (Q-17/Q-18) ; aucune
-> précondition de statut d'étape (Q-44).
-> **#20** : réservé aux délibérés dont l'étape est encore `DELIBERE_VIDE` (RG-DEL-07) ; ne rouvre
-> jamais l'étape suivante — distinct de l'exercice d'un recours (endpoint générique #5, Q-42).
+> que le compteur dépasse le seuil configurable `SEUIL_PROROGATIONS` (Q-17/Q-18). Depuis Q-78 :
+> délibéré en attente et étape `EN_DELIBERE` exigés, date future ; elle devient la date annoncée.
+> **#20** : depuis Q-78, délibéré en attente et étape `EN_DELIBERE` exigés (le juge rouvre les
+> débats avant de statuer) ; le délibéré garde sa date et son motif, l'étape revient `EN_COURS`.
+> Ne rouvre jamais l'étape suivante — distinct de l'exercice d'un recours (endpoint générique #5, Q-42).
 > **#21** : strictement consultatif (Q-19) ; le suivi de l'échéance est assuré par
 > `DelaiRecoursScheduler` (bascule `CLOTURE` + alerte `DELAI_RECOURS`, Q-43).
 > **#22** : dernier volet de Q-13, absent de l'OpenAPI formel mais implémenté selon les critères
-> Gherkin de l'US 3.6.
+> Gherkin de l'US 3.6. Depuis Q-78, refusé tant que le délibéré n'est pas vidé.
 > **#58 (M15, Q-68)** : symétrique de #56/#57 — 404 si le dossier est inconnu, tri par date
 > délibérée décroissante.
 
