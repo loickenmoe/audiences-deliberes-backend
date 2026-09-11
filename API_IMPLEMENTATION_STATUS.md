@@ -228,6 +228,14 @@ si sensible ou montant > seuil, paiement (Assistante). Traçabilité complète v
 | 34 | POST | `/publications/{id}/correspondance` | `ROLE_DJ`, `ROLE_DJA` | RG-INT-07 / US 5.5 | 💡 | ✅ |
 | 59 | GET | `/publications?dossierId=&statut=` | `ROLE_ASSISTANTE`, `ROLE_JURISTE`, `ROLE_DJ`, `ROLE_DJA` | UC-INT-09 (« file des publications à valider ») | 🆕 | ✅ M15 |
 
+> **Lecture et instruction (M16, Q-86).** `PublicationResponse` porte `referenceDossier`,
+> `avocatNom`, `audienceDate`, `restrictionAccesNom`, `nomFichier` ; le **détail #32** seul ajoute
+> `urlTelechargement` (pré-signée, 10 min), `commentaires` (auteur nommé) et `correspondance`.
+> **#32** : l'Assistante lit une publication `DEPOSE`/`REJETE` (404 pour les autres profils) ; la
+> restriction d'accès ne s'oppose ni à l'Assistante ni au DJ/DJA. **#59** : `statut=DEPOSE` en ordre
+> d'arrivée, sinon la plus récente d'abord. **#30** : une validation notifie les juristes du dossier,
+> ou le seul destinataire désigné.
+
 > **#30** : chemin généralisé, sans le segment `cr-audience` du contrat — s'applique aux deux
 > sous-types de publication (Q-55), aucun second endpoint n'étant prévu pour valider une « autre »
 > publication (US 5.3).
@@ -260,6 +268,11 @@ automatisés dédiés. Voir `DECISIONS_AND_OPEN_QUESTIONS.md` Q-20, Q-25, Q-55, 
 | 36 | PUT | `/constitutions/prestataires/{id}/validation` | `ROLE_SH` | FR-INT-07 / US 5.7 | 💡 | ✅ M9 |
 | 37 | GET | `/repertoire/avocats` | `ROLE_JURISTE`, `ROLE_ASSISTANTE` | FR-INT-08 / US 5.8 | 💡 | ✅ M9 |
 | 60 | GET | `/constitutions/prestataires?statut=` | `ROLE_SH`, `ROLE_JURISTE` | UC-INT-07 (« constitutions à signer ») | 🆕 | ✅ M15 |
+
+> **M16 (Q-86, Q-87).** `DemandeConstitutionResponse` porte `referenceDossier`, `prestataireNom`,
+> `prestataireType`, `demandeurNom`, `valideParNom`. **#36** : l'avocat constitué est désormais
+> réellement notifié — le prestataire, chargé à la demande, était un proxy d'`Intervenant` que
+> `instanceof Avocat` ne reconnaissait jamais (`Hibernate.unproxy`).
 | 61 | POST | `/intervenants` | `ROLE_DJ`, `ROLE_DJA` | RG-INT-01/02 (administration du référentiel) | 🆕 | ✅ M15 |
 | 62 | GET | `/intervenants?type=` | `ROLE_CONSULTATION` | RG-DOS-03 (sélecteurs d'affectation) | 🆕 | ✅ M15 |
 

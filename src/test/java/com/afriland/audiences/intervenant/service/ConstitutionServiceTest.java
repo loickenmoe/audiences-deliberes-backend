@@ -63,7 +63,9 @@ class ConstitutionServiceTest {
             demande.getDemandeur() != null ? demande.getDemandeur().getId() : null, demande.getMotif(),
             demande.getStatut(), demande.getValidePar() != null ? demande.getValidePar().getId() : null,
             demande.getMotifRejet(), demande.getLettreDocument() != null ? demande.getLettreDocument().getId() : null,
-            demande.getDateDemande(), demande.getDateDecision());
+            demande.getDateDemande(), demande.getDateDecision(),
+            demande.getDossier() != null ? demande.getDossier().getReference() : null,
+            demande.getPrestataire() != null ? demande.getPrestataire().getNom() : null, null, null, null);
 
     private ConstitutionService service;
     private Dossier dossier;

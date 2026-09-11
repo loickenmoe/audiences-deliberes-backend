@@ -195,6 +195,16 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(status().isCreated())
                 .andReturn());
 
+        // Q-86 : l'Assistante lit la publication à valider, nommée ; un juriste, pas encore
+        mockMvc.perform(get(api("/publications/" + publicationId)).with(role("kc-assistante", "ROLE_CONSULTATION")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statutValidation").value("DEPOSE"))
+                .andExpect(jsonPath("$.referenceDossier").isNotEmpty())
+                .andExpect(jsonPath("$.avocatNom").isNotEmpty())
+                .andExpect(jsonPath("$.audienceDate").isNotEmpty());
+        mockMvc.perform(get(api("/publications/" + publicationId)).with(role("kc-juriste", "ROLE_CONSULTATION")))
+                .andExpect(status().isNotFound());
+
         mockMvc.perform(put(api("/publications/" + publicationId + "/validation"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("statut", "VALIDE")))
@@ -202,9 +212,15 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statutValidation").value("VALIDE"));
 
-        // Une fois validée, la publication devient consultable
+        // Une fois validée, la publication devient consultable, avec ses échanges (Q-86)
         mockMvc.perform(get(api("/publications/" + publicationId)).with(role("kc-juriste", "ROLE_CONSULTATION")))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.commentaires").isArray());
+
+        // … et le juriste du dossier en est prévenu (Q-86, UC-INT-08 étape 1)
+        mockMvc.perform(get(api("/alertes/mes-notifications")).with(role("kc-juriste", "ROLE_JURISTE")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.type == 'NOUVELLE_PUBLICATION')]").isNotEmpty());
     }
 
     // ---------------------------------------------------------------- P3
@@ -465,7 +481,16 @@ class ParcoursEndToEndIntegrationTest {
                         .with(role("kc-sh", "ROLE_SH")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statut").value("VALIDEE"))
-                .andExpect(jsonPath("$.lettreDocumentId").isNotEmpty());
+                .andExpect(jsonPath("$.lettreDocumentId").isNotEmpty())
+                // Q-86 : la demande est nommée ; Q-87 : un avocat chargé à la demande reste un avocat
+                .andExpect(jsonPath("$.referenceDossier").isNotEmpty())
+                .andExpect(jsonPath("$.prestataireNom").value("Me Test"))
+                .andExpect(jsonPath("$.prestataireType").value("AVOCAT"));
+
+        // Q-87 : l'avocat constitué est bien notifié (le proxy du prestataire l'en privait)
+        mockMvc.perform(get(api("/alertes/mes-notifications")).with(role("kc-avocat", "ROLE_AVOCAT")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.type == 'CONSTITUTION_A_SIGNER')]").isNotEmpty());
 
         // La lettre générée est bien un document du dossier (interaction intervenant → ged)
         mockMvc.perform(get(api("/dossiers/" + dossierId + "/documents")).with(role("kc-juriste", "ROLE_CONSULTATION")))
