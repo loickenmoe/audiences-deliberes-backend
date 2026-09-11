@@ -50,8 +50,9 @@ public class JurisprudenceController {
     public PageResponse<JurisprudenceResponse> rechercher(@RequestParam(required = false) String motCle,
                                                             @RequestParam(required = false) String natureDecision,
                                                             @RequestParam(required = false) String juridiction,
+                                                            @RequestParam(required = false) Long dossierId,
                                                             @RequestParam(defaultValue = "0") int page,
                                                             @RequestParam(defaultValue = "20") int size) {
-        return jurisprudenceService.rechercher(motCle, natureDecision, juridiction, PageRequest.of(page, size));
+        return jurisprudenceService.rechercher(motCle, natureDecision, juridiction, dossierId, PageRequest.of(page, size));
     }
 }

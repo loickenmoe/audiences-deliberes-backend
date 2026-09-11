@@ -42,13 +42,13 @@ qu'après une décision d'ajout — traité comme tel dès M4.
   des intervenants (#61, #62), les deux référentiels de formulaire (#64, #65) et le répertoire des
   utilisateurs internes (#66, Q-69).
 
-- **M16 (6)** — corrections issues de l'intégration frontend : `GET /dossiers/{id}/seuil-derogation`
+- **M16 (7)** — corrections issues de l'intégration frontend : `GET /dossiers/{id}/seuil-derogation`
   (Q-74), `PATCH /audiences/{id}/annulation` (Q-76), `PATCH /alarmes/{id}/traiter` (Q-77),
   `PUT /deliberes/{id}/resultat` et `GET /deliberes/{id}/prorogations` (Q-78),
-  `GET /frais/demandes/{id}` (Q-82).
+  `GET /frais/demandes/{id}` (Q-82), `GET /dossiers/{id}/decisions` (Q-88).
 
-Soit **73 endpoints HTTP exposés au total** : les 66 numérotés, `POST /dossiers/{id}/etapes` et les
-six ajouts de M16 — décompte des annotations de mapping du code, le 2026-09-11 (le « 66 » inscrit
+Soit **74 endpoints HTTP exposés au total** : les 66 numérotés, `POST /dossiers/{id}/etapes` et les
+sept ajouts de M16 — décompte des annotations de mapping du code, le 2026-09-11 (le « 66 » inscrit
 ici jusqu'au 2026-09-10 n'avait pas suivi les ajouts non numérotés).
 
 Le squelette de starter hors périmètre (Template/Admin/Staff/Dashboard/Chat, auth JWT maison) a
@@ -376,6 +376,13 @@ rapport journalier correct (actif et à zéro). 16 tests automatisés dédiés. 
 | 53 | PATCH | `/condamnations/{id}/statut` | `ROLE_JURISTE` | FR-DEF-02 / US 8.2 | 💡 | ✅ |
 | 54 | POST | `/jurisprudences` (multipart) | `ROLE_JURISTE` | FR-DEF-03 / US 8.3 | 💡 | ✅ |
 | 55 | GET | `/jurisprudences` | `ROLE_CONSULTATION` | UC-DEF-03 (« consultable dans la base ») | 🆕 | ✅ |
+| — | GET | `/dossiers/{id}/decisions` | `ROLE_CONSULTATION` | US 8.1/8.2 (onglet « Décisions » de la fiche, Q-88) | 🆕 | ✅ M16 |
+
+> **Lecture des décisions (M16, Q-88).** `{adjudications, condamnations}`, chaque liste de la plus
+> récente à la plus ancienne ; 404 si le dossier est inconnu — symétrique de #56/#57/#58.
+> **#55 (M16, Q-89)** : filtres partiels et insensibles à la casse (un mot-clé est retenu dès qu'un
+> mot indexé le contient), paramètre `dossierId` pour les décisions archivées d'un dossier.
+> Les accents comptent (pas d'`unaccent`).
 
 **Circuit implémenté (M12)** : `DecisionDefinitiveService` — adjudication (étape `CLOTURE`
 requise, RG-DEF-01), condamnation pécuniaire (aucune précondition d'étape, asymétrie assumée —

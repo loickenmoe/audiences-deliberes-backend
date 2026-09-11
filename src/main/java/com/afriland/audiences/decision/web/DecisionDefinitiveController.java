@@ -5,12 +5,14 @@ import com.afriland.audiences.decision.web.dto.AdjudicationResponse;
 import com.afriland.audiences.decision.web.dto.CondamnationResponse;
 import com.afriland.audiences.decision.web.dto.CreerAdjudicationRequest;
 import com.afriland.audiences.decision.web.dto.CreerCondamnationRequest;
+import com.afriland.audiences.decision.web.dto.DecisionsDossierResponse;
 import com.afriland.audiences.decision.web.dto.ModifierStatutCondamnationRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -26,6 +28,13 @@ import org.springframework.web.bind.annotation.RestController;
 public class DecisionDefinitiveController {
 
     private final DecisionDefinitiveService decisionDefinitiveService;
+
+    /** 🆕 M16 (Q-88) : décisions d'un dossier, symétrique de #56/#57/#58. */
+    @GetMapping("${api.prefix}/dossiers/{id}/decisions")
+    @PreAuthorize("hasRole('CONSULTATION')")
+    public DecisionsDossierResponse lister(@PathVariable Long id) {
+        return decisionDefinitiveService.lister(id);
+    }
 
     @PostMapping("${api.prefix}/dossiers/{id}/adjudications")
     @PreAuthorize("hasRole('JURISTE')")

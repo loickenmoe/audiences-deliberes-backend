@@ -1717,6 +1717,42 @@ la signature, l'avocat a bien une alerte `CONSTITUTION_A_SIGNER`, et la demande 
 Le défaut a été établi à la lecture du code ; le parcours n'a pas été rejoué sur le code d'avant le
 correctif.
 
+### Q-88 ✅ Les décisions définitives ne se relisaient pas — tranché (M16)
+
+Remonté dès l'audit frontend (QF-03), décidé par le porteur du projet à l'ouverture du jalon F13 le
+2026-09-11. `POST /dossiers/{id}/adjudications`, `POST /dossiers/{id}/condamnations` et
+`PATCH /condamnations/{id}/statut` existaient sans **aucune** lecture : l'onglet « Décisions » d'une
+fiche restait en écriture seule, et la mise à jour du statut d'une condamnation (UC-DEF-02 étape 8)
+devenait inatteignable après un rechargement — son identifiant n'était connu qu'à la création.
+**Tranché** : `GET /dossiers/{id}/decisions` (`ROLE_CONSULTATION`, 404 si le dossier est inconnu),
+symétrique de #56/#57/#58 : `{adjudications, condamnations}`, chaque liste de la plus récente à la
+plus ancienne. **Vérifié** : test d'intégration sur PostgreSQL réel (condamnation créée puis passée
+en recouvrement forcé, relue avec son statut par l'Assistante ; 404 pour un dossier inconnu).
+
+### Q-89 ✅ La recherche jurisprudentielle n'était qu'exacte — tranché (M16)
+
+Constaté au même audit. `GET /jurisprudences` comparait le mot-clé à l'un des mots indexés par
+égalité stricte, casse comprise (`:motCle = ANY(mots_cles)`), et de même la nature et la
+juridiction : « saisie » ne retrouvait pas « Saisie immobilière », « tgi douala » pas « TGI Douala ».
+Or FR-DEF-03 veut une décision « consultable dans la base » et la recherche par mots-clés est la
+voie d'accès. Et la fiche ne pouvait pas relister les décisions qu'on y archivait (UC-DEF-03 les
+« rattache au dossier »). **Tranché** : chaque filtre textuel est un motif « contient », insensible à
+la casse (jokers saisis échappés) ; un paramètre `dossierId` restreint la recherche au dossier.
+**Vérifié** : 3 tests unitaires (motif, filtres vides ignorés, échappement), 1 test d'intégration
+sur PostgreSQL réel (fragment de mot-clé en minuscules, juridiction en minuscules restreinte au
+dossier, autre dossier sans résultat). Limite : les accents comptent (« hypotheque » ne retrouve
+pas « hypothèque ») — l'extension `unaccent` n'est pas installée.
+
+### Q-90 — Suivi d'une adjudication dans le temps, statut initial d'une condamnation — `P2`, ouvert
+
+Constaté au même audit, **laissé ouvert sur décision du porteur du projet** (2026-09-11). RG-DEF-02
+dit que le système « suit » la comptabilisation, la reprise de provision, la restitution de soulte,
+la mutation et le reliquat d'une adjudication, mais aucune source ne décrit leur mise à jour — seule
+la condamnation en a une (UC-DEF-02 étape 8, #53). S'en tenir à la lettre, comme pour Q-59 : aucune
+mise à jour d'adjudication n'est ajoutée. **À confirmer avec la Direction Juridique.** Même famille :
+US 8.2 fait saisir `statutPaiement` à la création d'une condamnation, que `CreerCondamnationRequest`
+ne reçoit pas (toujours `EN_ATTENTE`, QF-40 du frontend) — un champ facultatif suffirait.
+
 ### Q-27 ✅ `dossier.parties` défini deux fois — tranché (M2)
 Le dictionnaire REF-06 §2.1.2 déclare `parties JSONB` **deux fois**, avec deux structures
 différentes : `{demandeur, defendeur}` et `{demandeur, defendeur, client}`. Le contrat d'API et
