@@ -21,8 +21,10 @@ import com.afriland.audiences.referentiel.domain.Avocat;
 import com.afriland.audiences.referentiel.domain.AutrePrestataire;
 import com.afriland.audiences.referentiel.domain.Intervenant;
 import com.afriland.audiences.referentiel.domain.Utilisateur;
+import com.afriland.audiences.referentiel.repository.AvocatRepository;
 import com.afriland.audiences.referentiel.repository.IntervenantRepository;
 import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
+import com.afriland.audiences.referentiel.service.CompteAvocatService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -53,6 +55,7 @@ class ConstitutionServiceTest {
     @Mock private LettreConstitutionService lettreConstitutionService;
     @Mock private MinioStorageService minioStorageService;
     @Mock private DocumentRepository documentRepository;
+    @Mock private AvocatRepository avocatRepository;
 
     private final DemandeConstitutionMapper mapper = demande -> new DemandeConstitutionResponse(
             demande.getId(), demande.getDossier() != null ? demande.getDossier().getId() : null,
@@ -71,7 +74,8 @@ class ConstitutionServiceTest {
     void setUp() {
         service = new ConstitutionService(demandeConstitutionRepository, dossierRepository, intervenantRepository,
                 utilisateurRepository, currentUserService, historiqueActionService, alerteService,
-                lettreConstitutionService, minioStorageService, documentRepository, mapper);
+                lettreConstitutionService, minioStorageService, documentRepository, mapper,
+                new CompteAvocatService(avocatRepository, utilisateurRepository));
 
         dossier = Dossier.builder().id(1L).reference("DOS-2026-001").build();
         juriste = Utilisateur.builder().id(10L).nom("Juriste").prenom("Test").build();

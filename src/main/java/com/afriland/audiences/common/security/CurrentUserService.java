@@ -49,7 +49,22 @@ public class CurrentUserService {
     @Transactional(readOnly = true)
     public Utilisateur resolveOrProvision(Jwt jwt) {
         return utilisateurRepository.findByKeycloakId(jwt.getSubject())
+                .map(utilisateur -> synchroniserIdentifiant(utilisateur, jwt))
                 .orElseGet(() -> provisioningService.provisionner(jwt));
+    }
+
+    /**
+     * Q-84 : l'identifiant de connexion sert à reconnaître un avocat. Un utilisateur provisionné
+     * avant Q-84, ou renommé dans Keycloak, le reçoit à sa requête suivante — écrit par le service
+     * de provisionnement, dans sa propre transaction (R-06).
+     */
+    private Utilisateur synchroniserIdentifiant(Utilisateur utilisateur, Jwt jwt) {
+        String identifiant = jwt.getClaimAsString(UtilisateurProvisioningService.CLAIM_IDENTIFIANT);
+        if (identifiant != null && !identifiant.equals(utilisateur.getIdentifiant())) {
+            provisioningService.synchroniserIdentifiant(utilisateur.getId(), identifiant);
+            utilisateur.setIdentifiant(identifiant);
+        }
+        return utilisateur;
     }
 
     private Jwt extractJwt() {

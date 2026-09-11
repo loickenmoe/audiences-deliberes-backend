@@ -1138,6 +1138,36 @@ garanti — sans quoi un nouveau DJ aurait pu être enregistré comme juriste.
 `BUILD SUCCESS`.** **Vérifié en réel** : composites de `ROLE_DJ` et `ROLE_DJA` = `ROLE_JURISTE`,
 `ROLE_SAISIE` dans le Keycloak local. Un jeton émis avant le changement exige une reconnexion.
 
+### 12. Frais : détail, décisions du circuit, relance CONF04 (Q-82, Q-83) ✅
+
+Remonté par l'audit du jalon F11 du frontend, décidé par le porteur du projet le 2026-09-11. Aucun
+détail d'une demande de frais, décisions du circuit invisibles (le DJ ne voyait pas l'accord de la
+DJA, personne ne savait s'il avait déjà voté), réponse limitée à des identifiants, file sans ordre
+stable ; et la relance CONF04 n'était pas implémentée. **Implémenté** : `GET /frais/demandes/{id}`
+(l'avocat ne lit que les siennes) ; `DemandeFraisResponse` porte dossier et avocat nommés,
+sensibilité, seuil applicable, validation conjointe requise et décisions ; file triée par date
+décroissante ; `FraisRelanceScheduler` relance le DJ et/ou la DJA qui n'ont pas voté après
+`DELAI_VALIDATION_CONJOINTE` jours ; migration `V11__frais_relance_validation_conjointe.sql`.
+
+**Testé** : 3 tests unitaires (`FraisServiceTest`), 4 (`FraisRelanceSchedulerTest`), parcours
+d'intégration `p6` étendu sur PostgreSQL réel. **300 tests au vert, `BUILD SUCCESS`.** **Vérifié en
+réel** : V11 appliquée (rang 11), colonne `date_derniere_relance` présente.
+
+### 13. Avocat reconnu par son identifiant de connexion ; unicité concurrente en 409 (Q-84, Q-85) ✅
+
+Constaté en préparant les parcours e2e de F11, corrigé sur décision du porteur du projet avant la
+clôture du jalon. Le backend comparait `avocat.compte_keycloak` au `sub` du jeton, alors que le DJ y
+saisit l'identifiant de connexion : aucun avocat créé par l'interface n'était reconnu, et ses alertes
+ne partaient pas. **Implémenté** : `utilisateur.identifiant` (`preferred_username`, migration
+`V12__utilisateur_identifiant.sql`), renseigné au provisionnement ou à la requête suivante ;
+`CompteAvocatService` (identifiant de connexion d'abord, `sub` en second) dans `FraisService`,
+`PublicationService` et `ConstitutionService`. Et deux créations concurrentes (même avocat, même
+facture…) rendent 409 et non plus 500 : `GlobalExceptionHandler` traite la violation d'unicité.
+
+**Testé** : `CompteAvocatServiceTest` (5), `CurrentUserServiceTest` (+2), `GlobalExceptionHandlerTest`
+(+2), `HabilitationFrontendIntegrationTest` (+1, PostgreSQL réel). **310 tests au vert,
+`BUILD SUCCESS`.**
+
 ---
 
 ## Chemin critique

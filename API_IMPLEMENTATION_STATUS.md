@@ -42,12 +42,13 @@ qu'après une décision d'ajout — traité comme tel dès M4.
   des intervenants (#61, #62), les deux référentiels de formulaire (#64, #65) et le répertoire des
   utilisateurs internes (#66, Q-69).
 
-- **M16 (5)** — corrections issues de l'intégration frontend : `GET /dossiers/{id}/seuil-derogation`
+- **M16 (6)** — corrections issues de l'intégration frontend : `GET /dossiers/{id}/seuil-derogation`
   (Q-74), `PATCH /audiences/{id}/annulation` (Q-76), `PATCH /alarmes/{id}/traiter` (Q-77),
-  `PUT /deliberes/{id}/resultat` et `GET /deliberes/{id}/prorogations` (Q-78).
+  `PUT /deliberes/{id}/resultat` et `GET /deliberes/{id}/prorogations` (Q-78),
+  `GET /frais/demandes/{id}` (Q-82).
 
-Soit **72 endpoints HTTP exposés au total** : les 66 numérotés, `POST /dossiers/{id}/etapes` et les
-cinq ajouts de M16 — décompte des annotations de mapping du code, le 2026-09-11 (le « 66 » inscrit
+Soit **73 endpoints HTTP exposés au total** : les 66 numérotés, `POST /dossiers/{id}/etapes` et les
+six ajouts de M16 — décompte des annotations de mapping du code, le 2026-09-11 (le « 66 » inscrit
 ici jusqu'au 2026-09-10 n'avait pas suivi les ajouts non numérotés).
 
 Le squelette de starter hors périmètre (Template/Admin/Staff/Dashboard/Chat, auth JWT maison) a
@@ -187,11 +188,27 @@ d'expédition (403 hors rôle JURISTE / 200 sinon). 14 tests automatisés dédi�
 | 26 | POST | `/frais/demandes/{id}/validation-conjointe` | `ROLE_DJ` **et** `ROLE_DJA` | FR-INT-04 / US 4.5 | 📋 | ✅ |
 | 27 | PATCH | `/frais/demandes/{id}/paiement` | `ROLE_ASSISTANTE` | FR-INT-05 / US 4.6 | 📋 | ✅ |
 | 28 | GET | `/frais/demandes` | selon profil | UC-INT-02/03/04 (« liste des demandes en attente ») | 🆕 | ✅ |
+| — | GET | `/frais/demandes/{id}` | `ROLE_AVOCAT` (les siennes), `ROLE_ASSISTANTE`, `ROLE_DJA`, `ROLE_DJ` | UC-INT-02 étape 3 (détail, Q-82) | 🆕 | ✅ M16 |
 
 > **#28** : les UC-INT-02/03/04 supposent tous une **file de travail** (« le système affiche la liste
 > des demandes validées en attente de paiement », « aucune demande en attente »). Implémenté en M10
 > — `GET /frais/demandes?statut=`, filtré sur les propres demandes pour `ROLE_AVOCAT`, transverse
-> pour le personnel interne. Cf. Q-24.
+> pour le personnel interne. Cf. Q-24. Depuis Q-82, triée de la plus récente à la plus ancienne.
+>
+> **Réponse enrichie (M16, Q-82)** : `DemandeFraisResponse` porte `referenceDossier`, `avocatNom`,
+> `dossierSensible`, `seuilApplicable`, `validationConjointeRequise` (RG-INT-03 appliquée) et
+> `validations` (étape, décision, motif, auteur nommé, date) — sur toutes les réponses du module.
+> **Détail** `GET /frais/demandes/{id}` : 403 pour un avocat sur la demande d'un confrère.
+>
+> **Relance CONF04 (M16, Q-83)** : `FraisRelanceScheduler`, horaire — une validation conjointe
+> restée sans suite `DELAI_VALIDATION_CONJOINTE` jours (5 par défaut) après l'accord d'opportunité,
+> puis après chaque relance, relance le DJ et/ou la DJA qui n'ont pas encore voté (alerte
+> `VALIDATION_CONJOINTE_REQUISE`). Migration `V11__frais_relance_validation_conjointe.sql`.
+>
+> **Avocat connecté (M16, Q-84)** : reconnu par son identifiant de connexion (`preferred_username`,
+> enregistré sur `utilisateur.identifiant`, V12) — c'est ce que le DJ saisit comme `compteKeycloak` —,
+> à défaut par son `sub`. Vaut pour #23, #28, le détail et les publications de l'avocat (#29, #31),
+> ainsi que pour les alertes qui lui sont destinées.
 
 **Circuit implémenté (M10)** : `FraisService` — dépôt (avocat affecté au dossier, RG-INT-01/Q-54),
 anti-doublon de facture (`ERR-006`, unique tous statuts confondus, y compris `REJETEE` — US 4.3),

@@ -421,6 +421,22 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statutPaiement").value("PAYEE"));
 
+        // Détail (Q-82) : dossier et avocat nommés, décisions du circuit dans l'ordre
+        mockMvc.perform(get(api("/frais/demandes/" + demandeId)).with(role("kc-assistante", "ROLE_ASSISTANTE")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.referenceDossier").isNotEmpty())
+                .andExpect(jsonPath("$.avocatNom").isNotEmpty())
+                .andExpect(jsonPath("$.validationConjointeRequise").value(false))
+                .andExpect(jsonPath("$.validations.length()").value(2))
+                .andExpect(jsonPath("$.validations[0].etape").value("CONFORMITE"))
+                .andExpect(jsonPath("$.validations[1].etape").value("OPPORTUNITE"));
+
+        // L'avocat lit sa demande, jamais celle d'un confrère
+        mockMvc.perform(get(api("/frais/demandes/" + demandeId)).with(role("kc-avocat", "ROLE_AVOCAT")))
+                .andExpect(status().isOk());
+        mockMvc.perform(get(api("/frais/demandes/" + demandeId)).with(role("kc-avocat-etranger", "ROLE_AVOCAT")))
+                .andExpect(status().isForbidden());
+
         // L'avocat retrouve sa demande dans sa file de travail (Q-24)
         mockMvc.perform(get(api("/frais/demandes")).with(role("kc-avocat", "ROLE_AVOCAT")))
                 .andExpect(status().isOk())

@@ -16,7 +16,6 @@ import com.afriland.audiences.frais.domain.EtapeValidationFrais;
 import com.afriland.audiences.frais.domain.StatutCircuitFrais;
 import com.afriland.audiences.frais.domain.StatutPaiementFrais;
 import com.afriland.audiences.frais.domain.ValidationFrais;
-import com.afriland.audiences.frais.mapper.DemandeFraisMapper;
 import com.afriland.audiences.frais.repository.DemandeFraisRepository;
 import com.afriland.audiences.frais.repository.ValidationFraisRepository;
 import com.afriland.audiences.frais.web.dto.ControleConformiteRequest;
@@ -24,9 +23,10 @@ import com.afriland.audiences.frais.web.dto.ControleOpportuniteRequest;
 import com.afriland.audiences.frais.web.dto.DemandeFraisResponse;
 import com.afriland.audiences.frais.web.dto.DeposerFraisRequest;
 import com.afriland.audiences.frais.web.dto.ValidationConjointeRequest;
+import com.afriland.audiences.frais.web.dto.ValidationFraisResponse;
 import com.afriland.audiences.referentiel.domain.Avocat;
 import com.afriland.audiences.referentiel.domain.Utilisateur;
-import com.afriland.audiences.referentiel.repository.AvocatRepository;
+import com.afriland.audiences.referentiel.service.CompteAvocatService;
 import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
 import com.afriland.audiences.referentiel.service.ConfigurationService;
 import com.afriland.audiences.common.security.CurrentUserService;
@@ -39,6 +39,9 @@ import org.springframework.util.StringUtils;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Épic 4 (RG-INT-01/03/04/05) — circuit complet dépôt → conformité → opportunité → validation
@@ -54,13 +57,12 @@ public class FraisService {
     private final ValidationFraisRepository validationFraisRepository;
     private final DossierRepository dossierRepository;
     private final DossierAvocatRepository dossierAvocatRepository;
-    private final AvocatRepository avocatRepository;
+    private final CompteAvocatService compteAvocatService;
     private final UtilisateurRepository utilisateurRepository;
     private final CurrentUserService currentUserService;
     private final HistoriqueActionService historiqueActionService;
     private final AlerteService alerteService;
     private final ConfigurationService configurationService;
-    private final DemandeFraisMapper demandeFraisMapper;
 
     /**
      * FR-INT-01/RG-INT-01 : seul un avocat affecté au dossier (table {@code dossier_avocat},
@@ -98,7 +100,7 @@ public class FraisService {
                 "Nouvelle demande de frais déposée sur le dossier " + dossier.getReference()
                         + " (RG-INT-01), en attente de contrôle de conformité.");
 
-        return demandeFraisMapper.toResponse(demande);
+        return versReponse(demande);
     }
 
     /** FR-INT-02/RG-INT-03/05 : contrôle de conformité par l'Assistante. */
@@ -122,7 +124,7 @@ public class FraisService {
         historiqueActionService.enregistrer(demande.getDossier().getId(), "Contrôle de conformité d'une demande de frais",
                 Map.of("demandeId", demandeId, "conforme", request.conforme()));
 
-        return demandeFraisMapper.toResponse(demande);
+        return versReponse(demande);
     }
 
     /**
@@ -139,7 +141,7 @@ public class FraisService {
         if (Boolean.TRUE.equals(request.accord())) {
             enregistrerValidation(demande, EtapeValidationFrais.OPPORTUNITE, dja, DecisionValidationFrais.ACCORD, null);
             Dossier dossier = demande.getDossier();
-            if (Boolean.TRUE.equals(dossier.getEstSensible()) || demande.getMontant() > seuilApplicable(dossier)) {
+            if (exigeValidationConjointe(dossier, demande.getMontant(), seuilApplicable(dossier, seuilGlobal()))) {
                 demande.setStatutCircuit(StatutCircuitFrais.OPPORTUNITE);
                 demandeFraisRepository.save(demande);
                 signalerValidationConjointeRequise(demande);
@@ -155,7 +157,7 @@ public class FraisService {
         historiqueActionService.enregistrer(demande.getDossier().getId(), "Contrôle d'opportunité d'une demande de frais",
                 Map.of("demandeId", demandeId, "accord", request.accord()));
 
-        return demandeFraisMapper.toResponse(demande);
+        return versReponse(demande);
     }
 
     /**
@@ -190,7 +192,7 @@ public class FraisService {
         historiqueActionService.enregistrer(demande.getDossier().getId(), "Validation conjointe d'une demande de frais",
                 Map.of("demandeId", demandeId, "etape", etape.name(), "accord", request.accord()));
 
-        return demandeFraisMapper.toResponse(demande);
+        return versReponse(demande);
     }
 
     /** FR-INT-05/RG-INT-04 : paiement par l'Assistante, demande nécessairement {@code VALIDEE}. */
@@ -211,12 +213,12 @@ public class FraisService {
 
         String message = "Le paiement de votre demande de frais " + demandeId + " sur le dossier "
                 + payee.getDossier().getReference() + " a été effectué (RG-INT-04).";
-        utilisateurRepository.findByKeycloakId(payee.getAvocat().getCompteKeycloak())
+        compteAvocatService.utilisateurDe(payee.getAvocat())
                 .ifPresent(u -> alerteService.declencher(TypeAlerte.PAIEMENT_EFFECTUE, dossierId, u, message));
         notifierProfil("DJ", dossierId, TypeAlerte.PAIEMENT_EFFECTUE, message);
         notifierProfil("DJA", dossierId, TypeAlerte.PAIEMENT_EFFECTUE, message);
 
-        return demandeFraisMapper.toResponse(payee);
+        return versReponse(payee);
     }
 
     /** Endpoint 🆕 (Q-24) : file de travail filtrable par statut — propre à l'avocat pour ROLE_AVOCAT, transverse pour le personnel interne. */
@@ -225,7 +227,7 @@ public class FraisService {
         Utilisateur utilisateur = currentUserService.getCurrentUser();
         Page<DemandeFrais> page;
         if ("AVOCAT".equals(utilisateur.getProfil().getCode())) {
-            Avocat avocat = avocatRepository.findByCompteKeycloak(utilisateur.getKeycloakId())
+            Avocat avocat = compteAvocatService.avocatDe(utilisateur)
                     .orElseThrow(() -> ApiException.forbidden(ErrorCodes.DROITS_INSUFFISANTS, "Aucun avocat associé à cet utilisateur"));
             page = statut == null
                     ? demandeFraisRepository.findByAvocatId(avocat.getId(), pageable)
@@ -235,7 +237,29 @@ public class FraisService {
                     ? demandeFraisRepository.findAll(pageable)
                     : demandeFraisRepository.findByStatutCircuit(statut, pageable);
         }
-        return PageResponse.of(page, demandeFraisMapper::toResponse);
+        // Une requête pour les décisions de toute la page, un seul seuil global (Q-82).
+        Map<Long, List<ValidationFrais>> validations = validationFraisRepository
+                .findByDemandeFraisIdInOrderByDateValidationAscIdAsc(page.map(DemandeFrais::getId).getContent())
+                .stream()
+                .collect(Collectors.groupingBy(v -> v.getDemandeFrais().getId()));
+        double seuilGlobal = page.isEmpty() ? 0 : seuilGlobal();
+        return PageResponse.of(page, d -> versReponse(d, validations.getOrDefault(d.getId(), List.of()), seuilGlobal));
+    }
+
+    /**
+     * 🆕 M16 (Q-82) : détail d'une demande et décisions du circuit (UC-INT-02 étape 3 : « la demande,
+     * ses pièces justificatives et le résultat du contrôle de conformité »). L'avocat ne lit que ses
+     * propres demandes, comme dans la file (Q-24).
+     */
+    @Transactional(readOnly = true)
+    public DemandeFraisResponse consulter(Long demandeId) {
+        DemandeFrais demande = getDemandeOrThrow(demandeId);
+        Utilisateur utilisateur = currentUserService.getCurrentUser();
+        if ("AVOCAT".equals(utilisateur.getProfil().getCode())
+                && !compteAvocatService.estLeCompteDe(utilisateur, demande.getAvocat())) {
+            throw ApiException.forbidden(ErrorCodes.DROITS_INSUFFISANTS, "Cette demande de frais n'est pas la vôtre");
+        }
+        return versReponse(demande);
     }
 
     /**
@@ -252,7 +276,7 @@ public class FraisService {
 
         String message = "Votre demande de frais " + demande.getId() + " sur le dossier "
                 + demande.getDossier().getReference() + " a été rejetée : " + motif;
-        utilisateurRepository.findByKeycloakId(demande.getAvocat().getCompteKeycloak())
+        compteAvocatService.utilisateurDe(demande.getAvocat())
                 .ifPresent(u -> alerteService.declencher(TypeAlerte.NOUVELLE_DEMANDE_FRAIS, demande.getDossier().getId(), u, message));
     }
 
@@ -281,11 +305,65 @@ public class FraisService {
     }
 
     /** Q-26 : seuil du dossier si dérogation validée, sinon seuil global. */
-    private double seuilApplicable(Dossier dossier) {
+    private static double seuilApplicable(Dossier dossier, double seuilGlobal) {
         if (dossier.getSeuilOrigine() == SeuilOrigine.DEROGATION && dossier.getSeuilMontant() != null) {
             return dossier.getSeuilMontant();
         }
+        return seuilGlobal;
+    }
+
+    private double seuilGlobal() {
         return Double.parseDouble(configurationService.getOrThrow(CLE_SEUIL_MONTANT_DEFAUT).getValeur());
+    }
+
+    /** RG-INT-03 : {@code estSensible = true} OU {@code montant > seuilApplicable}. */
+    private static boolean exigeValidationConjointe(Dossier dossier, Double montant, double seuil) {
+        return Boolean.TRUE.equals(dossier.getEstSensible()) || (montant != null && montant > seuil);
+    }
+
+    private DemandeFraisResponse versReponse(DemandeFrais demande) {
+        return versReponse(demande,
+                validationFraisRepository.findByDemandeFraisIdOrderByDateValidationAscIdAsc(demande.getId()),
+                seuilGlobal());
+    }
+
+    /**
+     * Q-82 : {@code validationConjointeRequise} applique la règle en vigueur (RG-INT-03) — pour une
+     * demande qui n'a pas encore atteint l'opportunité, c'est ce qui l'attend.
+     */
+    private static DemandeFraisResponse versReponse(DemandeFrais demande, List<ValidationFrais> validations, double seuilGlobal) {
+        Dossier dossier = demande.getDossier();
+        double seuil = seuilApplicable(dossier, seuilGlobal);
+        return new DemandeFraisResponse(
+                demande.getId(),
+                dossier.getId(),
+                dossier.getReference(),
+                demande.getAvocat().getId(),
+                demande.getAvocat().getNom(),
+                demande.getMontant(),
+                demande.getPiecesJustificatives(),
+                demande.getStatutCircuit(),
+                demande.getMotifRejet(),
+                demande.getStatutPaiement(),
+                demande.getReferenceFacture(),
+                dossier.getEstSensible(),
+                seuil,
+                exigeValidationConjointe(dossier, demande.getMontant(), seuil),
+                validations.stream().map(FraisService::versReponse).toList(),
+                demande.getCreatedAt(),
+                demande.getUpdatedAt());
+    }
+
+    private static ValidationFraisResponse versReponse(ValidationFrais validation) {
+        Utilisateur auteur = validation.getUtilisateur();
+        return new ValidationFraisResponse(
+                validation.getEtape(),
+                validation.getDecision(),
+                validation.getMotif(),
+                auteur != null ? auteur.getId() : null,
+                auteur == null ? null : Stream.of(auteur.getPrenom(), auteur.getNom())
+                        .filter(Objects::nonNull).collect(Collectors.joining(" ")),
+                validation.getDateValidation());
     }
 
     private EtapeValidationFrais etapeConjointe(Utilisateur utilisateur) {
@@ -301,7 +379,7 @@ public class FraisService {
 
     private Avocat getAvocatCourantOrThrow() {
         Utilisateur utilisateur = currentUserService.getCurrentUser();
-        return avocatRepository.findByCompteKeycloak(utilisateur.getKeycloakId())
+        return compteAvocatService.avocatDe(utilisateur)
                 .orElseThrow(() -> ApiException.forbidden(ErrorCodes.DROITS_INSUFFISANTS, "Aucun avocat associé à cet utilisateur"));
     }
 

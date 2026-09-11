@@ -1587,6 +1587,83 @@ choisit désormais par **priorité** (DJ, DJA, SH, ASSISTANTE, JURISTE, AVOCAT),
 Effet à connaître : un jeton émis avant le changement ne porte pas le nouveau rôle — se reconnecter.
 Q-80 (rapport journalier ouvert nommément au DJ et à la DJA) devient redondant pour eux, sans effet.
 
+### Q-82 ✅ Une demande de frais ne se lisait ni seule, ni avec ses décisions — tranché (M16)
+
+Remonté par l'audit du jalon F11 du frontend, décidé par le porteur du projet le 2026-09-11.
+
+**A — Le constat, vérifié dans le code.** Aucun `GET /frais/demandes/{id}` : le détail d'une demande
+ne pouvait être retrouvé qu'en fouillant la file paginée. Les décisions du circuit, pourtant tracées
+dans `validation_frais` (Q-05), n'étaient exposées nulle part : le DJ ne pouvait pas voir que la DJA
+avait déjà donné son accord (US 4.5), ni personne savoir s'il avait déjà voté — l'interface aurait
+proposé un vote que le backend refuse (409). UC-INT-02 étape 3 veut pourtant « la demande, ses pièces
+justificatives et le résultat du contrôle de conformité ». La réponse ne portait que des
+identifiants (dossier, avocat), rien de ce qui explique la validation conjointe, et la file n'avait
+aucun ordre stable (`PageRequest` sans tri).
+
+**B — Tranché.** `GET /frais/demandes/{id}` (mêmes rôles que la file ; l'avocat ne lit que les
+siennes, 403 sinon). `DemandeFraisResponse` gagne `referenceDossier`, `avocatNom`,
+`dossierSensible`, `seuilApplicable` (Q-26), `validationConjointeRequise` (RG-INT-03, même fonction
+que la décision d'opportunité) et `validations` (étape, décision, motif, auteur nommé, date), sur
+toutes les réponses du module. File triée par date de dépôt décroissante. La réponse étant désormais
+calculée, `DemandeFraisMapper` (MapStruct) est remplacé par une construction dans le service, comme
+`DelibereMapper` en Q-78. Les décisions d'une page de la file sont chargées en une requête.
+
+**Vérifié** : 3 tests unitaires (avocat étranger refusé, décisions nommées et règle conjointe,
+seuil de dérogation) ; parcours d'intégration `p6` étendu (détail nommé, décisions dans l'ordre,
+lecture par l'avocat propriétaire, 403 pour un confrère).
+
+### Q-83 ✅ La relance de validation conjointe (CONF04) n'existait pas — tranché (M16)
+
+Constaté au même audit. CONF04 : « délai maximal (en jours) pour que le DJ et le DJA valident
+conjointement une demande sensible avant qu'une alerte de rappel soit déclenchée » — 5 jours,
+modifiable par le DJ. La clé `DELAI_VALIDATION_CONJOINTE` existait (V2), aucun code ne la lisait.
+
+**Tranché** : `FraisRelanceScheduler` (module `frais`, même principe que
+`SuppressionRelanceScheduler`, Q-02), horaire. Une demande `OPPORTUNITE` est relancée quand le délai
+est écoulé depuis l'accord d'opportunité, puis depuis la dernière relance
+(`demande_frais.date_derniere_relance`, migration `V11__frais_relance_validation_conjointe.sql`).
+Seul celui qui n'a pas encore voté est relancé (alerte `VALIDATION_CONJOINTE_REQUISE`). Une valeur
+non numérique du paramètre est journalisée et la relance sautée, sans faire échouer la tâche.
+
+**Vérifié** : 4 tests unitaires (relance du seul non-votant, délai non écoulé, délai compté depuis
+la dernière relance, rien à relancer) ; V11 appliquée à la base locale.
+
+### Q-84 ✅ Un avocat n'était reconnu que par son `sub` Keycloak — tranché (M16)
+
+Constaté en préparant les parcours e2e du jalon F11 du frontend (QF-38), décidé par le porteur du
+projet le 2026-09-11.
+
+**A — Le constat, vérifié en base et dans le code.** `FraisService` et `PublicationService`
+reconnaissaient l'avocat connecté en comparant `avocat.compte_keycloak` au `sub` du jeton, un UUID.
+Or le DJ saisit, dans le formulaire des intervenants, l'**identifiant de connexion** de l'avocat
+(`avocat.dupont`) : tous les avocats de la base locale en portaient un, aucun n'était reconnu —
+aucun dépôt de frais ni de publication possible, et les alertes destinées à l'avocat (rejet,
+paiement, correspondance, constitution) ne partaient pas, `utilisateurRepository.findByKeycloakId`
+étant appelé avec cet identifiant.
+
+**B — Tranché.** `utilisateur.identifiant` (claim `preferred_username`, migration
+`V12__utilisateur_identifiant.sql`, unique) : renseigné au provisionnement, et pour un utilisateur
+déjà provisionné à sa requête suivante (`CurrentUserService`, écriture dans une transaction à part
+comme en R-06). `CompteAvocatService` fait le lien dans les deux sens — identifiant de connexion
+d'abord, `sub` en second pour les comptes déjà rattachés ainsi — et remplace les quatre recherches
+de `FraisService`, `PublicationService` et `ConstitutionService`.
+
+**Vérifié** : 5 tests unitaires (`CompteAvocatServiceTest`), 2 (`CurrentUserServiceTest` :
+identifiant enregistré, identifiant à jour laissé tel quel), 1 test d'intégration sur PostgreSQL réel
+(avocat reconnu par son identifiant de connexion, identifiant conservé sur l'utilisateur, compte sans
+avocat refusé).
+
+### Q-85 ✅ Deux créations concurrentes rendaient 500 au lieu de 409 — tranché (M16)
+
+Constaté au même moment : deux parcours parallèles créant le même avocat franchissaient tous deux le
+contrôle d'unicité de `IntervenantService` ; la contrainte `avocat_compte_keycloak_key` rejetait la
+seconde insertion, remontée en `DataIntegrityViolationException` puis en **500**. Le même cas
+existe pour toute création soumise à une contrainte d'unicité (facture, référence de dossier…).
+
+**Tranché** : `GlobalExceptionHandler` rend **409 `ERR-CONFLICT`** pour une violation d'unicité
+(SQLState `23505`), avec un message générique qui ne divulgue rien de la base ; toute autre violation
+d'intégrité reste une erreur interne. **Vérifié** : 2 tests unitaires (23505 → 409, 23503 → 500).
+
 ### Q-27 ✅ `dossier.parties` défini deux fois — tranché (M2)
 Le dictionnaire REF-06 §2.1.2 déclare `parties JSONB` **deux fois**, avec deux structures
 différentes : `{demandeur, defendeur}` et `{demandeur, defendeur, client}`. Le contrat d'API et

@@ -4,12 +4,14 @@ import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Path;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
+import java.sql.SQLException;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -97,6 +99,30 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
         assertThat(response.getBody().code()).isEqualTo(ErrorCodes.ERREUR_INTERNE);
         assertThat(response.getBody().message()).doesNotContain("secret interne");
+    }
+
+    @Test
+    void handleDataIntegrityViolation_turnsAUniqueViolationInto409() {
+        // Deux créations concurrentes du même avocat : la contrainte de la base tranche la seconde (Q-85).
+        DataIntegrityViolationException ex = new DataIntegrityViolationException("insert into avocat",
+                new SQLException("duplicate key value violates unique constraint", "23505"));
+
+        ResponseEntity<ErrorResponse> response = handler.handleDataIntegrityViolation(ex);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody().code()).isEqualTo(ErrorCodes.CONFLIT);
+        assertThat(response.getBody().message()).doesNotContain("duplicate key");
+    }
+
+    @Test
+    void handleDataIntegrityViolation_leavesOtherViolationsInternal() {
+        DataIntegrityViolationException ex = new DataIntegrityViolationException("insert",
+                new SQLException("violates foreign key constraint", "23503"));
+
+        ResponseEntity<ErrorResponse> response = handler.handleDataIntegrityViolation(ex);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertThat(response.getBody().code()).isEqualTo(ErrorCodes.ERREUR_INTERNE);
     }
 
     @Test
