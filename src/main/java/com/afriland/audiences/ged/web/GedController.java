@@ -81,8 +81,13 @@ public class GedController {
         return gedService.approuverOuRejeter(id, request);
     }
 
+    /**
+     * Q-80 : « tout juriste » (FR-GED-04) — le DJ et la DJA ont tous les droits d'un juriste (US,
+     * tableau des profils), et le document d'analyse attribue ce rapport à l'Assistante. Or ces trois
+     * profils ne portent pas {@code ROLE_JURISTE} dans le realm : ils sont nommés ici.
+     */
     @GetMapping("${api.prefix}/ged/rapport-journalier")
-    @PreAuthorize("hasRole('JURISTE')")
+    @PreAuthorize("hasAnyRole('JURISTE', 'DJ', 'DJA', 'ASSISTANTE')")
     public RapportJournalierResponse rapportJournalier(@RequestParam(required = false) LocalDate date) {
         return gedService.rapportJournalier(date != null ? date : LocalDate.now());
     }

@@ -1,7 +1,7 @@
 # API_IMPLEMENTATION_STATUS
 
 > Inventaire exhaustif des endpoints et état d'implémentation.
-> Dernière mise à jour : 2026-09-11 (M16 — cycle du délibéré aligné sur les sources, Q-78).
+> Dernière mise à jour : 2026-09-11 (M16 — cycle du délibéré Q-78 ; GED : demande orpheline et file nommée Q-79, rapport journalier Q-80).
 > **Conformité vérifiée endpoint par endpoint en M14** : les 56 endpoints du code ont été audités
 > contre ce tableau — 54 strictement conformes, 2 écarts de rôle corrigés ici (`POST
 > /dossiers/{id}/etapes` et `DELETE /ged/documents/{id}` : `ROLE_JURISTE`, non `ROLE_SAISIE`) — Q-66.
@@ -277,9 +277,15 @@ notifiant le demandeur, décision déjà prise refusée (409). 11 tests automati
 | 39 | GET | `/ged/documents/{id}` | `ROLE_CONSULTATION` | FR-GED-02 / US 6.3 | 📋 | ✅ M8 |
 | 40 | DELETE | `/ged/documents/{id}` | `ROLE_JURISTE` (202) / `ROLE_DJ`,`ROLE_DJA` (200) | FR-GED-03 / US 6.4, 6.5 | 📋 | ✅ M8 |
 | 41 | PUT | `/ged/documents/{id}/approbation-suppression` | `ROLE_DJ`, `ROLE_DJA` | FR-GED-03 / US 6.4 | 💡 | ✅ M8 |
-| 42 | GET | `/ged/rapport-journalier` | `ROLE_JURISTE` | FR-GED-04 / US 6.6 | 📋 | ✅ M8 |
+| 42 | GET | `/ged/rapport-journalier` | `ROLE_JURISTE`, `ROLE_DJ`, `ROLE_DJA`, `ROLE_ASSISTANTE` (Q-80) | FR-GED-04 / US 6.6 | 📋 | ✅ M8 |
 | 43 | GET | `/dossiers/{id}/documents` | `ROLE_CONSULTATION` | UC-GED-02 | 🆕 | ✅ M8 |
 | 63 | GET | `/ged/demandes-suppression?statut=` | `ROLE_DJ`, `ROLE_DJA` | UC-GED-04 (« demandes en attente ») | 🆕 | ✅ M15 |
+
+> **M16 (Q-79, Q-80)** : `DemandeSuppressionResponse` (#40 en 202, #41, #63) porte `documentNom`,
+> `typeDocument`, `dossierId`, `referenceDossier` — la file dit quoi supprimer, historique compris.
+> Une suppression directe (#40 en 200) ferme la demande en attente sur le même document ; elle
+> restait sinon indécidable (404) et relancée toutes les 72 h (V10 ferme les orphelines existantes).
+> #42 est ouvert au DJ, à la DJA et à l'Assistante (« tout juriste », FR-GED-04 ; cf. Q-81).
 
 > **#38** : format dérivé de l'extension du fichier (pas du `Content-Type` déclaré, Q-46) ;
 > `typeDocument` reste un texte libre (Q-45). **#40** : double comportement selon le profil résolu

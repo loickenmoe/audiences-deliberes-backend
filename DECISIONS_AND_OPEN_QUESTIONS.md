@@ -1534,6 +1534,59 @@ compteur de délibérés du rapport ignorent désormais les délibérés en atte
 quoi ils compteraient comme des échecs ; l'expédition est refusée avant la décision. Le
 planificateur du délai de recours ne voit que des délibérés vidés : inchangé.
 
+### Q-79 ✅ Une suppression directe laissait la demande de suppression orpheline — tranché (M16)
+
+Remonté par l'audit du jalon F10 du frontend (QF-34), décidé par le porteur du projet le 2026-09-11.
+
+**A — Le constat, vérifié dans le code.** Un juriste demande la suppression d'une pièce (202), puis
+le DJ ou la DJA la supprime directement (200, US 6.5). `supprimerDirectement` ne touchait pas à la
+demande : elle restait `EN_ATTENTE` dans la file, **indécidable** (`approuverOuRejeter` cherche un
+document actif → 404) et **relancée toutes les 72 h sans fin** par `SuppressionRelanceScheduler`.
+Le parcours e2e « le juriste demande, le DJ supprime » du frontend en créait une à chaque exécution.
+S'y ajoutait un manque : `DemandeSuppressionResponse` ne portait que `documentId` — la file du DJ ne
+disait pas **quoi** supprimer, et l'historique d'une demande approuvée restait anonyme (document
+supprimé → 404 à la consultation).
+
+**B — Tranché.** La suppression directe ferme la demande en attente sur le même document :
+`APPROUVEE`, validée par l'auteur de la suppression, datée. La réponse porte `documentNom`,
+`typeDocument`, `dossierId`, `referenceDossier`. Migration `V10__demandes_suppression_orphelines.sql` :
+ferme les demandes déjà orphelines (validateur inconnu après coup, laissé nul).
+
+**Vérifié** : un test unitaire par volet, un test d'intégration de bout en bout sur PostgreSQL ;
+en base locale, V10 a fermé une orpheline et n'en laisse aucune.
+
+### Q-80 ✅ Le rapport journalier GED n'était servi qu'au rôle juriste — tranché (M16)
+
+Remonté par l'audit F10 (QF-35), décidé par le porteur du projet le 2026-09-11. FR-GED-04 : « tout
+juriste » ; les user stories donnent au DJ et à la DJA « tous les droits d'un juriste » ; le document
+d'analyse attribue le rapport à l'Assistante. Or aucun de ces trois profils ne porte `ROLE_JURISTE`
+dans le realm (cf. Q-81). **Tranché** : `GET /ged/rapport-journalier` sous
+`hasAnyRole('JURISTE', 'DJ', 'DJA', 'ASSISTANTE')`. **Vérifié** : test d'intégration — 200 pour les
+quatre profils, 403 pour le SH.
+
+### Q-81 ✅ Le DJ et la DJA ne portaient pas `ROLE_JURISTE` — tranché (M16)
+
+Constaté pendant l'audit F10 (QF-36). Les user stories et le document d'analyse donnent au DJ et à
+la DJA « tous les droits d'un juriste » (en plus des leurs). Dans `audiences-realm.json`, leurs rôles
+composites n'incluent que `ROLE_SAISIE` : **toute** action réservée à `ROLE_JURISTE` leur est
+refusée — planifier une audience, gérer les étapes, les délibérés, les alarmes, les décisions
+définitives… Deux voies : ajouter `ROLE_JURISTE` aux composites de `ROLE_DJ`/`ROLE_DJA` (une ligne
+par rôle, effet sur tous les endpoints), ou élargir endpoint par endpoint comme Q-80.
+
+**Tranché par le porteur du projet (2026-09-11)** : `ROLE_JURISTE` ajouté aux composites de
+`ROLE_DJ` et `ROLE_DJA`, dans `audiences-realm.json` (futurs imports) **et** dans le Keycloak en
+service (`kcadm add-roles` : l'import au démarrage ignore un realm existant). Une seule règle, au
+même endroit, fidèle aux sources ; un nouvel endpoint réservé au juriste leur est ouvert d'office.
+
+**Précaution indispensable, appliquée avec** : le provisionnement déduisait le profil du **premier**
+rôle métier du jeton (`findFirst()`). Un jeton de DJ portant désormais `ROLE_DJ` et `ROLE_JURISTE`,
+dans un ordre que Keycloak ne garantit pas, un nouveau DJ aurait pu être enregistré comme juriste —
+perdant la suppression directe, les alertes réservées au DJ, etc. `UtilisateurProvisioningService`
+choisit désormais par **priorité** (DJ, DJA, SH, ASSISTANTE, JURISTE, AVOCAT), le même ordre que
+`profilPrincipal` côté frontend. Les comptes déjà provisionnés gardent leur profil (il est en base).
+Effet à connaître : un jeton émis avant le changement ne porte pas le nouveau rôle — se reconnecter.
+Q-80 (rapport journalier ouvert nommément au DJ et à la DJA) devient redondant pour eux, sans effet.
+
 ### Q-27 ✅ `dossier.parties` défini deux fois — tranché (M2)
 Le dictionnaire REF-06 §2.1.2 déclare `parties JSONB` **deux fois**, avec deux structures
 différentes : `{demandeur, defendeur}` et `{demandeur, defendeur, client}`. Le contrat d'API et

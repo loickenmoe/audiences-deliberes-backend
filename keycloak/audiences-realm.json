@@ -18,15 +18,15 @@
       },
       {
         "name": "ROLE_DJ",
-        "description": "Directeur Juridique",
+        "description": "Directeur Juridique - tous les droits d'un juriste, plus les siens (Q-81)",
         "composite": true,
-        "composites": { "realm": ["ROLE_SAISIE"] }
+        "composites": { "realm": ["ROLE_SAISIE", "ROLE_JURISTE"] }
       },
       {
         "name": "ROLE_DJA",
-        "description": "Directeur Juridique Adjoint",
+        "description": "Directeur Juridique Adjoint - tous les droits d'un juriste, plus les siens (Q-81)",
         "composite": true,
-        "composites": { "realm": ["ROLE_SAISIE"] }
+        "composites": { "realm": ["ROLE_SAISIE", "ROLE_JURISTE"] }
       },
       {
         "name": "ROLE_ASSISTANTE",

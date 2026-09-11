@@ -830,6 +830,70 @@ class HabilitationFrontendIntegrationTest {
         return etapeId;
     }
 
+    @Test
+    @DisplayName("M16 : une suppression directe ferme la demande en attente, et la file nomme fichier et dossier (Q-79)")
+    void suppressionDirecte_fermeLaDemandeEnAttente() throws Exception {
+        long dossierId = creerDossier();
+        RequestPostProcessor juriste = role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_SAISIE", "ROLE_CONSULTATION");
+        RequestPostProcessor dj = role("kc-dj-m15", "ROLE_DJ", "ROLE_CONSULTATION");
+        String nom = "piece-q79-" + COMPTEUR.incrementAndGet() + ".pdf";
+
+        long documentId = extraireId(mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart(api("/ged/documents"))
+                        .file(new org.springframework.mock.web.MockMultipartFile("file", nom, "application/pdf", new byte[]{1, 2}))
+                        .param("dossierId", String.valueOf(dossierId))
+                        .param("typeDocument", "PV_TRANSFERT")
+                        .with(juriste))
+                .andExpect(status().isCreated())
+                .andReturn());
+
+        // Le juriste auteur demande (202) : la demande nomme déjà son fichier et son dossier.
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .delete(api("/ged/documents/" + documentId)).with(juriste))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.documentNom").value(nom))
+                .andExpect(jsonPath("$.dossierId").value(dossierId));
+
+        // Le DJ supprime directement le même document (200).
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .delete(api("/ged/documents/" + documentId)).with(dj))
+                .andExpect(status().isOk());
+
+        // Plus de demande fantôme en attente : elle est close avec le document, validée par le DJ.
+        JsonNode enAttente = lireJson(mockMvc.perform(get(api("/ged/demandes-suppression"))
+                        .param("statut", "EN_ATTENTE").with(dj))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(enAttente.findValues("documentId").stream().map(JsonNode::asLong).toList()).doesNotContain(documentId);
+
+        JsonNode toutes = lireJson(mockMvc.perform(get(api("/ged/demandes-suppression")).with(dj))
+                .andExpect(status().isOk())
+                .andReturn());
+        JsonNode demande = null;
+        for (JsonNode candidate : toutes) {
+            if (candidate.get("documentId").asLong() == documentId) {
+                demande = candidate;
+            }
+        }
+        assertThat(demande).as("la demande reste dans l'historique").isNotNull();
+        assertThat(demande.get("statut").asText()).isEqualTo("APPROUVEE");
+        assertThat(demande.get("documentNom").asText()).isEqualTo(nom);
+        assertThat(demande.get("referenceDossier").asText()).startsWith("DOS-M15-");
+    }
+
+    @Test
+    @DisplayName("M16 : le rapport journalier est servi au juriste, au DJ, à la DJA et à l'Assistante, refusé au SH (Q-80)")
+    void rapportJournalier_ouvertAuxQuatreProfils() throws Exception {
+        for (String roleProfil : List.of("ROLE_JURISTE", "ROLE_DJ", "ROLE_DJA", "ROLE_ASSISTANTE")) {
+            mockMvc.perform(get(api("/ged/rapport-journalier")).param("date", "2020-01-02")
+                            .with(role("kc-rapport-" + roleProfil, roleProfil)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.piecesAjoutees").value(0));
+        }
+        mockMvc.perform(get(api("/ged/rapport-journalier")).with(role("kc-sh-m15", "ROLE_SH")))
+                .andExpect(status().isForbidden());
+    }
+
     private String api(String chemin) {
         return "/api/v1" + chemin;
     }
