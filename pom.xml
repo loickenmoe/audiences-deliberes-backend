@@ -72,12 +72,33 @@
 			<artifactId>spring-security-test</artifactId>
 			<scope>test</scope>
 		</dependency>
-		
+		<!-- Testcontainers (tests d'intégration contre un vrai PostgreSQL, version gérée par
+		     spring-boot-starter-parent) -->
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>postgresql</artifactId>
+			<scope>test</scope>
+		</dependency>
+
 		<!-- PostgreSQL Driver -->
 		<dependency>
 			<groupId>org.postgresql</groupId>
 			<artifactId>postgresql</artifactId>
 			<scope>runtime</scope>
+		</dependency>
+		<!-- Flyway (migrations de schéma versionnées) -->
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-core</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-database-postgresql</artifactId>
 		</dependency>
 		<!-- Minio -->
 		<dependency>
@@ -93,11 +114,8 @@
 		</dependency>
 
     <!-- Pour les exports Excel et PDF -->
-		<dependency>
-			<groupId>com.itextpdf</groupId>
-			<artifactId>itextpdf</artifactId>
-			<version>5.5.13.4</version>
-		</dependency>
+		<!-- Note : itextpdf (AGPL) retiré au profit de pdfbox (Apache 2.0), seule licence
+		     compatible avec un usage propriétaire non distribué (cf. DECISIONS_AND_OPEN_QUESTIONS.md Q-31). -->
 		<dependency>
 			<groupId>org.apache.pdfbox</groupId>
 			<artifactId>pdfbox</artifactId>
@@ -108,25 +126,6 @@
             <artifactId>poi-ooxml</artifactId>
             <version>5.2.3</version>
         </dependency>
-
-		<!-- JWT Dependencies -->
-		<dependency>
-			<groupId>io.jsonwebtoken</groupId>
-			<artifactId>jjwt-api</artifactId>
-			<version>0.12.5</version>
-		</dependency>
-		<dependency>
-			<groupId>io.jsonwebtoken</groupId>
-			<artifactId>jjwt-impl</artifactId>
-			<version>0.12.5</version>
-			<scope>runtime</scope>
-		</dependency>
-		<dependency>
-			<groupId>io.jsonwebtoken</groupId>
-			<artifactId>jjwt-jackson</artifactId> <!-- or jjwt-gson if Gson preferred -->
-			<version>0.12.5</version>
-			<scope>runtime</scope>
-		</dependency>
 
 		<!-- Swagger / OpenAPI -->
 		<dependency>
@@ -147,20 +146,11 @@
         	<scope>provided</scope>
     	</dependency>
 
-		<dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-mail</artifactId>
-        </dependency>
-    	<!-- Spring Boot Starter Mail (pour les emails) -->
+		<!-- Spring Boot Starter Mail (pour les emails) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-mail</artifactId>
         </dependency>
-		    <!-- Spring Boot Starter WebSocket (pour les notifications temps réel) -->
-    	<dependency>
-        	<groupId>org.springframework.boot</groupId>
-        	<artifactId>spring-boot-starter-websocket</artifactId>
-    	</dependency>
 
     	<!-- Spring Boot Actuator (pour le monitoring) -->
     	<dependency>
@@ -188,6 +178,17 @@
 							<groupId>org.projectlombok</groupId>
 							<artifactId>lombok</artifactId>
 						</path>
+						<!-- Requis pour que MapStruct voie les accesseurs générés par Lombok -->
+						<path>
+							<groupId>org.projectlombok</groupId>
+							<artifactId>lombok-mapstruct-binding</artifactId>
+							<version>0.2.0</version>
+						</path>
+						<path>
+							<groupId>org.mapstruct</groupId>
+							<artifactId>mapstruct-processor</artifactId>
+							<version>1.5.5.Final</version>
+						</path>
 					</annotationProcessorPaths>
 				</configuration>
 			</plugin>
@@ -202,6 +203,39 @@
 						</exclude>
 					</excludes>
 				</configuration>
+			</plugin>
+			<!--
+			  M14 : mesure de couverture (cible > 80 %, REF-02 §10.2). Les DTO/entités (records,
+			  classes Lombok) et le code généré (MapStruct) sont exclus : ils n'ont pas de logique
+			  propre, leur inclusion fausserait la mesure du code réellement testable.
+			-->
+			<plugin>
+				<groupId>org.jacoco</groupId>
+				<artifactId>jacoco-maven-plugin</artifactId>
+				<version>0.8.12</version>
+				<configuration>
+					<excludes>
+						<exclude>**/web/dto/**</exclude>
+						<exclude>**/domain/**</exclude>
+						<exclude>**/*MapperImpl.class</exclude>
+						<exclude>**/AudiencesApplication.class</exclude>
+					</excludes>
+				</configuration>
+				<executions>
+					<execution>
+						<id>prepare-agent</id>
+						<goals>
+							<goal>prepare-agent</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>report</id>
+						<phase>test</phase>
+						<goals>
+							<goal>report</goal>
+						</goals>
+					</execution>
+				</executions>
 			</plugin>
 		</plugins>
 	</build>

@@ -1,0 +1,35 @@
+package com.afriland.audiences.frais.repository;
+
+import com.afriland.audiences.frais.domain.DemandeFrais;
+import com.afriland.audiences.frais.domain.StatutCircuitFrais;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+@Repository
+public interface DemandeFraisRepository extends JpaRepository<DemandeFrais, Long> {
+
+    /**
+     * Anti-doublon de facture (RG-INT-01, ERR-006) : unicité vérifiée sur l'ensemble des demandes,
+     * quel que soit leur statut — y compris une demande déjà {@code REJETEE} (US 4.3, cf.
+     * FUNCTIONAL_MAP.md §4 « Tests attendus »), conformément à la contrainte SQL {@code UNIQUE}
+     * portée par la colonne.
+     */
+    boolean existsByReferenceFacture(String referenceFacture);
+
+    Page<DemandeFrais> findByAvocatId(Long avocatId, Pageable pageable);
+
+    Page<DemandeFrais> findByAvocatIdAndStatutCircuit(Long avocatId, StatutCircuitFrais statut, Pageable pageable);
+
+    Page<DemandeFrais> findByStatutCircuit(StatutCircuitFrais statut, Pageable pageable);
+
+    /** FR-REP-02 (tableau de bord, M13) : demandes non encore soldées (ni payées, ni rejetées). */
+    long countByStatutCircuitNotIn(List<StatutCircuitFrais> statuts);
+
+    /** FR-REP-01 (rapport périodique, M13) : demandes déposées dans la période. */
+    long countByCreatedAtBetween(LocalDateTime debut, LocalDateTime fin);
+}

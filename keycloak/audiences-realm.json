@@ -1,0 +1,134 @@
+{
+  "realm": "audiences-realm",
+  "enabled": true,
+  "displayName": "Audiences et Délibérés",
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "accessTokenLifespan": 3600,
+  "refreshTokenMaxReuse": 0,
+  "roles": {
+    "realm": [
+      {
+        "name": "ROLE_JURISTE",
+        "description": "Juriste - gestion des dossiers",
+        "composite": true,
+        "composites": { "realm": ["ROLE_SAISIE"] }
+      },
+      {
+        "name": "ROLE_DJ",
+        "description": "Directeur Juridique",
+        "composite": true,
+        "composites": { "realm": ["ROLE_SAISIE"] }
+      },
+      {
+        "name": "ROLE_DJA",
+        "description": "Directeur Juridique Adjoint",
+        "composite": true,
+        "composites": { "realm": ["ROLE_SAISIE"] }
+      },
+      {
+        "name": "ROLE_ASSISTANTE",
+        "description": "Assistante juridique",
+        "composite": true,
+        "composites": { "realm": ["ROLE_SAISIE"] }
+      },
+      {
+        "name": "ROLE_SH",
+        "description": "Supérieur Hiérarchique (Chef de département)",
+        "composite": true,
+        "composites": { "realm": ["ROLE_SAISIE"] }
+      },
+      { "name": "ROLE_AVOCAT",       "description": "Avocat partenaire externe" },
+      { "name": "ROLE_CONSULTATION", "description": "Lecture seule - tous profils habilités" },
+      { "name": "ROLE_SAISIE",       "description": "Saisie - implicite pour Juriste, DJ, DJA, Assistante, SH (rôle composite, cf. DECISIONS_AND_OPEN_QUESTIONS.md Q-08)" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "audiences-api",
+      "enabled": true,
+      "publicClient": false,
+      "bearerOnly": false,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "secret": "audiences-api-secret",
+      "redirectUris": ["http://localhost:3000/*", "http://localhost:8080/*"],
+      "webOrigins": ["http://localhost:3000", "http://localhost:8080"],
+      "protocolMappers": [
+        {
+          "name": "realm-roles-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "multivalued": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "roles",
+            "jsonType.label": "String"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "juriste.test",
+      "email": "juriste@afriland.cm",
+      "firstName": "Jean",
+      "lastName": "Juriste",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "Password1!", "temporary": false }],
+      "realmRoles": ["ROLE_JURISTE", "ROLE_CONSULTATION"]
+    },
+    {
+      "username": "dj.test",
+      "email": "dj@afriland.cm",
+      "firstName": "Marie",
+      "lastName": "Directrice",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "Password1!", "temporary": false }],
+      "realmRoles": ["ROLE_DJ", "ROLE_CONSULTATION"]
+    },
+    {
+      "username": "dja.test",
+      "email": "dja@afriland.cm",
+      "firstName": "Paul",
+      "lastName": "Adjoint",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "Password1!", "temporary": false }],
+      "realmRoles": ["ROLE_DJA", "ROLE_CONSULTATION"]
+    },
+    {
+      "username": "assistante.test",
+      "email": "assistante@afriland.cm",
+      "firstName": "Sophie",
+      "lastName": "Assistante",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "Password1!", "temporary": false }],
+      "realmRoles": ["ROLE_ASSISTANTE", "ROLE_CONSULTATION"]
+    },
+    {
+      "username": "sh.test",
+      "email": "sh@afriland.cm",
+      "firstName": "Henri",
+      "lastName": "Huissier",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "Password1!", "temporary": false }],
+      "realmRoles": ["ROLE_SH", "ROLE_CONSULTATION"]
+    },
+    {
+      "username": "avocat.test",
+      "email": "avocat@afriland.cm",
+      "firstName": "Claire",
+      "lastName": "Avocat",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "Password1!", "temporary": false }],
+      "realmRoles": ["ROLE_AVOCAT"]
+    }
+  ]
+}
