@@ -1753,6 +1753,72 @@ mise à jour d'adjudication n'est ajoutée. **À confirmer avec la Direction Jur
 US 8.2 fait saisir `statutPaiement` à la création d'une condamnation, que `CreerCondamnationRequest`
 ne reçoit pas (toujours `EN_ATTENTE`, QF-40 du frontend) — un champ facultatif suffirait.
 
+### Q-91 ✅ Une valeur de configuration erronée cassait d'autres modules — tranché (M17)
+
+Constaté à l'audit d'ouverture du jalon F14 du frontend (écran 41, « Configurations et seuils »).
+`PUT /configurations/{cle}` n'exigeait que `@NotBlank` sur la valeur, alors que cinq points de code
+la reconvertissent : `FraisService.seuilGlobal` (`Double.parseDouble`, appelé sur **chaque** réponse
+de frais depuis Q-82), `DelibereService` (`Integer.parseInt` de `SEUIL_PROROGATIONS`), `GedService`
+(`Long.parseLong` de `TAILLE_MAX_GED`, découpage de `FORMATS_GED` par virgules **sans retirer les
+espaces**). Seuls `ChargeMaxAvocatScheduler` et `FraisRelanceScheduler` se protégeaient d'un
+`NumberFormatException`. Conséquence : une saisie « 50 000 000 » ou « pdf, xlsx » par le DJ passait
+en 200, puis ressortait en **erreur 500 dans un module sans rapport avec l'écran de configuration** —
+diagnostic à la charge de l'utilisateur, à distance de la cause.
+
+**Tranché** : chaque clé porte une règle (`RegleConfiguration`), appliquée dans
+`ConfigurationService.modifier` — donc aussi sur `PUT /alertes/seuils`, qui y délègue. Une valeur
+invalide est refusée en **400** et nommée ; une valeur valide est **normalisée** avant enregistrement
+(espaces retirés, liste en majuscules, sans doublon, ordre de l'énumération). La règle est
+**publiée** dans `ConfigurationResponse` (`typeValeur`, `valeurMinimale`, `valeurMaximale`,
+`valeursPossibles`) : le frontend construit son champ de saisie à partir du contrat au lieu d'en
+redéclarer une copie qui divergerait.
+
+**Origine des bornes** — les minima (≥ 1) et les ensembles fermés viennent du code consommateur ou
+des énumérations du domaine (`FormatDocument`, `CanalAlerte`) ; `APPLICATIF` ne peut pas être retiré
+des canaux (RG-ALR-03, « applicatif obligatoire »). Le maximum de `TAILLE_MAX_GED` est la limite
+`spring.servlet.multipart.max-file-size` (10 Mo) — au-delà, Spring rejette le fichier avant le
+contrôle métier, le réglage serait sans effet. Celui de `SEUIL_MONTANT_DEFAUT` (12 chiffres) tient à
+l'exactitude du `double` du calcul de seuil. En revanche les maxima de `SEUIL_PROROGATIONS` (1 000),
+`DELAI_VALIDATION_CONJOINTE` (365) et `CHARGE_MAX_AVOCAT` (1 000) sont des **garde-fous que je
+propose**, aucune source ne fixant de plafond : sans eux, un délai de 2 000 000 000 jours ferait
+déborder le calcul de date du planificateur de relance. Ils sont regroupés en un point unique, à
+ajuster si la Direction Juridique les précise. **À confirmer.**
+
+**Vérifié** : 24 tests unitaires sur les règles, 2 sur le service, et en réel contre le backend
+démarré — « 50 000 000 » refusé en 400, `OUTLOOK` seul refusé, `" pdf , png "` enregistré
+`PDF,PNG`.
+
+### Q-92 ✅ Les notifications revenaient sans ordre — tranché (M17)
+
+Constaté en construisant l'écran 03 du frontend. `GET /alertes/mes-notifications` paginait
+(`PageRequest.of(page, size)`) **sans aucun tri** : la requête JPA ne portait pas d'`ORDER BY`, et
+PostgreSQL ne garantit alors aucun ordre entre deux requêtes. Une notification pouvait donc atterrir
+sur n'importe quelle page ; pire, une même alerte pouvait apparaître sur deux pages ou n'apparaître
+sur aucune, selon le plan d'exécution choisi. L'écran « Mes notifications » n'est utilisable qu'à
+partir du moment où la plus récente est en tête.
+
+**Tranché** (arbitrage du porteur du projet, 2026-09-12) : tri `dateDeclenchement DESC, id DESC`,
+comme la file des demandes de frais depuis Q-82. L'`id` départage les alertes déclenchées dans la
+même transaction, qui partagent l'horodatage. **Vérifié** : 1 test d'intégration sur PostgreSQL réel
+(trois alertes créées dans la même seconde, relues dans l'ordre inverse de création).
+
+### Q-93 ✅ Les listes de clients et de dossiers revenaient sans ordre — tranché (M17)
+
+Même défaut que Q-92, constaté juste après, et cette fois **visible en usage** : `GET /clients`
+paginait sans `ORDER BY`. Passé vingt clients — seuil franchi le 2026-09-12, 23 clients en base de
+développement — celui qu'un juriste venait de créer basculait en page 2, donc **invisible pour son
+auteur** au retour sur la liste. Deux parcours de bout en bout du frontend l'ont démontré, en
+exécution parallèle **et** en exécution seule. `GET /dossiers` (Specification + `findAll`) portait le
+même défaut, encore masqué par les filtres de l'écran.
+
+`GET /jurisprudences` a été vérifié à cette occasion : il est **déjà** trié
+(`ORDER BY j.date_decision DESC, j.id DESC`, posé en Q-89). `GET /frais/demandes` l'est depuis Q-82
+et `GET /publications` depuis M16. Il ne restait donc que ces deux-là.
+
+**Tranché** (arbitrage du porteur du projet, 2026-09-12) : tri `createdAt DESC, id DESC` sur les deux,
+comme partout ailleurs. **Vérifié** : 1 test d'intégration sur PostgreSQL réel (le client et le
+dossier créés à l'instant reviennent en tête d'une page d'un seul élément).
+
 ### Q-27 ✅ `dossier.parties` défini deux fois — tranché (M2)
 Le dictionnaire REF-06 §2.1.2 déclare `parties JSONB` **deux fois**, avec deux structures
 différentes : `{demandeur, defendeur}` et `{demandeur, defendeur, client}`. Le contrat d'API et

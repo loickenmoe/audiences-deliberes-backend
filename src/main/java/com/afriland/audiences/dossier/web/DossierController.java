@@ -18,6 +18,7 @@ import com.afriland.audiences.dossier.domain.StatutValidation;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -66,8 +67,9 @@ public class DossierController {
             @RequestParam(defaultValue = "false") boolean mesDossiers,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
+        // Plus récent d'abord (Q-93) : sans tri, l'ordre des lignes était laissé à PostgreSQL.
         return dossierService.listerDossiers(nature, categorie, juridiction, reference, clientId,
-                mesDossiers, PageRequest.of(page, size));
+                mesDossiers, PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt", "id")));
     }
 
     @GetMapping("/{id}")
