@@ -1819,6 +1819,34 @@ et `GET /publications` depuis M16. Il ne restait donc que ces deux-là.
 comme partout ailleurs. **Vérifié** : 1 test d'intégration sur PostgreSQL réel (le client et le
 dossier créés à l'instant reviennent en tête d'une page d'un seul élément).
 
+### Q-94 ✅ La vue consolidée d'un client interrogeait la base dossier par dossier — tranché (M17)
+
+Mesuré le 2026-09-12 sur la base de développement, en marge du jalon F14 du frontend (signalé
+QF-41 côté frontend). `GET /clients/{id}/dossiers` mettait **11 à 19 secondes**, jusqu'à 70 s sous
+charge, pour un client portant 310 dossiers : l'écran 13 restait en chargement, et l'appel occupait
+assez longtemps une connexion pour faire expirer des requêtes voisines dans la suite de bout en bout.
+
+**Cause.** `construireReponseLegere` allait chercher étapes, juristes et avocats **par dossier** —
+trois requêtes chacun, soit 930 pour 310 dossiers. Un N+1 classique, invisible tant que les clients
+de test portaient trois dossiers.
+
+**Ce qu'il ne fallait pas faire.** La première piste — alléger la réponse — était fausse : le contrat
+d'API inclut `etapes` dans le schéma `Dossier`, et l'écran 13 s'en sert pour afficher l'étape
+courante. Paginer ne convenait pas davantage : le contrat décrit la vue consolidée comme « toutes les
+procédures d'un client, par catégorie », sans pagination. C'était donc le **nombre de requêtes** qu'il
+fallait réduire, pas la réponse qu'il fallait amputer.
+
+**Tranché.** `construireReponses(List<Dossier>)` charge les trois collections en **trois requêtes pour
+la liste entière** (`findByDossierIdIn`), puis les apparie en mémoire par identifiant. Les
+identifiants composites `DossierJuristeId`/`DossierAvocatId` portent déjà `dossierId` : les lire
+n'initialise aucun proxy. `GET /dossiers` emprunte le même chemin et passe de soixante requêtes par
+page à trois.
+
+**Mesuré après correction**, même base, client entre-temps passé à **355 dossiers** :
+**0,12 s** (0,17 s et 1,05 s au premier appel, JIT compris) pour 306 Ko — contre 11 à 19 s avant.
+**Vérifié** : 1 test d'intégration sur PostgreSQL réel qui garantit l'appariement — deux dossiers du
+même client affectés à des avocats différents gardent chacun le sien, seul vrai risque de la bascule.
+
 ### Q-27 ✅ `dossier.parties` défini deux fois — tranché (M2)
 Le dictionnaire REF-06 §2.1.2 déclare `parties JSONB` **deux fois**, avec deux structures
 différentes : `{demandeur, defendeur}` et `{demandeur, defendeur, client}`. Le contrat d'API et

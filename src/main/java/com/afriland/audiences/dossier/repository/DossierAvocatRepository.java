@@ -8,12 +8,16 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 
 @Repository
 public interface DossierAvocatRepository extends JpaRepository<DossierAvocat, DossierAvocatId> {
 
     List<DossierAvocat> findByDossierId(Long dossierId);
+
+    /** Affectations de plusieurs dossiers en une requête (QF-41). */
+    List<DossierAvocat> findByDossierIdIn(Collection<Long> dossierIds);
 
     boolean existsByDossierIdAndAvocatId(Long dossierId, Long avocatId);
 

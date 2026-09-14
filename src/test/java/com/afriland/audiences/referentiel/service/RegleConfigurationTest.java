@@ -32,7 +32,7 @@ class RegleConfigurationTest {
             "SEUIL_MONTANT_DEFAUT, '-1'",
             "SEUIL_PROROGATIONS, '0'",
             "SEUIL_PROROGATIONS, '1.5'",
-            "DELAI_VALIDATION_CONJOINTE, '2000000000'",
+            "DELAI_VALIDATION_CONJOINTE, '3000000000'",
             "TAILLE_MAX_GED, '104857600'",
             "FORMATS_GED, 'PDF,DOCX'",
             "FORMATS_GED, 'PDF,,PNG'",
@@ -50,10 +50,21 @@ class RegleConfigurationTest {
                 .isInstanceOf(ApiException.class);
     }
 
-    /** TAILLE_MAX_GED est plafonnée à la limite multipart de Spring : au-delà, le fichier est rejeté avant le contrôle métier. */
+    /** CONF06 : 10 Mo, paramètre confié à la DSI « via configuration Spring Boot / MinIO ». Au-delà, Spring rejette le fichier avant le contrôle métier. */
     @Test
     void tailleMaxGed_isCappedAtTheSpringMultipartLimit() {
         assertThat(RegleConfiguration.TAILLE_MAX_GED.maximum()).isEqualTo(10_485_760L);
+    }
+
+    /**
+     * Les sources ne fixent aucun maximum métier pour les compteurs (US 7.1 : « seuil (entier
+     * positif) »). Une valeur absurde mais inoffensive doit donc être acceptée : la validation
+     * refuse ce qui casserait l'application, pas ce que la documentation autorise.
+     */
+    @ParameterizedTest
+    @CsvSource({ "SEUIL_PROROGATIONS, '999999'", "CHARGE_MAX_AVOCAT, '100000'", "DELAI_VALIDATION_CONJOINTE, '3650'" })
+    void valider_acceptsLargeButHarmlessCounters(String cle, String saisie) {
+        assertThat(RegleConfiguration.valueOf(cle).valider(saisie)).isEqualTo(saisie);
     }
 
     /** Chaque clé décrit sa saisie à l'écran d'administration : bornes pour un entier, valeurs pour une liste. */
