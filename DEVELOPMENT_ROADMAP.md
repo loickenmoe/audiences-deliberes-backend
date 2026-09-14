@@ -1232,6 +1232,21 @@ casserait l'application, pas ce que la documentation autorise.**
 `HabilitationFrontendIntegrationTest` (+3, PostgreSQL réel), et en réel contre le backend démarré.
 **351 tests au vert, `BUILD SUCCESS`.**
 
+### 17. Tableau de bord exécutif ouvert à la DJA (Q-95) ✅
+
+Ouverture du jalon F15 du frontend (écran 39), décidé par le porteur du projet le 2026-09-14, en
+reprenant QF-04. `GET /tableau-de-bord` était `hasRole('DJ')` d'après le critère d'acceptation d'US
+8.5, mais les spécifications fonctionnelles décrivent le tableau consolidé comme obtenu « à travers
+le DJ/DJA » (STK-06). **Implémenté** : `hasAnyRole('DJ', 'DJA')` ; les autres profils restent exclus
+(RG-REP-03).
+
+À noter : `ROLE_DJ` et `ROLE_DJA` étant composites depuis Q-81, la direction atteignait déjà
+`GET /rapports`, `GET /audiences/calendrier` et `GET /repertoire/avocats` — effet de bord non
+consigné à l'époque, qui a clos l'essentiel de QF-04 sans modification.
+
+**Testé** : `ParcoursEndToEndIntegrationTest.p9_pilotage` étendu (DJA en 200, juriste et Assistante
+en 403) sur PostgreSQL réel, et en réel contre le backend démarré.
+
 ---
 
 ## Chemin critique

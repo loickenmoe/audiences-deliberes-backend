@@ -1847,6 +1847,33 @@ page à trois.
 **Vérifié** : 1 test d'intégration sur PostgreSQL réel qui garantit l'appariement — deux dossiers du
 même client affectés à des avocats différents gardent chacun le sien, seul vrai risque de la bascule.
 
+### Q-95 ✅ Le tableau de bord exécutif s'ouvre à la DJA — tranché (M18)
+
+Soulevé à l'ouverture du jalon F15 du frontend (écran 39), en reprenant QF-04.
+
+**A — Ce que la documentation exige.** Deux passages en tension. US 8.5, critère d'acceptation :
+« *Given que je suis le DJ (**ROLE_DJ**), When j'appelle GET /tableau-de-bord…* » — d'où le
+`hasRole('DJ')` d'origine. Mais les spécifications fonctionnelles, table des parties prenantes
+(STK-06, Direction Générale), attendent de « *disposer d'un tableau de bord consolidé du risque
+crédit contentieux **à travers le DJ/DJA*** ». La première nomme un rôle technique, la seconde
+désigne les deux responsables au niveau des objectifs.
+
+**B — Ce que le code implémentait.** `@PreAuthorize("hasRole('DJ')")`, sans `ROLE_DJA`. La DJA
+recevait 403 sur le seul écran qui lui aurait donné une vue d'ensemble, alors qu'elle contrôle
+l'opportunité de toutes les demandes de frais et valide conjointement les demandes sensibles.
+
+**C — Tranché** (arbitrage du porteur du projet, 2026-09-14) : `hasAnyRole('DJ', 'DJA')`. Les autres
+profils restent exclus — RG-REP-03 en fait un tableau de pilotage, pas un écran d'équipe.
+
+**Vérifié** : `ParcoursEndToEndIntegrationTest.p9_pilotage` étendu (DJA en 200, juriste et Assistante
+en 403) sur PostgreSQL réel, et en réel contre le backend démarré — `dja.test` → 200,
+`assistante.test` → 403.
+
+**À noter, découvert au passage** : `ROLE_DJ` et `ROLE_DJA` étant composites depuis Q-81, la
+direction atteint déjà tout ce qui est ouvert au juriste — `GET /rapports`, `GET /audiences/calendrier`,
+`GET /repertoire/avocats`. C'est ce qui a clos l'essentiel de QF-04 sans modification, et c'est un
+effet de bord de Q-81 qui n'avait pas été consigné.
+
 ### Q-27 ✅ `dossier.parties` défini deux fois — tranché (M2)
 Le dictionnaire REF-06 §2.1.2 déclare `parties JSONB` **deux fois**, avec deux structures
 différentes : `{demandeur, defendeur}` et `{demandeur, defendeur, client}`. Le contrat d'API et
