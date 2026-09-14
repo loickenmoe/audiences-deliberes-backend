@@ -14,4 +14,7 @@ public interface DemandeConstitutionRepository extends JpaRepository<DemandeCons
     List<DemandeConstitution> findByStatutOrderByDateDemandeAsc(StatutConstitution statut);
 
     List<DemandeConstitution> findByOrderByDateDemandeDesc();
+
+    /** Portail avocat (Q-96) : les lettres de constitution le désignant comme prestataire. */
+    List<DemandeConstitution> findByPrestataireIdOrderByDateDemandeDesc(Long prestataireId);
 }

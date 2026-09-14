@@ -82,7 +82,7 @@ class GedServiceTest {
         service = new GedService(documentRepository, demandeSuppressionRepository, dossierRepository,
                 dossierJuristeRepository, utilisateurRepository, historiqueActionRepository, audienceRepository,
                 configurationService, alerteService, historiqueActionService, currentUserService, minioStorageService,
-                demandeSuppressionMapper);
+                new ValidationFichierService(configurationService), demandeSuppressionMapper);
 
         dossier = Dossier.builder().id(1L).reference("DOS-2026-001").build();
         juriste = Utilisateur.builder().id(10L).profil(Profil.builder().code("JURISTE").build()).build();

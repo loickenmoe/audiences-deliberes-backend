@@ -58,12 +58,14 @@ public class GedService {
     private final HistoriqueActionService historiqueActionService;
     private final CurrentUserService currentUserService;
     private final MinioStorageService minioStorageService;
+    // RG-GED-04/08, partagé avec les pièces justificatives de frais (Q-97).
+    private final ValidationFichierService validationFichierService;
     private final DemandeSuppressionMapper demandeSuppressionMapper;
 
     @Transactional
     public DocumentResponse uploaderDocument(Long dossierId, String typeDocument, MultipartFile fichier) {
         Dossier dossier = getDossierOrThrow(dossierId);
-        FormatDocument format = validerFichier(fichier);
+        FormatDocument format = validationFichierService.valider(fichier);
         Utilisateur auteur = currentUserService.getCurrentUser();
 
         String cheminStockage = minioStorageService.deposer(dossierId, fichier);
@@ -84,35 +86,6 @@ public class GedService {
         signalerDocumentCharge(dossier, document);
 
         return toResponse(document, null);
-    }
-
-    /** RG-GED-04/08 : format ∈ FORMATS_GED (dérivé de l'extension du fichier) et poids ≤ TAILLE_MAX_GED. */
-    private FormatDocument validerFichier(MultipartFile fichier) {
-        String nom = fichier.getOriginalFilename();
-        int pointIdx = nom == null ? -1 : nom.lastIndexOf('.');
-        if (!StringUtils.hasText(nom) || pointIdx < 0 || pointIdx == nom.length() - 1) {
-            throw ApiException.badRequest(ErrorCodes.DOCUMENT_NON_CONFORME, "Le fichier doit avoir une extension identifiable");
-        }
-        String extension = nom.substring(pointIdx + 1).toUpperCase();
-        FormatDocument format;
-        try {
-            format = FormatDocument.valueOf(extension);
-        } catch (IllegalArgumentException e) {
-            throw ApiException.badRequest(ErrorCodes.DOCUMENT_NON_CONFORME, "Format de fichier non conforme : " + extension);
-        }
-
-        Set<String> formatsAutorises = Set.of(configurationService.getOrThrow("FORMATS_GED").getValeur().split(","));
-        if (!formatsAutorises.contains(format.name())) {
-            throw ApiException.badRequest(ErrorCodes.DOCUMENT_NON_CONFORME,
-                    "Format « " + format + " » désactivé par la configuration FORMATS_GED");
-        }
-
-        long tailleMax = Long.parseLong(configurationService.getOrThrow("TAILLE_MAX_GED").getValeur());
-        if (fichier.getSize() > tailleMax) {
-            throw ApiException.badRequest(ErrorCodes.DOCUMENT_NON_CONFORME,
-                    "Poids du fichier (" + fichier.getSize() + " o) supérieur au maximum autorisé (" + tailleMax + " o)");
-        }
-        return format;
     }
 
     /** RG-GED-02 : notifie chaque juriste coté au dossier. */

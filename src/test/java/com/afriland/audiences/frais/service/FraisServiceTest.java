@@ -29,6 +29,7 @@ import com.afriland.audiences.referentiel.repository.AvocatRepository;
 import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
 import com.afriland.audiences.referentiel.domain.ConfigurationSysteme;
 import com.afriland.audiences.referentiel.service.CompteAvocatService;
+import com.afriland.audiences.ged.service.MinioStorageService;
 import com.afriland.audiences.referentiel.service.ConfigurationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -61,6 +62,8 @@ class FraisServiceTest {
     @Mock private HistoriqueActionService historiqueActionService;
     @Mock private AlerteService alerteService;
     @Mock private ConfigurationService configurationService;
+    // Q-97 : URL pré-signées des pièces justificatives, sur le détail seulement.
+    @Mock private MinioStorageService minioStorageService;
 
     private FraisService service;
     private Dossier dossier;
@@ -75,7 +78,7 @@ class FraisServiceTest {
         service = new FraisService(demandeFraisRepository, validationFraisRepository, dossierRepository,
                 dossierAvocatRepository, new CompteAvocatService(avocatRepository, utilisateurRepository),
                 utilisateurRepository, currentUserService,
-                historiqueActionService, alerteService, configurationService);
+                historiqueActionService, alerteService, configurationService, minioStorageService);
         // Toute réponse porte le seuil applicable (Q-82).
         lenient().when(configurationService.getOrThrow("SEUIL_MONTANT_DEFAUT"))
                 .thenReturn(ConfigurationSysteme.builder().cle("SEUIL_MONTANT_DEFAUT").valeur("50000000").build());

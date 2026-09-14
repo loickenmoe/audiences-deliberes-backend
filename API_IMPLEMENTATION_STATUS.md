@@ -1,7 +1,8 @@
 # API_IMPLEMENTATION_STATUS
 
 > Inventaire exhaustif des endpoints et état d'implémentation.
-> Dernière mise à jour : 2026-09-14 (M18 — tableau de bord exécutif ouvert à la DJA, Q-95).
+> Dernière mise à jour : 2026-09-14 (M19 — portail Avocat, quatre lectures cadrées Q-96 ; pièces justificatives réellement téléversées Q-97).
+> Précédente : 2026-09-14 (M18 — tableau de bord exécutif ouvert à la DJA, Q-95).
 > Précédente : 2026-09-14 (M17 — paramètres système validés par clé Q-91 ; listes triées Q-92/Q-93 ; vue consolidée d'un client sans N+1 Q-94).
 > Précédente : 2026-09-11 (M16 — cycle du délibéré Q-78 ; GED : demande orpheline et file nommée Q-79, rapport journalier Q-80).
 > **Conformité vérifiée endpoint par endpoint en M14** : les 56 endpoints du code ont été audités
@@ -337,6 +338,28 @@ pour un juriste non auteur (403), suppression directe DJ/DJA (200), approbation 
 obligatoire) d'une demande, relance à 72 h déclenchée en conditions réelles avec anti-doublon,
 rapport journalier correct (actif et à zéro). 16 tests automatisés dédiés. Voir
 `DECISIONS_AND_OPEN_QUESTIONS.md` Q-02, Q-45, Q-46, Q-47, Q-48, Q-49, Q-50, Q-51.
+
+## 8bis. Portail Avocat (M19, Q-96)
+
+Quatre lectures propres au prestataire connecté — **surface distincte**, et non un élargissement des
+endpoints internes : la restriction est portée par la requête, pas par un filtre applicable après
+coup. Réponses réduites à ce que l'usage exige.
+
+| # | Méthode | Endpoint | Rôle requis | FR / US | Src | Statut |
+|---|---|---|---|---|---|---|
+| — | GET | `/avocat/mes-dossiers` 🆕 Q-96 | `ROLE_AVOCAT` | US 4.1, US 5.1 | 💡 | ✅ M19 |
+| — | GET | `/avocat/mes-dossiers/{id}/audiences` 🆕 Q-96 | `ROLE_AVOCAT` | US 5.1 | 💡 | ✅ M19 |
+| — | GET | `/avocat/mes-publications` 🆕 Q-96 | `ROLE_AVOCAT` | — | 💡 | ✅ M19 |
+| — | GET | `/avocat/mes-constitutions` 🆕 Q-96 | `ROLE_AVOCAT` | — | 💡 | ✅ M19 |
+| — | POST | `/avocat/pieces-justificatives` *(multipart)* 🆕 Q-97 | `ROLE_AVOCAT` | UC-INT-01 ét. 4 | 💡 | ✅ M19 |
+
+> **Un dossier ne montre que son identification** — référence, nature, juridiction saisie. Ni client,
+> ni risque encouru, ni sensibilité, ni juristes affectés. **Les audiences d'un dossier qui n'est pas
+> le sien répondent 403**, non 404 : le dossier existe, c'est l'accès qui est refusé.
+>
+> **Périmètre à confirmer** : `mes-publications` et `mes-constitutions` ne répondent à aucune
+> exigence écrite (US 5.4 vise le juriste) — livrées sur arbitrage du 2026-09-14, au motif qu'un
+> avocat notifié d'un rejet ne pouvait pas relire ce qui avait été rejeté.
 
 ## 9. Alertes, configurations, reporting
 

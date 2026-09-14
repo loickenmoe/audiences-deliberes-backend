@@ -21,6 +21,8 @@ import com.afriland.audiences.frais.repository.ValidationFraisRepository;
 import com.afriland.audiences.frais.web.dto.ControleConformiteRequest;
 import com.afriland.audiences.frais.web.dto.ControleOpportuniteRequest;
 import com.afriland.audiences.frais.web.dto.DemandeFraisResponse;
+import com.afriland.audiences.ged.service.MinioStorageService;
+import com.afriland.audiences.portail.web.dto.PieceJustificativeResponse;
 import com.afriland.audiences.frais.web.dto.DeposerFraisRequest;
 import com.afriland.audiences.frais.web.dto.ValidationConjointeRequest;
 import com.afriland.audiences.frais.web.dto.ValidationFraisResponse;
@@ -63,6 +65,8 @@ public class FraisService {
     private final HistoriqueActionService historiqueActionService;
     private final AlerteService alerteService;
     private final ConfigurationService configurationService;
+    // Q-97 : URL pré-signées des pièces réellement stockées, sur le détail seulement.
+    private final MinioStorageService minioStorageService;
 
     /**
      * FR-INT-01/RG-INT-01 : seul un avocat affecté au dossier (table {@code dossier_avocat},
@@ -243,7 +247,10 @@ public class FraisService {
                 .stream()
                 .collect(Collectors.groupingBy(v -> v.getDemandeFrais().getId()));
         double seuilGlobal = page.isEmpty() ? 0 : seuilGlobal();
-        return PageResponse.of(page, d -> versReponse(d, validations.getOrDefault(d.getId(), List.of()), seuilGlobal));
+        // Pas d'URL pré-signée sur la liste : elles ne vivent que 10 minutes et coûteraient un
+        // aller-retour MinIO par pièce, pour un écran qui ne les affiche pas (Q-97).
+        return PageResponse.of(page,
+                d -> versReponse(d, validations.getOrDefault(d.getId(), List.of()), seuilGlobal, List.of()));
     }
 
     /**
@@ -259,7 +266,9 @@ public class FraisService {
                 && !compteAvocatService.estLeCompteDe(utilisateur, demande.getAvocat())) {
             throw ApiException.forbidden(ErrorCodes.DROITS_INSUFFISANTS, "Cette demande de frais n'est pas la vôtre");
         }
-        return versReponse(demande);
+        return versReponse(demande,
+                validationFraisRepository.findByDemandeFraisIdOrderByDateValidationAscIdAsc(demande.getId()),
+                seuilGlobal(), piecesTelechargeables(demande));
     }
 
     /**
@@ -324,14 +333,40 @@ public class FraisService {
     private DemandeFraisResponse versReponse(DemandeFrais demande) {
         return versReponse(demande,
                 validationFraisRepository.findByDemandeFraisIdOrderByDateValidationAscIdAsc(demande.getId()),
-                seuilGlobal());
+                seuilGlobal(), List.of());
+    }
+
+    /**
+     * UC-INT-02 étape 3 (Q-97) : l'instructeur doit <b>voir</b> les pièces, pas en lire les noms.
+     * Seules les entrées déposées par le portail sont signées — le tableau peut contenir des
+     * libellés antérieurs au téléversement, qui ne désignent aucun objet stocké et pour lesquels
+     * une URL pré-signée échouerait.
+     */
+    private List<PieceJustificativeResponse> piecesTelechargeables(DemandeFrais demande) {
+        List<String> pieces = demande.getPiecesJustificatives();
+        if (pieces == null) {
+            return List.of();
+        }
+        return pieces.stream()
+                .filter(cle -> cle != null && cle.startsWith(MinioStorageService.PREFIXE_PIECES_FRAIS + "/"))
+                .map(cle -> new PieceJustificativeResponse(cle, nomDOrigine(cle),
+                        minioStorageService.urlTelechargement(cle)))
+                .toList();
+    }
+
+    /** La clé est {@code frais/{uuid}-{nom}} : seul le nom d'origine est lisible par un humain. */
+    private static String nomDOrigine(String cle) {
+        String fin = cle.substring(cle.lastIndexOf('/') + 1);
+        int tiret = fin.indexOf('-', 35);
+        return tiret >= 0 ? fin.substring(tiret + 1) : fin;
     }
 
     /**
      * Q-82 : {@code validationConjointeRequise} applique la règle en vigueur (RG-INT-03) — pour une
      * demande qui n'a pas encore atteint l'opportunité, c'est ce qui l'attend.
      */
-    private static DemandeFraisResponse versReponse(DemandeFrais demande, List<ValidationFrais> validations, double seuilGlobal) {
+    private static DemandeFraisResponse versReponse(DemandeFrais demande, List<ValidationFrais> validations,
+                                                      double seuilGlobal, List<PieceJustificativeResponse> pieces) {
         Dossier dossier = demande.getDossier();
         double seuil = seuilApplicable(dossier, seuilGlobal);
         return new DemandeFraisResponse(
@@ -350,6 +385,7 @@ public class FraisService {
                 seuil,
                 exigeValidationConjointe(dossier, demande.getMontant(), seuil),
                 validations.stream().map(FraisService::versReponse).toList(),
+                pieces,
                 demande.getCreatedAt(),
                 demande.getUpdatedAt());
     }
