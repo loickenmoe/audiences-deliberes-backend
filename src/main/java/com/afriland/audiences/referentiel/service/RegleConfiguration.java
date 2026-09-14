@@ -25,22 +25,31 @@ import java.util.stream.Stream;
  * dans des modules sans rapport avec l'écran de configuration. La règle refuse la valeur à la
  * source, en 400, et la normalise avant enregistrement.
  * <p>
- * <b>Origine des bornes.</b> Les minima (≥ 1) et les ensembles fermés viennent du code qui
- * consomme la valeur ou des énumérations du domaine. Les bornes hautes de {@code TAILLE_MAX_GED}
- * (limite {@code spring.servlet.multipart.max-file-size}, 10 Mo — au-delà, Spring rejette le
- * fichier avant le contrôle métier) et de {@code SEUIL_MONTANT_DEFAUT} (12 chiffres, au-delà le
- * {@code double} du calcul de seuil perdrait en exactitude) sont déduites de l'existant. Celles de
- * {@code SEUIL_PROROGATIONS}, {@code DELAI_VALIDATION_CONJOINTE} et {@code CHARGE_MAX_AVOCAT} sont
- * en revanche des <b>garde-fous</b> : les spécifications ne fixent aucun maximum, et une valeur
- * comme 2 000 000 000 jours ferait déborder le calcul de date du planificateur de relance. Elles
- * sont regroupées ici pour être ajustées en un seul point si le métier les précise.
+ * <b>Origine des bornes — aucune n'est inventée.</b> Les sources (user stories §11.2, tableau
+ * CONF01 à CONF07, et US 7.1 « seuil (entier positif) ») fixent des <b>valeurs par défaut</b> et
+ * exigent un entier positif ; elles ne fixent <b>aucun maximum métier</b>. Cette règle s'en tient
+ * donc à ce qui est documenté, plus les seules limites que le code impose réellement :
+ * <ul>
+ *   <li>minimum 1 partout : « entier positif » (US 7.1) ;</li>
+ *   <li>{@code TAILLE_MAX_GED} plafonné à 10 Mo : CONF06 donne cette valeur et confie le paramètre
+ *       à la DSI « via configuration Spring Boot / MinIO ». Au-delà de
+ *       {@code spring.servlet.multipart.max-file-size}, Spring rejette le fichier avant le contrôle
+ *       métier — le réglage serait sans effet ;</li>
+ *   <li>{@code SEUIL_MONTANT_DEFAUT} plafonné à 12 chiffres : au-delà, le {@code double} du calcul
+ *       de seuil perdrait en exactitude ;</li>
+ *   <li>les trois compteurs plafonnés à {@link Integer#MAX_VALUE} : c'est le type dans lequel le
+ *       code appelant les convertit, rien de plus.</li>
+ * </ul>
+ * Une valeur absurde mais inoffensive (999 999 prorogations) est donc <b>acceptée</b> : refuser ce
+ * que la documentation autorise serait inventer une règle métier. Cette validation ne refuse que ce
+ * qui casserait réellement l'application.
  */
 public enum RegleConfiguration {
 
     SEUIL_MONTANT_DEFAUT(entier(1L, 999_999_999_999L)),
-    SEUIL_PROROGATIONS(entier(1L, 1_000L)),
-    DELAI_VALIDATION_CONJOINTE(entier(1L, 365L)),
-    CHARGE_MAX_AVOCAT(entier(1L, 1_000L)),
+    SEUIL_PROROGATIONS(entier(1L, Integer.MAX_VALUE)),
+    DELAI_VALIDATION_CONJOINTE(entier(1L, Integer.MAX_VALUE)),
+    CHARGE_MAX_AVOCAT(entier(1L, Integer.MAX_VALUE)),
     TAILLE_MAX_GED(entier(1L, 10_485_760L)),
     FORMATS_GED(liste(noms(FormatDocument.values()), null)),
     CANAUX_NOTIFICATION_DEFAUT(liste(noms(CanalAlerte.values()), CanalAlerte.APPLICATIF.name()));

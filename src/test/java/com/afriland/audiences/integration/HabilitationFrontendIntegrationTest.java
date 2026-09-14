@@ -408,6 +408,75 @@ class HabilitationFrontendIntegrationTest {
                 .andExpect(jsonPath("$.content[0].id").value(dossierId));
     }
 
+    // ---------------------------------------------------------------- Vue consolidée par client (QF-41)
+
+    /**
+     * QF-41 : les étapes, juristes et avocats de la vue consolidée sont désormais chargés en trois
+     * requêtes pour toute la liste, au lieu de trois par dossier. Le risque d'une telle bascule est
+     * l'appariement — qu'un dossier hérite des affectations d'un autre. Ce parcours le vérifie sur
+     * deux dossiers du même client, affectés à des avocats différents.
+     */
+    @Test
+    @DisplayName("QF-41 : chaque dossier de la vue consolidée garde ses propres étapes et affectations")
+    void vueConsolidee_apparieChaqueDossierAvecSesPropresAffectations() throws Exception {
+        RequestPostProcessor juriste = role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_SAISIE", "ROLE_CONSULTATION");
+        int n = COMPTEUR.incrementAndGet();
+        long clientId = extraireId(mockMvc.perform(post(api("/clients")).with(juriste)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("nom", "Client QF41 " + n, "reference", "CLI-QF41-" + n))))
+                .andExpect(status().isCreated())
+                .andReturn());
+        Long juristeId = utilisateurRepository.findByKeycloakId("kc-juriste-m15").orElseThrow().getId();
+        long autreAvocatId = extraireId(mockMvc.perform(post(api("/intervenants"))
+                        .with(role("kc-dj-qf41", "ROLE_DJ", "ROLE_SAISIE", "ROLE_CONSULTATION"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        // RG-INT-01 : un avocat porte obligatoirement un compte.
+                        .content(json(Map.of("type", "AVOCAT", "nom", "Me QF41 " + n,
+                                "compteKeycloak", "kc-avocat-qf41-" + n))))
+                .andExpect(status().isCreated())
+                .andReturn());
+
+        long premier = creerDossierPourClient(juriste, clientId, juristeId, avocatId, "DOS-QF41-A-" + n);
+        long second = creerDossierPourClient(juriste, clientId, juristeId, autreAvocatId, "DOS-QF41-B-" + n);
+
+        JsonNode vue = lireJson(mockMvc.perform(get(api("/clients/" + clientId + "/dossiers")).with(juriste))
+                .andExpect(status().isOk())
+                .andReturn());
+
+        JsonNode recouvrement = vue.get("recouvrement");
+        assertThat(recouvrement).hasSize(2);
+        recouvrement.forEach(dossier -> {
+            long attendu = dossier.get("id").asLong() == premier ? avocatId : autreAvocatId;
+            assertThat(dossier.get("avocatsAffectes").get(0).asLong())
+                    .as("le dossier %s doit porter son propre avocat", dossier.get("reference").asText())
+                    .isEqualTo(attendu);
+            assertThat(dossier.get("juristesAffectes").get(0).asLong()).isEqualTo(juristeId);
+            // Chaque dossier naît avec son étape INSTANCE : la liste ne doit être ni vide ni doublée.
+            assertThat(dossier.get("etapes")).hasSize(1);
+        });
+        assertThat(recouvrement.get(0).get("id").asLong()).isNotEqualTo(recouvrement.get(1).get("id").asLong());
+        assertThat(second).isNotEqualTo(premier);
+    }
+
+    private long creerDossierPourClient(RequestPostProcessor juriste, long clientId, Long juristeId,
+                                          long avocat, String reference) throws Exception {
+        return extraireId(mockMvc.perform(post(api("/dossiers")).with(juriste)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.ofEntries(
+                                Map.entry("reference", reference),
+                                Map.entry("nature", "Assignation en paiement"),
+                                Map.entry("categorie", "RECOUVREMENT"),
+                                Map.entry("juridictionSaisie", "TGI Douala"),
+                                Map.entry("clientId", clientId),
+                                Map.entry("risqueEncouru", 1_000_000),
+                                Map.entry("dossierCreditOrigine", "CRD-" + reference),
+                                Map.entry("pvTransfert", "PV-" + reference),
+                                Map.entry("juristesAffectes", List.of(juristeId)),
+                                Map.entry("avocatsAffectes", List.of(avocat))))))
+                .andExpect(status().isCreated())
+                .andReturn());
+    }
+
     // ---------------------------------------------------------------- Helpers
 
     private long creerDossier() throws Exception {

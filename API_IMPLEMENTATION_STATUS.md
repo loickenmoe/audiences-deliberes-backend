@@ -1,7 +1,7 @@
 # API_IMPLEMENTATION_STATUS
 
 > Inventaire exhaustif des endpoints et état d'implémentation.
-> Dernière mise à jour : 2026-09-12 (M17 — validation par clé des paramètres système Q-91 ; notifications, clients et dossiers triés Q-92/Q-93).
+> Dernière mise à jour : 2026-09-14 (M17 — paramètres système validés par clé Q-91 ; listes triées Q-92/Q-93 ; vue consolidée d'un client sans N+1 Q-94).
 > Précédente : 2026-09-11 (M16 — cycle du délibéré Q-78 ; GED : demande orpheline et file nommée Q-79, rapport journalier Q-80).
 > **Conformité vérifiée endpoint par endpoint en M14** : les 56 endpoints du code ont été audités
 > contre ce tableau — 54 strictement conformes, 2 écarts de rôle corrigés ici (`POST
@@ -91,7 +91,7 @@ Q-10, Q-11, Q-12, Q-26, Q-34, Q-35 pour le détail des arbitrages pris pendant l
 |---|---|---|---|---|---|---|
 | 9 | GET | `/clients` | `ROLE_CONSULTATION` | US 8.6 | 📋 | ✅ M4 · **trié M17** (Q-93) |
 | 10 | GET | `/clients/{id}` | `ROLE_CONSULTATION` | US 8.6 | 📋 | ✅ M4 |
-| 11 | GET | `/clients/{clientId}/dossiers` | `ROLE_CONSULTATION` | FR-REP-03 / US 8.6 | 📋 | ✅ M4 |
+| 11 | GET | `/clients/{clientId}/dossiers` | `ROLE_CONSULTATION` | FR-REP-03 / US 8.6 | 📋 | ✅ M4 · **N+1 supprimé M17** (Q-94) |
 | 12 | POST | `/clients` | `ROLE_SAISIE` | INT-05 | 🆕 | ✅ M4 |
 
 > **#12** : le contrat expose la lecture des clients mais **aucun endpoint de création**, alors que

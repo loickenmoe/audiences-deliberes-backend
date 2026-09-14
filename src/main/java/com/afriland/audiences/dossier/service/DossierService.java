@@ -60,6 +60,7 @@ import org.springframework.util.StringUtils;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -241,13 +242,8 @@ public class DossierService {
         var page = dossierRepository.findAll(
                 DossierSpecifications.withFilters(nature, categorie, juridiction, reference, clientId, juristeId),
                 pageable);
-        return PageResponse.of(page, dossier -> construireReponse(dossier,
-                etapeProcedureRepository.findByDossierIdOrderByTypeAsc(dossier.getId()),
-                dossierJuristeRepository.findByDossierId(dossier.getId()).stream()
-                        .map(dj -> dj.getUtilisateur().getId()).toList(),
-                dossierAvocatRepository.findByDossierId(dossier.getId()).stream()
-                        .map(da -> da.getAvocat().getId()).toList(),
-                List.of()));
+        // Trois requêtes pour la page entière, et non trois par ligne (QF-41).
+        return new PageResponse<>(construireReponses(page.getContent()), page.getTotalPages(), page.getTotalElements());
     }
 
     @Transactional(readOnly = true)
@@ -285,24 +281,48 @@ public class DossierService {
         Client client = clientRepository.findById(clientId)
                 .orElseThrow(() -> ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE, "Client introuvable : " + clientId));
         List<Dossier> dossiers = dossierRepository.findByClientId(clientId);
-        List<DossierResponse> recouvrement = dossiers.stream()
-                .filter(d -> d.getCategorie() == CategorieDossier.RECOUVREMENT)
-                .map(this::construireReponseLegere)
-                .toList();
-        List<DossierResponse> exploitationLitiges = dossiers.stream()
-                .filter(d -> d.getCategorie() == CategorieDossier.EXPLOITATION_LITIGES)
-                .map(this::construireReponseLegere)
-                .toList();
+        List<DossierResponse> recouvrement = construireReponses(dossiers.stream()
+                .filter(d -> d.getCategorie() == CategorieDossier.RECOUVREMENT).toList());
+        List<DossierResponse> exploitationLitiges = construireReponses(dossiers.stream()
+                .filter(d -> d.getCategorie() == CategorieDossier.EXPLOITATION_LITIGES).toList());
         return new VueClientDossiersResponse(clientId, client.getNom(), recouvrement, exploitationLitiges);
     }
 
-    private DossierResponse construireReponseLegere(Dossier dossier) {
-        List<EtapeProcedure> etapes = etapeProcedureRepository.findByDossierIdOrderByTypeAsc(dossier.getId());
-        List<Long> juristesAffectes = dossierJuristeRepository.findByDossierId(dossier.getId()).stream()
-                .map(dj -> dj.getUtilisateur().getId()).toList();
-        List<Long> avocatsAffectes = dossierAvocatRepository.findByDossierId(dossier.getId()).stream()
-                .map(da -> da.getAvocat().getId()).toList();
-        return construireReponse(dossier, etapes, juristesAffectes, avocatsAffectes, List.of());
+    /**
+     * Construit la réponse d'une <b>liste</b> de dossiers en trois requêtes, quel qu'en soit le
+     * nombre (QF-41).
+     * <p>
+     * La version précédente allait chercher étapes, juristes et avocats <b>dossier par dossier</b> :
+     * sur la vue consolidée d'un client portant 310 dossiers, cela faisait 930 requêtes et 11 à 19
+     * secondes de réponse — assez pour que l'écran reste en chargement et que l'appel monopolise une
+     * connexion au détriment des requêtes voisines. Le contrat impose la liste complète, sans
+     * pagination, et l'écran 13 lit bien l'étape courante de chaque dossier : c'est donc le nombre de
+     * requêtes qu'il fallait réduire, pas la réponse qu'il fallait amputer.
+     */
+    private List<DossierResponse> construireReponses(List<Dossier> dossiers) {
+        if (dossiers.isEmpty()) {
+            return List.of();
+        }
+        List<Long> ids = dossiers.stream().map(Dossier::getId).toList();
+
+        Map<Long, List<EtapeProcedure>> etapesParDossier =
+                etapeProcedureRepository.findByDossierIdInOrderByDossierIdAscTypeAsc(ids).stream()
+                        .collect(Collectors.groupingBy(etape -> etape.getDossier().getId()));
+        // L'identifiant composite porte déjà `dossierId` : le lire n'initialise aucun proxy.
+        Map<Long, List<Long>> juristesParDossier = dossierJuristeRepository.findByDossierIdIn(ids).stream()
+                .collect(Collectors.groupingBy(dj -> dj.getId().getDossierId(),
+                        Collectors.mapping(dj -> dj.getId().getUtilisateurId(), Collectors.toList())));
+        Map<Long, List<Long>> avocatsParDossier = dossierAvocatRepository.findByDossierIdIn(ids).stream()
+                .collect(Collectors.groupingBy(da -> da.getId().getDossierId(),
+                        Collectors.mapping(da -> da.getId().getAvocatId(), Collectors.toList())));
+
+        return dossiers.stream()
+                .map(dossier -> construireReponse(dossier,
+                        etapesParDossier.getOrDefault(dossier.getId(), List.of()),
+                        juristesParDossier.getOrDefault(dossier.getId(), List.of()),
+                        avocatsParDossier.getOrDefault(dossier.getId(), List.of()),
+                        List.of()))
+                .toList();
     }
 
     // ------------------------------------------------------------------ Affectation

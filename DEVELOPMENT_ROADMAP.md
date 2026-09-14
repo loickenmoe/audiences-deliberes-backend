@@ -1194,7 +1194,7 @@ initial d'une condamnation, à confirmer avec la Direction Juridique.
 **Testé** : `JurisprudenceServiceTest` (+2, un mis à jour), `HabilitationFrontendIntegrationTest`
 (+2, PostgreSQL réel). **319 tests au vert, `BUILD SUCCESS`.**
 
-### 16. Paramètres système validés par clé, listes triées (Q-91, Q-92, Q-93) ✅
+### 16. Paramètres système, tri des listes, vue consolidée (Q-91 à Q-94) ✅
 
 Ouverture du jalon F14 du frontend (écran 41), décidé par le porteur du projet le 2026-09-12.
 `PUT /configurations/{cle}` acceptait n'importe quelle chaîne non vide alors que cinq points de code
@@ -1214,9 +1214,23 @@ venait de créer devenait **invisible pour son auteur**. Tri du plus récent au 
 par `id`, sur arbitrage du porteur du projet. `GET /jurisprudences`, `GET /frais/demandes` et
 `GET /publications` étaient déjà triés (Q-89, Q-82, M16).
 
-**Testé** : `RegleConfigurationTest` (24), `ConfigurationServiceTest` (+2),
-`HabilitationFrontendIntegrationTest` (+2, PostgreSQL réel), et en réel contre le backend démarré.
-**347 tests au vert, `BUILD SUCCESS`.**
+**Ajouté en fin de jalon (Q-94)** : `GET /clients/{id}/dossiers` interrogeait la base **trois fois
+par dossier** — 930 requêtes et 11 à 19 s pour un client portant 310 dossiers. Les trois collections
+sont désormais chargées en trois requêtes pour la liste entière ; `GET /dossiers` emprunte le même
+chemin. Mesuré après correction, sur 355 dossiers : **0,12 s** contre 11 à 19 s.
+
+**Précision apportée à Q-91 après relecture des sources.** Le tableau CONF01 à CONF07 (user stories
+§11.2) fixe des valeurs par défaut, jamais des maxima, et la story 7.1 n'exige qu'un « seuil (entier
+positif) ». Les plafonds que j'avais proposés pour `SEUIL_PROROGATIONS`, `DELAI_VALIDATION_CONJOINTE`
+et `CHARGE_MAX_AVOCAT` n'avaient donc pas d'assise : ils sont ramenés à `Integer.MAX_VALUE`, le type
+dans lequel le code convertit la valeur. Restent les deux bornes que les sources justifient — 10 Mo
+pour la GED (CONF06, « via configuration Spring Boot / MinIO ») et douze chiffres pour le seuil de
+montant, au-delà desquels le calcul en `double` perdrait en exactitude. **Le contrôle refuse ce qui
+casserait l'application, pas ce que la documentation autorise.**
+
+**Testé** : `RegleConfigurationTest` (27), `ConfigurationServiceTest` (+2),
+`HabilitationFrontendIntegrationTest` (+3, PostgreSQL réel), et en réel contre le backend démarré.
+**351 tests au vert, `BUILD SUCCESS`.**
 
 ---
 
