@@ -2,7 +2,10 @@
 
 > Feuille de route séquentielle du backend. Un jalon = un objectif, un périmètre fermé,
 > une validation manuelle par le porteur du projet avant passage au suivant.
-> Dernière mise à jour : 2026-09-07 (M0 à M15 terminés et validés — feuille de route achevée,
+> Dernière mise à jour : 2026-09-14 (M0 à M20 terminés et validés). Les jalons **M16 à M20** ont été
+> ouverts hors feuille de route initiale, sur autorisation explicite du porteur du projet, pour
+> corriger ce que la consommation réelle de l'API par le frontend a révélé — Q-70 à Q-98.
+> Précédente : 2026-09-07 (M0 à M15 terminés et validés — feuille de route achevée,
 > M15 ajouté hors roadmap initiale pour rendre le backend consommable par un frontend).
 
 ---
