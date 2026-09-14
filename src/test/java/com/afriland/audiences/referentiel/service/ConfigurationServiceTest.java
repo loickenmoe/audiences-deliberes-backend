@@ -4,6 +4,7 @@ import com.afriland.audiences.common.audit.HistoriqueActionService;
 import com.afriland.audiences.common.error.ApiException;
 import com.afriland.audiences.common.security.CurrentUserService;
 import com.afriland.audiences.referentiel.domain.ConfigurationSysteme;
+import com.afriland.audiences.referentiel.domain.TypeValeurConfiguration;
 import com.afriland.audiences.referentiel.domain.Utilisateur;
 import com.afriland.audiences.referentiel.mapper.ConfigurationMapper;
 import com.afriland.audiences.referentiel.repository.ConfigurationSystemeRepository;
@@ -14,6 +15,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -23,6 +25,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -58,7 +61,8 @@ class ConfigurationServiceTest {
         when(configurationSystemeRepository.save(any(ConfigurationSysteme.class))).thenAnswer(inv -> inv.getArgument(0));
         when(currentUserService.getCurrentUser()).thenReturn(dj);
         when(configurationMapper.toResponse(any(ConfigurationSysteme.class))).thenReturn(
-                new ConfigurationResponse("SEUIL_PROROGATIONS", "12", null, "ROLE_DJ", null));
+                new ConfigurationResponse("SEUIL_PROROGATIONS", "12", null, "ROLE_DJ", null,
+                        TypeValeurConfiguration.ENTIER, 1L, 1_000L, List.of()));
 
         ConfigurationResponse result = configurationService.modifier("SEUIL_PROROGATIONS", "12");
 
@@ -66,5 +70,35 @@ class ConfigurationServiceTest {
         assertThat(result.valeur()).isEqualTo("12");
         verify(historiqueActionService).enregistrerPour(eq(dj), isNull(), eq("Modification de la configuration SEUIL_PROROGATIONS"),
                 eq(Map.of("ancienneValeur", "10", "nouvelleValeur", "12")));
+    }
+
+    /** Q-91 : une saisie non numérique est refusée ici, au lieu de casser le module frais plus tard. */
+    @Test
+    void modifier_rejectsValueThatBreaksTheKeyContract() {
+        ConfigurationSysteme config = ConfigurationSysteme.builder().cle("SEUIL_MONTANT_DEFAUT").valeur("50000000").build();
+        when(configurationSystemeRepository.findByCle("SEUIL_MONTANT_DEFAUT")).thenReturn(Optional.of(config));
+
+        assertThatThrownBy(() -> configurationService.modifier("SEUIL_MONTANT_DEFAUT", "50 000 000"))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("SEUIL_MONTANT_DEFAUT");
+
+        assertThat(config.getValeur()).isEqualTo("50000000");
+        verifyNoInteractions(historiqueActionService);
+    }
+
+    /** Q-91 : la liste est enregistrée normalisée — GedService la découpe sans retirer les espaces. */
+    @Test
+    void modifier_storesNormalizedListValue() {
+        ConfigurationSysteme config = ConfigurationSysteme.builder().cle("FORMATS_GED").valeur("PDF,PNG").build();
+        when(configurationSystemeRepository.findByCle("FORMATS_GED")).thenReturn(Optional.of(config));
+        when(configurationSystemeRepository.save(any(ConfigurationSysteme.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(currentUserService.getCurrentUser()).thenReturn(Utilisateur.builder().id(3L).build());
+        when(configurationMapper.toResponse(any(ConfigurationSysteme.class))).thenReturn(
+                new ConfigurationResponse("FORMATS_GED", "PDF,XLSX", null, "ROLE_DJ", null,
+                        TypeValeurConfiguration.LISTE, null, null, List.of()));
+
+        configurationService.modifier("FORMATS_GED", " pdf , xlsx ");
+
+        assertThat(config.getValeur()).isEqualTo("PDF,XLSX");
     }
 }

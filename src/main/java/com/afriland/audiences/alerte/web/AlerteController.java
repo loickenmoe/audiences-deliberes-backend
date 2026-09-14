@@ -13,6 +13,8 @@ import com.afriland.audiences.alerte.service.AlerteService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -48,13 +50,22 @@ public class AlerteController {
         return configurationService.modifier(CLE_CHARGE_MAX_AVOCAT, String.valueOf(request.seuil()));
     }
 
+    /**
+     * Plus récente d'abord (Q-92). Sans tri explicite, la requête paginée n'avait <b>aucun</b>
+     * {@code ORDER BY} : l'ordre des lignes était laissé à PostgreSQL, une notification pouvait
+     * donc atterrir sur n'importe quelle page — et une même alerte apparaître deux fois, ou
+     * disparaître, en changeant de page. {@code id} départage les alertes déclenchées dans la même
+     * transaction, qui portent l'horodatage à la milliseconde près.
+     */
     @GetMapping("/mes-notifications")
     @PreAuthorize("isAuthenticated()")
     public PageResponse<AlerteResponse> mesNotifications(
             @RequestParam(required = false) StatutAlerte statut,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return alerteService.mesNotifications(statut, PageRequest.of(page, size));
+        Pageable pageable = PageRequest.of(page, size,
+                Sort.by(Sort.Direction.DESC, "dateDeclenchement", "id"));
+        return alerteService.mesNotifications(statut, pageable);
     }
 
     @PatchMapping("/{id}/traiter")

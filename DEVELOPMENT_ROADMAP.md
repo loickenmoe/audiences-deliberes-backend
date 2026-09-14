@@ -1194,6 +1194,30 @@ initial d'une condamnation, à confirmer avec la Direction Juridique.
 **Testé** : `JurisprudenceServiceTest` (+2, un mis à jour), `HabilitationFrontendIntegrationTest`
 (+2, PostgreSQL réel). **319 tests au vert, `BUILD SUCCESS`.**
 
+### 16. Paramètres système validés par clé, listes triées (Q-91, Q-92, Q-93) ✅
+
+Ouverture du jalon F14 du frontend (écran 41), décidé par le porteur du projet le 2026-09-12.
+`PUT /configurations/{cle}` acceptait n'importe quelle chaîne non vide alors que cinq points de code
+reconvertissent ces valeurs : une saisie erronée du DJ ressortait en **erreur 500 dans un module
+sans rapport** (frais, délibéré, GED). **Implémenté** : `RegleConfiguration` — type, bornes et
+ensembles fermés par clé, appliqués dans `ConfigurationService.modifier` (donc aussi sur
+`PUT /alertes/seuils`, qui y délègue) ; valeur invalide refusée en **400**, valeur valide
+**normalisée** avant enregistrement ; règle **publiée** dans `ConfigurationResponse` pour que l'écran
+d'administration construise son champ à partir du contrat. **Laissé à confirmer** : les maxima de
+`SEUIL_PROROGATIONS`, `DELAI_VALIDATION_CONJOINTE` et `CHARGE_MAX_AVOCAT` sont des garde-fous que je
+propose, aucune source ne fixant de plafond.
+
+**Ajouté en cours de jalon (Q-92, Q-93)** : trois listes paginaient sans aucun `ORDER BY` —
+`GET /alertes/mes-notifications`, `GET /clients` et `GET /dossiers`. Une ligne pouvait atterrir sur
+n'importe quelle page, apparaître deux fois ou disparaître ; passé vingt clients, celui qu'un juriste
+venait de créer devenait **invisible pour son auteur**. Tri du plus récent au plus ancien, départagé
+par `id`, sur arbitrage du porteur du projet. `GET /jurisprudences`, `GET /frais/demandes` et
+`GET /publications` étaient déjà triés (Q-89, Q-82, M16).
+
+**Testé** : `RegleConfigurationTest` (24), `ConfigurationServiceTest` (+2),
+`HabilitationFrontendIntegrationTest` (+2, PostgreSQL réel), et en réel contre le backend démarré.
+**347 tests au vert, `BUILD SUCCESS`.**
+
 ---
 
 ## Chemin critique

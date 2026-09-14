@@ -1,5 +1,7 @@
 package com.afriland.audiences.integration;
 
+import com.afriland.audiences.alerte.domain.TypeAlerte;
+import com.afriland.audiences.alerte.service.AlerteService;
 import com.afriland.audiences.referentiel.domain.Avocat;
 import com.afriland.audiences.referentiel.domain.Utilisateur;
 import com.afriland.audiences.referentiel.repository.AvocatRepository;
@@ -82,6 +84,7 @@ class HabilitationFrontendIntegrationTest {
     @Autowired private UtilisateurRepository utilisateurRepository;
     @Autowired private ProfilRepository profilRepository;
     @Autowired private AvocatRepository avocatRepository;
+    @Autowired private AlerteService alerteService;
 
     private Long avocatId;
 
@@ -352,6 +355,57 @@ class HabilitationFrontendIntegrationTest {
         // Le profil dérivé du jeton est vérifié par ProvisionnementLectureSeuleIntegrationTest ;
         // ici, seule compte la présence de la ligne — la preuve que l'INSERT a bien eu lieu.
         assertThat(utilisateurRepository.findByKeycloakId(nouveau)).isPresent();
+    }
+
+    // ---------------------------------------------------------------- Ordre des notifications (Q-92)
+
+    /**
+     * Q-92 : {@code GET /alertes/mes-notifications} n'avait aucun {@code ORDER BY}. L'ordre était
+     * laissé à PostgreSQL, donc une notification pouvait atterrir sur n'importe quelle page — et
+     * une même alerte apparaître deux fois, ou disparaître, en changeant de page. Les trois alertes
+     * de ce test sont créées dans la même seconde : seul le départage par {@code id} les ordonne.
+     */
+    @Test
+    @DisplayName("Q-92 : les notifications reviennent de la plus récente à la plus ancienne")
+    void mesNotifications_sontTrieesDeLaPlusRecenteALaPlusAncienne() throws Exception {
+        String keycloakId = "kc-alertes-" + COMPTEUR.incrementAndGet();
+        mockMvc.perform(get(api("/alertes/mes-notifications")).with(role(keycloakId, "ROLE_JURISTE")))
+                .andExpect(status().isOk());
+        Utilisateur destinataire = utilisateurRepository.findByKeycloakId(keycloakId).orElseThrow();
+
+        for (String texte : List.of("Première", "Deuxième", "Troisième")) {
+            alerteService.declencher(TypeAlerte.DOSSIER_INCOMPLET, null, destinataire, texte);
+        }
+
+        mockMvc.perform(get(api("/alertes/mes-notifications")).with(role(keycloakId, "ROLE_JURISTE")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(3))
+                .andExpect(jsonPath("$.content[0].declencheur").value("Troisième"))
+                .andExpect(jsonPath("$.content[1].declencheur").value("Deuxième"))
+                .andExpect(jsonPath("$.content[2].declencheur").value("Première"));
+    }
+
+    /**
+     * Q-93 : {@code GET /clients} et {@code GET /dossiers} paginaient sans {@code ORDER BY}. Passé
+     * vingt clients, celui qu'on venait de créer basculait en page 2 — invisible pour son auteur.
+     */
+    @Test
+    @DisplayName("Q-93 : le client et le dossier qu'on vient de créer sont en tête de la première page")
+    void clientsEtDossiers_reviennentDuPlusRecentAuPlusAncien() throws Exception {
+        RequestPostProcessor juriste = role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_SAISIE", "ROLE_CONSULTATION");
+        String reference = "CLI-TRI-" + COMPTEUR.incrementAndGet();
+        mockMvc.perform(post(api("/clients")).with(juriste).contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("reference", reference, "nom", "Client " + reference))))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(get(api("/clients")).param("size", "1").with(juriste))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].reference").value(reference));
+
+        long dossierId = creerDossier();
+        mockMvc.perform(get(api("/dossiers")).param("size", "1").with(juriste))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id").value(dossierId));
     }
 
     // ---------------------------------------------------------------- Helpers

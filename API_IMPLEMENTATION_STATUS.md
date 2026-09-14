@@ -1,7 +1,8 @@
 # API_IMPLEMENTATION_STATUS
 
 > Inventaire exhaustif des endpoints et état d'implémentation.
-> Dernière mise à jour : 2026-09-11 (M16 — cycle du délibéré Q-78 ; GED : demande orpheline et file nommée Q-79, rapport journalier Q-80).
+> Dernière mise à jour : 2026-09-12 (M17 — validation par clé des paramètres système Q-91 ; notifications, clients et dossiers triés Q-92/Q-93).
+> Précédente : 2026-09-11 (M16 — cycle du délibéré Q-78 ; GED : demande orpheline et file nommée Q-79, rapport journalier Q-80).
 > **Conformité vérifiée endpoint par endpoint en M14** : les 56 endpoints du code ont été audités
 > contre ce tableau — 54 strictement conformes, 2 écarts de rôle corrigés ici (`POST
 > /dossiers/{id}/etapes` et `DELETE /ged/documents/{id}` : `ROLE_JURISTE`, non `ROLE_SAISIE`) — Q-66.
@@ -62,7 +63,7 @@ Le squelette de starter hors périmètre (Template/Admin/Staff/Dashboard/Chat, a
 | # | Méthode | Endpoint | Rôle requis | FR / US | Src | Statut |
 |---|---|---|---|---|---|---|
 | 1 | POST | `/dossiers` | `ROLE_SAISIE` | FR-DOS-01 / US 1.1 | 📋 | ✅ M4 |
-| 2 | GET | `/dossiers` | `ROLE_CONSULTATION` | FR-DOS-03 / US 1.3 | 📋 | ✅ M4 |
+| 2 | GET | `/dossiers` | `ROLE_CONSULTATION` | FR-DOS-03 / US 1.3 | 📋 | ✅ M4 · **trié M17** (Q-93) |
 | 3 | GET | `/dossiers/{id}` | `ROLE_CONSULTATION` | FR-DOS-03 / US 1.3 | 📋 | ✅ M4 |
 | 4 | PUT | `/dossiers/{id}/affectation` | `ROLE_JURISTE`, `ROLE_DJ` | FR-DOS-02 / US 1.2 | 📋 | ✅ M4 |
 | 5 | PATCH | `/dossiers/{id}/etapes/{etapeId}/statut` | `ROLE_JURISTE` | FR-DOS-04 / US 1.4 | 📋 | ✅ M4 |
@@ -88,7 +89,7 @@ Q-10, Q-11, Q-12, Q-26, Q-34, Q-35 pour le détail des arbitrages pris pendant l
 
 | # | Méthode | Endpoint | Rôle requis | FR / US | Src | Statut |
 |---|---|---|---|---|---|---|
-| 9 | GET | `/clients` | `ROLE_CONSULTATION` | US 8.6 | 📋 | ✅ M4 |
+| 9 | GET | `/clients` | `ROLE_CONSULTATION` | US 8.6 | 📋 | ✅ M4 · **trié M17** (Q-93) |
 | 10 | GET | `/clients/{id}` | `ROLE_CONSULTATION` | US 8.6 | 📋 | ✅ M4 |
 | 11 | GET | `/clients/{clientId}/dossiers` | `ROLE_CONSULTATION` | FR-REP-03 / US 8.6 | 📋 | ✅ M4 |
 | 12 | POST | `/clients` | `ROLE_SAISIE` | INT-05 | 🆕 | ✅ M4 |
@@ -341,10 +342,10 @@ rapport journalier correct (actif et à zéro). 16 tests automatisés dédiés. 
 | # | Méthode | Endpoint | Rôle requis | FR / US | Src | Statut |
 |---|---|---|---|---|---|---|
 | 44 | PUT | `/alertes/seuils` | `ROLE_DJ` | FR-ALR-01 / US 7.1 | 📋 | ✅ M5 |
-| 45 | GET | `/alertes/mes-notifications` | authentifié | FR-ALR-02 / US 7.3 | 📋 | ✅ M5 |
+| 45 | GET | `/alertes/mes-notifications` | authentifié | FR-ALR-02 / US 7.3 | 📋 | ✅ M5 · **trié M17** (Q-92) |
 | 46 | PATCH | `/alertes/{id}/traiter` | destinataire | US 7.4 | 💡 | ✅ M5 |
-| 47 | GET | `/configurations` | `ROLE_CONSULTATION` | CONF01-07 | 📋 | ✅ M5 |
-| 48 | PUT | `/configurations/{cle}` | `ROLE_DJ` | CONF01-07 | 📋 | ✅ M5 |
+| 47 | GET | `/configurations` | `ROLE_CONSULTATION` | CONF01-07 | 📋 | ✅ M5 · **enrichi M17** (Q-91) |
+| 48 | PUT | `/configurations/{cle}` | `ROLE_DJ` | CONF01-07 | 📋 | ✅ M5 · **validé par clé M17** (Q-91) |
 | 49 | GET | `/rapports` | `ROLE_JURISTE` | FR-REP-01 / US 8.4 | 📋 | ✅ |
 | 50 | GET | `/tableau-de-bord` | `ROLE_DJ` | FR-REP-02 / US 8.5 | 📋 | ✅ |
 
@@ -356,6 +357,17 @@ rapport journalier correct (actif et à zéro). 16 tests automatisés dédiés. 
 > anti-doublon, doublon d'affectation M4→M5, traitement par le seul destinataire, push WebSocket
 > best-effort) + 15 tests automatisés (`AlerteServiceTest`, `ChargeMaxAvocatSchedulerTest`,
 > `ConfigurationServiceTest`). Voir Q-22, Q-32, Q-36, Q-37, Q-38.
+>
+> **#47/#48 (M17, Q-91)** : chaque clé porte une règle de saisie appliquée dans
+> `ConfigurationService.modifier` — donc aussi sur **#44**, qui y délègue. Une valeur incohérente est
+> refusée en **400** au lieu de ressortir en 500 depuis un autre module (frais, délibéré, GED) ; une
+> valeur valide est **normalisée** avant enregistrement. La règle est publiée dans la réponse
+> (`typeValeur`, `valeurMinimale`, `valeurMaximale`, `valeursPossibles`) pour que l'écran
+> d'administration construise son champ à partir du contrat. +26 tests (`RegleConfigurationTest`,
+> `ConfigurationServiceTest`).
+>
+> **#45 (M17, Q-92)** : plus récente d'abord (`dateDeclenchement DESC, id DESC`). Sans tri, la
+> requête paginée n'avait aucun `ORDER BY` et l'ordre des lignes était laissé à PostgreSQL.
 >
 > **#49/#50 (M13)** : US 8.6 (vue consolidée par client) était déjà couverte depuis M4 par
 > `GET /clients/{clientId}/dossiers` (#11) — seuls le rapport périodique et le tableau de bord
