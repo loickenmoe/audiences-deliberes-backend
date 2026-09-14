@@ -48,6 +48,8 @@ public class PublicationMapper {
                 audienceDate = cr.getAudience().getDatePlanifiee();
             }
             contenu = cr.getContenu();
+            // Q-98 : la pièce jointe se lit comme celle d'une autre publication — même nom, même URL.
+            nomFichier = nomFichier(cr.getCheminStockage());
         } else if (publication instanceof AutrePublication autre) {
             typeDocument = autre.getTypeDocument();
             nomFichier = nomFichier(autre.getCheminStockage());

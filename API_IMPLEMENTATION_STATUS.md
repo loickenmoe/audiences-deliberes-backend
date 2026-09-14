@@ -223,7 +223,7 @@ si sensible ou montant > seuil, paiement (Assistante). Traçabilité complète v
 
 | # | Méthode | Endpoint | Rôle requis | FR / US | Src | Statut |
 |---|---|---|---|---|---|---|
-| 29 | POST | `/publications/cr-audience` | `ROLE_AVOCAT` | FR-INT-09 / US 5.1 | 📋 | ✅ |
+| 29 | POST | `/publications/cr-audience` (multipart) | `ROLE_AVOCAT` | FR-INT-09 / US 5.1 | 📋 | ✅ |
 | 30 | PUT | `/publications/{id}/validation` | `ROLE_ASSISTANTE` | FR-INT-09 / US 5.2 | 📋 | ✅ |
 | 31 | POST | `/publications/autres` (multipart) | `ROLE_AVOCAT` | FR-INT-09 / US 5.3 | 📋 | ✅ |
 | 32 | GET | `/publications/{id}` | `ROLE_CONSULTATION` | US 5.4 | 📋 | ✅ |
@@ -238,6 +238,13 @@ si sensible ou montant > seuil, paiement (Assistante). Traçabilité complète v
 > restriction d'accès ne s'oppose ni à l'Assistante ni au DJ/DJA. **#59** : `statut=DEPOSE` en ordre
 > d'arrivée, sinon la plus récente d'abord. **#30** : une validation notifie les juristes du dossier,
 > ou le seul destinataire désigné.
+
+> **Pièce jointe du compte rendu (M16, Q-98).** **#29** est **multipart** : `dossierId`,
+> `audienceId`, `contenu` et `restrictionAcces` en paramètres, la pièce en partie `file`
+> **facultative** — le contrat le décrivait en JSON, l'écart est assumé et consigné. La pièce subit
+> les mêmes contrôles que la GED (`FORMATS_GED`, `TAILLE_MAX_GED`) et se relit par `nomFichier` /
+> `urlTelechargement` sur **#32**, comme celle d'une autre publication. Un dépôt sans pièce se
+> comporte exactement comme avant.
 
 > **#30** : chemin généralisé, sans le segment `cr-audience` du contrat — s'applique aux deux
 > sous-types de publication (Q-55), aucun second endpoint n'étant prévu pour valider une « autre »

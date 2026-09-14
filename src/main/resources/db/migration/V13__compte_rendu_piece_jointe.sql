@@ -1,0 +1,13 @@
+-- Q-98 : pièce jointe facultative à un compte rendu d'audience.
+--
+-- US 5.1 décrit un compte rendu comme un `contenu` textuel, et US 5.3 réserve le fichier à une
+-- « autre publication ». Aucune source n'interdit pourtant de joindre au récit la pièce qui l'étaye
+-- — plumitif du greffe, note d'audience — et l'avocat qui rentre d'audience produit les deux d'un
+-- même geste. Déposés séparément, ils perdaient tout lien : `autre_publication` ne porte pas
+-- d'audience, et le juriste lisant le compte rendu ne retrouvait pas le document qui l'accompagne.
+--
+-- Arbitrage du porteur du projet, 2026-09-14, à confirmer avec la Direction Juridique.
+--
+-- La colonne est NULLABLE : `contenu` reste obligatoire, le compte rendu demeure un récit. Même
+-- forme que `autre_publication.chemin_stockage` (Q-56) et `jurisprudence.chemin_stockage` (Q-58).
+ALTER TABLE compte_rendu_audience ADD COLUMN chemin_stockage VARCHAR(255);

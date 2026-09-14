@@ -1276,6 +1276,28 @@ validation de format et de poids est extraite de `GedService` en `ValidationFich
 champs du portefeuille, fermeture aux profils internes, téléversement et relecture par l'instructeur,
 format refusé.
 
+### 19. Une pièce facultative sur le compte rendu d'audience (Q-98) ✅
+
+Question du porteur du projet après le jalon F17 du frontend : l'avocat qui relate une audience
+dispose souvent du plumitif, et n'avait aucun moyen de le joindre à son compte rendu — il fallait le
+déposer à part, en « autre publication », où il perdait son rattachement à l'audience.
+
+**Implémenté** : `V13__compte_rendu_piece_jointe.sql` ajoute `chemin_stockage` **nullable** à
+`compte_rendu_audience` ; `POST /publications/cr-audience` passe en multipart (métadonnées en
+paramètres, partie `file` facultative) ; la pièce traverse `ValidationFichierService`, donc les mêmes
+`FORMATS_GED` et `TAILLE_MAX_GED` que la GED ; `GET /publications/{id}` renvoie désormais
+`nomFichier` et `urlTelechargement` pour **les deux** sous-types. Le récit reste obligatoire : la
+pièce l'étaye, elle ne le remplace pas. Le contrat d'API décrivait un corps JSON — l'écart est assumé
+et consigné (Q-98), au même titre que `/publications/autres` déjà multipart.
+
+**Testé** : 2 tests unitaires (dépôt avec pièce nommée, refus d'un format hors `FORMATS_GED`), le
+parcours P2 basculé en multipart avec relecture du `nomFichier` sur PostgreSQL réel, le refus d'un
+récit vide en 400, le test sans pièce conservé tel quel. **358 tests au vert.**
+
+**Vérifié en réel** : dépôt avec pièce 201 et URL pré-signée réellement téléchargeable depuis MinIO
+(HTTP 200) — ce que le client mocké ne pouvait pas montrer ; dépôt sans pièce 201 et `nomFichier`
+nul ; `.exe` et récit vide refusés en 400.
+
 ---
 
 ## Chemin critique

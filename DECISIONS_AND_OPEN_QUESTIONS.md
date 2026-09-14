@@ -1953,6 +1953,45 @@ l'Assistante ; format non autorisé refusé en 400. Le client MinIO étant mock�
 pré-signée y est nulle : le test vérifie la présence du champ, pas une valeur que le mock ne produit
 pas.
 
+### Q-98 ✅ Un compte rendu d'audience ne pouvait pas porter sa pièce — tranché (M20)
+
+Question du porteur du projet le 2026-09-14, après le jalon F17 du frontend : l'avocat qui dépose un
+compte rendu d'audience dispose souvent du **plumitif** ou d'une note d'audience, et n'avait aucun
+moyen de la joindre — il devait la déposer séparément en « autre publication », où elle perdait son
+rattachement à l'audience.
+
+**A — Ce que le modèle permettait.** `CompteRenduAudience` ne portait que `contenu` (texte) et
+`audience_id` ; seule `AutrePublication` avait un `chemin_stockage`. La hiérarchie `JOINED` rendait
+pourtant l'ajout trivial : une colonne sur la table du sous-type, rien à déplacer.
+
+**B — Tranché** (« Applique ta recommandation ») : **pièce facultative sur le compte rendu**.
+
+1. `V13__compte_rendu_piece_jointe.sql` ajoute `chemin_stockage VARCHAR(255)` à
+   `compte_rendu_audience`, **nullable** — les comptes rendus existants restent valides tels quels.
+2. `POST /publications/cr-audience` passe en **multipart** : métadonnées en paramètres, fichier en
+   partie `file` facultative. Le contrat d'API décrivait un corps JSON ; **l'écart est assumé**, au
+   même titre que `/publications/autres` qui était déjà multipart. Un dépôt sans pièce se comporte
+   exactement comme avant, et le récit reste **obligatoire** : la pièce étaye, elle ne remplace pas.
+3. La pièce passe par `ValidationFichierService` (Q-97) : mêmes `FORMATS_GED` et `TAILLE_MAX_GED` que
+   la GED, une seule source de vérité pour les trois points d'entrée de fichier.
+4. `GET /publications/{id}` renvoie `nomFichier` et `urlTelechargement` pour **les deux** sous-types
+   — la lecture ne distingue plus un compte rendu d'une autre publication.
+
+**Pourquoi pas une publication unique.** Fusionner les deux sous-types aurait fait porter à un seul
+objet trois combinaisons que le métier n'accepte pas (fichier seul rattaché à une audience, texte
+seul sans audience, audience avec un `type_document`), et effacé la distinction métier — **relater**
+une audience contre **transmettre** un document du dossier — au profit d'une règle devinée.
+
+**Vérifié** : 2 tests unitaires (dépôt avec pièce nommée, refus d'un format hors `FORMATS_GED`), le
+parcours d'intégration P2 basculé en multipart avec pièce et relecture du `nomFichier` sur
+PostgreSQL réel, le refus d'un récit vide en **400** (et non en 500 au flush), et le test sans pièce
+conservé (`verifyNoInteractions(minioStorageService)`).
+
+**Vérifié en réel** contre l'instance locale (2026-09-14), ce que le client MinIO mocké ne pouvait
+pas montrer : dépôt avec pièce **201**, `nomFichier` restitué à l'avocat comme à l'Assistante, URL
+pré-signée sur `dossiers/795/{uuid}-plumitif-….pdf` **effectivement téléchargeable** (HTTP 200) ;
+dépôt sans pièce **201** avec `nomFichier: null` ; `.exe` refusé en **400** ; récit vide **400**.
+
 ### Q-27 ✅ `dossier.parties` défini deux fois — tranché (M2)
 Le dictionnaire REF-06 §2.1.2 déclare `parties JSONB` **deux fois**, avec deux structures
 différentes : `{demandeur, defendeur}` et `{demandeur, defendeur, client}`. Le contrat d'API et
