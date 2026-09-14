@@ -1,7 +1,8 @@
 # API_IMPLEMENTATION_STATUS
 
 > Inventaire exhaustif des endpoints et état d'implémentation.
-> Dernière mise à jour : 2026-09-14 (M17 — paramètres système validés par clé Q-91 ; listes triées Q-92/Q-93 ; vue consolidée d'un client sans N+1 Q-94).
+> Dernière mise à jour : 2026-09-14 (M18 — tableau de bord exécutif ouvert à la DJA, Q-95).
+> Précédente : 2026-09-14 (M17 — paramètres système validés par clé Q-91 ; listes triées Q-92/Q-93 ; vue consolidée d'un client sans N+1 Q-94).
 > Précédente : 2026-09-11 (M16 — cycle du délibéré Q-78 ; GED : demande orpheline et file nommée Q-79, rapport journalier Q-80).
 > **Conformité vérifiée endpoint par endpoint en M14** : les 56 endpoints du code ont été audités
 > contre ce tableau — 54 strictement conformes, 2 écarts de rôle corrigés ici (`POST
@@ -347,7 +348,7 @@ rapport journalier correct (actif et à zéro). 16 tests automatisés dédiés. 
 | 47 | GET | `/configurations` | `ROLE_CONSULTATION` | CONF01-07 | 📋 | ✅ M5 · **enrichi M17** (Q-91) |
 | 48 | PUT | `/configurations/{cle}` | `ROLE_DJ` | CONF01-07 | 📋 | ✅ M5 · **validé par clé M17** (Q-91) |
 | 49 | GET | `/rapports` | `ROLE_JURISTE` | FR-REP-01 / US 8.4 | 📋 | ✅ |
-| 50 | GET | `/tableau-de-bord` | `ROLE_DJ` | FR-REP-02 / US 8.5 | 📋 | ✅ |
+| 50 | GET | `/tableau-de-bord` | `ROLE_DJ` **et `ROLE_DJA`** | FR-REP-02 / US 8.5 | 📋 | ✅ · **élargi M18** (Q-95) |
 
 > **#44** : `type` doit valoir `CHARGE_MAX_AVOCAT` (400 sinon) — seul type d'alerte du contrat
 > adossé à un seuil configurable (RG-ALR-02) ; délègue à `PUT /configurations/{cle}` en interne.

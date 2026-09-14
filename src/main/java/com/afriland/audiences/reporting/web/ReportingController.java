@@ -30,8 +30,15 @@ public class ReportingController {
     private final ReportingService reportingService;
     private final RapportExportService rapportExportService;
 
+    /**
+     * Ouvert au DJ <b>et à la DJA</b> (Q-95). Le critère d'acceptation d'US 8.5 ne nomme que
+     * {@code ROLE_DJ}, mais les spécifications fonctionnelles décrivent le tableau de bord consolidé
+     * comme obtenu « à travers le DJ/DJA » (partie prenante STK-06) : la DJA instruit les mêmes
+     * dossiers et valide conjointement les frais sensibles, lui refuser les indicateurs la priverait
+     * du contexte de ses propres décisions. Arbitrage du porteur du projet, 2026-09-14.
+     */
     @GetMapping("${api.prefix}/tableau-de-bord")
-    @PreAuthorize("hasRole('DJ')")
+    @PreAuthorize("hasAnyRole('DJ', 'DJA')")
     public TableauDeBordResponse tableauDeBord() {
         return reportingService.tableauDeBord();
     }

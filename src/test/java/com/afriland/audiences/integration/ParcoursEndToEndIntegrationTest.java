@@ -571,8 +571,15 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(jsonPath("$.recouvrement.length()").value(1))
                 .andExpect(jsonPath("$.exploitationLitiges.length()").value(0));
 
-        // Le tableau de bord reste interdit aux profils non DJ (RG-REP-03)
+        // La DJA y accède aussi (Q-95) : elle valide conjointement et instruit les mêmes dossiers.
+        mockMvc.perform(get(api("/tableau-de-bord")).with(role("kc-dja", "ROLE_DJA")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nbDossiersActifs").isNumber());
+
+        // Il reste interdit aux autres profils (RG-REP-03).
         mockMvc.perform(get(api("/tableau-de-bord")).with(role("kc-juriste", "ROLE_JURISTE")))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get(api("/tableau-de-bord")).with(role("kc-assistante", "ROLE_ASSISTANTE")))
                 .andExpect(status().isForbidden());
     }
 
