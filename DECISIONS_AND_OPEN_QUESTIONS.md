@@ -2,7 +2,10 @@
 
 > Contradictions documentaires, ambiguïtés et lacunes nécessitant un **arbitrage explicite**.
 > Aucune de ces questions n'a été tranchée silencieusement.
-> Dernière mise à jour : 2026-09-07 (après jalon M15 — voir statuts R-01 à R-08, Q-01 à Q-69 ;
+> Dernière mise à jour : 2026-09-14 (jalon M20 — Q-98, pièce jointe facultative au compte rendu
+> d'audience). Q-70 à Q-98 ont toutes été ouvertes par la consommation réelle de l'API par le
+> frontend, jalons M16 à M20 : ce sont les défauts qu'aucun test backend ne pouvait voir.
+> Précédente : 2026-09-07 (après jalon M15 — voir statuts R-01 à R-08, Q-01 à Q-69 ;
 > **R-06 corrigé**, **Q-24 close**, et **Q-59/Q-60/Q-67 arbitrées** à ce jalon).
 
 **Convention de lecture de chaque fiche :**
