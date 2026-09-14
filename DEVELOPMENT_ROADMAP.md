@@ -1247,6 +1247,35 @@ consigné à l'époque, qui a clos l'essentiel de QF-04 sans modification.
 **Testé** : `ParcoursEndToEndIntegrationTest.p9_pilotage` étendu (DJA en 200, juriste et Assistante
 en 403) sur PostgreSQL réel, et en réel contre le backend démarré.
 
+### 18. Portail Avocat : lectures cadrées et pièces téléversées (Q-96, Q-97) ✅
+
+Ouverture du jalon F16 du frontend, sur la lacune QF-01 relevée dès l'audit initial. L'avocat ne
+porte pas `ROLE_CONSULTATION` : US 4.1 le faisait soumettre un `dossierId` et US 5.1 lui demandait de
+déposer « en choisissant le dossier et l'audience », alors que rien ne lui permettait de les
+découvrir — l'exigence était inapplicable.
+
+**Implémenté** : un module `portail`, quatre lectures sous `/avocat` (`mes-dossiers`,
+`mes-dossiers/{id}/audiences`, `mes-publications`, `mes-constitutions`), toutes `hasRole('AVOCAT')` et
+restreintes **dans la requête**. Une surface distincte plutôt que l'élargissement des endpoints
+internes : la confidentialité ne doit pas reposer sur un filtre qu'on peut oublier. Un dossier ne
+montre que son identification — ni client, ni risque, ni sensibilité.
+
+**À confirmer** : `mes-publications` et `mes-constitutions` ne répondent à aucune exigence écrite
+(US 5.4 vise le juriste) ; elles sont livrées sur arbitrage, au motif qu'un avocat notifié d'un rejet
+ne pouvait pas relire ce qui avait été rejeté.
+
+**Ajouté en fin de jalon (Q-97)**, sur signalement du porteur du projet : les **pièces
+justificatives** d'une demande de frais n'étaient jamais téléversées. UC-INT-01 dit que « l'avocat
+**charge** les pièces », UC-INT-02 que l'instructeur les **affiche**, et le dictionnaire décrit
+`pieces_justificatives` comme des « chemins ou références ». Téléversement en deux temps
+(`POST /avocat/pieces-justificatives` puis report des clés), URL pré-signées sur le détail. La
+validation de format et de poids est extraite de `GedService` en `ValidationFichierService` pour que
+`FORMATS_GED` et `TAILLE_MAX_GED` restent la seule source de vérité des deux.
+
+**Testé** : `HabilitationFrontendIntegrationTest` (+5, PostgreSQL réel) — cloisonnement, absence des
+champs du portefeuille, fermeture aux profils internes, téléversement et relecture par l'instructeur,
+format refusé.
+
 ---
 
 ## Chemin critique

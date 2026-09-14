@@ -16,5 +16,8 @@ public interface PublicationRepository extends JpaRepository<Publication, Long> 
     /** M15 (Q-68) : publications d'un dossier — onglet correspondant de la fiche dossier. */
     Page<Publication> findByDossierId(Long dossierId, Pageable pageable);
 
+    /** Portail avocat (Q-96) : ses propres dépôts, quel qu'en soit le statut — y compris rejetés. */
+    Page<Publication> findByAvocatId(Long avocatId, Pageable pageable);
+
     Page<Publication> findByDossierIdAndStatutValidation(Long dossierId, StatutPublication statut, Pageable pageable);
 }

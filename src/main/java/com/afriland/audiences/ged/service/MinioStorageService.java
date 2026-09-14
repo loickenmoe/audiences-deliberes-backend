@@ -32,6 +32,9 @@ public class MinioStorageService {
 
     private final MinioClient minioClient;
 
+    /** Préfixe des pièces justificatives de frais (Q-97). Public : il sert de marqueur à la lecture. */
+    public static final String PREFIXE_PIECES_FRAIS = "frais";
+
     @Value("${minio.bucket-name}")
     private String bucketName;
 
@@ -60,6 +63,21 @@ public class MinioStorageService {
     public String deposerSansDossier(MultipartFile fichier) {
         try (InputStream flux = fichier.getInputStream()) {
             return deposer("jurisprudence", fichier.getOriginalFilename(), fichier.getContentType(), flux, fichier.getSize());
+        } catch (IOException e) {
+            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE, "Fichier illisible : " + e.getMessage());
+        }
+    }
+
+    /**
+     * Pièce justificative d'une demande de frais (Q-97). Elle n'est pas un document GED : elle
+     * n'est pas rattachée à une étape du dossier, n'est pas soumise au circuit de suppression, et
+     * son cycle de vie est celui de la demande. D'où un préfixe dédié, que
+     * {@code FraisService} reconnaît pour ne signer que ce qu'il a lui-même stocké.
+     */
+    public String deposerPieceFrais(MultipartFile fichier) {
+        try (InputStream flux = fichier.getInputStream()) {
+            return deposer(PREFIXE_PIECES_FRAIS, fichier.getOriginalFilename(), fichier.getContentType(),
+                    flux, fichier.getSize());
         } catch (IOException e) {
             throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE, "Fichier illisible : " + e.getMessage());
         }

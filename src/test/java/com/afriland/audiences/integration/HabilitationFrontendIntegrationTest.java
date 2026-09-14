@@ -8,6 +8,7 @@ import com.afriland.audiences.referentiel.repository.AvocatRepository;
 import com.afriland.audiences.referentiel.repository.ProfilRepository;
 import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
 import com.fasterxml.jackson.databind.JsonNode;
+import org.springframework.mock.web.MockMultipartFile;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.minio.MinioClient;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,6 +41,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -473,6 +475,151 @@ class HabilitationFrontendIntegrationTest {
                                 Map.entry("pvTransfert", "PV-" + reference),
                                 Map.entry("juristesAffectes", List.of(juristeId)),
                                 Map.entry("avocatsAffectes", List.of(avocat))))))
+                .andExpect(status().isCreated())
+                .andReturn());
+    }
+
+    // ---------------------------------------------------------------- Portail Avocat (Q-96)
+
+    /**
+     * Q-96 : le point sensible du portail n'est pas ce que l'avocat voit, c'est ce qu'il ne doit
+     * <b>pas</b> voir. Ce parcours crée deux dossiers — un auquel il est affecté, un auquel il ne
+     * l'est pas — et vérifie que le second n'apparaît ni dans sa liste ni par son identifiant.
+     */
+    @Test
+    @DisplayName("Q-96 : l'avocat ne voit que les dossiers auxquels il est affecté")
+    void portailAvocat_neVoitQueSesPropresDossiers() throws Exception {
+        RequestPostProcessor avocat = role("kc-avocat-m15", "ROLE_AVOCAT");
+        long sien = creerDossier();
+        long autre = creerDossierSansAvocat();
+
+        JsonNode mesDossiers = lireJson(mockMvc.perform(get(api("/avocat/mes-dossiers")).param("size", "100").with(avocat))
+                        .andExpect(status().isOk())
+                        .andReturn());
+        List<Long> identifiants = mesDossiers.get("content").findValues("id").stream().map(JsonNode::asLong).toList();
+        assertThat(identifiants).contains(sien).doesNotContain(autre);
+
+        // La réponse reste réduite à l'identification : ni client, ni risque, ni sensibilité.
+        JsonNode premier = mesDossiers.get("content").get(0);
+        assertThat(premier.has("reference")).isTrue();
+        assertThat(premier.has("clientId")).as("le portefeuille de la banque ne doit pas fuiter").isFalse();
+        assertThat(premier.has("risqueEncouru")).isFalse();
+        assertThat(premier.has("estSensible")).isFalse();
+
+        // Les audiences de son dossier lui sont ouvertes, celles d'un autre non (403, pas 404).
+        mockMvc.perform(get(api("/avocat/mes-dossiers/" + sien + "/audiences")).with(avocat))
+                .andExpect(status().isOk());
+        mockMvc.perform(get(api("/avocat/mes-dossiers/" + autre + "/audiences")).with(avocat))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Q-96 : le portail est fermé aux profils internes, qui ont leurs propres écrans")
+    void portailAvocat_estFermeAuxProfilsInternes() throws Exception {
+        for (String[] profil : List.of(new String[] {"kc-juriste-m15", "ROLE_JURISTE"},
+                                        new String[] {"kc-dj-m15", "ROLE_DJ"},
+                                        new String[] {"kc-assistante-m15", "ROLE_ASSISTANTE"})) {
+            mockMvc.perform(get(api("/avocat/mes-dossiers")).with(role(profil[0], profil[1], "ROLE_CONSULTATION")))
+                    .andExpect(status().isForbidden());
+        }
+    }
+
+    @Test
+    @DisplayName("Q-96 : ses publications et ses constitutions lui reviennent, les siennes seules")
+    void portailAvocat_relitSesPublicationsEtSesConstitutions() throws Exception {
+        RequestPostProcessor avocat = role("kc-avocat-m15", "ROLE_AVOCAT");
+
+        mockMvc.perform(get(api("/avocat/mes-publications")).with(avocat))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isArray());
+
+        JsonNode constitutions = lireJson(mockMvc.perform(get(api("/avocat/mes-constitutions")).with(avocat))
+                .andExpect(status().isOk())
+                .andReturn());
+        constitutions.forEach(demande ->
+                assertThat(demande.get("prestataireId").asLong()).isEqualTo(avocatId));
+    }
+
+    /**
+     * Q-97 : UC-INT-01 étape 4 veut que l'avocat <b>charge</b> ses pièces justificatives, et le
+     * dictionnaire décrit {@code pieces_justificatives} comme des « chemins ou références ». Ce
+     * parcours va du téléversement jusqu'à la relecture par l'instructeur (UC-INT-02 étape 3).
+     */
+    @Test
+    @DisplayName("Q-97 : l'avocat charge une pièce, la demande la porte, l'instructeur peut l'ouvrir")
+    void pieceJustificative_estChargeePuisRelisibleParLInstructeur() throws Exception {
+        RequestPostProcessor avocat = role("kc-avocat-m15", "ROLE_AVOCAT");
+        long dossierId = creerDossier();
+
+        JsonNode piece = lireJson(mockMvc.perform(multipart(api("/avocat/pieces-justificatives"))
+                        .file(new MockMultipartFile("file", "facture.pdf", "application/pdf", new byte[] {1, 2, 3}))
+                        .with(avocat))
+                .andExpect(status().isCreated())
+                .andReturn());
+        String cle = piece.get("cle").asText();
+        assertThat(cle).startsWith("frais/");
+        assertThat(piece.get("nomFichier").asText()).isEqualTo("facture.pdf");
+
+        long demandeId = extraireId(mockMvc.perform(post(api("/frais/demandes")).with(avocat)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("dossierId", dossierId, "montant", 250_000,
+                                "piecesJustificatives", List.of(cle),
+                                "referenceFacture", "FAC-Q97-" + COMPTEUR.incrementAndGet()))))
+                .andExpect(status().isCreated())
+                .andReturn());
+
+        // L'Assistante instruit : elle doit voir la pièce, pas en lire le nom (UC-INT-02 étape 3).
+        JsonNode detail = lireJson(mockMvc.perform(get(api("/frais/demandes/" + demandeId))
+                        .with(role("kc-assistante-m15", "ROLE_ASSISTANTE")))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(detail.get("piecesTelechargeables")).hasSize(1);
+        assertThat(detail.get("piecesTelechargeables").get(0).get("nomFichier").asText()).isEqualTo("facture.pdf");
+        // Le champ est bien renseigné ; sa valeur vient de MinIO, dont le client est mocké ici.
+        assertThat(detail.get("piecesTelechargeables").get(0).has("urlTelechargement")).isTrue();
+    }
+
+    /** Q-97 : un format hors FORMATS_GED est refusé — mêmes règles que la GED, un seul réglage. */
+    @Test
+    @DisplayName("Q-97 : une pièce d'un format non autorisé est refusée")
+    void pieceJustificative_refuseUnFormatNonAutorise() throws Exception {
+        mockMvc.perform(multipart(api("/avocat/pieces-justificatives"))
+                        .file(new MockMultipartFile("file", "virus.exe", "application/octet-stream", new byte[] {1}))
+                        .with(role("kc-avocat-m15", "ROLE_AVOCAT")))
+                .andExpect(status().isBadRequest());
+    }
+
+    /** Un dossier du même client, affecté à un autre avocat : le témoin de la restriction. */
+    private long creerDossierSansAvocat() throws Exception {
+        int n = COMPTEUR.incrementAndGet();
+        long clientId = extraireId(mockMvc.perform(post(api("/clients"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("nom", "Client Q96 " + n, "reference", "CLI-Q96-" + n)))
+                        .with(role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_SAISIE")))
+                .andExpect(status().isCreated())
+                .andReturn());
+        long autreAvocat = extraireId(mockMvc.perform(post(api("/intervenants"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("type", "AVOCAT", "nom", "Me Autre Q96 " + n,
+                                "compteKeycloak", "kc-autre-avocat-q96-" + n)))
+                        .with(role("kc-dj-m15", "ROLE_DJ")))
+                .andExpect(status().isCreated())
+                .andReturn());
+        Long juristeId = utilisateurRepository.findByKeycloakId("kc-juriste-m15").orElseThrow().getId();
+        return extraireId(mockMvc.perform(post(api("/dossiers"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.ofEntries(
+                                Map.entry("reference", "DOS-Q96-" + n),
+                                Map.entry("nature", "Assignation en paiement"),
+                                Map.entry("categorie", "RECOUVREMENT"),
+                                Map.entry("juridictionSaisie", "TGI Douala"),
+                                Map.entry("clientId", clientId),
+                                Map.entry("risqueEncouru", 1_000_000),
+                                Map.entry("dossierCreditOrigine", "CRD-Q96-" + n),
+                                Map.entry("pvTransfert", "PV-Q96-" + n),
+                                Map.entry("juristesAffectes", List.of(juristeId)),
+                                Map.entry("avocatsAffectes", List.of(autreAvocat)))))
+                        .with(role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_SAISIE")))
                 .andExpect(status().isCreated())
                 .andReturn());
     }

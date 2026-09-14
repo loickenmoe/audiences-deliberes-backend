@@ -1874,6 +1874,85 @@ direction atteint déjà tout ce qui est ouvert au juriste — `GET /rapports`, 
 `GET /repertoire/avocats`. C'est ce qui a clos l'essentiel de QF-04 sans modification, et c'est un
 effet de bord de Q-81 qui n'avait pas été consigné.
 
+### Q-96 ✅ L'avocat ne pouvait pas désigner son dossier — tranché (M19)
+
+Ouverture du jalon F16 du frontend (portail Avocat), sur la lacune QF-01 relevée dès l'audit initial.
+
+**A — Ce que la documentation exige.** US 4.1 : « je soumets **dossierId**, montant,
+referenceFacture, piecesJustificatives via POST /frais/demandes ». US 5.1 : « je veux déposer un
+compte rendu d'audience **en choisissant le dossier et l'audience** ». Les deux stories supposent
+donc que l'avocat connaisse ses dossiers, et leurs audiences.
+
+**B — Ce que le code implémentait.** L'avocat ne porte pas {@code ROLE_CONSULTATION} : il recevait
+403 sur {@code GET /dossiers} comme sur {@code GET /dossiers/{id}/audiences}. Il devait fournir des
+identifiants qu'aucun endpoint ne lui permettait de découvrir — l'exigence était **inapplicable**.
+
+**C — Tranché** (arbitrage du porteur du projet, 2026-09-14) : un module {@code portail}, quatre
+lectures sous {@code /avocat}, toutes {@code hasRole('AVOCAT')} :
+
+| Endpoint | Objet | Exigé par |
+|---|---|---|
+| `GET /avocat/mes-dossiers` | Ses dossiers, **identification seule** | US 4.1, US 5.1 |
+| `GET /avocat/mes-dossiers/{id}/audiences` | Les audiences d'un de ses dossiers | US 5.1 |
+| `GET /avocat/mes-publications` | Ses dépôts, statut et motif de rejet | — *(périmètre ajouté)* |
+| `GET /avocat/mes-constitutions` | Les lettres le désignant | — *(périmètre ajouté)* |
+
+**Deux partis pris, et leurs raisons.**
+
+1. **Une surface distincte, plutôt que l'élargissement des endpoints internes.** Ouvrir
+   {@code GET /dossiers} à {@code ROLE_AVOCAT} aurait fait reposer la confidentialité sur un filtre
+   à l'intérieur d'un service partagé — un oubli, et le portefeuille entier passait à un tiers. Ici
+   la restriction est **dans la requête** ({@code SELECT da.dossier FROM DossierAvocat da WHERE
+   da.avocat.id = :avocatId}), et le périmètre est impossible à confondre avec celui du personnel.
+2. **Un dossier réduit à son identification** — référence, nature, juridiction. Ni client, ni risque
+   encouru, ni sensibilité, ni juristes affectés : un prestataire externe n'a pas à connaître le
+   portefeuille de la banque, et l'exposer le rendrait extractible en masse.
+
+**Périmètre à confirmer.** Les deux dernières lectures ne répondent à aucune exigence écrite — US 5.4
+vise le juriste. Elles sont livrées au motif qu'un avocat notifié du rejet d'une publication ne
+pouvait pas relire ce qui avait été rejeté, ni le motif à corriger. **À confirmer avec la Direction
+Juridique.**
+
+**Vérifié** : 3 tests d'intégration sur PostgreSQL réel — un dossier auquel il n'est pas affecté
+n'apparaît ni dans sa liste ni par son identifiant (403), la réponse ne porte aucun champ du
+portefeuille, le portail est fermé aux profils internes — et en réel contre le backend démarré.
+
+### Q-97 ✅ Les pièces justificatives d'une demande de frais n'étaient jamais téléversées — tranché (M19)
+
+Signalé par le porteur du projet le 2026-09-14, en fin de jalon F16 du frontend, sur une lecture trop
+étroite de ma part (QF-26 côté frontend, que j'avais close à tort comme « conforme »).
+
+**A — Ce que la documentation exige.** UC-INT-01 étape 4 : « L'avocat **charge** les pièces
+justificatives. » UC-INT-02 étape 3 : « Le système affiche la demande, **ses pièces justificatives**
+et le résultat du contrôle de conformité. » Et le dictionnaire des données décrit
+`pieces_justificatives TEXT[]` comme « **Chemins ou références** des pièces (tableau) ».
+
+**B — Ce que le code implémentait.** `DeposerFraisRequest.piecesJustificatives` acceptait n'importe
+quelle liste de chaînes non vide, et aucun endpoint ne permettait de téléverser quoi que ce soit. Le
+tableau contenait donc des libellés arbitraires, sur lesquels l'Assistante était censée exercer un
+contrôle de conformité — ce qui n'a pas de sens.
+
+**C — Tranché** (arbitrage du porteur du projet) : **téléversement en deux temps**.
+
+1. `POST /avocat/pieces-justificatives` (multipart, `ROLE_AVOCAT`) range le fichier sous le préfixe
+   `frais/` et renvoie sa **clé**. Mêmes contrôles de format et de poids que la GED — le service de
+   validation est extrait de `GedService` en `ValidationFichierService` pour que `FORMATS_GED` et
+   `TAILLE_MAX_GED` restent la **seule** source de vérité des deux.
+2. L'avocat reporte ces clés dans `piecesJustificatives`. **Le contrat de `POST /frais/demandes` ne
+   change pas** : le document d'API le décrit en JSON avec un tableau de chaînes, et un envoi qui
+   échoue ne fait pas reperdre les pièces déjà transmises.
+3. Le **détail** d'une demande (`GET /frais/demandes/{id}`) expose `piecesTelechargeables`, avec une
+   URL pré-signée par pièce — UC-INT-02 étape 3. Vide sur la liste : les URL ne vivent que dix
+   minutes et coûteraient un aller-retour MinIO par pièce, pour un écran qui ne les affiche pas.
+
+**Compatibilité.** Seules les entrées préfixées `frais/` sont signées : le tableau peut contenir des
+libellés antérieurs, qui ne désignent aucun objet stocké et pour lesquels une URL échouerait.
+
+**Vérifié** : 2 tests d'intégration sur PostgreSQL réel — téléversement, dépôt, relecture par
+l'Assistante ; format non autorisé refusé en 400. Le client MinIO étant mocké en test, l'URL
+pré-signée y est nulle : le test vérifie la présence du champ, pas une valeur que le mock ne produit
+pas.
+
 ### Q-27 ✅ `dossier.parties` défini deux fois — tranché (M2)
 Le dictionnaire REF-06 §2.1.2 déclare `parties JSONB` **deux fois**, avec deux structures
 différentes : `{demandeur, defendeur}` et `{demandeur, defendeur, client}`. Le contrat d'API et
