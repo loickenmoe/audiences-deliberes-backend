@@ -13,6 +13,7 @@ import com.afriland.audiences.dossier.domain.DossierJuriste;
 import com.afriland.audiences.dossier.repository.DossierJuristeRepository;
 import com.afriland.audiences.dossier.repository.DossierRepository;
 import com.afriland.audiences.ged.service.MinioStorageService;
+import com.afriland.audiences.ged.service.ValidationFichierService;
 import com.afriland.audiences.publication.domain.AutrePublication;
 import com.afriland.audiences.publication.domain.CommentairePublication;
 import com.afriland.audiences.publication.domain.CompteRenduAudience;
@@ -69,6 +70,8 @@ public class PublicationService {
     private final HistoriqueActionService historiqueActionService;
     private final AlerteService alerteService;
     private final MinioStorageService minioStorageService;
+    // Q-98 : mêmes règles de format et de poids que la GED pour la pièce jointe d'un compte rendu.
+    private final ValidationFichierService validationFichierService;
     private final PublicationMapper publicationMapper;
     private final DossierJuristeRepository dossierJuristeRepository;
 
@@ -81,7 +84,7 @@ public class PublicationService {
 
     /** FR-INT-09/US 5.1 : l'audience doit être rattachée au dossier indiqué (404 sinon). */
     @Transactional
-    public PublicationResponse deposerCompteRendu(DeposerCompteRenduRequest request) {
+    public PublicationResponse deposerCompteRendu(DeposerCompteRenduRequest request, MultipartFile file) {
         Dossier dossier = getDossierOrThrow(request.dossierId());
         Audience audience = audienceRepository.findById(request.audienceId())
                 .filter(a -> a.getDossier().getId().equals(dossier.getId()))
@@ -89,18 +92,31 @@ public class PublicationService {
                         "Audience introuvable pour ce dossier : " + request.audienceId()));
         Avocat avocat = getAvocatCourantOrThrow();
 
+        /*
+         * Pièce jointe **facultative** (Q-98) : le récit reste obligatoire, le document l'étaye. Les
+         * contrôles de format et de poids sont ceux de la GED — le fichier atterrit dans le même
+         * stockage, et le DJ pilote les deux par `FORMATS_GED` et `TAILLE_MAX_GED`.
+         */
+        String cle = null;
+        if (file != null && !file.isEmpty()) {
+            validationFichierService.valider(file);
+            cle = minioStorageService.deposer(dossier.getId(), file);
+        }
+
         CompteRenduAudience publication = CompteRenduAudience.builder()
                 .dossier(dossier)
                 .avocat(avocat)
                 .audience(audience)
                 .contenu(request.contenu())
+                .cheminStockage(cle)
                 .statutValidation(StatutPublication.DEPOSE)
                 .restrictionAcces(resoudreRestrictionAcces(request.restrictionAcces()))
                 .build();
         publication = publicationRepository.save(publication);
 
         historiqueActionService.enregistrer(dossier.getId(), "Dépôt d'un compte rendu d'audience",
-                Map.of("publicationId", publication.getId(), "audienceId", audience.getId()));
+                Map.of("publicationId", publication.getId(), "audienceId", audience.getId(),
+                        "pieceJointe", cle != null));
         notifierProfil("ASSISTANTE", dossier.getId(), "Nouveau compte rendu d'audience déposé sur le dossier "
                 + dossier.getReference() + " (RG-INT-09), en attente de validation.");
 
@@ -201,9 +217,14 @@ public class PublicationService {
             }
         }
 
-        String url = publication instanceof AutrePublication autre && autre.getCheminStockage() != null
-                ? minioStorageService.urlTelechargement(autre.getCheminStockage())
-                : null;
+        // Q-98 : les deux sous-types peuvent désormais porter un fichier — le compte rendu
+        // facultativement, l'autre publication par nature. L'Assistante doit l'ouvrir pour valider.
+        String cheminStockage = switch (publication) {
+            case AutrePublication autre -> autre.getCheminStockage();
+            case CompteRenduAudience cr -> cr.getCheminStockage();
+            default -> null;
+        };
+        String url = cheminStockage != null ? minioStorageService.urlTelechargement(cheminStockage) : null;
         List<CommentaireResponse> commentaires = commentairePublicationRepository.findByPublicationIdOrderByCreatedAtAsc(id)
                 .stream()
                 .map(commentaire -> versReponse(id, commentaire))

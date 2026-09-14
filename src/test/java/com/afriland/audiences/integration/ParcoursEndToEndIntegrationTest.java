@@ -186,14 +186,27 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statut").value("TENUE"));
 
-        // Compte rendu publié par l'avocat (Épic 5), validé par l'Assistante
-        long publicationId = extraireId(mockMvc.perform(post(api("/publications/cr-audience"))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("dossierId", dossierId, "audienceId", audienceId,
-                                "contenu", "Plaidoirie effectuée, renvoi au délibéré")))
+        // Compte rendu publié par l'avocat (Épic 5), validé par l'Assistante. Q-98 : le récit porte
+        // ici sa pièce, déposée dans le même mouvement — le dépôt est multipart depuis.
+        MockMultipartFile plumitif =
+                new MockMultipartFile("file", "plumitif.pdf", "application/pdf", new byte[]{4, 5, 6});
+        long publicationId = extraireId(mockMvc.perform(multipart(api("/publications/cr-audience"))
+                        .file(plumitif)
+                        .param("dossierId", String.valueOf(dossierId))
+                        .param("audienceId", String.valueOf(audienceId))
+                        .param("contenu", "Plaidoirie effectuée, renvoi au délibéré")
                         .with(role("kc-avocat", "ROLE_AVOCAT")))
                 .andExpect(status().isCreated())
                 .andReturn());
+
+        // Le récit reste obligatoire : le passage en multipart n'a pas fait perdre la contrainte,
+        // qui doit être refusée à l'entrée (400) et non au flush (500).
+        mockMvc.perform(multipart(api("/publications/cr-audience"))
+                        .param("dossierId", String.valueOf(dossierId))
+                        .param("audienceId", String.valueOf(audienceId))
+                        .param("contenu", "   ")
+                        .with(role("kc-avocat", "ROLE_AVOCAT")))
+                .andExpect(status().isBadRequest());
 
         // Q-86 : l'Assistante lit la publication à valider, nommée ; un juriste, pas encore
         mockMvc.perform(get(api("/publications/" + publicationId)).with(role("kc-assistante", "ROLE_CONSULTATION")))
@@ -201,7 +214,9 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(jsonPath("$.statutValidation").value("DEPOSE"))
                 .andExpect(jsonPath("$.referenceDossier").isNotEmpty())
                 .andExpect(jsonPath("$.avocatNom").isNotEmpty())
-                .andExpect(jsonPath("$.audienceDate").isNotEmpty());
+                .andExpect(jsonPath("$.audienceDate").isNotEmpty())
+                // Q-98 : la pièce du compte rendu se lit comme celle d'une autre publication.
+                .andExpect(jsonPath("$.nomFichier").value("plumitif.pdf"));
         mockMvc.perform(get(api("/publications/" + publicationId)).with(role("kc-juriste", "ROLE_CONSULTATION")))
                 .andExpect(status().isNotFound());
 
