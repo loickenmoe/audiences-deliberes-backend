@@ -6,6 +6,9 @@ import com.afriland.audiences.intervenant.web.dto.CreerIntervenantRequest;
 import com.afriland.audiences.intervenant.web.dto.IntervenantResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import com.afriland.audiences.common.web.PageResponse;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -16,7 +19,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 
 /**
  * M15 — administration du référentiel des intervenants (endpoints 🆕, Q-68). Aucune user story ne
@@ -37,9 +39,21 @@ public class IntervenantController {
         return ResponseEntity.status(HttpStatus.CREATED).body(intervenantService.creer(request));
     }
 
+    /**
+     * Paginé depuis Q-100, et **cherchable par nom depuis Q-105**.
+     *
+     * <p>C'est ce paramètre {@code nom} qui règle le vrai problème des sélecteurs. Une liste
+     * déroulante qui demandait « une grande page » cassait silencieusement dès que l'annuaire la
+     * dépassait ; elle interroge désormais le serveur au fil de la frappe et n'a plus besoin de tout
+     * détenir. La taille par défaut redescend donc à 20 : ce qu'affiche une liste déroulante, pas ce
+     * qu'elle contient.
+     */
     @GetMapping
     @PreAuthorize("hasRole('CONSULTATION')")
-    public List<IntervenantResponse> lister(@RequestParam(required = false) TypeIntervenant type) {
-        return intervenantService.lister(type);
+    public PageResponse<IntervenantResponse> lister(@RequestParam(required = false) TypeIntervenant type,
+                                                      @RequestParam(required = false) String nom,
+                                                      @RequestParam(defaultValue = "0") int page,
+                                                      @RequestParam(defaultValue = "20") int size) {
+        return intervenantService.lister(type, nom, PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "nom", "id")));
     }
 }

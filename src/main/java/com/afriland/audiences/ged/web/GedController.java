@@ -8,6 +8,8 @@ import com.afriland.audiences.ged.web.dto.RapportJournalierResponse;
 import com.afriland.audiences.ged.web.dto.SuppressionResult;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import com.afriland.audiences.common.web.PageResponse;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -53,8 +55,10 @@ public class GedController {
 
     @GetMapping("${api.prefix}/dossiers/{id}/documents")
     @PreAuthorize("hasRole('CONSULTATION')")
-    public List<DocumentResponse> listerDocumentsDossier(@PathVariable Long id) {
-        return gedService.listerDocumentsDossier(id);
+    public PageResponse<DocumentResponse> listerDocumentsDossier(@PathVariable Long id,
+                                                                    @RequestParam(defaultValue = "0") int page,
+                                                                    @RequestParam(defaultValue = "10") int size) {
+        return gedService.listerDocumentsDossier(id, PageRequest.of(page, size));
     }
 
     @DeleteMapping("${api.prefix}/ged/documents/{id}")
@@ -69,9 +73,11 @@ public class GedController {
     /** M15 (Q-68) : file de travail des demandes de suppression (DJ/DJA) — endpoint 🆕. */
     @GetMapping("${api.prefix}/ged/demandes-suppression")
     @PreAuthorize("hasAnyRole('DJ', 'DJA')")
-    public List<DemandeSuppressionResponse> listerDemandesSuppression(
-            @RequestParam(required = false) com.afriland.audiences.ged.domain.StatutSuppression statut) {
-        return gedService.listerDemandesSuppression(statut);
+    public PageResponse<DemandeSuppressionResponse> listerDemandesSuppression(
+            @RequestParam(required = false) com.afriland.audiences.ged.domain.StatutSuppression statut,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return gedService.listerDemandesSuppression(statut, PageRequest.of(page, size));
     }
 
     @PutMapping("${api.prefix}/ged/documents/{id}/approbation-suppression")

@@ -38,8 +38,11 @@ public class AlarmeController {
     /** M15 (Q-68) : alarmes d'un dossier — endpoint 🆕, aucune lecture n'existait. */
     @org.springframework.web.bind.annotation.GetMapping("${api.prefix}/dossiers/{id}/alarmes")
     @PreAuthorize("hasRole('CONSULTATION')")
-    public java.util.List<AlarmeResponse> listerAlarmesDossier(@PathVariable Long id) {
-        return alarmeService.listerParDossier(id);
+    public com.afriland.audiences.common.web.PageResponse<AlarmeResponse> listerAlarmesDossier(
+            @PathVariable Long id,
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue = "0") int page,
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue = "10") int size) {
+        return alarmeService.listerParDossier(id, org.springframework.data.domain.PageRequest.of(page, size));
     }
 
     @PutMapping("${api.prefix}/alarmes/{id}/reprogrammer")

@@ -17,6 +17,8 @@ import com.afriland.audiences.dossier.repository.DossierRepository;
 import com.afriland.audiences.dossier.repository.EtapeProcedureRepository;
 import com.afriland.audiences.referentiel.domain.Utilisateur;
 import org.junit.jupiter.api.BeforeEach;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -166,13 +168,14 @@ class AlarmeServiceTest {
     @Test
     void listerParDossier_retourneLesAlarmesTrieesParEcheance() {
         when(dossierRepository.existsById(1L)).thenReturn(true);
-        when(alarmeRepository.findByDossierIdOrderByDateEcheanceAsc(1L)).thenReturn(java.util.List.of(
+        when(alarmeRepository.findByDossierIdOrderByDateEcheanceAsc(eq(1L), any())).thenReturn(new PageImpl<>(java.util.List.of(
                 Alarme.builder().id(1L).dossier(dossier).objet("Proche").statut(StatutAlarme.ACTIVE)
                         .dateEcheance(LocalDateTime.now().plusDays(1)).createdBy(juriste).build(),
                 Alarme.builder().id(2L).dossier(dossier).objet("Lointaine").statut(StatutAlarme.ACTIVE)
-                        .dateEcheance(LocalDateTime.now().plusDays(9)).createdBy(juriste).build()));
+                        .dateEcheance(LocalDateTime.now().plusDays(9)).createdBy(juriste).build())));
 
-        assertThat(service.listerParDossier(1L)).extracting(AlarmeResponse::objet)
+        assertThat(service.listerParDossier(1L, PageRequest.of(0, 10)).content())
+                .extracting(AlarmeResponse::objet)
                 .containsExactly("Proche", "Lointaine");
     }
 
@@ -180,7 +183,7 @@ class AlarmeServiceTest {
     void listerParDossier_dossierInconnu_retourne404() {
         when(dossierRepository.existsById(999L)).thenReturn(false);
 
-        assertThatThrownBy(() -> service.listerParDossier(999L))
+        assertThatThrownBy(() -> service.listerParDossier(999L, PageRequest.of(0, 10)))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("Dossier introuvable");
     }

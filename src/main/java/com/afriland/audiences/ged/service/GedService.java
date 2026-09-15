@@ -8,6 +8,7 @@ import com.afriland.audiences.audience.repository.AudienceRepository;
 import com.afriland.audiences.common.audit.HistoriqueActionRepository;
 import com.afriland.audiences.common.audit.HistoriqueActionService;
 import com.afriland.audiences.common.error.ApiException;
+import com.afriland.audiences.common.web.PageResponse;
 import com.afriland.audiences.common.error.ErrorCodes;
 import com.afriland.audiences.common.security.CurrentUserService;
 import com.afriland.audiences.dossier.domain.Dossier;
@@ -30,6 +31,7 @@ import com.afriland.audiences.referentiel.domain.Utilisateur;
 import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
 import com.afriland.audiences.referentiel.service.ConfigurationService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -104,11 +106,10 @@ public class GedService {
     }
 
     @Transactional(readOnly = true)
-    public List<DocumentResponse> listerDocumentsDossier(Long dossierId) {
+    public PageResponse<DocumentResponse> listerDocumentsDossier(Long dossierId, Pageable pageable) {
         getDossierOrThrow(dossierId);
-        return documentRepository.findByDossierIdAndEstSupprimeFalse(dossierId).stream()
-                .map(d -> toResponse(d, null))
-                .toList();
+        return PageResponse.of(documentRepository.findByDossierIdAndEstSupprimeFalse(dossierId, pageable),
+                d -> toResponse(d, null));
     }
 
     /**
@@ -178,11 +179,11 @@ public class GedService {
      * Sans filtre, retourne l'historique complet (plus récentes d'abord).
      */
     @Transactional(readOnly = true)
-    public List<DemandeSuppressionResponse> listerDemandesSuppression(StatutSuppression statut) {
+    public PageResponse<DemandeSuppressionResponse> listerDemandesSuppression(StatutSuppression statut, Pageable pageable) {
         var demandes = statut == null
-                ? demandeSuppressionRepository.findByOrderByDateDemandeDesc()
-                : demandeSuppressionRepository.findByStatutOrderByDateDemandeAsc(statut);
-        return demandes.stream().map(demandeSuppressionMapper::toResponse).toList();
+                ? demandeSuppressionRepository.findByOrderByDateDemandeDesc(pageable)
+                : demandeSuppressionRepository.findByStatutOrderByDateDemandeAsc(statut, pageable);
+        return PageResponse.of(demandes, demandeSuppressionMapper::toResponse);
     }
 
     @Transactional

@@ -56,16 +56,22 @@ public class AlerteController {
      * donc atterrir sur n'importe quelle page — et une même alerte apparaître deux fois, ou
      * disparaître, en changeant de page. {@code id} départage les alertes déclenchées dans la même
      * transaction, qui portent l'horodatage à la milliseconde près.
+     * <p>
+     * {@code type} et {@code dossierId} sont arrivés en M22 (Q-102) : avec dix-sept types d'alerte
+     * et des rappels d'audience à J-7, J-3 et J-1, la liste se remplit vite, et rien ne permettait
+     * d'y chercher. Le destinataire, lui, reste résolu sur le jeton — il n'est pas un paramètre.
      */
     @GetMapping("/mes-notifications")
     @PreAuthorize("isAuthenticated()")
     public PageResponse<AlerteResponse> mesNotifications(
             @RequestParam(required = false) StatutAlerte statut,
+            @RequestParam(required = false) TypeAlerte type,
+            @RequestParam(required = false) Long dossierId,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "10") int size) {
         Pageable pageable = PageRequest.of(page, size,
                 Sort.by(Sort.Direction.DESC, "dateDeclenchement", "id"));
-        return alerteService.mesNotifications(statut, pageable);
+        return alerteService.mesNotifications(statut, type, dossierId, pageable);
     }
 
     @PatchMapping("/{id}/traiter")

@@ -6,6 +6,7 @@ import com.afriland.audiences.portail.service.PortailAvocatService;
 import com.afriland.audiences.portail.web.dto.AudienceAvocatResponse;
 import com.afriland.audiences.portail.web.dto.DossierAvocatResponse;
 import com.afriland.audiences.portail.web.dto.PieceJustificativeResponse;
+import com.afriland.audiences.publication.domain.StatutPublication;
 import com.afriland.audiences.publication.web.dto.PublicationResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -77,9 +78,11 @@ public class PortailAvocatController {
 
     @GetMapping("/mes-publications")
     @PreAuthorize("hasRole('AVOCAT')")
-    public PageResponse<PublicationResponse> mesPublications(@RequestParam(defaultValue = "0") int page,
-                                                                @RequestParam(defaultValue = "20") int size) {
-        return portailAvocatService.mesPublications(
+    public PageResponse<PublicationResponse> mesPublications(
+            @RequestParam(required = false) StatutPublication statut,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return portailAvocatService.mesPublications(statut,
                 PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "dateDepot", "id")));
     }
 

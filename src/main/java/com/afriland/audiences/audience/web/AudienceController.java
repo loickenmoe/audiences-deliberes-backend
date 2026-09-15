@@ -9,8 +9,10 @@ import com.afriland.audiences.audience.web.dto.CalendrierEntreeResponse;
 import com.afriland.audiences.audience.web.dto.EnregistrerCompteRenduRequest;
 import com.afriland.audiences.audience.web.dto.FormatExport;
 import com.afriland.audiences.audience.web.dto.PlanifierAudienceRequest;
+import com.afriland.audiences.common.web.PageResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -70,8 +72,10 @@ public class AudienceController {
     /** M15 (Q-68) : onglet « Audiences » de la fiche dossier — endpoint 🆕. */
     @GetMapping("${api.prefix}/dossiers/{id}/audiences")
     @PreAuthorize("hasRole('CONSULTATION')")
-    public List<AudienceResponse> listerAudiencesDossier(@PathVariable Long id) {
-        return audienceService.listerParDossier(id);
+    public PageResponse<AudienceResponse> listerAudiencesDossier(@PathVariable Long id,
+                                                                    @RequestParam(defaultValue = "0") int page,
+                                                                    @RequestParam(defaultValue = "10") int size) {
+        return audienceService.listerParDossier(id, PageRequest.of(page, size));
     }
 
     @GetMapping("${api.prefix}/audiences/calendrier")

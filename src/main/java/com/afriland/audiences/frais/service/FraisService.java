@@ -39,6 +39,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -227,20 +229,26 @@ public class FraisService {
 
     /** Endpoint 🆕 (Q-24) : file de travail filtrable par statut — propre à l'avocat pour ROLE_AVOCAT, transverse pour le personnel interne. */
     @Transactional(readOnly = true)
-    public PageResponse<DemandeFraisResponse> lister(StatutCircuitFrais statut, Pageable pageable) {
+    public PageResponse<DemandeFraisResponse> lister(StatutCircuitFrais statut, Long dossierId, Long avocatId,
+                                                       String referenceFacture, LocalDate dateDebut, LocalDate dateFin,
+                                                       Pageable pageable) {
         Utilisateur utilisateur = currentUserService.getCurrentUser();
-        Page<DemandeFrais> page;
+        /*
+         * Pour un avocat, l'identifiant est **imposé**, jamais reçu : il ne lit que ses propres
+         * demandes. Un `avocatId` laissé libre aurait suffi à lire celles d'un confrère en changeant
+         * un chiffre dans l'URL — le filtre d'instruction et la restriction d'accès ne peuvent pas
+         * être le même paramètre.
+         */
+        Long avocatFiltre = avocatId;
         if ("AVOCAT".equals(utilisateur.getProfil().getCode())) {
             Avocat avocat = compteAvocatService.avocatDe(utilisateur)
                     .orElseThrow(() -> ApiException.forbidden(ErrorCodes.DROITS_INSUFFISANTS, "Aucun avocat associé à cet utilisateur"));
-            page = statut == null
-                    ? demandeFraisRepository.findByAvocatId(avocat.getId(), pageable)
-                    : demandeFraisRepository.findByAvocatIdAndStatutCircuit(avocat.getId(), statut, pageable);
-        } else {
-            page = statut == null
-                    ? demandeFraisRepository.findAll(pageable)
-                    : demandeFraisRepository.findByStatutCircuit(statut, pageable);
+            avocatFiltre = avocat.getId();
         }
+        Page<DemandeFrais> page = demandeFraisRepository.findAll(
+                DemandeFraisSpecifications.withFilters(avocatFiltre, statut, dossierId, referenceFacture,
+                        dateDebut, dateFin),
+                pageable);
         // Une requête pour les décisions de toute la page, un seul seuil global (Q-82).
         Map<Long, List<ValidationFrais>> validations = validationFraisRepository
                 .findByDemandeFraisIdInOrderByDateValidationAscIdAsc(page.map(DemandeFrais::getId).getContent())

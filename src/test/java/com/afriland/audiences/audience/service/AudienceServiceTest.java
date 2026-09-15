@@ -24,6 +24,8 @@ import com.afriland.audiences.dossier.repository.EtapeProcedureRepository;
 import com.afriland.audiences.referentiel.domain.Utilisateur;
 import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
 import org.junit.jupiter.api.BeforeEach;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -181,13 +183,14 @@ class AudienceServiceTest {
     @Test
     void listerParDossier_retourneLesAudiencesDuDossier() {
         when(dossierRepository.findById(dossier.getId())).thenReturn(Optional.of(dossier));
-        when(audienceRepository.findByDossierIdOrderByDatePlanifieeDesc(dossier.getId())).thenReturn(List.of(
+        when(audienceRepository.findByDossierIdOrderByDatePlanifieeDesc(eq(dossier.getId()), any()))
+                .thenReturn(new PageImpl<>(List.of(
                 Audience.builder().id(2L).dossier(dossier).datePlanifiee(LocalDate.now().plusDays(5))
                         .statut(StatutAudience.PLANIFIEE).build(),
                 Audience.builder().id(1L).dossier(dossier).datePlanifiee(LocalDate.now().minusDays(5))
-                        .statut(StatutAudience.TENUE).build()));
+                        .statut(StatutAudience.TENUE).build())));
 
-        List<AudienceResponse> result = service.listerParDossier(dossier.getId());
+        List<AudienceResponse> result = service.listerParDossier(dossier.getId(), PageRequest.of(0, 10)).content();
 
         assertThat(result).extracting(AudienceResponse::id).containsExactly(2L, 1L);
     }
@@ -196,10 +199,10 @@ class AudienceServiceTest {
     void listerParDossier_dossierInconnu_retourne404() {
         when(dossierRepository.findById(999L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.listerParDossier(999L))
+        assertThatThrownBy(() -> service.listerParDossier(999L, PageRequest.of(0, 10)))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("Dossier introuvable");
-        verify(audienceRepository, never()).findByDossierIdOrderByDatePlanifieeDesc(any());
+        verify(audienceRepository, never()).findByDossierIdOrderByDatePlanifieeDesc(any(), any());
     }
 
     /** Q-76 : annulation motivée d'une audience planifiée. */

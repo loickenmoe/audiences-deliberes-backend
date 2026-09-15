@@ -2,7 +2,8 @@
 
 > Contradictions documentaires, ambiguïtés et lacunes nécessitant un **arbitrage explicite**.
 > Aucune de ces questions n'a été tranchée silencieusement.
-> Dernière mise à jour : 2026-09-15 (jalon M21 — Q-99, index adossés aux tris des listes paginées).
+> Dernière mise à jour : 2026-09-15 (jalon M22 — Q-100 à Q-106 : pagination généralisée, filtres, recherche au fil de la frappe).
+> Précédente : 2026-09-15 (jalon M21 — Q-99, index adossés aux tris des listes paginées).
 > Précédente : 2026-09-14 (jalon M20 — Q-98, pièce jointe facultative au compte rendu
 > d'audience). Q-70 à Q-98 ont toutes été ouvertes par la consommation réelle de l'API par le
 > frontend, jalons M16 à M20 : ce sont les défauts qu'aucun test backend ne pouvait voir.
@@ -2044,6 +2045,83 @@ descendant.
 — le planificateur **ignorera ces index**, et il aura raison : un balayage séquentiel y est plus
 rapide qu'un parcours d'index. Ce n'est pas un échec de la migration. Le gain se mesure au volume,
 et c'est pourquoi la mesure ci-dessus a été faite sur 200 000 lignes.
+
+### Q-106 ✅ Un index B-tree ne peut rien pour une recherche « contient » — tranché (M22)
+
+Trouvé en écrivant les index des filtres de M22, et c'est un défaut **antérieur** qui passait
+inaperçu depuis M16.
+
+**A — Le constat.** Trois recherches de l'application cherchent un fragment **au milieu** d'un
+texte : la référence d'un dossier (`LIKE '%…%'`, Q-72), celle d'une facture (Q-103) et le nom d'un
+intervenant (Q-105). Or un index B-tree ordonne les chaînes **par leur début** : il sert
+`LIKE 'DOS%'` et ne peut **rien** pour `LIKE '%DOS%'`.
+
+`idx_dossier_reference` existait donc depuis V1 et semblait couvrir le filtre de référence — il ne
+l'a jamais servi. Personne ne pouvait s'en apercevoir : la requête est correcte, elle est seulement
+exécutée par balayage complet.
+
+**B — Tranché** : extension `pg_trgm` et index **GIN trigramme** sur les trois colonnes. Les
+trigrammes découpent le texte en triplets de caractères et les indexent ; la recherche d'un fragment
+interne devient alors une recherche indexée.
+
+**C — Prérequis d'exploitation, à porter à la DSI.** `CREATE EXTENSION` demande des droits élevés.
+L'utilisateur applicatif les a sur le poste de développement ; **en production, l'extension devra
+être créée par la DSI avant le premier démarrage**, sans quoi la migration échouera. L'échec est
+franc et visible au démarrage — jamais silencieux, contrairement au défaut qu'il corrige.
+
+### Q-100 à Q-105 ✅ Pagination généralisée, filtres et recherche au fil de la frappe — tranché (M22)
+
+Demandé par le porteur du projet le 2026-09-15 : **dix lignes par tableau au maximum**, et des
+filtres partout où ils manquent. Objectifs énoncés : « ni perte de données, ni lenteur », pour une
+application « amenée à recevoir beaucoup de données ».
+
+**Q-100 — pagination.** Huit endpoints renvoyaient une liste entière : `/repertoire/avocats`,
+`/constitutions/prestataires`, `/intervenants`, `/ged/demandes-suppression`, et les onglets
+Documents, Audiences et Alarmes d'un dossier. Tous passent en `PageResponse`. S'y ajoute
+`GET /dossiers/{id}/historique`, créé : RG-DOS-06 historise toute action, et la fiche transportait
+l'historique **entier** à chaque ouverture. La fiche n'en embarque plus que les **dix entrées les
+plus récentes** — le champ du contrat garde sa forme, l'onglet pagine pour le reste, aucune entrée
+n'est perdue.
+
+**Deux limites assumées, écrites dans le code.** Le **répertoire des avocats** n'est paginé qu'à
+moitié : US 5.8 le classe par charge croissante, or la charge vient d'un comptage agrégé joint en
+Java et non d'une colonne. Aucun `ORDER BY` SQL ne peut produire cet ordre, donc la base ne peut pas
+découper ce qu'elle ne sait pas trier — la pagination réduit ce qui **voyage**, pas ce que la base
+lit. Et **trois listes restent entières** parce qu'elles sont structurellement bornées : étapes (trois
+au maximum), délibérés et décisions d'un dossier. Y ajouter une pagination serveur aurait été du
+contrat à maintenir pour toujours en échange de rien.
+
+**Q-101 — filtrer les dossiers sensibles**, sur rappel explicite du porteur du projet. `estSensible`
+et `sensibiliteStatut` s'ajoutent à `GET /dossiers`. Le second ne relève pas du confort :
+`EN_ATTENTE` donne au DJ et à la DJA la **file des sensibilités à valider**, que rien n'exposait.
+C'est la moitié de **QF-08**, que j'avais close à tort en concluant que la notification suffisait —
+une notification prévient d'un événement, elle ne dit pas ce qui reste en attente.
+
+**Q-102 — notifications** : `type` et `dossierId`. Avec dix-sept types d'alerte et des rappels à
+J-7, J-3 et J-1, la liste se remplit vite et rien ne permettait d'y chercher.
+
+**Q-103 — circuit des frais** : `dossierId`, `avocatId`, `referenceFacture`, `dateDebut`, `dateFin`.
+
+**Q-104 — portail** : l'avocat filtre ses dépôts par `statut`.
+
+**Q-105 — recherche au fil de la frappe** : `nom` sur `/intervenants`. C'est la réponse **durable**
+au problème des sélecteurs, autorisée par le porteur du projet hors du périmètre initial. Une liste
+déroulante qui demandait « une grande page » cassait silencieusement dès que l'annuaire la dépassait ;
+elle interroge désormais le serveur pendant la frappe et n'a plus besoin de tout détenir. La taille
+par défaut de `/intervenants` est donc **redescendue de 200 à 20** : ce qu'affiche une liste
+déroulante, non ce qu'elle contient.
+
+**Deux verrous de sécurité, posés parce que ces filtres touchent des données restreintes.** Le
+**destinataire** d'une notification n'est pas filtrable : il reste résolu sur le jeton. Et pour un
+avocat, `avocatId` est **imposé** à son propre identifiant, jamais lu depuis l'URL — sans quoi le
+filtre destiné à l'instruction serait devenu un moyen de lire les demandes d'un confrère en changeant
+un chiffre.
+
+**Trois pièges de sélecteur, dont deux signalés par le compilateur.** `GET /intervenants` alimente
+trois listes déroulantes et un seul tableau ; `PortailAvocatService` réutilise la requête des
+audiences pour le sélecteur du formulaire de dépôt. Paginer sans regarder aurait amputé ces listes en
+silence — exactement la « perte de données » que le porteur du projet demandait d'écarter, et
+invisible en recette. Le sélecteur d'audiences passe donc explicitement `Pageable.unpaged()`.
 
 ### Q-27 ✅ `dossier.parties` défini deux fois — tranché (M2)
 Le dictionnaire REF-06 §2.1.2 déclare `parties JSONB` **deux fois**, avec deux structures

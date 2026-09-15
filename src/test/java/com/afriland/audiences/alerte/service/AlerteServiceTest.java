@@ -29,6 +29,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -98,24 +99,39 @@ class AlerteServiceTest {
     void mesNotifications_filtersByStatutWhenProvided() {
         Utilisateur current = Utilisateur.builder().id(5L).build();
         when(currentUserService.getCurrentUser()).thenReturn(current);
-        when(alerteRepository.findByDestinataireIdAndStatut(eq(5L), eq(StatutAlerte.DECLENCHEE), any()))
+        when(alerteRepository.rechercher(eq(5L), eq(StatutAlerte.DECLENCHEE), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of()));
 
-        alerteService.mesNotifications(StatutAlerte.DECLENCHEE, PageRequest.of(0, 20));
+        alerteService.mesNotifications(StatutAlerte.DECLENCHEE, null, null, PageRequest.of(0, 10));
 
-        verify(alerteRepository).findByDestinataireIdAndStatut(eq(5L), eq(StatutAlerte.DECLENCHEE), any());
-        verify(alerteRepository, never()).findByDestinataireId(any(), any());
+        verify(alerteRepository).rechercher(eq(5L), eq(StatutAlerte.DECLENCHEE), isNull(), isNull(), any());
     }
 
     @Test
     void mesNotifications_listsAllWhenStatutIsNull() {
         Utilisateur current = Utilisateur.builder().id(5L).build();
         when(currentUserService.getCurrentUser()).thenReturn(current);
-        when(alerteRepository.findByDestinataireId(eq(5L), any())).thenReturn(new PageImpl<>(List.of()));
+        when(alerteRepository.rechercher(eq(5L), any(), any(), any(), any())).thenReturn(new PageImpl<>(List.of()));
 
-        alerteService.mesNotifications(null, PageRequest.of(0, 20));
+        alerteService.mesNotifications(null, null, null, PageRequest.of(0, 10));
 
-        verify(alerteRepository).findByDestinataireId(eq(5L), any());
+        verify(alerteRepository).rechercher(eq(5L), isNull(), isNull(), isNull(), any());
+    }
+
+    /**
+     * Q-102 — les deux filtres neufs. Ce que ce test garde n'est pas leur transmission mais le fait
+     * que le **destinataire** reste celui du jeton : il n'est pas un paramètre, et aucun filtre ne
+     * doit pouvoir le déplacer vers un collègue.
+     */
+    @Test
+    void mesNotifications_transmetTypeEtDossierSansToucherAuDestinataire() {
+        Utilisateur current = Utilisateur.builder().id(5L).build();
+        when(currentUserService.getCurrentUser()).thenReturn(current);
+        when(alerteRepository.rechercher(any(), any(), any(), any(), any())).thenReturn(new PageImpl<>(List.of()));
+
+        alerteService.mesNotifications(null, TypeAlerte.RAPPEL_AUDIENCE, 42L, PageRequest.of(0, 10));
+
+        verify(alerteRepository).rechercher(eq(5L), isNull(), eq(TypeAlerte.RAPPEL_AUDIENCE), eq(42L), any());
     }
 
     @Test

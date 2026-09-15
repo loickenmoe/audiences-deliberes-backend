@@ -79,11 +79,10 @@ public class AlerteService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<AlerteResponse> mesNotifications(StatutAlerte statut, Pageable pageable) {
+    public PageResponse<AlerteResponse> mesNotifications(StatutAlerte statut, TypeAlerte type,
+                                                            Long dossierId, Pageable pageable) {
         Utilisateur utilisateur = currentUserService.getCurrentUser();
-        var page = statut == null
-                ? alerteRepository.findByDestinataireId(utilisateur.getId(), pageable)
-                : alerteRepository.findByDestinataireIdAndStatut(utilisateur.getId(), statut, pageable);
+        var page = alerteRepository.rechercher(utilisateur.getId(), statut, type, dossierId, pageable);
         return PageResponse.of(page, alerteMapper::toResponse);
     }
 

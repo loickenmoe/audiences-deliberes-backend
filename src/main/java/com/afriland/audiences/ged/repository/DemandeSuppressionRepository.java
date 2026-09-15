@@ -2,6 +2,8 @@ package com.afriland.audiences.ged.repository;
 
 import com.afriland.audiences.ged.domain.DemandeSuppression;
 import com.afriland.audiences.ged.domain.StatutSuppression;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -24,7 +26,7 @@ public interface DemandeSuppressionRepository extends JpaRepository<DemandeSuppr
     List<DemandeSuppression> findByStatutAndDateDerniereRelanceLessThanEqual(StatutSuppression statut, LocalDateTime seuil);
 
     /** M15 (Q-68) : file de travail « demandes de suppression en attente » du DJ/DJA, plus ancienne d'abord. */
-    List<DemandeSuppression> findByStatutOrderByDateDemandeAsc(StatutSuppression statut);
+    Page<DemandeSuppression> findByStatutOrderByDateDemandeAsc(StatutSuppression statut, Pageable pageable);
 
-    List<DemandeSuppression> findByOrderByDateDemandeDesc();
+    Page<DemandeSuppression> findByOrderByDateDemandeDesc(Pageable pageable);
 }

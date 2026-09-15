@@ -30,6 +30,8 @@ import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
 import com.afriland.audiences.referentiel.service.ConfigurationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.PageImpl;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -223,11 +225,12 @@ class GedServiceTest {
     void listerDemandesSuppression_nommeLeDocumentEtLeDossier() {
         Document document = Document.builder().id(1L).dossier(dossier).nomFichier("pv-transfert.pdf")
                 .typeDocument("PV_TRANSFERT").build();
-        when(demandeSuppressionRepository.findByStatutOrderByDateDemandeAsc(StatutSuppression.EN_ATTENTE))
-                .thenReturn(List.of(DemandeSuppression.builder().id(9L).document(document).demandeur(juriste)
-                        .statut(StatutSuppression.EN_ATTENTE).build()));
+        when(demandeSuppressionRepository.findByStatutOrderByDateDemandeAsc(eq(StatutSuppression.EN_ATTENTE), any()))
+                .thenReturn(new PageImpl<>(List.of(DemandeSuppression.builder().id(9L).document(document).demandeur(juriste)
+                        .statut(StatutSuppression.EN_ATTENTE).build())));
 
-        DemandeSuppressionResponse demande = service.listerDemandesSuppression(StatutSuppression.EN_ATTENTE).get(0);
+        DemandeSuppressionResponse demande = service
+                .listerDemandesSuppression(StatutSuppression.EN_ATTENTE, PageRequest.of(0, 10)).content().get(0);
 
         assertThat(demande.documentNom()).isEqualTo("pv-transfert.pdf");
         assertThat(demande.typeDocument()).isEqualTo("PV_TRANSFERT");
@@ -358,28 +361,28 @@ class GedServiceTest {
     @Test
     void listerDemandesSuppression_filtreParStatut() {
         Document document = Document.builder().id(1L).dossier(dossier).nomFichier("piece.pdf").build();
-        when(demandeSuppressionRepository.findByStatutOrderByDateDemandeAsc(StatutSuppression.EN_ATTENTE))
-                .thenReturn(List.of(DemandeSuppression.builder().id(9L).document(document).demandeur(juriste)
-                        .motif("Doublon").statut(StatutSuppression.EN_ATTENTE).build()));
+        when(demandeSuppressionRepository.findByStatutOrderByDateDemandeAsc(eq(StatutSuppression.EN_ATTENTE), any()))
+                .thenReturn(new PageImpl<>(List.of(DemandeSuppression.builder().id(9L).document(document).demandeur(juriste)
+                        .motif("Doublon").statut(StatutSuppression.EN_ATTENTE).build())));
 
-        var result = service.listerDemandesSuppression(StatutSuppression.EN_ATTENTE);
+        var result = service.listerDemandesSuppression(StatutSuppression.EN_ATTENTE, PageRequest.of(0, 10)).content();
 
         assertThat(result).singleElement()
                 .satisfies(d -> assertThat(d.statut()).isEqualTo(StatutSuppression.EN_ATTENTE));
-        verify(demandeSuppressionRepository, never()).findByOrderByDateDemandeDesc();
+        verify(demandeSuppressionRepository, never()).findByOrderByDateDemandeDesc(any());
     }
 
     @Test
     void listerDemandesSuppression_sansFiltre_retourneToutLHistorique() {
         Document document = Document.builder().id(1L).dossier(dossier).nomFichier("piece.pdf").build();
-        when(demandeSuppressionRepository.findByOrderByDateDemandeDesc())
-                .thenReturn(List.of(
+        when(demandeSuppressionRepository.findByOrderByDateDemandeDesc(any()))
+                .thenReturn(new PageImpl<>(List.of(
                         DemandeSuppression.builder().id(9L).document(document).demandeur(juriste)
                                 .motif("Doublon").statut(StatutSuppression.APPROUVEE).validePar(dj).build(),
                         DemandeSuppression.builder().id(8L).document(document).demandeur(juriste)
                                 .motif("Erreur").statut(StatutSuppression.REJETEE).validePar(dj)
-                                .motifRejet("Pièce utile").build()));
+                                .motifRejet("Pièce utile").build())));
 
-        assertThat(service.listerDemandesSuppression(null)).hasSize(2);
+        assertThat(service.listerDemandesSuppression(null, PageRequest.of(0, 10)).content()).hasSize(2);
     }
 }

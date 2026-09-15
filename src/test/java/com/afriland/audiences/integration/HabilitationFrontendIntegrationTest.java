@@ -233,8 +233,9 @@ class HabilitationFrontendIntegrationTest {
                         .with(role("kc-juriste-m15", "ROLE_CONSULTATION")))
                 .andExpect(status().isOk())
                 .andReturn());
-        assertThat(avocats.findValues("id")).anySatisfy(n -> assertThat(n.asLong()).isEqualTo(id));
-        avocats.forEach(a -> assertThat(a.get("type").asText()).isEqualTo("AVOCAT"));
+        // Q-100 : la réponse est paginée — `{content, totalPages, totalElements}`.
+        assertThat(avocats.get("content").findValues("id")).anySatisfy(n -> assertThat(n.asLong()).isEqualTo(id));
+        avocats.get("content").forEach(a -> assertThat(a.get("type").asText()).isEqualTo("AVOCAT"));
     }
 
     @Test
@@ -302,7 +303,8 @@ class HabilitationFrontendIntegrationTest {
         mockMvc.perform(get(api("/ged/demandes-suppression")).param("statut", "EN_ATTENTE")
                         .with(role("kc-dj-m15", "ROLE_DJ")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray());
+                .andExpect(jsonPath("$.content").isArray())
+                .andExpect(jsonPath("$.totalElements").exists());
         mockMvc.perform(get(api("/ged/demandes-suppression"))
                         .with(role("kc-juriste-m15", "ROLE_JURISTE")))
                 .andExpect(status().isForbidden());
@@ -311,7 +313,8 @@ class HabilitationFrontendIntegrationTest {
         mockMvc.perform(get(api("/constitutions/prestataires")).param("statut", "EN_ATTENTE")
                         .with(role("kc-sh-m15", "ROLE_SH")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray());
+                .andExpect(jsonPath("$.content").isArray())
+                .andExpect(jsonPath("$.totalElements").exists());
         mockMvc.perform(get(api("/constitutions/prestataires"))
                         .with(role("kc-assistante-m15", "ROLE_ASSISTANTE")))
                 .andExpect(status().isForbidden());
@@ -324,12 +327,26 @@ class HabilitationFrontendIntegrationTest {
     void sousRessourcesDossier() throws Exception {
         long dossierId = creerDossier();
 
-        for (String sousRessource : List.of("audiences", "deliberes", "alarmes")) {
+        /*
+         * Q-100 : audiences et alarmes sont paginées — elles grandissent avec la vie du dossier. Les
+         * délibérés restent une liste : un dossier en compte un par étape, trois au maximum. Cette
+         * asymétrie est délibérée, et ce test la fige pour qu'elle ne soit pas « corrigée » par
+         * mégarde dans un sens ou dans l'autre.
+         */
+        for (String sousRessource : List.of("audiences", "alarmes")) {
             mockMvc.perform(get(api("/dossiers/" + dossierId + "/" + sousRessource))
                             .with(role("kc-juriste-m15", "ROLE_CONSULTATION")))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$").isArray());
+                    .andExpect(jsonPath("$.content").isArray())
+                    .andExpect(jsonPath("$.totalElements").exists());
+        }
 
+        mockMvc.perform(get(api("/dossiers/" + dossierId + "/deliberes"))
+                        .with(role("kc-juriste-m15", "ROLE_CONSULTATION")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray());
+
+        for (String sousRessource : List.of("audiences", "deliberes", "alarmes")) {
             mockMvc.perform(get(api("/dossiers/999999/" + sousRessource))
                             .with(role("kc-juriste-m15", "ROLE_CONSULTATION")))
                     .andExpect(status().isNotFound());
@@ -625,6 +642,99 @@ class HabilitationFrontendIntegrationTest {
     }
 
     // ---------------------------------------------------------------- Helpers
+
+    // ---------------------------------------------------------------- Pagination (Q-100)
+
+    /**
+     * L'exigence du porteur du projet, vérifiée là où elle se joue : **dix lignes par page, et la
+     * onzième sur la page suivante**.
+     *
+     * <p>Ce test ne se contente pas de compter dix lignes — une page qui perdrait la onzième
+     * passerait encore. Il vérifie que la onzième **existe**, qu'elle est **sur la page 2**, et
+     * qu'elle est **différente** de celles de la page 1 : c'est la garantie « aucune perte de
+     * données » prise au mot.
+     */
+    @Test
+    @DisplayName("Q-100 : onze alarmes tiennent sur deux pages, sans perte ni doublon")
+    void paginationDixLignes_laOnziemeEstSurLaPageSuivante() throws Exception {
+        long dossierId = creerDossier();
+        long etapeId = lireJson(mockMvc.perform(get(api("/dossiers/" + dossierId))
+                        .with(role("kc-juriste-m15", "ROLE_CONSULTATION")))
+                .andExpect(status().isOk())
+                .andReturn())
+                .get("etapes").get(0).get("id").asLong();
+
+        for (int i = 1; i <= 11; i++) {
+            mockMvc.perform(post(api("/dossiers/" + dossierId + "/alarmes"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json(Map.of("etapeId", etapeId, "objet", "Alarme " + i,
+                                    "dateEcheance", LocalDate.now().plusDays(i).atStartOfDay().toString())))
+                            .with(role("kc-juriste-m15", "ROLE_JURISTE")))
+                    .andExpect(status().isCreated());
+        }
+
+        JsonNode page1 = lireJson(mockMvc.perform(get(api("/dossiers/" + dossierId + "/alarmes"))
+                        .with(role("kc-juriste-m15", "ROLE_CONSULTATION")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(10))
+                .andExpect(jsonPath("$.totalElements").value(11))
+                .andExpect(jsonPath("$.totalPages").value(2))
+                .andReturn());
+
+        JsonNode page2 = lireJson(mockMvc.perform(get(api("/dossiers/" + dossierId + "/alarmes"))
+                        .param("page", "1")
+                        .with(role("kc-juriste-m15", "ROLE_CONSULTATION")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andReturn());
+
+        var idsPage1 = page1.get("content").findValues("id").stream().map(JsonNode::asLong).toList();
+        var idsPage2 = page2.get("content").findValues("id").stream().map(JsonNode::asLong).toList();
+        assertThat(idsPage1).hasSize(10).doesNotContainAnyElementsOf(idsPage2);
+        assertThat(idsPage2).hasSize(1);
+    }
+
+    /** Q-101 — le filtre demandé par le porteur du projet : la file des sensibilités à valider. */
+    @Test
+    @DisplayName("Q-101 : les dossiers sensibles et leur statut de validation sont filtrables")
+    void filtreSensibilite() throws Exception {
+        creerDossier();
+
+        mockMvc.perform(get(api("/dossiers")).param("estSensible", "true")
+                        .with(role("kc-juriste-m15", "ROLE_CONSULTATION")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isArray());
+
+        mockMvc.perform(get(api("/dossiers")).param("sensibiliteStatut", "EN_ATTENTE")
+                        .with(role("kc-juriste-m15", "ROLE_CONSULTATION")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isArray());
+    }
+
+    /** Q-105 — la recherche au fil de la frappe des sélecteurs. */
+    @Test
+    @DisplayName("Q-105 : le référentiel se cherche par fragment de nom")
+    void rechercheIntervenantParNom() throws Exception {
+        int n = COMPTEUR.incrementAndGet();
+        String nom = "Me Rechercheable " + n;
+        mockMvc.perform(post(api("/intervenants"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("type", "AVOCAT", "nom", nom,
+                                "compteKeycloak", "kc-recherche-" + n)))
+                        .with(role("kc-dj-m15", "ROLE_DJ")))
+                .andExpect(status().isCreated());
+
+        // Fragment au milieu du nom : c'est ce qu'un index B-tree ne sait pas servir (Q-106).
+        mockMvc.perform(get(api("/intervenants")).param("nom", "Rechercheable")
+                        .with(role("kc-juriste-m15", "ROLE_CONSULTATION")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)));
+
+        mockMvc.perform(get(api("/intervenants")).param("nom", "IntrouvableXYZ")
+                        .with(role("kc-juriste-m15", "ROLE_CONSULTATION")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(0));
+    }
 
     private long creerDossier() throws Exception {
         int n = COMPTEUR.incrementAndGet();
@@ -1178,7 +1288,8 @@ class HabilitationFrontendIntegrationTest {
         // Contrairement à la reprogrammation, aucune alarme de remplacement n'a été créée.
         mockMvc.perform(get(api("/dossiers/" + dossierId + "/alarmes")).with(juriste))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1));
+                // Paginé depuis Q-100 : `$.length()` compterait les trois clés de l'enveloppe.
+                .andExpect(jsonPath("$.totalElements").value(1));
     }
 
     /** Passe la première étape du dossier « en cours » : la condition d'une audience (RG-AUD-01). */
@@ -1231,11 +1342,18 @@ class HabilitationFrontendIntegrationTest {
                 .andReturn());
         assertThat(enAttente.findValues("documentId").stream().map(JsonNode::asLong).toList()).doesNotContain(documentId);
 
-        JsonNode toutes = lireJson(mockMvc.perform(get(api("/ged/demandes-suppression")).with(dj))
+        /*
+         * `size` explicite : la file est paginée depuis Q-100, et ce test cherche **une** demande
+         * précise dans tout l'historique. S'en remettre à la page par défaut le rendrait dépendant du
+         * nombre de demandes créées par les autres tests — vert aujourd'hui, rouge le jour où la
+         * classe en compte onze.
+         */
+        JsonNode toutes = lireJson(mockMvc.perform(get(api("/ged/demandes-suppression"))
+                        .param("size", "200").with(dj))
                 .andExpect(status().isOk())
                 .andReturn());
         JsonNode demande = null;
-        for (JsonNode candidate : toutes) {
+        for (JsonNode candidate : toutes.get("content")) {
             if (candidate.get("documentId").asLong() == documentId) {
                 demande = candidate;
             }

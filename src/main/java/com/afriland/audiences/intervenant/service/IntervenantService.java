@@ -1,6 +1,7 @@
 package com.afriland.audiences.intervenant.service;
 
 import com.afriland.audiences.common.error.ApiException;
+import com.afriland.audiences.common.web.PageResponse;
 import com.afriland.audiences.common.error.ErrorCodes;
 import com.afriland.audiences.intervenant.domain.TypeIntervenant;
 import com.afriland.audiences.intervenant.web.dto.CreerIntervenantRequest;
@@ -11,11 +12,12 @@ import com.afriland.audiences.referentiel.domain.Intervenant;
 import com.afriland.audiences.referentiel.repository.AvocatRepository;
 import com.afriland.audiences.referentiel.repository.IntervenantRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import java.util.List;
+
 
 /**
  * M15 — administration du référentiel des intervenants (Q-68). Aucun endpoint de création
@@ -79,13 +81,23 @@ public class IntervenantService {
         return toResponse(prestataire);
     }
 
-    /** Liste du référentiel — alimente les sélecteurs d'affectation et de constitution du frontend. */
+    /**
+     * Liste du référentiel, paginée depuis Q-100.
+     *
+     * <p>⚠ Cet endpoint sert **deux usages** : l'écran 42, qui est un tableau et veut dix lignes, et
+     * trois **sélecteurs** (affectation d'un dossier, constitution d'un prestataire) qui ont besoin
+     * de l'annuaire entier. Ces derniers demandent donc explicitement une grande page, comme
+     * {@code /avocat/mes-dossiers} le fait déjà. La réponse durable pour un annuaire qui grandirait
+     * n'est pas une page plus grande mais une **recherche au fil de la frappe** ; c'est consigné,
+     * pas implémenté.
+     */
     @Transactional(readOnly = true)
-    public List<IntervenantResponse> lister(TypeIntervenant type) {
-        return intervenantRepository.findAll().stream()
-                .filter(i -> type == null || type == typeDe(i))
-                .map(this::toResponse)
-                .toList();
+    public PageResponse<IntervenantResponse> lister(TypeIntervenant type, String nom, Pageable pageable) {
+        Boolean avocatsSeuls = type == null ? null : type == TypeIntervenant.AVOCAT;
+        return PageResponse.of(
+                intervenantRepository.rechercher(avocatsSeuls,
+                        StringUtils.hasText(nom) ? "%" + nom.toLowerCase() + "%" : null, pageable),
+                this::toResponse);
     }
 
     private TypeIntervenant typeDe(Intervenant intervenant) {
