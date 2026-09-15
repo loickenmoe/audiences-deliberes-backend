@@ -2,7 +2,7 @@
 
 > Feuille de route séquentielle du backend. Un jalon = un objectif, un périmètre fermé,
 > une validation manuelle par le porteur du projet avant passage au suivant.
-> Dernière mise à jour : 2026-09-14 (M0 à M20 terminés et validés). Les jalons **M16 à M20** ont été
+> Dernière mise à jour : 2026-09-15 (M0 à M21 terminés et validés). Les jalons **M16 à M20** ont été
 > ouverts hors feuille de route initiale, sur autorisation explicite du porteur du projet, pour
 > corriger ce que la consommation réelle de l'API par le frontend a révélé — Q-70 à Q-98.
 > Précédente : 2026-09-07 (M0 à M15 terminés et validés — feuille de route achevée,
@@ -1300,6 +1300,25 @@ récit vide en 400, le test sans pièce conservé tel quel. **358 tests au vert.
 **Vérifié en réel** : dépôt avec pièce 201 et URL pré-signée réellement téléchargeable depuis MinIO
 (HTTP 200) — ce que le client mocké ne pouvait pas montrer ; dépôt sans pièce 201 et `nomFichier`
 nul ; `.exe` et récit vide refusés en 400.
+
+---
+
+## M21 — Index adossés aux tris des listes paginées ✅ **Terminé**
+
+**Origine.** Relevé le 2026-09-15 dans le recensement d'améliorations demandé par le porteur du
+projet, et appliqué sur sa décision. Jalon d'une seule migration, sans code applicatif.
+
+**Implémenté** : `V14__index_tris_pagination.sql`. Six listes paginées triaient sur des colonnes
+qu'aucun des 37 index existants ne portait — `dossier`, `client`, `demande_frais` (`created_at`),
+`alerte` (`date_declenchement`), `publication` interne et portail (`date_depot`). Neuf index
+reproduisent désormais exactement l'ORDER BY de chaque requête, colonne de filtre en tête quand il y
+en a une.
+
+**Mesuré** sur une table jetable de 200 000 lignes reproduisant la forme de `dossier` : première page
+**62,5 ms → 0,094 ms** (balayage complet et tri, contre parcours d'index sur 20 lignes), page
+profonde `OFFSET 5000` à 5,4 ms sans tri complet. Table supprimée après mesure.
+
+**Testé** : 358 tests au vert, `BUILD SUCCESS`. Aucun contrat modifié, aucun impact frontend.
 
 ---
 
