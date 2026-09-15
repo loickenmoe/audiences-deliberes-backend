@@ -242,7 +242,8 @@ public class FraisService {
         Long avocatFiltre = avocatId;
         if ("AVOCAT".equals(utilisateur.getProfil().getCode())) {
             Avocat avocat = compteAvocatService.avocatDe(utilisateur)
-                    .orElseThrow(() -> ApiException.forbidden(ErrorCodes.DROITS_INSUFFISANTS, "Aucun avocat associé à cet utilisateur"));
+                    .orElseThrow(() -> ApiException.forbidden(ErrorCodes.AVOCAT_NON_RATTACHE,
+                        "Aucun avocat du référentiel n'est rattaché à ce compte"));
             avocatFiltre = avocat.getId();
         }
         Page<DemandeFrais> page = demandeFraisRepository.findAll(
@@ -424,7 +425,8 @@ public class FraisService {
     private Avocat getAvocatCourantOrThrow() {
         Utilisateur utilisateur = currentUserService.getCurrentUser();
         return compteAvocatService.avocatDe(utilisateur)
-                .orElseThrow(() -> ApiException.forbidden(ErrorCodes.DROITS_INSUFFISANTS, "Aucun avocat associé à cet utilisateur"));
+                .orElseThrow(() -> ApiException.forbidden(ErrorCodes.AVOCAT_NON_RATTACHE,
+                        "Aucun avocat du référentiel n'est rattaché à ce compte"));
     }
 
     private void exigerStatut(DemandeFrais demande, StatutCircuitFrais attendu) {

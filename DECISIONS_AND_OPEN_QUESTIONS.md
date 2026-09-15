@@ -2123,6 +2123,42 @@ audiences pour le sélecteur du formulaire de dépôt. Paginer sans regarder aur
 silence — exactement la « perte de données » que le porteur du projet demandait d'écarter, et
 invisible en recette. Le sélecteur d'audiences passe donc explicitement `Pageable.unpaged()`.
 
+### Q-107 ✅ Un avocat non inscrit au répertoire recevait un refus de droits — tranché (M22)
+
+Signalé par le porteur du projet le 2026-09-15, après une réinitialisation de la base de
+développement : connecté en avocat, il voyait « Le chargement a échoué — Aucun avocat du référentiel
+n'est rattaché à ce compte » sur *Mon espace* et sur *Frais d'avocats*.
+
+**A — Ce n'était pas un défaut de comportement.** Deux choses différentes portent le mot « avocat ».
+Le **compte de connexion** vit dans Keycloak, et le backend crée à la volée la ligne `utilisateur`
+correspondante. L'**avocat du référentiel** est une fiche métier, créée par le DJ ou la DJA
+(UC-INT-01) et portant son identifiant de connexion (`compteKeycloak`, RG-INT-01). Le portail ne
+travaille que sur la seconde. Sur une base vierge, la table est vide : le refus est donc conforme aux
+sources — un avocat existe pour le métier parce qu'un juriste l'a inscrit, jamais parce qu'il possède
+un compte.
+
+**B — Le défaut était dans ce que l'application en disait.** Elle présentait un **état d'inscription**
+comme une **panne**. L'avocat lisait un message technique, ne pouvait rien y faire, et ne savait pas
+à qui s'adresser. Or ce cas n'est pas rare : il se produit à chaque mise en service, et pour chaque
+nouvel avocat, tant que la Direction Juridique ne l'a pas inscrit.
+
+**C — Tranché** : un code d'erreur **dédié**, `ERR-AVOCAT-NON-RATTACHE`, lève les quatre points
+concernés (portail, frais ×2, publications), et l'interface l'affiche comme un état, avec ce qui
+manque et à qui s'adresser.
+
+**Pourquoi un code et non une lecture du message.** `ERR-FORBIDDEN` couvre aussi les **vrais** refus
+de droits : s'en servir aurait fait dire « votre compte n'est pas rattaché » à un avocat qui force
+une URL interdite — un mensonge. Et comparer des phrases se briserait à la première reformulation ou
+traduction. C'est le parti déjà retenu pour `ERR-009` (accès restreint à une publication), qui isole
+un état légitime d'un refus.
+
+**Au passage**, les quatre points levaient **deux formulations** pour une cause unique (« Aucun avocat
+associé à cet utilisateur » et « Aucun avocat du référentiel n'est rattaché à ce compte »). Elles
+sont unifiées.
+
+**Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
+inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
+
 ### Q-27 ✅ `dossier.parties` défini deux fois — tranché (M2)
 Le dictionnaire REF-06 §2.1.2 déclare `parties JSONB` **deux fois**, avec deux structures
 différentes : `{demandeur, defendeur}` et `{demandeur, defendeur, client}`. Le contrat d'API et

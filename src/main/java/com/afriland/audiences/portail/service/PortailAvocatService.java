@@ -142,7 +142,7 @@ public class PortailAvocatService {
      */
     private Avocat avocatCourant() {
         return compteAvocatService.avocatDe(currentUserService.getCurrentUser())
-                .orElseThrow(() -> ApiException.forbidden(ErrorCodes.DROITS_INSUFFISANTS,
+                .orElseThrow(() -> ApiException.forbidden(ErrorCodes.AVOCAT_NON_RATTACHE,
                         "Aucun avocat du référentiel n'est rattaché à ce compte"));
     }
 }
