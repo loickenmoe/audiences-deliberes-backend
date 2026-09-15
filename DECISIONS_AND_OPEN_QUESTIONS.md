@@ -2,7 +2,8 @@
 
 > Contradictions documentaires, ambiguïtés et lacunes nécessitant un **arbitrage explicite**.
 > Aucune de ces questions n'a été tranchée silencieusement.
-> Dernière mise à jour : 2026-09-14 (jalon M20 — Q-98, pièce jointe facultative au compte rendu
+> Dernière mise à jour : 2026-09-15 (jalon M21 — Q-99, index adossés aux tris des listes paginées).
+> Précédente : 2026-09-14 (jalon M20 — Q-98, pièce jointe facultative au compte rendu
 > d'audience). Q-70 à Q-98 ont toutes été ouvertes par la consommation réelle de l'API par le
 > frontend, jalons M16 à M20 : ce sont les défauts qu'aucun test backend ne pouvait voir.
 > Précédente : 2026-09-07 (après jalon M15 — voir statuts R-01 à R-08, Q-01 à Q-69 ;
@@ -1994,6 +1995,55 @@ conservé (`verifyNoInteractions(minioStorageService)`).
 pas montrer : dépôt avec pièce **201**, `nomFichier` restitué à l'avocat comme à l'Assistante, URL
 pré-signée sur `dossiers/795/{uuid}-plumitif-….pdf` **effectivement téléchargeable** (HTTP 200) ;
 dépôt sans pièce **201** avec `nomFichier: null` ; `.exe` refusé en **400** ; récit vide **400**.
+
+### Q-99 ✅ Six listes paginées triaient sans index — tranché (M21)
+
+Relevé le 2026-09-15 lors du recensement d'améliorations demandé par le porteur du projet, et
+**appliqué sur sa décision**.
+
+**A — Le constat.** M17 (Q-92, Q-93) puis M19 ont donné un ordre stable aux listes paginées. Six
+d'entre elles trient sur une colonne qu'**aucun index ne portait** : `dossier` et `client` par
+`created_at DESC, id DESC`, `demande_frais` de même, `alerte` par `date_declenchement DESC, id DESC`,
+et `publication` par `date_depot` dans les deux sens (file interne #59 et portail avocat). Les
+13 migrations comptaient 37 index, **aucun sur une colonne de tri** — vérifiable par
+`grep "CREATE INDEX" | grep -c created_at` → `0`.
+
+PostgreSQL devait donc trier l'intégralité du jeu filtré à **chaque page** pour n'en rendre que
+vingt lignes.
+
+**B — Pourquoi le corriger alors que rien ne se voyait.** C'est la forme exacte du défaut Q-94 : la
+vue consolidée d'un client tenait parfaitement jusqu'à ce qu'un client atteigne 310 dossiers, et elle
+est alors passée à **19 secondes**. Le remède est ici gratuit — des index, aucune ligne de code
+applicatif, aucun changement de contrat.
+
+**C — Mesuré**, sur une table jetable de **200 000 lignes** reproduisant la forme et le tri de
+`dossier` (table supprimée après mesure) :
+
+| | Plan | Temps |
+|---|---|---|
+| Sans index | `Parallel Seq Scan` + `top-N heapsort`, 200 000 lignes lues | **62,5 ms** |
+| Avec index | `Index Scan`, 20 lignes touchées | **0,094 ms** |
+
+Soit un facteur **665** sur la première page. Sur une page profonde (`OFFSET 5000`), l'index évite
+toujours le tri complet : **5,4 ms**.
+
+**Appliqué** : `V14__index_tris_pagination.sql`, neuf index reproduisant **exactement** l'ORDER BY de
+chaque requête, colonne de filtre en tête quand il y en a une — un index dont l'ordre diverge du tri
+demandé ne serait pas retenu par le planificateur. Deux index sur `alerte` et sur `demande_frais` :
+la forme filtrée (par statut, par destinataire) et la forme complète ne peuvent pas être servies par
+le même. `publication` reçoit un index ascendant, que PostgreSQL parcourt à l'envers pour le tri
+descendant.
+
+**Vérifié** : 358 tests au vert, `BUILD SUCCESS`. Aucun contrat modifié, aucun impact frontend.
+
+**Vérifié en réel** (2026-09-15) : Flyway a appliqué la version 14 au démarrage
+(`flyway_schema_history` → `14 | index tris pagination | t`) et les **neuf** index sont présents dans
+`pg_indexes`. Le smoke et la suite de bout en bout passent sur la base migrée.
+
+**Une précision qui évite un contresens.** Sur la base de développement — quelques dizaines de lignes
+— le planificateur **ignorera ces index**, et il aura raison : un balayage séquentiel y est plus
+rapide qu'un parcours d'index. Ce n'est pas un échec de la migration. Le gain se mesure au volume,
+et c'est pourquoi la mesure ci-dessus a été faite sur 200 000 lignes.
 
 ### Q-27 ✅ `dossier.parties` défini deux fois — tranché (M2)
 Le dictionnaire REF-06 §2.1.2 déclare `parties JSONB` **deux fois**, avec deux structures
