@@ -79,4 +79,18 @@ public class Alerte {
 
     @Column(name = "date_traitement")
     private LocalDateTime dateTraitement;
+
+    /**
+     * Issue de la diffusion temps réel (Q-109). <b>Nullable à dessein</b> : les alertes antérieures
+     * à la migration V16 n'ont pas été observées, et le taux de délivrance ne porte que sur ce qui
+     * a été réellement mesuré. Les compter d'office comme réussies ou échouées reviendrait à
+     * inventer le chiffre que l'on cherche à établir.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "statut_diffusion", length = 20)
+    private StatutDiffusion statutDiffusion;
+
+    /** Instant où l'issue a été observée — succès comme échec. */
+    @Column(name = "date_diffusion")
+    private LocalDateTime dateDiffusion;
 }

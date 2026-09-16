@@ -2159,6 +2159,51 @@ sont unifiées.
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
 
+### Q-109 ✅ Le taux de délivrance des alertes devient mesurable — tranché (2026-09-16)
+
+**Point de départ** : un recensement de l'observabilité de l'application, demandé par le porteur du
+projet. NF-ALR-02 fait du canal applicatif le canal **obligatoire**, avec une délivrance supérieure
+à 99 %. Ce taux n'était mesuré **nulle part** : un échec de diffusion produisait une ligne de journal,
+que personne ne lit. C'était la seule exigence non fonctionnelle dont la rupture était **silencieuse
+pour tout le monde**, y compris pour la personne qu'elle pénalise — un juriste qui découvre après
+coup l'audience qu'on ne lui a pas rappelée.
+
+**Le piège, et la raison d'être de la conception retenue.**
+`SimpMessagingTemplate.convertAndSendToUser` **ne lève aucune exception** lorsque le destinataire
+est déconnecté : elle route vers une file sans abonné et retourne normalement. La mesure évidente —
+« pas d'exception, donc délivré » — aurait donc affiché **100 % en permanence, panne comprise**.
+Une mesure qui ment est pire que pas de mesure. Il faut interroger
+{@code SimpUserRegistry} **avant** de pousser, pour distinguer l'absence de destinataire, qui est
+normale, de la rupture du canal, qui est le défaut.
+
+**Trois issues, enregistrées sur l'alerte** (`statut_diffusion`, migration V16) :
+
+| Issue | Sens | Délivrée ? |
+|---|---|---|
+| `DIFFUSEE` | session WebSocket vivante, poussée aboutie | oui |
+| `DIFFEREE` | aucune session ; l'alerte attend dans `GET /alertes/mes-notifications` | **oui** |
+| `ECHEC` | courtier indisponible ou transport rompu | **non** |
+
+**Deux taux, et les confondre serait la première erreur.** Le **taux de délivrance**
+(`1 − ECHEC/observées`) répond à NF-ALR-02 : le canal a-t-il fait son travail ? Le **taux de
+diffusion temps réel** (`DIFFUSEE/observées`) répond à tout autre chose : à quel point les gens
+sont-ils connectés quand on les alerte. Un second taux bas n'est pas un défaut du système — c'est
+une information sur les usages, et souvent la raison de brancher enfin un second canal. Aucun seuil
+ne lui est opposé, et l'écran le dit explicitement.
+
+**Ce qui est délibérément exclu du calcul.** Les alertes antérieures à V16 n'ont pas d'issue
+observée : les compter comme réussies gonflerait le taux d'une valeur inventée, les compter comme
+échouées l'effondrerait autant. Elles sont hors dénominateur — le taux ne porte que sur ce qui a été
+réellement mesuré. De même, une **fenêtre sans aucune alerte** est déclarée conforme : il n'y a rien
+à respecter ni à enfreindre, et afficher « 0 % » ferait sonner une alarme sur du vide.
+
+**`nonTraitees` ne participe à aucun taux**, et c'est voulu : une alerte techniquement délivrée que
+personne n'a ouverte relève d'un autre problème que la délivrance. Les mélanger brouillerait les
+deux signaux.
+
+**Statut (2026-09-16)** : appliqué — V16, `GET /alertes/statistiques-diffusion` (DJ/DJA), bloc de
+supervision sur l'écran 41. Backend 378/378, frontend 294/294.
+
 ### Q-108 ✅ L'administration des paramètres est ouverte à la DJA — tranché (2026-09-16)
 
 **Point de départ** : le porteur du projet demande un relevé complet des habilitations du DJ et de

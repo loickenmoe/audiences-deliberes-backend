@@ -3,10 +3,12 @@ package com.afriland.audiences.alerte.service;
 import com.afriland.audiences.alerte.domain.Alerte;
 import com.afriland.audiences.alerte.domain.CanalAlerte;
 import com.afriland.audiences.alerte.domain.StatutAlerte;
+import com.afriland.audiences.alerte.domain.StatutDiffusion;
 import com.afriland.audiences.alerte.domain.TypeAlerte;
 import com.afriland.audiences.alerte.mapper.AlerteMapper;
 import com.afriland.audiences.alerte.repository.AlerteRepository;
 import com.afriland.audiences.alerte.web.dto.AlerteResponse;
+import com.afriland.audiences.alerte.web.dto.StatistiquesDiffusionResponse;
 import com.afriland.audiences.common.error.ApiException;
 import com.afriland.audiences.common.security.CurrentUserService;
 import com.afriland.audiences.referentiel.domain.Utilisateur;
@@ -20,7 +22,10 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.messaging.MessagingException;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.messaging.simp.user.SimpUser;
+import org.springframework.messaging.simp.user.SimpUserRegistry;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -31,6 +36,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -49,6 +55,13 @@ class AlerteServiceTest {
 
     @Mock
     private SimpMessagingTemplate messagingTemplate;
+
+    /**
+     * Q-109 — sans lui, la mesure de délivrance mentirait :
+     * {@code convertAndSendToUser} réussit même quand personne n'écoute.
+     */
+    @Mock
+    private SimpUserRegistry simpUserRegistry;
 
     @InjectMocks
     private AlerteService alerteService;
@@ -93,6 +106,110 @@ class AlerteServiceTest {
 
         assertThat(result).isNotNull();
         assertThat(result.getStatut()).isEqualTo(StatutAlerte.DECLENCHEE);
+        // Q-109 : la rupture du canal est désormais enregistrée, pas seulement journalisée.
+        assertThat(result.getStatutDiffusion()).isEqualTo(StatutDiffusion.ECHEC);
+        assertThat(result.getDateDiffusion()).isNotNull();
+    }
+
+    /**
+     * Q-109 — le cœur de la mesure, et la raison pour laquelle un booléen ne suffisait pas.
+     *
+     * <p>{@code convertAndSendToUser} ne lève <b>aucune</b> exception quand le destinataire est
+     * déconnecté : elle route vers une file sans abonné et retourne normalement. Ces deux tests
+     * vérifient que les deux situations sont distinguées, sans quoi le taux afficherait 100 % en
+     * permanence — panne comprise.
+     */
+    @Test
+    void declencher_marqueDiffuseeQuandLeDestinataireEstConnecte() {
+        Utilisateur destinataire = Utilisateur.builder().id(5L).keycloakId("kc-5").build();
+        when(alerteRepository.save(any(Alerte.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(alerteMapper.toResponse(any(Alerte.class))).thenReturn(
+                new AlerteResponse(1L, null, 5L, TypeAlerte.RAPPEL_AUDIENCE, "J-7", CanalAlerte.APPLICATIF,
+                        StatutAlerte.DECLENCHEE, null, null));
+        when(simpUserRegistry.getUser("kc-5")).thenReturn(mock(SimpUser.class));
+
+        Alerte result = alerteService.declencher(TypeAlerte.RAPPEL_AUDIENCE, null, destinataire, "J-7");
+
+        assertThat(result.getStatutDiffusion()).isEqualTo(StatutDiffusion.DIFFUSEE);
+        assertThat(result.getDateDiffusion()).isNotNull();
+    }
+
+    @Test
+    void declencher_marqueDiffereeQuandAucuneSessionNEstOuverte() {
+        Utilisateur destinataire = Utilisateur.builder().id(5L).keycloakId("kc-5").build();
+        when(alerteRepository.save(any(Alerte.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(alerteMapper.toResponse(any(Alerte.class))).thenReturn(
+                new AlerteResponse(1L, null, 5L, TypeAlerte.RAPPEL_AUDIENCE, "J-7", CanalAlerte.APPLICATIF,
+                        StatutAlerte.DECLENCHEE, null, null));
+        when(simpUserRegistry.getUser("kc-5")).thenReturn(null);
+
+        Alerte result = alerteService.declencher(TypeAlerte.RAPPEL_AUDIENCE, null, destinataire, "J-7");
+
+        // Pas un échec : le repli garanti reste ouvert, seule la remise est plus tardive.
+        assertThat(result.getStatutDiffusion()).isEqualTo(StatutDiffusion.DIFFEREE);
+        verify(messagingTemplate).convertAndSendToUser(eq("kc-5"), eq("/queue/alertes"), any(AlerteResponse.class));
+    }
+
+    /**
+     * Q-109 — une alerte remise plus tard reste délivrée au sens de NF-ALR-02 : le canal applicatif
+     * comprend la liste des notifications. Seuls les échecs comptent contre nous.
+     */
+    @Test
+    void statistiquesDiffusion_neCompteQueLesEchecsContreLeSysteme() {
+        LocalDate debut = LocalDate.of(2026, 9, 1);
+        LocalDate fin = LocalDate.of(2026, 9, 30);
+        when(alerteRepository.compterParDiffusion(eq(StatutDiffusion.DIFFUSEE), any(), any())).thenReturn(700L);
+        when(alerteRepository.compterParDiffusion(eq(StatutDiffusion.DIFFEREE), any(), any())).thenReturn(295L);
+        when(alerteRepository.compterParDiffusion(eq(StatutDiffusion.ECHEC), any(), any())).thenReturn(5L);
+        when(alerteRepository.compterNonTraitees(any(), any())).thenReturn(42L);
+
+        StatistiquesDiffusionResponse stats = alerteService.statistiquesDiffusion(debut, fin);
+
+        assertThat(stats.observees()).isEqualTo(1000L);
+        // 995/1000 : les différées sont délivrées, seuls les 5 échecs pèsent.
+        assertThat(stats.tauxDelivrance()).isEqualByComparingTo("99.50");
+        assertThat(stats.seuilRespecte()).isTrue();
+        // Tout autre chose : la proportion de destinataires connectés au moment du déclenchement.
+        assertThat(stats.tauxDiffusionTempsReel()).isEqualByComparingTo("70.00");
+        assertThat(stats.nonTraitees()).isEqualTo(42L);
+    }
+
+    @Test
+    void statistiquesDiffusion_signaleLeFranchissementDuSeuilNfAlr02() {
+        when(alerteRepository.compterParDiffusion(eq(StatutDiffusion.DIFFUSEE), any(), any())).thenReturn(80L);
+        when(alerteRepository.compterParDiffusion(eq(StatutDiffusion.DIFFEREE), any(), any())).thenReturn(18L);
+        when(alerteRepository.compterParDiffusion(eq(StatutDiffusion.ECHEC), any(), any())).thenReturn(2L);
+        when(alerteRepository.compterNonTraitees(any(), any())).thenReturn(0L);
+
+        StatistiquesDiffusionResponse stats = alerteService.statistiquesDiffusion(
+                LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30));
+
+        assertThat(stats.tauxDelivrance()).isEqualByComparingTo("98.00");
+        assertThat(stats.seuilRespecte()).isFalse();
+    }
+
+    /**
+     * Une fenêtre sans aucune alerte observée ne vaut pas un manquement : il n'y a rien à respecter
+     * ni à enfreindre. La déclarer non conforme ferait sonner une alarme sur du vide.
+     */
+    @Test
+    void statistiquesDiffusion_uneFenetreVideNEstPasUnManquement() {
+        when(alerteRepository.compterParDiffusion(any(), any(), any())).thenReturn(0L);
+        when(alerteRepository.compterNonTraitees(any(), any())).thenReturn(0L);
+
+        StatistiquesDiffusionResponse stats = alerteService.statistiquesDiffusion(
+                LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30));
+
+        assertThat(stats.observees()).isZero();
+        assertThat(stats.seuilRespecte()).isTrue();
+    }
+
+    @Test
+    void statistiquesDiffusion_refuseUneFenetreInversee() {
+        assertThatThrownBy(() -> alerteService.statistiquesDiffusion(
+                LocalDate.of(2026, 9, 30), LocalDate.of(2026, 9, 1)))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("date de début");
     }
 
     @Test

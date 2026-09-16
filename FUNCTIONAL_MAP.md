@@ -242,6 +242,7 @@ réels), y compris la relance à 72 h en conditions réelles (cron accéléré, 
 | FR-ALR-01 | 7.1 | UC-ALR-01 | RG-ALR-02 | `configuration_systeme` | `PUT /alertes/seuils` | **`ROLE_DJ` ou `ROLE_DJA` (Q-108)** ; `type = CHARGE_MAX_AVOCAT`, `seuil` entier positif ; alerte déclenchée quand un avocat atteint le seuil | ✅ |
 | — | — | UC-ALR-01 | — | `configuration_systeme` | `GET /configurations`, `PUT /configurations/{cle}` | Lecture : `ROLE_CONSULTATION`. Écriture : **`ROLE_DJ` ou `ROLE_DJA` (Q-108)**. Clés au minimum : `SEUIL_MONTANT_DEFAUT`, `SEUIL_PROROGATIONS`, `CANAUX_NOTIFICATION_DEFAUT`, `DELAI_VALIDATION_CONJOINTE`, `TAILLE_MAX_GED`, `FORMATS_GED` (CONF01…CONF07) | ✅ |
 | FR-ALR-02 | 7.2 | UC-ALR-02 | RG-ALR-01, RG-ALR-03 | `alerte` | *(déclenchement interne : `@Scheduled` + événements)* | Détecte la condition → identifie les destinataires → enregistre `DECLENCHEE` → diffuse (applicatif obligatoire, Outlook et Teams optionnels) **< 1 minute**, délivrance > 99 % | 🟡 |
+| — | 7.2 | UC-ALR-02 | RG-ALR-03, **NF-ALR-02** | `alerte` (`statut_diffusion`, V16) | `GET /alertes/statistiques-diffusion?dateDebut&dateFin` | **`ROLE_DJ` ou `ROLE_DJA` (Q-109)** ; rend le taux de délivrance **observable**, ce qu'il n'était pas. Trois issues enregistrées à chaque déclenchement : `DIFFUSEE` (session vivante), `DIFFEREE` (destinataire déconnecté, repli garanti), `ECHEC` (canal rompu). **Taux de délivrance = 1 − ECHEC/observées** — les différées sont délivrées, le canal applicatif comprenant la liste des notifications. Un second taux, **diffusion temps réel = DIFFUSEE/observées**, décrit les usages et **n'est opposable à aucun seuil** | ✅ |
 | FR-ALR-02 | 7.3 | UC-ALR-02 | RG-ALR-03 | `alerte` | `GET /alertes/mes-notifications` | Alertes de l'utilisateur, filtre `statut`, paginé | ✅ |
 | — | 7.4 | UC-ALR-02 | RG-ALR-01 | `alerte`, `historique_action` | `PATCH /alertes/{id}/traiter` **(à proposer)** | Seul le destinataire (403 sinon) ; `TRAITEE` + `date_traitement` | ✅ |
 
@@ -269,7 +270,8 @@ canal applicatif, marquage `TRAITEE` par un non-destinataire (403), seuil config
 pris en compte immédiatement, relance 72 h des demandes de suppression.
 
 **Écrans frontend** : *Mes notifications* (badge, liste, marquer comme traitée) ·
-*(DJ/DJA)* Configuration des seuils et paramètres · *(DSI/DJ)* Supervision des alertes (REF-05 §11.5).
+*(DJ/DJA)* Configuration des seuils et paramètres · *(DJ/DJA)* **Supervision des alertes** — taux de
+délivrance du canal applicatif sur une fenêtre, adossé à NF-ALR-02 (Q-109, écran 41).
 
 ---
 

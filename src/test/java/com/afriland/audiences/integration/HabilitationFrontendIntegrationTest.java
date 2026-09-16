@@ -1459,6 +1459,46 @@ class HabilitationFrontendIntegrationTest {
                 .andExpect(result -> assertThat(result.getResponse().getStatus()).isNotEqualTo(403));
     }
 
+    /**
+     * Q-109 — la supervision du canal applicatif est une lecture d'administration : DJ et DJA, comme
+     * l'écriture des paramètres. Elle expose un taux global, tous destinataires confondus ; l'ouvrir
+     * plus largement reviendrait à publier l'activité de chacun.
+     */
+    @Test
+    @DisplayName("Q-109 : le taux de délivrance des alertes est réservé au DJ et à la DJA")
+    void statistiquesDiffusion_reserveesAuDjEtALaDja() throws Exception {
+        for (String compte : List.of("kc-dj-m15", "kc-dja-m15")) {
+            String profil = compte.contains("dja") ? "ROLE_DJA" : "ROLE_DJ";
+            mockMvc.perform(get(api("/alertes/statistiques-diffusion"))
+                            .param("dateDebut", "2026-09-01").param("dateFin", "2026-09-30")
+                            .with(role(compte, profil)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.observees").exists())
+                    .andExpect(jsonPath("$.tauxDelivrance").exists())
+                    .andExpect(jsonPath("$.tauxDiffusionTempsReel").exists());
+        }
+
+        for (String profil : List.of("ROLE_JURISTE", "ROLE_ASSISTANTE", "ROLE_SH")) {
+            mockMvc.perform(get(api("/alertes/statistiques-diffusion"))
+                            .param("dateDebut", "2026-09-01").param("dateFin", "2026-09-30")
+                            .with(role("kc-superv-" + profil, profil)))
+                    .andExpect(status().isForbidden());
+        }
+    }
+
+    /**
+     * Une fenêtre inversée est une erreur de saisie, pas une fenêtre vide : la laisser passer
+     * renverrait un taux de 0 % parfaitement silencieux, que l'on prendrait pour une panne.
+     */
+    @Test
+    @DisplayName("Q-109 : une fenêtre inversée est refusée plutôt que renvoyée à zéro")
+    void statistiquesDiffusion_refusentUneFenetreInversee() throws Exception {
+        mockMvc.perform(get(api("/alertes/statistiques-diffusion"))
+                        .param("dateDebut", "2026-09-30").param("dateFin", "2026-09-01")
+                        .with(role("kc-dj-m15", "ROLE_DJ")))
+                .andExpect(status().isBadRequest());
+    }
+
     private String api(String chemin) {
         return "/api/v1" + chemin;
     }
