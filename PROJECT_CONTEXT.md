@@ -56,7 +56,7 @@ Authentification/RBAC via Keycloak.
 |---|---|---|---|
 | Juriste | `JURISTE` | Interne | Crée/suit les dossiers, planifie audiences, enregistre délibérés, alarmes, GED, sollicite constitutions |
 | Directeur Juridique | `DJ` | Interne | Tous droits juriste + **administration** (seuils, taxonomie), validation conjointe frais, suppression directe documents, tableau de bord |
-| Directeur Juridique Adjoint | `DJA` | Interne | Tous droits juriste + **contrôle d'opportunité** des frais, validation conjointe, suppression directe |
+| Directeur Juridique Adjoint | `DJA` | Interne | Tous droits juriste + **contrôle d'opportunité** des frais, validation conjointe, suppression directe, **administration (seuils, taxonomie) depuis Q-108** |
 | Assistante de Direction | `ASSISTANTE` | Interne | Tous droits juriste + **contrôle de conformité** des frais, validation des CR d'avocats, statut de paiement |
 | Supérieur Hiérarchique (Chef de département) | `SH` | Interne | **Seconde signature** des lettres de constitution |
 | Avocat partenaire | `AVOCAT` | **Externe** | Dépose demandes de frais, dépose CR d'audience et publications, reçoit lettres de constitution |

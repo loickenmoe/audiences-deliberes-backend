@@ -2159,6 +2159,44 @@ sont unifiées.
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
 
+### Q-108 ✅ L'administration des paramètres est ouverte à la DJA — tranché (2026-09-16)
+
+**Point de départ** : le porteur du projet demande un relevé complet des habilitations du DJ et de
+la DJA, partant de l'hypothèse que « la DJA peut tout ce que fait le DJ ».
+
+**Ce que le relevé a montré — et l'hypothèse était presque juste.** `ROLE_DJ` et `ROLE_DJA` sont
+**tous deux** composites de `ROLE_JURISTE` + `ROLE_SAISIE` : vérifié sur les jetons réels, les deux
+profils portent exactement les mêmes rôles à un près. Sur les 80 `@PreAuthorize` du backend, **65
+leur sont communs**. Il ne restait que **deux écarts, symétriques** :
+
+| Capacité | Endpoints | DJ | DJA |
+|---|---|---|---|
+| Écriture des paramètres | `PUT /configurations/{cle}`, `PUT /alertes/seuils` | ✅ | ❌ |
+| Contrôle d'opportunité | `PUT /frais/demandes/{id}/opportunite` | ❌ | ✅ |
+
+**Décision du porteur du projet** : ouvrir l'écriture des paramètres à la DJA. Le motif est la
+**continuité de service** — le DJ absent, plus personne ne pouvait relever un seuil de prorogation
+ou la taille maximale d'un document, alors qu'un Adjoint existe précisément pour suppléer. La
+traçabilité ne s'y perd pas : `ConfigurationService.modifier` historise déjà chaque écriture avec
+son auteur.
+
+**Pourquoi les deux endpoints et pas un seul.** Une ouverture limitée à `PUT /alertes/seuils` avait
+été envisagée puis écartée : `CHARGE_MAX_AVOCAT` est une clé de `configuration_systeme` comme les
+autres et s'affiche sur le **même écran**. La DJA aurait pu enregistrer un champ et pas ses voisins,
+ce qui aurait imposé d'inventer une permission par clé.
+
+**L'ouverture est à sens unique, et c'est délibéré.** Le contrôle d'opportunité **reste réservé à la
+DJA** : le donner aussi au DJ effondrerait sur un même profil les deux étapes que RG-INT-03 sépare —
+préparer l'avis d'opportunité, puis voter la validation conjointe. Un test dédié verrouille ce refus,
+pour qu'on ne « harmonise » pas les deux rôles par symétrie.
+
+**Défaut de couverture révélé au passage** : ces deux endpoints n'avaient **aucun** test
+d'habilitation. La restriction ne tenait qu'à une annotation, sur une règle pourtant écrite deux fois
+dans les sources. Trois tests d'intégration comblent le manque.
+
+**Statut (2026-09-16)** : appliqué — `hasAnyRole('DJ', 'DJA')` sur les deux endpoints,
+`PROJECT_CONTEXT.md` §4 et `FUNCTIONAL_MAP.md` (FR-ALR-01, UC-ALR-01) mis à jour.
+
 ### Q-27 ✅ `dossier.parties` défini deux fois — tranché (M2)
 Le dictionnaire REF-06 §2.1.2 déclare `parties JSONB` **deux fois**, avec deux structures
 différentes : `{demandeur, defendeur}` et `{demandeur, defendeur, client}`. Le contrat d'API et

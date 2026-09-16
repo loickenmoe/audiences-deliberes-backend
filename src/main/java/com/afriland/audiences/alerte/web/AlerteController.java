@@ -40,8 +40,17 @@ public class AlerteController {
     private final AlerteService alerteService;
     private final ConfigurationService configurationService;
 
+    /**
+     * Seuil {@code CHARGE_MAX_AVOCAT} — <strong>DJ et DJA</strong> (Q-108), pour la même raison de
+     * continuité de service que {@code PUT /configurations/{cle}}.
+     *
+     * <p>Réserver cette clé au seul DJ aurait été intenable : elle vit dans
+     * {@code configuration_systeme} comme les autres et s'affiche sur le <strong>même écran</strong>.
+     * La DJA aurait pu enregistrer un champ et pas ses voisins, ce qui aurait exigé une permission
+     * par clé pour rester compréhensible.
+     */
     @PutMapping("/seuils")
-    @PreAuthorize("hasRole('DJ')")
+    @PreAuthorize("hasAnyRole('DJ', 'DJA')")
     public ConfigurationResponse modifierSeuil(@Valid @RequestBody ModifierSeuilRequest request) {
         if (request.type() != TypeAlerte.CHARGE_MAX_AVOCAT) {
             throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,

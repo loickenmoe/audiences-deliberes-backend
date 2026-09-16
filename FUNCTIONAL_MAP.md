@@ -239,8 +239,8 @@ réels), y compris la relance à 72 h en conditions réelles (cron accéléré, 
 
 | FR | US | UC | RG | Entités | Endpoint | Comportement attendu | Statut |
 |---|---|---|---|---|---|---|---|
-| FR-ALR-01 | 7.1 | UC-ALR-01 | RG-ALR-02 | `configuration_systeme` | `PUT /alertes/seuils` | `ROLE_DJ` ; `type = CHARGE_MAX_AVOCAT`, `seuil` entier positif ; alerte déclenchée quand un avocat atteint le seuil | ✅ |
-| — | — | UC-ALR-01 | — | `configuration_systeme` | `GET /configurations`, `PUT /configurations/{cle}` | Lecture : `ROLE_CONSULTATION`. Écriture : `ROLE_DJ`. Clés au minimum : `SEUIL_MONTANT_DEFAUT`, `SEUIL_PROROGATIONS`, `CANAUX_NOTIFICATION_DEFAUT`, `DELAI_VALIDATION_CONJOINTE`, `TAILLE_MAX_GED`, `FORMATS_GED` (CONF01…CONF07) | ✅ |
+| FR-ALR-01 | 7.1 | UC-ALR-01 | RG-ALR-02 | `configuration_systeme` | `PUT /alertes/seuils` | **`ROLE_DJ` ou `ROLE_DJA` (Q-108)** ; `type = CHARGE_MAX_AVOCAT`, `seuil` entier positif ; alerte déclenchée quand un avocat atteint le seuil | ✅ |
+| — | — | UC-ALR-01 | — | `configuration_systeme` | `GET /configurations`, `PUT /configurations/{cle}` | Lecture : `ROLE_CONSULTATION`. Écriture : **`ROLE_DJ` ou `ROLE_DJA` (Q-108)**. Clés au minimum : `SEUIL_MONTANT_DEFAUT`, `SEUIL_PROROGATIONS`, `CANAUX_NOTIFICATION_DEFAUT`, `DELAI_VALIDATION_CONJOINTE`, `TAILLE_MAX_GED`, `FORMATS_GED` (CONF01…CONF07) | ✅ |
 | FR-ALR-02 | 7.2 | UC-ALR-02 | RG-ALR-01, RG-ALR-03 | `alerte` | *(déclenchement interne : `@Scheduled` + événements)* | Détecte la condition → identifie les destinataires → enregistre `DECLENCHEE` → diffuse (applicatif obligatoire, Outlook et Teams optionnels) **< 1 minute**, délivrance > 99 % | 🟡 |
 | FR-ALR-02 | 7.3 | UC-ALR-02 | RG-ALR-03 | `alerte` | `GET /alertes/mes-notifications` | Alertes de l'utilisateur, filtre `statut`, paginé | ✅ |
 | — | 7.4 | UC-ALR-02 | RG-ALR-01 | `alerte`, `historique_action` | `PATCH /alertes/{id}/traiter` **(à proposer)** | Seul le destinataire (403 sinon) ; `TRAITEE` + `date_traitement` | ✅ |
@@ -269,7 +269,7 @@ canal applicatif, marquage `TRAITEE` par un non-destinataire (403), seuil config
 pris en compte immédiatement, relance 72 h des demandes de suppression.
 
 **Écrans frontend** : *Mes notifications* (badge, liste, marquer comme traitée) ·
-*(DJ)* Configuration des seuils et paramètres · *(DSI/DJ)* Supervision des alertes (REF-05 §11.5).
+*(DJ/DJA)* Configuration des seuils et paramètres · *(DSI/DJ)* Supervision des alertes (REF-05 §11.5).
 
 ---
 

@@ -94,6 +94,7 @@ class HabilitationFrontendIntegrationTest {
     void setUp() {
         provisionner("kc-juriste-m15", "JURISTE");
         provisionner("kc-dj-m15", "DJ");
+        provisionner("kc-dja-m15", "DJA");
         provisionner("kc-sh-m15", "SH");
         provisionner("kc-assistante-m15", "ASSISTANTE");
         avocatId = avocatRepository.findByCompteKeycloak("kc-avocat-m15")
@@ -1375,6 +1376,87 @@ class HabilitationFrontendIntegrationTest {
         }
         mockMvc.perform(get(api("/ged/rapport-journalier")).with(role("kc-sh-m15", "ROLE_SH")))
                 .andExpect(status().isForbidden());
+    }
+
+    // ---------------------------------------------------------------- Administration (Q-108)
+
+    /**
+     * Q-108 — l'écriture des paramètres système est ouverte au DJ <b>et</b> à la DJA.
+     *
+     * <p>Ces deux endpoints n'avaient <b>aucun</b> test d'habilitation : la restriction ne tenait
+     * qu'à une annotation, sur une règle que la documentation énonce pourtant explicitement. Le
+     * constat a été fait en relevant les habilitations DJ/DJA à la demande du porteur du projet ;
+     * l'ouverture à la DJA est sa décision, motivée par la continuité de service — le DJ absent,
+     * personne ne pouvait plus relever un seuil.
+     */
+    @Test
+    @DisplayName("Q-108 : le DJ et la DJA écrivent les paramètres système, les autres profils sont refusés")
+    void configurations_ecriture_ouverteAuDjEtALaDja() throws Exception {
+        mockMvc.perform(put(api("/configurations/SEUIL_PROROGATIONS"))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(Map.of("valeur", "11")))
+                        .with(role("kc-dj-m15", "ROLE_DJ")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.valeur").value("11"));
+
+        mockMvc.perform(put(api("/configurations/SEUIL_PROROGATIONS"))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(Map.of("valeur", "12")))
+                        .with(role("kc-dja-m15", "ROLE_DJA")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.valeur").value("12"));
+
+        for (String profil : List.of("ROLE_JURISTE", "ROLE_ASSISTANTE", "ROLE_SH")) {
+            mockMvc.perform(put(api("/configurations/SEUIL_PROROGATIONS"))
+                            .contentType(MediaType.APPLICATION_JSON).content(json(Map.of("valeur", "13")))
+                            .with(role("kc-refus-" + profil, profil)))
+                    .andExpect(status().isForbidden());
+        }
+    }
+
+    @Test
+    @DisplayName("Q-108 : le seuil CHARGE_MAX_AVOCAT suit la même règle que les autres paramètres")
+    void seuilChargeMaxAvocat_ouvertAuDjEtALaDja() throws Exception {
+        mockMvc.perform(put(api("/alertes/seuils"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("type", "CHARGE_MAX_AVOCAT", "seuil", 21)))
+                        .with(role("kc-dj-m15", "ROLE_DJ")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.valeur").value("21"));
+
+        mockMvc.perform(put(api("/alertes/seuils"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("type", "CHARGE_MAX_AVOCAT", "seuil", 22)))
+                        .with(role("kc-dja-m15", "ROLE_DJA")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.valeur").value("22"));
+
+        mockMvc.perform(put(api("/alertes/seuils"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("type", "CHARGE_MAX_AVOCAT", "seuil", 23)))
+                        .with(role("kc-juriste-m15", "ROLE_JURISTE")))
+                .andExpect(status().isForbidden());
+    }
+
+    /**
+     * Le pendant du test précédent, et il compte autant : l'ouverture consentie à la DJA est <b>à
+     * sens unique</b>. Le contrôle d'opportunité reste réservé à la DJA, sans quoi RG-INT-03
+     * perdrait la séparation de ses deux étapes — le même profil préparerait l'avis puis voterait la
+     * validation conjointe. Ce test empêche qu'on « harmonise » les deux rôles par symétrie.
+     */
+    @Test
+    @DisplayName("Q-108 : le contrôle d'opportunité des frais reste refusé au DJ")
+    void controleOpportunite_resteReserveALaDja() throws Exception {
+        String corps = json(Map.of("accord", true));
+
+        mockMvc.perform(put(api("/frais/demandes/999999/opportunite"))
+                        .contentType(MediaType.APPLICATION_JSON).content(corps)
+                        .with(role("kc-dj-m15", "ROLE_DJ")))
+                .andExpect(status().isForbidden());
+
+        // La DJA franchit la garde : la demande est introuvable, ce qui n'est plus une question de droits.
+        mockMvc.perform(put(api("/frais/demandes/999999/opportunite"))
+                        .contentType(MediaType.APPLICATION_JSON).content(corps)
+                        .with(role("kc-dja-m15", "ROLE_DJA")))
+                .andExpect(result -> assertThat(result.getResponse().getStatus()).isNotEqualTo(403));
     }
 
     private String api(String chemin) {
