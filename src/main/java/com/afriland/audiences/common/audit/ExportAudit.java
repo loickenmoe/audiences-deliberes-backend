@@ -83,4 +83,18 @@ public class ExportAudit {
 
     @Column(name = "cle_stockage", nullable = false)
     private String cleStockage;
+
+    /**
+     * Référence lisible, de la forme {@code AUD-2026-0042} (Q-114).
+     *
+     * <p><b>L'empreinte prouve, la référence désigne.</b> On ne dicte pas soixante-quatre caractères
+     * hexadécimaux au téléphone et on ne les écrit pas dans un courrier de transmission ; c'est ce
+     * que fait la référence, et c'est par elle qu'on retrouve l'empreinte.
+     *
+     * <p>Le numéro vient de l'identifiant et non d'un compteur annuel : un compteur remis à zéro
+     * chaque année exigerait un verrou, pour un gain nul — ce qu'on attend d'une référence, c'est
+     * qu'elle soit unique et qu'elle se lise.
+     */
+    @Column(nullable = false, length = 20)
+    private String reference;
 }

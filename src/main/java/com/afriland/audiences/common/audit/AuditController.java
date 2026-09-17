@@ -112,6 +112,24 @@ public class AuditController {
     }
 
     /**
+     * Vérifie qu'un fichier détenu par quelqu'un correspond à une archive connue (Q-114).
+     *
+     * <p><b>C'est ce qui rend l'empreinte utile.</b> Sans ce chemin, vérifier supposait d'ouvrir un
+     * terminal, de taper {@code sha256sum} et de comparer soixante-quatre caractères à l'œil —
+     * autant dire que personne ne le faisait, et qu'une empreinte que nul ne vérifie n'est qu'une
+     * décoration.
+     *
+     * <p><b>Le fichier ne circule pas.</b> L'empreinte est calculée par le navigateur ; seul son
+     * résultat arrive ici. Un document d'audit n'a aucune raison de traverser le réseau pour être
+     * comparé à lui-même.
+     */
+    @GetMapping("/exports/verification")
+    @PreAuthorize("hasAnyRole('DJ', 'DJA')")
+    public VerificationResponse verifier(@RequestParam String empreinte) {
+        return auditExportService.verifier(empreinte);
+    }
+
+    /**
      * Récupération d'une archive déjà produite. Une URL pré-signée, valable quelques minutes, et
      * <b>une trace</b> : sans elle, on pourrait puiser dans les archives sans que rien ne le dise.
      */

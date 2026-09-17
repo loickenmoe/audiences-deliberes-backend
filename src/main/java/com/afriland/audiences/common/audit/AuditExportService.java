@@ -91,16 +91,25 @@ public class AuditExportService {
         List<HistoriqueAction> entrees = historiqueActionRepository.findAll(specification, TRI);
         List<LigneExport> lignes = mettreEnLignes(entrees);
 
-        String periode = "du " + dateDebut + " au " + dateFin;
-        byte[] contenu = format == FormatExportAudit.PDF
-                ? renderer.pdf(lignes, dateDebut, dateFin, periode)
-                : renderer.excel(lignes, dateDebut, dateFin);
-
-        String empreinte = empreinte(contenu);
-        String nomFichier = "audit-" + dateDebut + "-" + dateFin + "." + format.extension();
-        String cle = minioStorageService.deposerArchiveAudit(nomFichier, format.typeMime(), contenu);
+        /*
+         * La référence est lue **avant** la production du fichier, pour pouvoir y figurer. C'est la
+         * seule chose qui identifie l'archive et que le fichier puisse porter : tout ce qui décrit
+         * son contenu — l'empreinte au premier chef — est par construction impossible à écrire
+         * dedans sans le changer.
+         */
+        String reference = String.format("AUD-%d-%04d",
+                LocalDate.now().getYear(), exportAuditRepository.prochainNumeroReference());
+        String titre = "Audit " + reference + " - du " + dateDebut + " au " + dateFin;
 
         Utilisateur auteur = currentUserService.getCurrentUser();
+        byte[] contenu = format == FormatExportAudit.PDF
+                ? renderer.pdf(lignes, dateDebut, dateFin, titre, nomComplet(auteur))
+                : renderer.excel(lignes, dateDebut, dateFin, titre, nomComplet(auteur));
+
+        String empreinte = empreinte(contenu);
+        String nomFichier = reference.toLowerCase() + "-" + dateDebut + "-" + dateFin + "." + format.extension();
+        String cle = minioStorageService.deposerArchiveAudit(nomFichier, format.typeMime(), contenu);
+
         ExportAudit archive = exportAuditRepository.save(ExportAudit.builder()
                 .utilisateur(auteur)
                 .dateDebut(dateDebut).dateFin(dateFin)
@@ -109,10 +118,12 @@ public class AuditExportService {
                 .empreinte(empreinte)
                 .tailleOctets(contenu.length)
                 .cleStockage(cle)
+                .reference(reference)
                 .build());
 
         historiqueActionService.enregistrer(null, TypeActionHistorique.AUDIT_EXPORTE, criteres(
-                perimetre, dossierId, utilisateurId, code, dateDebut, dateFin, format, lignes.size(), empreinte));
+                perimetre, dossierId, utilisateurId, code, dateDebut, dateFin, format, lignes.size(), empreinte,
+                reference));
 
         return new Extraction(contenu, archive, nomFichier);
     }
@@ -133,6 +144,32 @@ public class AuditExportService {
                 Map.of("exportId", archive.getId(), "empreinte", archive.getEmpreinte()));
 
         return minioStorageService.urlTelechargement(archive.getCleStockage());
+    }
+
+    /**
+     * Vérifie qu'un fichier détenu par quelqu'un correspond à une archive connue (Q-114).
+     *
+     * <p><b>C'est ce qui rend l'empreinte utile.</b> Sans ce chemin, la vérification supposait
+     * d'ouvrir un terminal, de taper {@code sha256sum} et de comparer soixante-quatre caractères à
+     * l'œil — autant dire que personne ne la faisait. L'empreinte est calculée par le navigateur ;
+     * seul le résultat arrive ici, le fichier ne quitte jamais le poste.
+     *
+     * <p><b>Cette consultation n'est pas historisée</b>, et c'est délibéré : elle ne révèle aucun
+     * contenu, et une empreinte ne s'énumère pas — il faut déjà détenir le fichier pour interroger.
+     * La tracer n'aurait ajouté que du bruit à ce qu'on cherche à voir.
+     */
+    @Transactional(readOnly = true)
+    public VerificationResponse verifier(String empreinte) {
+        String normalisee = empreinte == null ? "" : empreinte.trim().toLowerCase();
+        if (!normalisee.matches("[0-9a-f]{64}")) {
+            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
+                    "Une empreinte SHA-256 compte 64 caractères hexadécimaux");
+        }
+        return exportAuditRepository.findByEmpreinte(normalisee)
+                .map(archive -> new VerificationResponse(true, versReponse().apply(archive)))
+                // Un fichier inconnu n'est pas une erreur : c'est une réponse, et souvent celle
+                // qu'on redoutait. Un 404 l'aurait fait passer pour une panne.
+                .orElseGet(() -> new VerificationResponse(false, null));
     }
 
     /**
@@ -175,8 +212,10 @@ public class AuditExportService {
 
     private Map<String, Object> criteres(Perimetre perimetre, Long dossierId, Long utilisateurId,
                                             TypeActionHistorique code, LocalDate dateDebut, LocalDate dateFin,
-                                            FormatExportAudit format, int lignes, String empreinte) {
+                                            FormatExportAudit format, int lignes, String empreinte,
+                                            String reference) {
         Map<String, Object> criteres = new LinkedHashMap<>();
+        criteres.put("reference", reference);
         criteres.put("perimetre", perimetre.name());
         criteres.put("format", format.name());
         criteres.put("dateDebut", dateDebut.toString());
@@ -193,6 +232,7 @@ public class AuditExportService {
     static Function<ExportAudit, ExportAuditResponse> versReponse() {
         return archive -> new ExportAuditResponse(
                 archive.getId(),
+                archive.getReference(),
                 archive.getUtilisateur() == null ? null : archive.getUtilisateur().getId(),
                 archive.getDateExport(), archive.getDateDebut(), archive.getDateFin(),
                 archive.getPerimetre(), archive.getFormat(), archive.getLignes(),

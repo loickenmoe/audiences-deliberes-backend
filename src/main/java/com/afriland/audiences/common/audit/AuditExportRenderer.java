@@ -41,7 +41,14 @@ public class AuditExportRenderer {
     public record LigneExport(String horodatage, String auteur, String dossier, String action, String details) {
     }
 
-    public byte[] pdf(List<LigneExport> lignes, LocalDate dateDebut, LocalDate dateFin, String empreintePeriode) {
+    /**
+     * @param titre  porte la référence de l'archive, seule chose l'identifiant que le fichier puisse
+     *               contenir : tout ce qui décrit son contenu — l'empreinte d'abord — changerait les
+     *               octets en y étant écrit, donc changerait ce qu'il décrit
+     * @param auteur nom de qui a demandé l'extraction, porté par le pied de page
+     */
+    public byte[] pdf(List<LigneExport> lignes, LocalDate dateDebut, LocalDate dateFin, String titre,
+                         String auteur) {
         try (PDDocument document = new PDDocument(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             // Paysage : cinq colonnes dont deux longues ne tiennent pas en portrait.
             PDRectangle format = new PDRectangle(PDRectangle.A4.getHeight(), PDRectangle.A4.getWidth());
@@ -59,7 +66,7 @@ public class AuditExportRenderer {
                         document.addPage(page);
                         cs = new PDPageContentStream(document, page);
                         y = format.getHeight() - 45;
-                        ecrire(cs, policeGrasse, 12, 40, y, "Audit - " + empreintePeriode);
+                        ecrire(cs, policeGrasse, 12, 40, y, titre);
                         y -= 16;
                         ecrire(cs, police, 8, 40, y,
                                 "Periode du " + dateDebut + " au " + dateFin + " - " + lignes.size() + " ligne(s)");
@@ -79,9 +86,37 @@ public class AuditExportRenderer {
                     page = new PDPage(format);
                     document.addPage(page);
                     cs = new PDPageContentStream(document, page);
-                    ecrire(cs, policeGrasse, 12, 40, format.getHeight() - 45, "Audit - " + empreintePeriode);
+                    ecrire(cs, policeGrasse, 12, 40, format.getHeight() - 45, titre);
                     ecrire(cs, police, 10, 40, format.getHeight() - 70,
                             "Aucune action sur la periode du " + dateDebut + " au " + dateFin + ".");
+                }
+                /*
+                 * Pied de page auto-descriptif. Un document d'audit détaché de l'application doit
+                 * dire lui-même ce qu'il est : sans quoi une page imprimée devient anonyme, et il
+                 * faut recalculer son empreinte rien que pour savoir de quoi on parle.
+                 */
+                if (cs != null) {
+                    cs.close();
+                    cs = null;
+                }
+                PDPage colophon = new PDPage(format);
+                document.addPage(colophon);
+                cs = new PDPageContentStream(document, colophon);
+                float yc = format.getHeight() - 60;
+                ecrire(cs, policeGrasse, 11, 40, yc, titre);
+                yc -= 22;
+                for (String mention : List.of(
+                        "Periode couverte  : du " + dateDebut + " au " + dateFin,
+                        "Lignes            : " + lignes.size(),
+                        "Extrait par       : " + (auteur == null || auteur.isBlank() ? "-" : auteur),
+                        "Extrait le        : " + horodater(java.time.LocalDateTime.now()),
+                        "",
+                        "L'empreinte SHA-256 de ce fichier est consignee dans l'application sous cette",
+                        "reference. Elle n'y figure pas : l'y ecrire changerait les octets du fichier,",
+                        "donc l'empreinte elle-meme. Pour verifier, deposez ce fichier dans l'ecran",
+                        "d'audit : l'application recalcule son empreinte et indique s'il correspond.")) {
+                    ecrire(cs, police, 9, 40, yc, mention);
+                    yc -= 14;
                 }
             } finally {
                 if (cs != null) cs.close();
@@ -93,7 +128,16 @@ public class AuditExportRenderer {
         }
     }
 
-    public byte[] excel(List<LigneExport> lignes, LocalDate dateDebut, LocalDate dateFin) {
+    /**
+     * Le classeur, et sa feuille de provenance.
+     *
+     * <p>Le PDF porte son colophon en derniere page ; le classeur n'en avait aucun. Or un fichier se
+     * renomme, et un tableur detache de son nom ne dit plus ni ce qu'il couvre, ni qui l'a extrait,
+     * ni sous quelle reference il est consigne. La matiere qu'on trie a autant besoin de sa
+     * provenance que la piece qu'on remet.
+     */
+    public byte[] excel(List<LigneExport> lignes, LocalDate dateDebut, LocalDate dateFin,
+                        String titre, String auteur) {
         try (XSSFWorkbook classeur = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             XSSFSheet feuille = classeur.createSheet("Audit");
             Row entete = feuille.createRow(0);
@@ -118,6 +162,27 @@ public class AuditExportRenderer {
             for (int i = 0; i < largeurs.length; i++) {
                 feuille.setColumnWidth(i, largeurs[i]);
             }
+            /*
+             * Feuille de provenance, en seconde position : elle ne doit pas s'interposer entre celui
+             * qui ouvre le classeur et les lignes qu'il vient chercher.
+             */
+            XSSFSheet provenance = classeur.createSheet("Provenance");
+            String[] mentions = {
+                    titre == null ? "" : titre,
+                    "Periode couverte : du " + dateDebut + " au " + dateFin,
+                    "Lignes : " + lignes.size(),
+                    "Extrait par : " + (auteur == null || auteur.isBlank() ? "-" : auteur),
+                    "Extrait le : " + horodater(java.time.LocalDateTime.now()),
+                    "",
+                    "L'empreinte SHA-256 de ce fichier est consignee dans l'application sous cette reference.",
+                    "Elle n'y figure pas : l'y ecrire changerait les octets du fichier, donc l'empreinte.",
+                    "Pour verifier, deposez ce fichier dans l'ecran d'audit.",
+            };
+            for (int i = 0; i < mentions.length; i++) {
+                provenance.createRow(i).createCell(0).setCellValue(mentions[i]);
+            }
+            provenance.setColumnWidth(0, 24_000);
+
             classeur.write(out);
             return out.toByteArray();
         } catch (IOException e) {

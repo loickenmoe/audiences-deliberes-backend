@@ -62,7 +62,8 @@ class AuditExportServiceTest {
         when(currentUserService.getCurrentUser()).thenReturn(Utilisateur.builder().id(3L).build());
         when(minioStorageService.deposerArchiveAudit(anyString(), anyString(), any())).thenReturn("audit/x.pdf");
         when(exportAuditRepository.save(any(ExportAudit.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(renderer.pdf(any(), any(), any(), anyString())).thenReturn(contenu);
+        when(exportAuditRepository.prochainNumeroReference()).thenReturn(42L);
+        when(renderer.pdf(any(), any(), any(), anyString(), anyString())).thenReturn(contenu);
     }
 
     /**
@@ -105,6 +106,8 @@ class AuditExportServiceTest {
                 .containsEntry("format", "PDF")
                 .containsEntry("auteurRecherche", 42L)
                 .containsEntry("lignes", 0);
+        // La référence figure dans la trace : c'est par elle qu'on relie l'acte à la pièce.
+        assertThat(captor.getValue().get("reference")).asString().startsWith("AUD-");
     }
 
     /**
@@ -183,5 +186,69 @@ class AuditExportServiceTest {
     void empreinte_estUnSha256Hexadecimal() {
         assertThat(AuditExportService.empreinte("abc".getBytes(StandardCharsets.UTF_8)))
                 .isEqualTo("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+    }
+
+    /**
+     * La référence est lue <b>avant</b> la production du fichier, et figure dans le titre remis au
+     * rendu : c'est la seule chose identifiant l'archive que le fichier puisse contenir.
+     */
+    @Test
+    void exporter_poseLaReferenceDansLeFichierEtDansLArchive() {
+        byte[] contenu = {9};
+        extractionVide(contenu);
+
+        var extraction = auditExportService.exporter(Perimetre.TOUT, null, null, null,
+                LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30), FormatExportAudit.PDF);
+
+        assertThat(extraction.archive().getReference()).matches("AUD-\\d{4}-0042");
+        assertThat(extraction.nomFichier()).startsWith("aud-");
+
+        ArgumentCaptor<String> titre = ArgumentCaptor.forClass(String.class);
+        verify(renderer).pdf(any(), any(), any(), titre.capture(), anyString());
+        assertThat(titre.getValue()).contains(extraction.archive().getReference());
+    }
+
+    /**
+     * La vérification est ce qui rend l'empreinte utile : sans elle, il fallait ouvrir un terminal
+     * et comparer soixante-quatre caractères à l'œil.
+     */
+    @Test
+    void verifier_reconnaitUnFichierQuiCorrespond() {
+        String empreinte = AuditExportService.empreinte("abc".getBytes(StandardCharsets.UTF_8));
+        ExportAudit archive = ExportAudit.builder().id(7L).reference("AUD-2026-0007")
+                .empreinte(empreinte).perimetre(Perimetre.TOUT).format(FormatExportAudit.PDF).build();
+        when(exportAuditRepository.findByEmpreinte(empreinte)).thenReturn(Optional.of(archive));
+
+        var resultat = auditExportService.verifier(empreinte.toUpperCase());
+
+        // Insensible à la casse : un contrôleur recopie une empreinte comme il la voit.
+        assertThat(resultat.reconnue()).isTrue();
+        assertThat(resultat.archive().reference()).isEqualTo("AUD-2026-0007");
+    }
+
+    /**
+     * Un fichier inconnu n'est pas une erreur : c'est une réponse, et souvent celle qu'on redoutait.
+     * Un 404 l'aurait fait passer pour une panne de l'application.
+     */
+    @Test
+    void verifier_repondSansErreurQuandRienNeCorrespond() {
+        String empreinte = "a".repeat(64);
+        when(exportAuditRepository.findByEmpreinte(empreinte)).thenReturn(Optional.empty());
+
+        var resultat = auditExportService.verifier(empreinte);
+
+        assertThat(resultat.reconnue()).isFalse();
+        assertThat(resultat.archive()).isNull();
+    }
+
+    /** Ce qui n'est pas une empreinte est refusé : chercher « bonjour » en base n'a aucun sens. */
+    @Test
+    void verifier_refuseCeQuiNEstPasUneEmpreinte() {
+        for (String invalide : List.of("", "bonjour", "abc", "z".repeat(64), "a".repeat(63))) {
+            assertThatThrownBy(() -> auditExportService.verifier(invalide))
+                    .as("empreinte invalide : %s", invalide)
+                    .isInstanceOf(ApiException.class)
+                    .hasMessageContaining("64 caractères");
+        }
     }
 }

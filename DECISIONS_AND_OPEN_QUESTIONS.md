@@ -2159,6 +2159,57 @@ sont unifiées.
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
 
+### Q-114 ✅ L'empreinte devient utilisable — tranché (2026-09-17)
+
+**Le constat de recette.** Q-113 scellait correctement les archives, mais l'écran affichait
+`empreinte 59bde5c1748ce074555d0329ec96fbfb0cf270815292619023866c8fd04b807e` — soixante-quatre
+caractères d'un seul tenant, que personne ne compare et que personne ne dicte. Une empreinte que nul
+ne vérifie n'est pas une preuve : c'est une décoration. Trois manques, trois réponses.
+
+**1. Vérifier depuis l'application.** `GET /api/historique/exports/verification?empreinte=` répond
+`{reconnue, archive}`. **Seule l'empreinte circule** : elle est calculée par le navigateur
+(`crypto.subtle.digest`), et un document d'audit n'a aucune raison de traverser le réseau pour être
+comparé à lui-même. Un fichier inconnu **n'est pas une erreur, c'est une réponse** — `reconnue:false`
+et non un 404 : « je ne reconnais pas ce document » et « la vérification a échoué » n'engagent pas
+les mêmes suites. Le 400 reste réservé à ce qui n'est pas une empreinte du tout.
+
+**2. Une référence lisible à côté de l'empreinte.** `AUD-2026-0042` s'écrit, se prononce, se
+retrouve. **L'empreinte prouve, la référence désigne** : ce sont deux métiers, et les confondre est
+ce qui rendait l'empreinte pénible à l'usage.
+
+*Pourquoi une séquence dédiée et non l'identifiant de la ligne.* La référence doit figurer **dans le
+PDF**, donc être connue **avant** de produire le fichier — alors que l'identifiant n'existe qu'après
+l'insertion, laquelle exige l'empreinte, laquelle exige le fichier. Une séquence indépendante rompt
+ce cercle. C'est la même raison qui interdit de dériver la référence de l'empreinte : rien de ce qui
+décrit le contenu d'un fichier ne peut être écrit dedans sans le changer. Pas de compteur remis à
+zéro chaque année — il exigerait un verrou pour un gain nul ; l'année dit quand, le numéro dit lequel.
+
+**3. Un colophon dans le PDF.** Dernière page : période, nombre de lignes, auteur, instant de
+génération, et l'explication de ce que l'empreinte est et pourquoi elle ne peut pas figurer dans le
+fichier qu'elle scelle. Sans cette page, celui qui reçoit la pièce ignore qu'une empreinte existe.
+
+**Le nom du fichier porte la référence** (`aud-2026-0042-2026-09-01-2026-09-17.pdf`) : c'est ce nom
+qu'on cite dans un courrier de transmission.
+
+**Défaut trouvé en chemin, et corrigé (CORS).** `Content-Disposition` et `X-Empreinte-SHA256`
+n'étaient **pas exposés** : CORS ne laisse lire qu'une poignée d'en-têtes, les autres existent sur le
+fil mais restent invisibles au code appelant. Conséquence, depuis Q-113 : le bandeau de succès
+affichait « empreinte … » vide, et le front reconstruisait un nom de fichier plausible mais
+différent de celui sous lequel l'archive est consignée. `setExposedHeaders` le corrige. Le parcours
+e2e de Q-113 ne l'avait pas vu parce qu'il se contentait de la phrase d'accompagnement sans regarder
+la valeur — assertion resserrée depuis. **Une assertion qui ne regarde pas la valeur ne garde rien.**
+
+**Le classeur porte désormais sa provenance, comme le PDF.** Une feuille *Provenance*, en seconde
+position pour ne pas s'interposer entre celui qui ouvre le classeur et les lignes qu'il vient
+chercher : référence, période, nombre de lignes, auteur, instant. L'asymétrie précédente — colophon
+dans le PDF, rien dans l'Excel — laissait la matière qu'on trie sans provenance dès qu'on la
+renommait, alors qu'elle en a autant besoin que la pièce qu'on remet.
+
+**Ce que la vérification ne prouve pas, et l'écran le dit.** « Reconnue » démontre que le fichier n'a
+pas changé depuis son scellement. Elle n'établit pas son antériorité face à un tiers : l'application
+détient à la fois le fichier et la ligne qui l'atteste. L'horodatage opposable relèverait d'un tiers
+de confiance — hors périmètre, et énoncé plutôt que tu.
+
 ### Q-113 ✅ L'export de l'audit, scellé — tranché (2026-09-17)
 
 **Jalon 3, et dernier du chantier d'audit.** Un inspecteur ne consulte pas un écran : il emporte une
