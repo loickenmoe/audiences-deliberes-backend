@@ -70,6 +70,7 @@ FR-AUD-01, FR-AUD-03, FR-DEL-02, FR-DEL-04, FR-INT-01, FR-INT-05, FR-GED-01, FR-
 | — | — | — | RG-DOS-09 | `dossier`, `audit_seuil_dossier` | `POST /dossiers/{id}/seuil-derogation` | Juriste propose un nouveau seuil + motif obligatoire → `EN_ATTENTE` ; 400 si dossier non sensible ; **201** | ✅ |
 | — | — | — | RG-DOS-09 | `audit_seuil_dossier` | `PUT /dossiers/{id}/seuil-derogation/{auditId}` | DJ/DJA valide ou rejette (motif obligatoire si rejet) ; si validée → `dossier.seuil_montant` + `seuil_origine='DEROGATION'` | ✅ |
 | FR-DOS-01 | 1.6 | toutes | RG-DOS-06 | `historique_action` | *(transversal)* | Chaque opération de modification insère une ligne `{dossier_id, utilisateur_id, action, details JSONB, date_action}` | ✅ |
+| — | 1.6 | — | RG-DOS-06 | `historique_action` | `GET /historique/systeme?utilisateurId&action&dateDebut&dateFin&page&size` | **`ROLE_DJ` ou `ROLE_DJA` (Q-110)** ; les actions historisées **sans dossier** — paramètres système, référentiels — qui n'avaient jusque-là **aucun point de lecture**. Périmètre figé côté serveur : l'activité des dossiers n'y entre jamais. Filtre par libellé en **liste fermée**, alimentée par les libellés présents en base (QF-24 interdit une recherche « contient » fiable). **Ne recense que les modifications** : aucune consultation n'est tracée | ✅ |
 | FR-REP-03 | 8.6 | UC-REP-03 | RG-REP-04 | `client`, `dossier` | `GET /clients`, `GET /clients/{id}` | Recherche par nom (partielle) / référence, paginée | ✅ |
 
 **Tests attendus** : création nominale, référence en doublon, client inexistant, champs

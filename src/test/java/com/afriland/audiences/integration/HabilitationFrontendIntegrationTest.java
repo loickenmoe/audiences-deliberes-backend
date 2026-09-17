@@ -1499,6 +1499,94 @@ class HabilitationFrontendIntegrationTest {
                 .andExpect(status().isBadRequest());
     }
 
+    /**
+     * Q-110 — le journal des actions hors dossier.
+     *
+     * <p>Le test le plus important du lot n'est pas l'habilitation mais le <b>périmètre</b> : le
+     * journal ne doit jamais laisser filtrer l'activité des juristes sur leurs dossiers. C'est une
+     * vue d'administration, pas une vue sur les personnes — la nuance est ce qui la rend acceptable
+     * tant que NF-CONF-01 (RGPD, conservation) reste à définir avec la DRH.
+     */
+    @Test
+    @DisplayName("Q-110 : le journal ne contient que des actions sans dossier, et jamais celles d'un dossier")
+    void journalSysteme_neContientQueLesActionsHorsDossier() throws Exception {
+        // Une action AVEC dossier, qui ne doit pas apparaître.
+        long dossierId = creerDossier();
+        // Une action SANS dossier : la modification d'un paramètre système.
+        mockMvc.perform(put(api("/configurations/SEUIL_PROROGATIONS"))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(Map.of("valeur", "14")))
+                        .with(role("kc-dj-m15", "ROLE_DJ")))
+                .andExpect(status().isOk());
+
+        JsonNode journal = lireJson(mockMvc.perform(get(api("/historique/systeme")).param("size", "100")
+                        .with(role("kc-dj-m15", "ROLE_DJ")))
+                .andExpect(status().isOk())
+                .andReturn());
+
+        assertThat(journal.get("totalElements").asLong()).isPositive();
+        assertThat(journal.get("content")).isNotEmpty();
+        // La création du dossier est historisée, mais avec un dossier : elle reste hors du journal.
+        for (JsonNode entree : journal.get("content")) {
+            assertThat(entree.get("action").asText()).doesNotContain("Création du dossier");
+        }
+        assertThat(journal.get("actionsDisponibles")).isNotEmpty();
+        assertThat(dossierId).isPositive();
+    }
+
+    @Test
+    @DisplayName("Q-110 : le journal est réservé au DJ et à la DJA")
+    void journalSysteme_reserveAuDjEtALaDja() throws Exception {
+        for (String profil : List.of("ROLE_DJ", "ROLE_DJA")) {
+            mockMvc.perform(get(api("/historique/systeme")).with(role("kc-journal-" + profil, profil)))
+                    .andExpect(status().isOk());
+        }
+        for (String profil : List.of("ROLE_JURISTE", "ROLE_ASSISTANTE", "ROLE_SH")) {
+            mockMvc.perform(get(api("/historique/systeme")).with(role("kc-journal-" + profil, profil)))
+                    .andExpect(status().isForbidden());
+        }
+    }
+
+    @Test
+    @DisplayName("Q-110 : le journal filtre par auteur, par libellé et par période ; une fenêtre inversée est refusée")
+    void journalSysteme_filtre() throws Exception {
+        mockMvc.perform(put(api("/configurations/SEUIL_PROROGATIONS"))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(Map.of("valeur", "15")))
+                        .with(role("kc-dja-m15", "ROLE_DJA")))
+                .andExpect(status().isOk());
+        Long djaId = utilisateurRepository.findByKeycloakId("kc-dja-m15").orElseThrow().getId();
+
+        JsonNode parAuteur = lireJson(mockMvc.perform(get(api("/historique/systeme"))
+                        .param("utilisateurId", String.valueOf(djaId)).param("size", "100")
+                        .with(role("kc-dj-m15", "ROLE_DJ")))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(parAuteur.get("content")).isNotEmpty();
+        for (JsonNode entree : parAuteur.get("content")) {
+            assertThat(entree.get("utilisateurId").asLong()).isEqualTo(djaId);
+        }
+
+        // Libellé exact, jamais « contient » : `action` est une phrase libre (QF-24).
+        JsonNode parLibelle = lireJson(mockMvc.perform(get(api("/historique/systeme"))
+                        .param("action", "Modification de la configuration SEUIL_PROROGATIONS")
+                        .param("size", "100").with(role("kc-dj-m15", "ROLE_DJ")))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(parLibelle.get("content")).isNotEmpty();
+
+        // Une période antérieure à toute activité ne renvoie rien, sans erreur.
+        JsonNode horsPeriode = lireJson(mockMvc.perform(get(api("/historique/systeme"))
+                        .param("dateDebut", "2020-01-01").param("dateFin", "2020-01-31")
+                        .with(role("kc-dj-m15", "ROLE_DJ")))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(horsPeriode.get("totalElements").asLong()).isZero();
+
+        mockMvc.perform(get(api("/historique/systeme"))
+                        .param("dateDebut", "2026-09-30").param("dateFin", "2026-09-01")
+                        .with(role("kc-dj-m15", "ROLE_DJ")))
+                .andExpect(status().isBadRequest());
+    }
+
     private String api(String chemin) {
         return "/api/v1" + chemin;
     }

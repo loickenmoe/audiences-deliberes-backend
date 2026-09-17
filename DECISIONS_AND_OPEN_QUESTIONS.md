@@ -2159,6 +2159,56 @@ sont unifiées.
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
 
+### Q-110 ✅ Les actions historisées hors dossier deviennent lisibles — tranché (2026-09-17)
+
+**Point de départ** : une analyse de l'auditabilité demandée par le porteur du projet. RG-DOS-06
+historise chaque modification — **42 points d'écriture, 11 services, 45 libellés distincts, 100 %
+des lignes portant des `details`** — mais l'unique point de lecture, `GET /dossiers/{id}/historique`,
+part d'un dossier. Les actions qui n'en ont pas étaient donc **écrites et jamais relues** :
+modifications de paramètres système, et indexations de jurisprudence sans dossier. Mesuré sur la base
+de recette : **26 lignes sur 657, soit 4 %**.
+
+**Ce que la mesure a corrigé dans l'analyse.** Une lecture statique du code n'avait trouvé qu'une
+famille d'actions concernée (`ConfigurationService`). La base en a révélé une seconde —
+`JurisprudenceService` passe un `dossierId` qui peut être nul, ce qu'aucun `grep` ne voit.
+
+**Pourquoi c'était devenu pressant.** Q-108 a ouvert l'administration des paramètres à la DJA. Il
+avait alors été argumenté que « la traçabilité n'y perd rien, chaque écriture étant historisée avec
+son auteur » : exact en base, mais le nombre de détenteurs de ce pouvoir doublait sans qu'aucun écran
+ne permette d'en relire l'exercice. « Qui a abaissé le seuil de validation conjointe ? » exigeait une
+requête SQL.
+
+**Livré** : `GET /historique/systeme`, réservé au **DJ et à la DJA**, filtrable par auteur, libellé
+et période, et un bloc sur l'écran 41, sous les paramètres — l'adjacence est la bonne, vingt-deux des
+vingt-six lignes étant des modifications de réglages.
+
+**Quatre décisions de conception.**
+
+1. **Le périmètre est structurel, pas conventionnel.** `HistoriqueActionSpecifications.Perimetre`
+   est une énumération à trois valeurs exclusives ; l'endpoint fige `HORS_DOSSIER`. Ouvrir un jour la
+   vue transversale serait une décision, pas l'effet d'un paramètre oublié.
+2. **Le filtre par libellé est une liste fermée**, construite à partir des libellés réellement
+   présents en base, et **indépendante des filtres en cours** — sinon choisir un libellé ferait
+   disparaître les autres choix. `action` étant une phrase française libre (QF-24), un `LIKE '%…%'`
+   aurait paru commode et menti par omission dès qu'un libellé change d'un mot.
+3. **DJ et DJA, pas `ROLE_CONSULTATION`**, alors que l'historique d'un dossier est ouvert à tout
+   profil interne. Sur une fiche, on regarde un dossier ; ici la lecture est agrégée et filtrable par
+   auteur — même contenu, autre nature. La restreindre est le minimum tant que **NF-CONF-01**
+   (RGPD, conservation) reste « à définir avec la DRH » dans les sources.
+4. **« Journal », jamais « Audit ».** Seules les modifications sont historisées ; **aucune
+   consultation ne l'est**. Ouvrir un dossier sensible ou télécharger une pièce ne laisse aucune
+   trace. L'écran le dit lui-même, plutôt que de laisser le défaut se découvrir au moment où l'on en
+   aurait besoin.
+
+**Ce que cela ne règle pas, et qui reste ouvert.** Le manque comblé était une question de
+*couverture* ; il reste une question de *point d'entrée*. Trois questions demeurent sans réponse :
+« qu'a fait X le mois dernier ? », « toutes les suppressions du trimestre ? », « que s'est-il passé
+entre le 1er et le 15 ? ». Y répondre suppose deux préalables — un **code d'action typé** (QF-24), et
+**NF-CONF-01** tranché. La décision d'ouvrir ou non cette vue est laissée au porteur du projet.
+
+**Statut (2026-09-17)** : appliqué — V17 (deux index partiels), spécification, endpoint, écran,
+tests. Backend 385/385, frontend 299/299, bout en bout vérifié contre la pile réelle.
+
 ### Q-109 ✅ Le taux de délivrance des alertes devient mesurable — tranché (2026-09-16)
 
 **Point de départ** : un recensement de l'observabilité de l'application, demandé par le porteur du
