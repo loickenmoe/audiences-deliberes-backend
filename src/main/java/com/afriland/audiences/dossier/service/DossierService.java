@@ -1,5 +1,6 @@
 package com.afriland.audiences.dossier.service;
 
+import com.afriland.audiences.common.audit.TypeActionHistorique;
 import com.afriland.audiences.alerte.domain.TypeAlerte;
 import com.afriland.audiences.alerte.service.AlerteService;
 import com.afriland.audiences.common.audit.HistoriqueAction;
@@ -150,7 +151,7 @@ public class DossierService {
         }
 
         Utilisateur auteur = currentUserService.getCurrentUser();
-        historiqueActionService.enregistrerPour(auteur, dossier.getId(), "Création du dossier",
+        historiqueActionService.enregistrerPour(auteur, dossier.getId(), TypeActionHistorique.DOSSIER_CREE,
                 Map.of("reference", dossier.getReference(), "categorie", categorie.name()));
 
         return construireReponse(dossier, List.of(instance), juristesAffectes, avocatsAffectes, List.of());
@@ -382,7 +383,7 @@ public class DossierService {
         List<Long> juristesAffectes = affecterJuristes(dossier, juristesDemandes);
         List<Long> avocatsAffectes = affecterAvocats(dossier, avocatsDemandes);
 
-        historiqueActionService.enregistrer(dossierId, "Modification de l'affectation",
+        historiqueActionService.enregistrer(dossierId, TypeActionHistorique.DOSSIER_AFFECTATION_MODIFIEE,
                 Map.of("juristesAffectes", juristesAffectes, "avocatsAffectes", avocatsAffectes));
 
         List<EtapeProcedure> etapes = etapeProcedureRepository.findByDossierIdOrderByTypeAsc(dossierId);
@@ -418,8 +419,10 @@ public class DossierService {
         etape.setStatutCycleVie(nouveau);
         etape = etapeProcedureRepository.save(etape);
 
-        historiqueActionService.enregistrer(dossierId, "Changement de statut de l'étape " + etape.getType(),
-                Map.of("ancienStatut", ancien.name(), "nouveauStatut", nouveau.name()));
+        // Q-111 : l'étape descend dans `details`. Noyée dans la phrase, elle n'était pas
+        // interrogeable ; ici, « tous les passages en EN_DELIBERE du trimestre » devient une requête.
+        historiqueActionService.enregistrer(dossierId, TypeActionHistorique.ETAPE_STATUT_MODIFIE,
+                Map.of("etape", etape.getType().name(), "ancienStatut", ancien.name(), "nouveauStatut", nouveau.name()));
 
         if (transitionValidator.estExerciceDeRecours(ancien, nouveau)) {
             ouvrirEtapeSuivante(dossier, etape);
@@ -440,9 +443,8 @@ public class DossierService {
             return;
         }
         EtapeProcedure nouvelle = creerEtapeInterne(dossier, suivante, StatutCycleVie.OUVERTURE);
-        historiqueActionService.enregistrer(dossier.getId(),
-                "Ouverture automatique de l'étape " + suivante + " (exercice d'un recours)",
-                Map.of("etapeId", nouvelle.getId()));
+        historiqueActionService.enregistrer(dossier.getId(), TypeActionHistorique.ETAPE_OUVERTE_AUTOMATIQUEMENT,
+                Map.of("etape", suivante.name(), "etapeId", nouvelle.getId()));
     }
 
     @Transactional
@@ -460,9 +462,8 @@ public class DossierService {
             }
         }
         EtapeProcedure etape = creerEtapeInterne(dossier, request.type(), StatutCycleVie.OUVERTURE);
-        historiqueActionService.enregistrer(dossierId,
-                "Positionnement direct à l'étape " + request.type() + " (antécédents inconnus)",
-                Map.of("etapeId", etape.getId()));
+        historiqueActionService.enregistrer(dossierId, TypeActionHistorique.ETAPE_POSITIONNEE_DIRECTEMENT,
+                Map.of("etape", request.type().name(), "etapeId", etape.getId()));
         return etapeProcedureMapper.toResponse(etape);
     }
 
@@ -507,7 +508,7 @@ public class DossierService {
                 .statut(StatutValidation.EN_ATTENTE)
                 .build();
         audit = auditSeuilDossierRepository.save(audit);
-        historiqueActionService.enregistrerPour(auteur, dossier.getId(), "Demande de dérogation de seuil",
+        historiqueActionService.enregistrerPour(auteur, dossier.getId(), TypeActionHistorique.DEROGATION_SEUIL_DEMANDEE,
                 Map.of("nouveauSeuil", nouveauSeuil, "motif", motif));
         return audit;
     }
@@ -567,9 +568,11 @@ public class DossierService {
             dossierRepository.save(dossier);
         }
 
-        historiqueActionService.enregistrerPour(validateur, dossierId,
-                "Décision sur la dérogation de seuil : " + request.statut(),
-                Map.of("auditId", auditId, "motif", Optional.ofNullable(request.motif()).orElse("")));
+        // Le sens de la décision devient une donnée : « toutes les dérogations rejetées » se
+        // demande, alors qu'il fallait auparavant lire chaque phrase.
+        historiqueActionService.enregistrerPour(validateur, dossierId, TypeActionHistorique.DEROGATION_SEUIL_ARBITREE,
+                Map.of("decision", request.statut().name(), "auditId", auditId,
+                        "motif", Optional.ofNullable(request.motif()).orElse("")));
 
         return auditSeuilMapper.toResponse(audit);
     }
@@ -616,9 +619,9 @@ public class DossierService {
         }
         dossier = dossierRepository.save(dossier);
 
-        historiqueActionService.enregistrerPour(validateur, dossierId,
-                "Décision sur la sensibilité du dossier : " + request.statut(),
-                Map.of("motifRejet", Optional.ofNullable(request.motifRejet()).orElse("")));
+        historiqueActionService.enregistrerPour(validateur, dossierId, TypeActionHistorique.SENSIBILITE_ARBITREE,
+                Map.of("decision", request.statut().name(),
+                        "motifRejet", Optional.ofNullable(request.motifRejet()).orElse("")));
 
         List<EtapeProcedure> etapes = etapeProcedureRepository.findByDossierIdOrderByTypeAsc(dossierId);
         List<Long> juristesAffectes = dossierJuristeRepository.findByDossierId(dossierId).stream()

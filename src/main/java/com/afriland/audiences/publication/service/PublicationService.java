@@ -1,5 +1,6 @@
 package com.afriland.audiences.publication.service;
 
+import com.afriland.audiences.common.audit.TypeActionHistorique;
 import com.afriland.audiences.alerte.domain.TypeAlerte;
 import com.afriland.audiences.alerte.service.AlerteService;
 import com.afriland.audiences.audience.domain.Audience;
@@ -114,7 +115,7 @@ public class PublicationService {
                 .build();
         publication = publicationRepository.save(publication);
 
-        historiqueActionService.enregistrer(dossier.getId(), "Dépôt d'un compte rendu d'audience",
+        historiqueActionService.enregistrer(dossier.getId(), TypeActionHistorique.PUBLICATION_CR_DEPOSE,
                 Map.of("publicationId", publication.getId(), "audienceId", audience.getId(),
                         "pieceJointe", cle != null));
         notifierProfil("ASSISTANTE", dossier.getId(), "Nouveau compte rendu d'audience déposé sur le dossier "
@@ -143,7 +144,7 @@ public class PublicationService {
                 .build();
         publication = publicationRepository.save(publication);
 
-        historiqueActionService.enregistrer(dossier.getId(), "Dépôt d'une autre publication",
+        historiqueActionService.enregistrer(dossier.getId(), TypeActionHistorique.PUBLICATION_AUTRE_DEPOSEE,
                 Map.of("publicationId", publication.getId(), "typeDocument", typeDocument.name()));
         notifierProfil("ASSISTANTE", dossier.getId(), "Nouvelle publication (" + typeDocument
                 + ") déposée sur le dossier " + dossier.getReference() + " (RG-INT-06), en attente de validation.");
@@ -183,7 +184,7 @@ public class PublicationService {
         }
         publicationRepository.save(publication);
 
-        historiqueActionService.enregistrer(publication.getDossier().getId(), "Décision sur une publication",
+        historiqueActionService.enregistrer(publication.getDossier().getId(), TypeActionHistorique.PUBLICATION_ARBITREE,
                 Map.of("publicationId", id, "statut", request.statut().name()));
 
         return publicationMapper.toResponse(publication);
@@ -247,7 +248,7 @@ public class PublicationService {
                 .contenu(request.contenu())
                 .build());
 
-        historiqueActionService.enregistrer(publication.getDossier().getId(), "Commentaire sur une publication",
+        historiqueActionService.enregistrer(publication.getDossier().getId(), TypeActionHistorique.PUBLICATION_COMMENTEE,
                 Map.of("publicationId", id, "commentaireId", commentaire.getId()));
         notifierProfil("DJ", publication.getDossier().getId(), "Nouveau commentaire du juriste sur la publication "
                 + id + " du dossier " + publication.getDossier().getReference() + " (RG-INT-07).");
@@ -272,7 +273,7 @@ public class PublicationService {
                 .contenu(request.contenu())
                 .build());
 
-        historiqueActionService.enregistrer(publication.getDossier().getId(), "Correspondance transmise à l'avocat",
+        historiqueActionService.enregistrer(publication.getDossier().getId(), TypeActionHistorique.PUBLICATION_CORRESPONDANCE_TRANSMISE,
                 Map.of("publicationId", id, "correspondanceId", correspondance.getId()));
         compteAvocatService.utilisateurDe(publication.getAvocat())
                 .ifPresent(u -> alerteService.declencher(TypeAlerte.NOUVELLE_PUBLICATION, publication.getDossier().getId(), u,

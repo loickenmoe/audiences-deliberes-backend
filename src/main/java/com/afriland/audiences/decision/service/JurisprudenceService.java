@@ -1,5 +1,6 @@
 package com.afriland.audiences.decision.service;
 
+import com.afriland.audiences.common.audit.TypeActionHistorique;
 import com.afriland.audiences.common.audit.HistoriqueActionService;
 import com.afriland.audiences.common.error.ApiException;
 import com.afriland.audiences.common.error.ErrorCodes;
@@ -75,7 +76,7 @@ public class JurisprudenceService {
                 .cheminStockage(cle)
                 .build());
 
-        historiqueActionService.enregistrer(dossierId, "Indexation d'une jurisprudence",
+        historiqueActionService.enregistrer(dossierId, TypeActionHistorique.JURISPRUDENCE_INDEXEE,
                 Map.of("jurisprudenceId", jurisprudence.getId(), "typeArchive", typeArchive.name()));
 
         return toResponse(jurisprudence);

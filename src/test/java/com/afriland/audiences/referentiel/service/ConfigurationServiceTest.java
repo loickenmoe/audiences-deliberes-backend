@@ -1,6 +1,7 @@
 package com.afriland.audiences.referentiel.service;
 
 import com.afriland.audiences.common.audit.HistoriqueActionService;
+import com.afriland.audiences.common.audit.TypeActionHistorique;
 import com.afriland.audiences.common.error.ApiException;
 import com.afriland.audiences.common.security.CurrentUserService;
 import com.afriland.audiences.referentiel.domain.ConfigurationSysteme;
@@ -68,8 +69,10 @@ class ConfigurationServiceTest {
 
         assertThat(config.getValeur()).isEqualTo("12");
         assertThat(result.valeur()).isEqualTo("12");
-        verify(historiqueActionService).enregistrerPour(eq(dj), isNull(), eq("Modification de la configuration SEUIL_PROROGATIONS"),
-                eq(Map.of("ancienneValeur", "10", "nouvelleValeur", "12")));
+        // Q-111 : la clé n'est plus concaténée au libellé, elle est une donnée de `details`.
+        verify(historiqueActionService).enregistrerPour(eq(dj), isNull(),
+                eq(TypeActionHistorique.CONFIGURATION_MODIFIEE),
+                eq(Map.of("cle", "SEUIL_PROROGATIONS", "ancienneValeur", "10", "nouvelleValeur", "12")));
     }
 
     /** Q-91 : une saisie non numérique est refusée ici, au lieu de casser le module frais plus tard. */

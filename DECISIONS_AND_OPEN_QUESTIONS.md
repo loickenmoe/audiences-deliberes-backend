@@ -2159,6 +2159,52 @@ sont unifiées.
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
 
+### Q-111 ✅ La nature des actions historisées est typée — tranché (2026-09-17)
+
+**Jalon 1 du chantier d'audit.** `historique_action.action` était une phrase française libre,
+parfois concaténée — « Modification de la configuration SEUIL_PROROGATIONS ». Filtrer sur une telle
+colonne suppose un `LIKE '%…%'`, qui paraît commode et **ment par omission** dès qu'un libellé change
+d'un mot : la ligne cesse d'être trouvée sans que rien ne le signale. C'est le préalable à toute vue
+d'audit, et la raison pour laquelle ce jalon **précède** l'écran au lieu de le suivre — un écran
+livré d'abord serait un outil dont les filtres sont approximatifs, et qu'on ne retire plus une fois
+entre les mains du métier.
+
+**Mesuré avant d'agir** : 42 points d'écriture, **un seul chemin** (`HistoriqueActionService` —
+aucune insertion directe, aucune ligne semée par migration), dont **36 libellés littéraux** et
+**6 construits**.
+
+**Le libellé est porté par l'énumération, pas transmis à l'appel.** Décision prise en cours de
+route, meilleure que ce qui avait été annoncé : les 42 sites ne passent plus qu'un code, et le
+service en dérive la phrase. Deux arguments côte à côte — un code et le texte censé le décrire —
+auraient fini par diverger ; l'écart est désormais impossible. La signature garde son arité.
+
+**Les six parties variables descendent dans `details`**, où elles deviennent interrogeables :
+
+| Avant | Code | `details` reçoit |
+|---|---|---|
+| « Changement de statut de l'étape INSTANCE » | `ETAPE_STATUT_MODIFIE` | `etape`, `ancienStatut`, `nouveauStatut` |
+| « Ouverture automatique de l'étape … » | `ETAPE_OUVERTE_AUTOMATIQUEMENT` | `etape`, `etapeId` |
+| « Positionnement direct à l'étape … » | `ETAPE_POSITIONNEE_DIRECTEMENT` | `etape`, `etapeId` |
+| « Décision sur la dérogation de seuil : … » | `DEROGATION_SEUIL_ARBITREE` | `decision`, `auditId`, `motif` |
+| « Décision sur la sensibilité du dossier : … » | `SENSIBILITE_ARBITREE` | `decision`, `motifRejet` |
+| « Modification de la configuration SEUIL_X » | `CONFIGURATION_MODIFIEE` | `cle`, `ancienneValeur`, `nouvelleValeur` |
+
+**Quatre décisions de conception.** La colonne est **obligatoire**, avec `NON_CLASSEE` pour ce que la
+reprise ne saurait rattacher — « on ne sait pas » doit se filtrer et se compter, là où un nul se
+glisserait hors de chaque requête. **La phrase reste en base** à côté du code : l'affichage existant
+ne change pas, et traduire un jour ce libellé (QF-24) sera un travail purement frontend, sans
+repasser sur les 42 sites. **Un code par action métier distincte**, soit 43 valeurs — regrouper pour
+faire court aurait rendu les filtres approximatifs. **Contrainte `CHECK`** en base, sur le modèle de
+`chk_alerte_type` : toute action auditée nouvelle demandera une migration, et un test rappelle ce
+lien, qu'une compilation réussie ne signale pas.
+
+**Reprise mesurée en réel** : 193 lignes existantes, **zéro `NON_CLASSEE`**. Les 41 libellés
+distincts se réduisent à 40 codes — la concaténation des clés de configuration est absorbée, et le
+filtre du journal ne propose plus une entrée par paramètre.
+
+**Statut (2026-09-17)** : appliqué — V18, énumération, 42 sites, filtre du journal basculé sur les
+codes. Backend 388/388, frontend 299/299.
+
 ### Q-110 ✅ Les actions historisées hors dossier deviennent lisibles — tranché (2026-09-17)
 
 **Point de départ** : une analyse de l'auditabilité demandée par le porteur du projet. RG-DOS-06

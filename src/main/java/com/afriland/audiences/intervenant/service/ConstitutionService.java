@@ -1,5 +1,6 @@
 package com.afriland.audiences.intervenant.service;
 
+import com.afriland.audiences.common.audit.TypeActionHistorique;
 import com.afriland.audiences.alerte.domain.TypeAlerte;
 import com.afriland.audiences.alerte.service.AlerteService;
 import com.afriland.audiences.common.audit.HistoriqueActionService;
@@ -71,7 +72,7 @@ public class ConstitutionService {
                 .statut(StatutConstitution.EN_ATTENTE)
                 .build());
 
-        historiqueActionService.enregistrerPour(demandeur, dossier.getId(), "Demande de constitution d'un prestataire",
+        historiqueActionService.enregistrerPour(demandeur, dossier.getId(), TypeActionHistorique.CONSTITUTION_DEMANDEE,
                 Map.of("demandeId", demande.getId(), "prestataireId", prestataire.getId()));
 
         String declencheur = "Demande de constitution du prestataire « " + prestataire.getNom()
@@ -110,7 +111,7 @@ public class ConstitutionService {
         }
         demande = demandeConstitutionRepository.save(demande);
 
-        historiqueActionService.enregistrerPour(sh, demande.getDossier().getId(), "Décision sur une demande de constitution",
+        historiqueActionService.enregistrerPour(sh, demande.getDossier().getId(), TypeActionHistorique.CONSTITUTION_ARBITREE,
                 Map.of("demandeId", demandeId, "decision", request.decision().name()));
 
         return demandeConstitutionMapper.toResponse(demande);

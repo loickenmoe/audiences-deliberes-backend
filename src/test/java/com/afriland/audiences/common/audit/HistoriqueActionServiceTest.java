@@ -36,14 +36,18 @@ class HistoriqueActionServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
         Map<String, Object> details = Map.of("ancienStatut", "OUVERTURE", "nouveauStatut", "EN_COURS");
 
-        HistoriqueAction result = historiqueActionService.enregistrer(99L, "Changement de statut", details);
+        HistoriqueAction result = historiqueActionService.enregistrer(
+                99L, TypeActionHistorique.ETAPE_STATUT_MODIFIE, details);
 
         ArgumentCaptor<HistoriqueAction> captor = ArgumentCaptor.forClass(HistoriqueAction.class);
         org.mockito.Mockito.verify(historiqueActionRepository).save(captor.capture());
         HistoriqueAction saved = captor.getValue();
         assertThat(saved.getDossierId()).isEqualTo(99L);
         assertThat(saved.getUtilisateur()).isEqualTo(juriste);
-        assertThat(saved.getAction()).isEqualTo("Changement de statut");
+        assertThat(saved.getCode()).isEqualTo(TypeActionHistorique.ETAPE_STATUT_MODIFIE);
+        // Q-111 : le libellé n'est plus transmis, il est dérivé du code. Un écart entre les deux,
+        // possible tant qu'ils étaient deux arguments côte à côte, ne peut plus se produire.
+        assertThat(saved.getAction()).isEqualTo(TypeActionHistorique.ETAPE_STATUT_MODIFIE.libelle());
         assertThat(saved.getDetails()).isEqualTo(details);
         assertThat(result).isSameAs(saved);
     }
@@ -55,7 +59,7 @@ class HistoriqueActionServiceTest {
         when(historiqueActionRepository.save(any(HistoriqueAction.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
-        HistoriqueAction result = historiqueActionService.enregistrer(null, "Modification de configuration", null);
+        HistoriqueAction result = historiqueActionService.enregistrer(null, TypeActionHistorique.CONFIGURATION_MODIFIEE, null);
 
         assertThat(result.getDossierId()).isNull();
     }
@@ -66,7 +70,7 @@ class HistoriqueActionServiceTest {
         when(historiqueActionRepository.save(any(HistoriqueAction.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
-        historiqueActionService.enregistrerPour(explicit, 1L, "Relance automatique", null);
+        historiqueActionService.enregistrerPour(explicit, 1L, TypeActionHistorique.ALARME_REPROGRAMMEE, null);
 
         verifyNoInteractions(currentUserService);
     }

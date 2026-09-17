@@ -1,5 +1,6 @@
 package com.afriland.audiences.frais.service;
 
+import com.afriland.audiences.common.audit.TypeActionHistorique;
 import com.afriland.audiences.alerte.domain.TypeAlerte;
 import com.afriland.audiences.alerte.service.AlerteService;
 import com.afriland.audiences.common.audit.HistoriqueActionService;
@@ -99,7 +100,7 @@ public class FraisService {
                 .statutPaiement(StatutPaiementFrais.EN_ATTENTE)
                 .build());
 
-        historiqueActionService.enregistrer(dossier.getId(), "Dépôt d'une demande de frais",
+        historiqueActionService.enregistrer(dossier.getId(), TypeActionHistorique.FRAIS_DEMANDE_DEPOSEE,
                 Map.of("demandeId", demande.getId(), "montant", request.montant()));
 
         notifierProfil("ASSISTANTE", dossier.getId(), TypeAlerte.NOUVELLE_DEMANDE_FRAIS,
@@ -127,7 +128,7 @@ public class FraisService {
             rejeter(demande, assistante, EtapeValidationFrais.CONFORMITE, request.motifRejet());
         }
 
-        historiqueActionService.enregistrer(demande.getDossier().getId(), "Contrôle de conformité d'une demande de frais",
+        historiqueActionService.enregistrer(demande.getDossier().getId(), TypeActionHistorique.FRAIS_CONFORMITE_CONTROLEE,
                 Map.of("demandeId", demandeId, "conforme", request.conforme()));
 
         return versReponse(demande);
@@ -160,7 +161,7 @@ public class FraisService {
             rejeter(demande, dja, EtapeValidationFrais.OPPORTUNITE, request.motifRejet());
         }
 
-        historiqueActionService.enregistrer(demande.getDossier().getId(), "Contrôle d'opportunité d'une demande de frais",
+        historiqueActionService.enregistrer(demande.getDossier().getId(), TypeActionHistorique.FRAIS_OPPORTUNITE_CONTROLEE,
                 Map.of("demandeId", demandeId, "accord", request.accord()));
 
         return versReponse(demande);
@@ -195,7 +196,7 @@ public class FraisService {
             rejeter(demande, utilisateur, etape, request.motifRejet());
         }
 
-        historiqueActionService.enregistrer(demande.getDossier().getId(), "Validation conjointe d'une demande de frais",
+        historiqueActionService.enregistrer(demande.getDossier().getId(), TypeActionHistorique.FRAIS_VALIDATION_CONJOINTE,
                 Map.of("demandeId", demandeId, "etape", etape.name(), "accord", request.accord()));
 
         return versReponse(demande);
@@ -215,7 +216,7 @@ public class FraisService {
         DemandeFrais payee = demandeFraisRepository.save(demande);
         Long dossierId = payee.getDossier().getId();
 
-        historiqueActionService.enregistrer(dossierId, "Paiement d'une demande de frais", Map.of("demandeId", demandeId));
+        historiqueActionService.enregistrer(dossierId, TypeActionHistorique.FRAIS_PAIEMENT_ENREGISTRE, Map.of("demandeId", demandeId));
 
         String message = "Le paiement de votre demande de frais " + demandeId + " sur le dossier "
                 + payee.getDossier().getReference() + " a été effectué (RG-INT-04).";

@@ -1,5 +1,6 @@
 package com.afriland.audiences.decision.service;
 
+import com.afriland.audiences.common.audit.TypeActionHistorique;
 import com.afriland.audiences.common.audit.HistoriqueActionService;
 import com.afriland.audiences.common.error.ApiException;
 import com.afriland.audiences.common.error.ErrorCodes;
@@ -75,7 +76,7 @@ public class DecisionDefinitiveService {
                 .dateDecision(request.dateDecision())
                 .build());
 
-        historiqueActionService.enregistrer(dossierId, "Enregistrement d'une adjudication",
+        historiqueActionService.enregistrer(dossierId, TypeActionHistorique.ADJUDICATION_ENREGISTREE,
                 Map.of("decisionId", adjudication.getId(), "beneficiaire", request.beneficiaire()));
 
         return adjudicationMapper.toResponse(adjudication);
@@ -98,7 +99,7 @@ public class DecisionDefinitiveService {
                 .dateDecision(request.dateDecision())
                 .build());
 
-        historiqueActionService.enregistrer(dossierId, "Enregistrement d'une condamnation pécuniaire",
+        historiqueActionService.enregistrer(dossierId, TypeActionHistorique.CONDAMNATION_ENREGISTREE,
                 Map.of("decisionId", condamnation.getId(), "sens", request.sens().name()));
 
         return condamnationMapper.toResponse(condamnation);
@@ -115,7 +116,7 @@ public class DecisionDefinitiveService {
         condamnation.setStatutPaiement(request.statutPaiement());
         condamnation = (CondamnationPecuniaire) decisionDefinitiveRepository.save(condamnation);
 
-        historiqueActionService.enregistrer(condamnation.getDossier().getId(), "Mise à jour du statut d'une condamnation",
+        historiqueActionService.enregistrer(condamnation.getDossier().getId(), TypeActionHistorique.CONDAMNATION_STATUT_MODIFIE,
                 Map.of("decisionId", id, "statutPaiement", request.statutPaiement().name()));
 
         return condamnationMapper.toResponse(condamnation);

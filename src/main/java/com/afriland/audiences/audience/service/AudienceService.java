@@ -1,5 +1,6 @@
 package com.afriland.audiences.audience.service;
 
+import com.afriland.audiences.common.audit.TypeActionHistorique;
 import com.afriland.audiences.alerte.domain.TypeAlerte;
 import com.afriland.audiences.alerte.service.AlerteService;
 import com.afriland.audiences.audience.domain.Audience;
@@ -81,7 +82,7 @@ public class AudienceService {
                 .statut(StatutAudience.PLANIFIEE)
                 .build());
 
-        historiqueActionService.enregistrer(dossierId, "Planification d'une audience",
+        historiqueActionService.enregistrer(dossierId, TypeActionHistorique.AUDIENCE_PLANIFIEE,
                 Map.of("audienceId", audience.getId(), "datePlanifiee", request.datePlanifiee().toString()));
 
         if (doublon) {
@@ -98,7 +99,7 @@ public class AudienceService {
                 + " (RG-AUD-06)";
         destinataires.forEach(dj -> alerteService.declencher(TypeAlerte.DOUBLON_AUDIENCE,
                 dossier.getId(), dj, declencheur));
-        historiqueActionService.enregistrer(dossier.getId(), "Doublon d'audience confirmé",
+        historiqueActionService.enregistrer(dossier.getId(), TypeActionHistorique.AUDIENCE_DOUBLON_CONFIRME,
                 Map.of("audienceId", audience.getId()));
     }
 
@@ -118,7 +119,7 @@ public class AudienceService {
         audience.setStatut(StatutAudience.TENUE);
         audience = audienceRepository.save(audience);
 
-        historiqueActionService.enregistrer(audience.getDossier().getId(), "Compte rendu d'audience enregistré",
+        historiqueActionService.enregistrer(audience.getDossier().getId(), TypeActionHistorique.AUDIENCE_COMPTE_RENDU_ENREGISTRE,
                 Map.of("audienceId", audience.getId()));
 
         return audienceMapper.toResponse(audience);
@@ -143,7 +144,7 @@ public class AudienceService {
         audience.setDateAnnulation(LocalDateTime.now());
         audience = audienceRepository.save(audience);
 
-        historiqueActionService.enregistrer(audience.getDossier().getId(), "Annulation d'une audience",
+        historiqueActionService.enregistrer(audience.getDossier().getId(), TypeActionHistorique.AUDIENCE_ANNULEE,
                 Map.of("audienceId", audience.getId(), "datePlanifiee", audience.getDatePlanifiee().toString(),
                         "motif", motif));
 

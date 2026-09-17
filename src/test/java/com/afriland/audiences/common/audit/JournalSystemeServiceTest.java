@@ -54,7 +54,8 @@ class JournalSystemeServiceTest {
     }
 
     private HistoriqueAction ligne(String action) {
-        return HistoriqueAction.builder().id(1L).dossierId(null).action(action)
+        return HistoriqueAction.builder().id(1L).dossierId(null)
+                .code(TypeActionHistorique.CONFIGURATION_MODIFIEE).action(action)
                 .details(Map.of("ancienneValeur", "10", "nouvelleValeur", "11"))
                 .dateAction(LocalDateTime.now()).build();
     }
@@ -89,20 +90,24 @@ class JournalSystemeServiceTest {
     @Test
     void consulter_proposeTousLesLibellesMemeQuandUnFiltreEstActif() {
         when(historiqueActionRepository.findAll(specification(), any(PageRequest.class)))
-                .thenReturn(new PageImpl<>(List.of(ligne("Modification de la configuration SEUIL_PROROGATIONS"))));
+                .thenReturn(new PageImpl<>(List.of(ligne("Modification de la configuration"))));
         when(historiqueActionMapper.toResponse(any())).thenReturn(
-                new HistoriqueActionResponse(1L, 7L, "Modification de la configuration SEUIL_PROROGATIONS",
-                        Map.of(), LocalDateTime.now()));
+                new HistoriqueActionResponse(1L, 7L, TypeActionHistorique.CONFIGURATION_MODIFIEE,
+                        "Modification de la configuration", Map.of(), LocalDateTime.now()));
         when(historiqueActionRepository.actionsHorsDossier()).thenReturn(List.of(
-                "Indexation d'une jurisprudence",
-                "Modification de la configuration SEUIL_MONTANT_DEFAUT",
-                "Modification de la configuration SEUIL_PROROGATIONS"));
+                TypeActionHistorique.JURISPRUDENCE_INDEXEE,
+                TypeActionHistorique.CONFIGURATION_MODIFIEE));
 
         JournalSystemeResponse journal = journalSystemeService.consulter(
-                null, "Modification de la configuration SEUIL_PROROGATIONS", null, null, 0, 10);
+                null, TypeActionHistorique.CONFIGURATION_MODIFIEE, null, null, 0, 10);
 
         assertThat(journal.content()).hasSize(1);
-        assertThat(journal.actionsDisponibles()).hasSize(3);
+        assertThat(journal.actionsDisponibles()).hasSize(2);
+        // Q-111 : le libellé proposé vient de l'énumération, pas de la ligne. Les lignes reprises par
+        // V18 portent encore leur ancienne phrase ; les lire aurait multiplié les entrées du filtre.
+        assertThat(journal.actionsDisponibles())
+                .extracting(JournalSystemeResponse.OptionAction::libelle)
+                .containsExactly("Indexation d'une jurisprudence", "Modification de la configuration");
     }
 
     @Test

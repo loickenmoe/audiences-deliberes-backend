@@ -18,12 +18,26 @@ import java.util.List;
  * sensible ou télécharger une pièce ne laisse aucune trace. L'absence de ligne ne prouve donc pas
  * l'absence d'action ; c'est la raison pour laquelle cet écran s'appelle un journal et non un audit.
  *
- * @param actionsDisponibles libellés distincts présents hors dossier, indépendants des filtres en
- *                           cours — sinon choisir un libellé viderait la liste des autres choix
+ * @param actionsDisponibles natures d'action présentes hors dossier, indépendantes des filtres en
+ *                           cours — sinon choisir une nature viderait la liste des autres choix
  */
 public record JournalSystemeResponse(
         List<HistoriqueActionResponse> content,
         int totalPages,
         long totalElements,
-        List<String> actionsDisponibles) {
+        List<OptionAction> actionsDisponibles) {
+
+    /**
+     * Une entrée du filtre : le <b>code</b> qui part au serveur, le <b>libellé</b> qui s'affiche.
+     *
+     * <p>Le libellé est dérivé de l'énumération plutôt que lu en base : les lignes reprises par la
+     * migration V18 portent encore leur ancienne phrase, et une même nature d'action se serait
+     * présentée plusieurs fois dans la liste — « Modification de la configuration SEUIL_PROROGATIONS »
+     * et « … TAILLE_MAX_GED » pour un unique code.
+     */
+    public record OptionAction(TypeActionHistorique code, String libelle) {
+        public static OptionAction de(TypeActionHistorique code) {
+            return new OptionAction(code, code.libelle());
+        }
+    }
 }

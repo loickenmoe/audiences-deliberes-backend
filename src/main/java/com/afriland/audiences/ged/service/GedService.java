@@ -1,5 +1,6 @@
 package com.afriland.audiences.ged.service;
 
+import com.afriland.audiences.common.audit.TypeActionHistorique;
 import com.afriland.audiences.alerte.domain.TypeAlerte;
 import com.afriland.audiences.alerte.service.AlerteService;
 import com.afriland.audiences.audience.domain.Audience;
@@ -82,7 +83,7 @@ public class GedService {
                 .cheminStockage(cheminStockage)
                 .build());
 
-        historiqueActionService.enregistrerPour(auteur, dossierId, "Chargement d'un document",
+        historiqueActionService.enregistrerPour(auteur, dossierId, TypeActionHistorique.DOCUMENT_CHARGE,
                 Map.of("documentId", document.getId(), "nomFichier", document.getNomFichier()));
 
         signalerDocumentCharge(dossier, document);
@@ -141,7 +142,7 @@ public class GedService {
                 .build());
 
         historiqueActionService.enregistrerPour(utilisateur, document.getDossier().getId(),
-                "Demande de suppression d'un document", Map.of("documentId", documentId, "demandeId", demande.getId()));
+                TypeActionHistorique.DOCUMENT_SUPPRESSION_DEMANDEE, Map.of("documentId", documentId, "demandeId", demande.getId()));
 
         signalerDemandeSuppression(document, "Une demande de suppression a été soumise pour le document « "
                 + document.getNomFichier() + "» (dossier " + document.getDossier().getReference() + ").");
@@ -165,7 +166,7 @@ public class GedService {
                 });
 
         historiqueActionService.enregistrerPour(validePar, document.getDossier().getId(),
-                "Suppression directe d'un document (DJ/DJA)", Map.of("documentId", document.getId()));
+                TypeActionHistorique.DOCUMENT_SUPPRIME_DIRECTEMENT, Map.of("documentId", document.getId()));
 
         alerteService.declencher(TypeAlerte.SUPPRESSION_DOCUMENT, document.getDossier().getId(), document.getAuteurChargement(),
                 "Votre document « " + document.getNomFichier() + " » a été supprimé directement par "
@@ -217,7 +218,7 @@ public class GedService {
         demande = demandeSuppressionRepository.save(demande);
 
         historiqueActionService.enregistrerPour(validateur, document.getDossier().getId(),
-                "Décision sur une demande de suppression de document",
+                TypeActionHistorique.DOCUMENT_SUPPRESSION_ARBITREE,
                 Map.of("documentId", documentId, "decision", request.decision().name()));
 
         return demandeSuppressionMapper.toResponse(demande);

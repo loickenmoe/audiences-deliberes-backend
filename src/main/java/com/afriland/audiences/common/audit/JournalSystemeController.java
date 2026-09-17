@@ -35,11 +35,13 @@ public class JournalSystemeController {
     @PreAuthorize("hasAnyRole('DJ', 'DJA')")
     public JournalSystemeResponse journalSysteme(
             @RequestParam(required = false) Long utilisateurId,
-            @RequestParam(required = false) String action,
+            /* Depuis Q-111 le filtre porte sur le code typé : une valeur inconnue est refusée en
+             * 400 par la conversion, là où une phrase libre renvoyait silencieusement zéro ligne. */
+            @RequestParam(required = false) TypeActionHistorique code,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateDebut,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFin,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        return journalSystemeService.consulter(utilisateurId, action, dateDebut, dateFin, page, size);
+        return journalSystemeService.consulter(utilisateurId, code, dateDebut, dateFin, page, size);
     }
 }

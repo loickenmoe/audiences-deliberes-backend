@@ -41,7 +41,7 @@ public class JournalSystemeService {
     private final HistoriqueActionMapper historiqueActionMapper;
 
     @Transactional(readOnly = true)
-    public JournalSystemeResponse consulter(Long utilisateurId, String action, LocalDate dateDebut,
+    public JournalSystemeResponse consulter(Long utilisateurId, TypeActionHistorique code, LocalDate dateDebut,
                                                LocalDate dateFin, int page, int size) {
         if (dateDebut != null && dateFin != null && dateDebut.isAfter(dateFin)) {
             throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
@@ -50,18 +50,20 @@ public class JournalSystemeService {
 
         Page<HistoriqueAction> resultat = historiqueActionRepository.findAll(
                 HistoriqueActionSpecifications.withFilters(
-                        Perimetre.HORS_DOSSIER, null, utilisateurId, action, dateDebut, dateFin),
+                        Perimetre.HORS_DOSSIER, null, utilisateurId, code, dateDebut, dateFin),
                 PageRequest.of(page, size, TRI));
 
         /*
-         * Les libellés proposés au filtre sont ceux de **tout** le journal, pas ceux de la page ni
-         * du résultat filtré : sinon choisir un libellé ferait disparaître les autres choix, et
+         * Les natures proposées au filtre sont celles de **tout** le journal, pas celles de la page
+         * ni du résultat filtré : sinon en choisir une ferait disparaître les autres choix, et
          * l'utilisateur ne pourrait plus changer d'avis sans vider ses filtres.
          */
         return new JournalSystemeResponse(
                 resultat.getContent().stream().map(historiqueActionMapper::toResponse).toList(),
                 resultat.getTotalPages(),
                 resultat.getTotalElements(),
-                historiqueActionRepository.actionsHorsDossier());
+                historiqueActionRepository.actionsHorsDossier().stream()
+                        .map(JournalSystemeResponse.OptionAction::de)
+                        .toList());
     }
 }
