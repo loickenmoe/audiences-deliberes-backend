@@ -45,9 +45,9 @@ class TypeActionHistoriqueTest {
      * production, sur l'action qu'on venait d'instrumenter. Ce test rappelle le lien.
      */
     @Test
-    void lNombreDeCodesCorrespondAuxSitesInstrumentes() {
-        // 42 points d'historisation recensés en Q-111, plus NON_CLASSEE pour la reprise.
-        assertThat(TypeActionHistorique.values()).hasSize(43);
+    void leNombreDeCodesCorrespondAuxSitesInstrumentes() {
+        // 42 points d'historisation recensés en Q-111, plus AUDIT_CONSULTE (Q-112) et NON_CLASSEE.
+        assertThat(TypeActionHistorique.values()).hasSize(44);
         assertThat(TypeActionHistorique.NON_CLASSEE.libelle()).isEqualTo("Action non classée");
     }
 }

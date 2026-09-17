@@ -2159,6 +2159,58 @@ sont unifiées.
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
 
+### Q-112 ✅ L'écran d'audit — tranché (2026-09-17)
+
+**Jalon 2 du chantier d'audit**, rendu possible par Q-111 : sans code d'action typé, les filtres
+auraient été approximatifs, et un écran approximatif ne se retire plus une fois entre les mains du
+métier.
+
+**Ce qu'il ouvre, et que Q-110 ne pouvait pas.** Le journal répondait à une question de
+*couverture* — des lignes existaient sans point de lecture. Restait une question de *point
+d'entrée* : « qu'a fait X le mois dernier ? », « toutes les suppressions du trimestre ? », « que
+s'est-il passé entre le 1er et le 15 ? ». Aucune ne part d'un dossier ; aucune n'était possible.
+
+**`GET /historique`** remplace `GET /historique/systeme`, supprimé. Le périmètre — tout /
+hors dossier / un dossier — devient un **critère** parmi les autres, et la vue « hors dossier » une
+valeur de filtre. Deux endroits où chercher la même trace étaient exactement la fragmentation qu'on
+voulait supprimer ; le journal était un palliatif assumé, il n'en était plus qu'un sous-ensemble.
+
+**Le périmètre cesse d'être structurel, et c'est assumé.** En Q-110, l'exclusivité de `Perimetre`
+protégeait l'interim : ouvrir la vue transversale devait être une décision, pas l'effet d'un
+paramètre oublié. La décision est prise (NF-CONF-01, filtre par personne autorisé). Ce qui protège
+désormais est explicite : la garde de rôle, et la trace de chaque consultation.
+
+**La consultation de l'audit s'audite elle-même** (`AUDIT_CONSULTE`, V19), avec ses critères.
+Ce n'est pas une contrainte imposée au DJ et à la DJA : c'est ce qui leur permet de **démontrer**
+qu'ils n'ont regardé que ce qu'ils devaient. Deux décisions de granularité : historisé **avant** la
+lecture, pour que la trace existe même si la requête échoue ; et **sur la première page seulement**,
+feuilleter un résultat n'étant pas une nouvelle consultation — compter chaque page produirait un
+bruit qui noierait ce qu'on cherche à voir. Le critère « personne » est consigné sous
+`auteurRecherche` et non `utilisateurId`, ce dernier désignant déjà celui qui a consulté.
+
+**Un défaut trouvé par les tests, et la propriété qu'il révèle.** La première version du test
+d'intégration lisait `content[0]` pour retrouver la trace : or **lire l'audit crée une ligne
+d'audit**, qui prend aussitôt la tête du classement. Le défaut était dans le test ; la propriété
+méritait d'être affirmée plutôt que contournée, et elle l'est désormais.
+
+**Le journal déménage, mais sa moitié utile reste.** La question qui naît *en regardant un réglage* —
+« pourquoi vaut-il 14, et qui l'a mis là ? » — mérite une réponse sur place. L'écran des paramètres
+affiche donc « modifié le … par … » sur chaque ligne (`configuration_systeme.dernier_auteur_id`,
+V19), et le tableau paginé à filtres s'en va. Administrer et enquêter sont deux tâches ; un outil
+d'enquête n'avait pas sa place sur un écran d'administration.
+
+**Habilitation** : capacité dédiée `consulterAudit`, **distincte** d'`administrerConfigurations` et
+de `superviserAlertes` bien qu'elle porte les mêmes rôles — lire l'activité nommée d'un collègue
+n'est ni écrire un seuil ni lire un taux global, et un assouplissement futur de l'une ne doit pas
+déplacer l'autre.
+
+**Ce qui reste, et l'écran le dit lui-même** : seules les **modifications** sont historisées. Aucune
+consultation ne l'est, hormis celle de cet écran. L'absence de ligne ne prouve pas l'absence
+d'action.
+
+**Statut (2026-09-17)** : appliqué — V19, `GET /historique`, écran 43, rappel contextuel sur
+l'écran 41.
+
 ### Q-111 ✅ La nature des actions historisées est typée — tranché (2026-09-17)
 
 **Jalon 1 du chantier d'audit.** `historique_action.action` était une phrase française libre,

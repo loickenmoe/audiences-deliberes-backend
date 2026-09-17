@@ -87,6 +87,17 @@ public enum TypeActionHistorique {
     CONFIGURATION_MODIFIEE("Modification de la configuration"),
 
     /**
+     * Consultation de l'écran d'audit (Q-112). {@code details} porte les critères employés :
+     * {@code perimetre}, et le cas échéant {@code auteurRecherche}, {@code dossierId},
+     * {@code codeRecherche}, {@code dateDebut}, {@code dateFin}.
+     *
+     * <p>Le filtre par personne étant autorisé, cet écran permet de suivre nommément l'activité d'un
+     * salarié. En tracer l'usage n'est pas une contrainte imposée au DJ et à la DJA : c'est ce qui
+     * leur permet de <b>démontrer</b> qu'ils n'ont regardé que ce qu'ils devaient.
+     */
+    AUDIT_CONSULTE("Consultation de l'audit"),
+
+    /**
      * Lignes antérieures à la typification que la reprise n'a pas su rattacher.
      *
      * <p>Une valeur explicite plutôt que {@code NULL} : « on ne sait pas » se filtre, se compte et

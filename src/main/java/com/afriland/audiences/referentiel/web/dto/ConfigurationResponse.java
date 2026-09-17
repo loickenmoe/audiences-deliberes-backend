@@ -16,6 +16,7 @@ public record ConfigurationResponse(
         String description,
         String modifiablePar,
         LocalDateTime dateModification,
+        Long dernierAuteurId,
         TypeValeurConfiguration typeValeur,
         Long valeurMinimale,
         Long valeurMaximale,

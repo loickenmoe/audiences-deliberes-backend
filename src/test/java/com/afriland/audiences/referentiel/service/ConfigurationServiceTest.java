@@ -62,7 +62,7 @@ class ConfigurationServiceTest {
         when(configurationSystemeRepository.save(any(ConfigurationSysteme.class))).thenAnswer(inv -> inv.getArgument(0));
         when(currentUserService.getCurrentUser()).thenReturn(dj);
         when(configurationMapper.toResponse(any(ConfigurationSysteme.class))).thenReturn(
-                new ConfigurationResponse("SEUIL_PROROGATIONS", "12", null, "ROLE_DJ", null,
+                new ConfigurationResponse("SEUIL_PROROGATIONS", "12", null, "ROLE_DJ", null, 3L,
                         TypeValeurConfiguration.ENTIER, 1L, 1_000L, List.of()));
 
         ConfigurationResponse result = configurationService.modifier("SEUIL_PROROGATIONS", "12");
@@ -97,7 +97,7 @@ class ConfigurationServiceTest {
         when(configurationSystemeRepository.save(any(ConfigurationSysteme.class))).thenAnswer(inv -> inv.getArgument(0));
         when(currentUserService.getCurrentUser()).thenReturn(Utilisateur.builder().id(3L).build());
         when(configurationMapper.toResponse(any(ConfigurationSysteme.class))).thenReturn(
-                new ConfigurationResponse("FORMATS_GED", "PDF,XLSX", null, "ROLE_DJ", null,
+                new ConfigurationResponse("FORMATS_GED", "PDF,XLSX", null, "ROLE_DJ", null, 3L,
                         TypeValeurConfiguration.LISTE, null, null, List.of()));
 
         configurationService.modifier("FORMATS_GED", " pdf , xlsx ");

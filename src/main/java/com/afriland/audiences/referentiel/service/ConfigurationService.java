@@ -55,6 +55,9 @@ public class ConfigurationService {
                 .orElse(nouvelleValeur);
         String ancienneValeur = configuration.getValeur();
         configuration.setValeur(valeurRetenue);
+        // Q-112 : l'écran des paramètres répond désormais sur place à « qui l'a mis là ? », question
+        // qui naît en regardant un réglage et n'a pas à faire changer d'écran.
+        configuration.setDernierAuteurId(currentUserService.getCurrentUser().getId());
         configuration = configurationSystemeRepository.save(configuration);
 
         // dossierId=null : action hors dossier (cf. Javadoc HistoriqueActionService#enregistrer).
