@@ -2159,6 +2159,49 @@ sont unifiées.
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
 
+### Q-113 ✅ L'export de l'audit, scellé — tranché (2026-09-17)
+
+**Jalon 3, et dernier du chantier d'audit.** Un inspecteur ne consulte pas un écran : il emporte une
+pièce. Mais une pièce qu'on peut rééditer en trois minutes ne prouve rien — c'était l'objection
+retenue contre l'archivage tel qu'il avait d'abord été envisagé.
+
+**La chaîne complète fait la valeur du jalon** : produire, calculer une **empreinte SHA-256**,
+déposer dans MinIO, consigner l'empreinte en base avec la période, l'auteur et l'instant. Le fichier
+remis et le fichier scellé sont alors démontrablement le même, des années plus tard. L'empreinte
+voyage aussi dans un en-tête de réponse : le destinataire peut la comparer sans interroger
+l'application.
+
+**Les deux formats, jamais l'un ou l'autre.** Le PDF produit une pièce figée qu'on remet ; l'Excel
+une matière qu'on trie et recoupe. Retenir un seul format aurait obligé l'un des deux usages à se
+contenter d'un outil qui ne lui convient pas.
+
+**Les six raccourcis de période sont calculés par l'écran, pas par l'API.** Ce sont des commodités de
+saisie : les exposer au serveur aurait figé six calendriers et interdit la **période libre**, celle
+que réclame la première inspection qui demande « du 12 mars au 4 juin ». Chaque raccourci couvre
+l'unité calendaire **écoulée** et s'arrête aujourd'hui — une archive ne doit pas prétendre couvrir
+des jours à venir.
+
+**La période est obligatoire à l'export, facultative à la consultation.** Une archive sans période ne
+dit pas ce qu'elle contient : son empreinte ne prouverait que son intégrité, jamais son exhaustivité.
+
+**Le plafond refuse plutôt que de tronquer.** Au-delà de 20 000 lignes, l'extraction est refusée avec
+la conduite à tenir — restreindre la période. Tronquer silencieusement aurait produit une archive qui
+ment sur ce qu'elle couvre, et dont l'empreinte aurait scellé ce mensonge.
+
+**Deux actions de plus sont historisées.** `AUDIT_EXPORTE` — exporter fait sortir le contenu de
+l'application, acte plus lourd que consulter. `ARCHIVE_TELECHARGEE` — sans elle, l'archive serait un
+trou plus large que la table qu'elle double, puisqu'on pourrait y puiser sans que rien ne le dise.
+La clé de stockage n'est jamais exposée : elle ne servirait qu'à contourner l'endpoint tracé.
+
+**Deux défauts rencontrés, et ce qu'ils ont appris.** La colonne d'empreinte était déclarée
+`CHAR(64)` en SQL face à un `@Column` ordinaire : PostgreSQL la rend en `bpchar` et la validation de
+schéma Hibernate l'a refusée — **62 erreurs d'un coup, sur un détail de type**. Corriger la migration
+après qu'elle eut été appliquée en base locale a ensuite fait échouer la validation Flyway : dérive
+locale sans effet sur une base neuve, nettoyée en retirant la ligne d'historique et la table.
+
+**Statut (2026-09-17)** : appliqué — V20, `GET /historique/export`, `GET /historique/exports`,
+`GET /historique/exports/{id}/telechargement`, bloc d'extraction sur l'écran 43.
+
 ### Q-112 ✅ L'écran d'audit — tranché (2026-09-17)
 
 **Jalon 2 du chantier d'audit**, rendu possible par Q-111 : sans code d'action typé, les filtres

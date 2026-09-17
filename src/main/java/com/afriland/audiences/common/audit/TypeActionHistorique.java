@@ -98,6 +98,24 @@ public enum TypeActionHistorique {
     AUDIT_CONSULTE("Consultation de l'audit"),
 
     /**
+     * Extraction de l'audit vers un fichier (Q-113). {@code details} porte la période, le format,
+     * le nombre de lignes et l'empreinte du fichier produit.
+     *
+     * <p>Distinct de {@link #AUDIT_CONSULTE} : consulter laisse le contenu dans l'application,
+     * exporter l'en fait sortir. C'est un acte plus lourd, qui mérite sa propre nature.
+     */
+    AUDIT_EXPORTE("Export de l'audit"),
+
+    /**
+     * Récupération d'une archive déjà produite (Q-113). {@code details} porte l'identifiant de
+     * l'export et son empreinte.
+     *
+     * <p>Sans cette trace, l'archive serait un trou plus large que la table qu'elle double : on
+     * pourrait y puiser indéfiniment sans que rien ne le dise.
+     */
+    ARCHIVE_TELECHARGEE("Téléchargement d'une archive d'audit"),
+
+    /**
      * Lignes antérieures à la typification que la reprise n'a pas su rattacher.
      *
      * <p>Une valeur explicite plutôt que {@code NULL} : « on ne sait pas » se filtre, se compte et

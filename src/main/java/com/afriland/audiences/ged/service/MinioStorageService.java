@@ -83,6 +83,17 @@ public class MinioStorageService {
         }
     }
 
+    /**
+     * Archive d'audit (Q-113), produite par le système et rattachée à aucun dossier.
+     *
+     * <p>Préfixe dédié : ces fichiers ne sont pas des documents GED — ils ne suivent ni le circuit
+     * de suppression, ni le cycle de vie d'un dossier. Leur seule porte de sortie est l'endpoint de
+     * téléchargement, qui trace chaque récupération.
+     */
+    public String deposerArchiveAudit(String nomFichier, String contentType, byte[] contenu) {
+        return deposer("audit", nomFichier, contentType, new ByteArrayInputStream(contenu), (long) contenu.length);
+    }
+
     private String deposer(String prefixe, String nomFichier, String contentType, InputStream flux, long taille) {
         String cle = prefixe + "/" + UUID.randomUUID() + "-" + nomFichier;
         try {

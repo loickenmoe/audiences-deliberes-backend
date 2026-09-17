@@ -46,8 +46,9 @@ class TypeActionHistoriqueTest {
      */
     @Test
     void leNombreDeCodesCorrespondAuxSitesInstrumentes() {
-        // 42 points d'historisation recensés en Q-111, plus AUDIT_CONSULTE (Q-112) et NON_CLASSEE.
-        assertThat(TypeActionHistorique.values()).hasSize(44);
+        // 42 points d'historisation recensés en Q-111, plus AUDIT_CONSULTE (Q-112),
+        // AUDIT_EXPORTE et ARCHIVE_TELECHARGEE (Q-113), et NON_CLASSEE pour la reprise.
+        assertThat(TypeActionHistorique.values()).hasSize(46);
         assertThat(TypeActionHistorique.NON_CLASSEE.libelle()).isEqualTo("Action non classée");
     }
 }
