@@ -150,7 +150,8 @@ class ParcoursEndToEndIntegrationTest {
 
         mockMvc.perform(get(api("/dossiers/" + dossierId + "/documents")).with(role("kc-juriste", "ROLE_CONSULTATION")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1));
+                // Q-100 : l'onglet Documents est paginé — le total vit désormais dans l'enveloppe.
+                .andExpect(jsonPath("$.totalElements").value(1));
     }
 
     // ---------------------------------------------------------------- P2
@@ -510,7 +511,8 @@ class ParcoursEndToEndIntegrationTest {
         // La lettre générée est bien un document du dossier (interaction intervenant → ged)
         mockMvc.perform(get(api("/dossiers/" + dossierId + "/documents")).with(role("kc-juriste", "ROLE_CONSULTATION")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1));
+                // Q-100 : l'onglet Documents est paginé — le total vit désormais dans l'enveloppe.
+                .andExpect(jsonPath("$.totalElements").value(1));
     }
 
     // ---------------------------------------------------------------- P8

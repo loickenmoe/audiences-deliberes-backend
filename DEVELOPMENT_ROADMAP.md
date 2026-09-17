@@ -2,7 +2,7 @@
 
 > Feuille de route séquentielle du backend. Un jalon = un objectif, un périmètre fermé,
 > une validation manuelle par le porteur du projet avant passage au suivant.
-> Dernière mise à jour : 2026-09-15 (M0 à M21 terminés et validés). Les jalons **M16 à M20** ont été
+> Dernière mise à jour : 2026-09-15 (M0 à M22 terminés et validés). Les jalons **M16 à M20** ont été
 > ouverts hors feuille de route initiale, sur autorisation explicite du porteur du projet, pour
 > corriger ce que la consommation réelle de l'API par le frontend a révélé — Q-70 à Q-98.
 > Précédente : 2026-09-07 (M0 à M15 terminés et validés — feuille de route achevée,
@@ -1319,6 +1319,32 @@ en a une.
 profonde `OFFSET 5000` à 5,4 ms sans tri complet. Table supprimée après mesure.
 
 **Testé** : 358 tests au vert, `BUILD SUCCESS`. Aucun contrat modifié, aucun impact frontend.
+
+---
+
+## M22 — Pagination généralisée, filtres et recherche au fil de la frappe ✅ **Terminé**
+
+**Origine.** Demande du porteur du projet le 2026-09-15 : **dix lignes par tableau au maximum**, et
+des filtres partout où ils manquent. Objectifs énoncés — « ni perte de données, ni lenteur » — pour
+une application « amenée à recevoir beaucoup de données ». La recherche au fil de la frappe a été
+autorisée en cours de jalon, hors du périmètre initial, comme réponse durable au problème des
+sélecteurs.
+
+**Implémenté** : huit endpoints passent de `List` à `PageResponse` et `GET /dossiers/{id}/historique`
+est créé ; filtres de sensibilité sur `#2`, de type et de dossier sur `#45`, de dossier, avocat,
+référence et période sur `#28`, de statut sur le portail ; recherche par nom sur `#62`. Migration
+`V15__index_filtres.sql` pour que ces filtres ne rendent pas à la base ce que V14 lui avait épargné.
+
+**Trois découvertes, consignées en Q-100 à Q-106.** Un index B-tree ne peut **rien** pour une
+recherche « contient » : `idx_dossier_reference` semblait couvrir le filtre de référence depuis M16
+et ne l'a jamais servi — corrigé par des index trigramme, qui imposent en contrepartie la création de
+l'extension `pg_trgm` par la DSI avant le premier démarrage en production. Le **répertoire des
+avocats** ne peut être paginé qu'à moitié, son tri venant d'un agrégat calculé hors SQL. Et **trois
+listes restent entières** parce qu'elles sont bornées par construction — trois étapes au maximum par
+dossier.
+
+**Deux verrous de sécurité** : le destinataire d'une notification et, pour un avocat, l'`avocatId`
+des frais restent résolus sur le jeton, jamais reçus en paramètre.
 
 ---
 

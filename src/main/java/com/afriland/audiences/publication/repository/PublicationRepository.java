@@ -19,5 +19,8 @@ public interface PublicationRepository extends JpaRepository<Publication, Long> 
     /** Portail avocat (Q-96) : ses propres dépôts, quel qu'en soit le statut — y compris rejetés. */
     Page<Publication> findByAvocatId(Long avocatId, Pageable pageable);
 
+    /** Q-104 — « Mon espace » : l'avocat filtre ses dépôts par statut (déposé, validé, rejeté). */
+    Page<Publication> findByAvocatIdAndStatutValidation(Long avocatId, StatutPublication statut, Pageable pageable);
+
     Page<Publication> findByDossierIdAndStatutValidation(Long dossierId, StatutPublication statut, Pageable pageable);
 }

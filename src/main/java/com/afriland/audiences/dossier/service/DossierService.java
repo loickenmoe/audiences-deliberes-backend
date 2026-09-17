@@ -34,6 +34,7 @@ import com.afriland.audiences.dossier.web.dto.CreerDossierRequest;
 import com.afriland.audiences.dossier.web.dto.CreerEtapeRequest;
 import com.afriland.audiences.dossier.web.dto.DemandeDerogationSeuilRequest;
 import com.afriland.audiences.dossier.web.dto.DossierResponse;
+import com.afriland.audiences.dossier.web.dto.HistoriqueActionResponse;
 import com.afriland.audiences.dossier.web.dto.EtapeProcedureResponse;
 import com.afriland.audiences.dossier.web.dto.ModifierAffectationRequest;
 import com.afriland.audiences.dossier.web.dto.ModifierStatutEtapeRequest;
@@ -51,6 +52,7 @@ import com.afriland.audiences.referentiel.repository.TypeClientSensibleRepositor
 import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
 import com.afriland.audiences.referentiel.web.dto.VueClientDossiersResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -71,6 +73,9 @@ public class DossierService {
     private final DossierJuristeRepository dossierJuristeRepository;
     private final DossierAvocatRepository dossierAvocatRepository;
     private final AuditSeuilDossierRepository auditSeuilDossierRepository;
+    /** Entrées d'historique embarquées dans la fiche ; au-delà, l'onglet pagine (Q-100). */
+    private static final int TAILLE_HISTORIQUE_FICHE = 10;
+
     private final HistoriqueActionRepository historiqueActionRepository;
     private final ClientRepository clientRepository;
     private final UtilisateurRepository utilisateurRepository;
@@ -235,12 +240,14 @@ public class DossierService {
     public PageResponse<DossierResponse> listerDossiers(String nature, CategorieDossier categorie,
                                                           String juridiction, String reference,
                                                           Long clientId, boolean mesDossiers,
+                                                          Boolean estSensible, StatutValidation sensibiliteStatut,
                                                           Pageable pageable) {
         // « Mes dossiers » se lit sur l'utilisateur authentifié, jamais sur un identifiant reçu :
         // le filtre ne peut donc pas servir à consulter le portefeuille d'un collègue.
         Long juristeId = mesDossiers ? currentUserService.getCurrentUser().getId() : null;
         var page = dossierRepository.findAll(
-                DossierSpecifications.withFilters(nature, categorie, juridiction, reference, clientId, juristeId),
+                DossierSpecifications.withFilters(nature, categorie, juridiction, reference, clientId, juristeId,
+                        estSensible, sensibiliteStatut),
                 pageable);
         // Trois requêtes pour la page entière, et non trois par ligne (QF-41).
         return new PageResponse<>(construireReponses(page.getContent()), page.getTotalPages(), page.getTotalElements());
@@ -254,9 +261,27 @@ public class DossierService {
                 .map(dj -> dj.getUtilisateur().getId()).toList();
         List<Long> avocatsAffectes = dossierAvocatRepository.findByDossierId(id).stream()
                 .map(da -> da.getAvocat().getId()).toList();
+        /*
+         * Q-100 : la fiche ne transporte plus que la **première page** de l'historique. RG-DOS-06
+         * historise toute action : sur un dossier suivi plusieurs années, `unpaged()` faisait voyager
+         * des centaines d'entrées à chaque ouverture, pour un onglet que l'on n'ouvre pas toujours.
+         * Le champ `historique` du contrat reste présent et garde sa forme ; il en porte désormais
+         * l'entrée la plus récente, et l'onglet pagine par `GET /dossiers/{id}/historique`.
+         */
         List<HistoriqueAction> historique = historiqueActionRepository
-                .findByDossierIdOrderByDateActionDesc(id, Pageable.unpaged()).getContent();
+                .findByDossierIdOrderByDateActionDesc(id, PageRequest.of(0, TAILLE_HISTORIQUE_FICHE)).getContent();
         return construireReponse(dossier, etapes, juristesAffectes, avocatsAffectes, historique);
+    }
+
+    /**
+     * Historique complet d'un dossier, paginé (Q-100). La fiche n'en embarque que la première page :
+     * cet endpoint sert l'onglet, qui seul a besoin de remonter le temps.
+     */
+    @Transactional(readOnly = true)
+    public PageResponse<HistoriqueActionResponse> historique(Long id, Pageable pageable) {
+        getDossierOrThrow(id);
+        return PageResponse.of(historiqueActionRepository.findByDossierIdOrderByDateActionDesc(id, pageable),
+                historiqueActionMapper::toResponse);
     }
 
     private Dossier getDossierOrThrow(Long id) {

@@ -4,6 +4,7 @@ import com.afriland.audiences.alerte.domain.StatutAlerte;
 import com.afriland.audiences.alerte.domain.TypeAlerte;
 import com.afriland.audiences.alerte.web.dto.AlerteResponse;
 import com.afriland.audiences.alerte.web.dto.ModifierSeuilRequest;
+import com.afriland.audiences.alerte.web.dto.StatistiquesDiffusionResponse;
 import com.afriland.audiences.common.error.ApiException;
 import com.afriland.audiences.common.error.ErrorCodes;
 import com.afriland.audiences.common.web.PageResponse;
@@ -15,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -24,6 +26,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.time.LocalDate;
 
 /**
  * Module Alertes (FR-ALR-01/02, RG-ALR-01/02/03) — cf. FUNCTIONAL_MAP.md §7,
@@ -40,8 +44,37 @@ public class AlerteController {
     private final AlerteService alerteService;
     private final ConfigurationService configurationService;
 
+    /**
+     * Seuil {@code CHARGE_MAX_AVOCAT} — <strong>DJ et DJA</strong> (Q-108), pour la même raison de
+     * continuité de service que {@code PUT /configurations/{cle}}.
+     *
+     * <p>Réserver cette clé au seul DJ aurait été intenable : elle vit dans
+     * {@code configuration_systeme} comme les autres et s'affiche sur le <strong>même écran</strong>.
+     * La DJA aurait pu enregistrer un champ et pas ses voisins, ce qui aurait exigé une permission
+     * par clé pour rester compréhensible.
+     */
+    /**
+     * Supervision du canal applicatif (Q-109, NF-ALR-02) — DJ et DJA, comme le reste de
+     * l'administration.
+     *
+     * <p>NF-ALR-02 exige une délivrance supérieure à 99 % sur le canal applicatif. C'était la seule
+     * exigence non fonctionnelle dont la rupture était <b>silencieuse pour tout le monde</b> : un
+     * échec de diffusion ne produisait qu'une ligne de journal, et le juriste découvrait après coup
+     * l'audience qu'on ne lui avait pas rappelée. Cet endpoint rend le taux observable.
+     *
+     * <p>La fenêtre est obligatoire : un taux sans période n'a pas de sens, et un taux cumulé depuis
+     * la mise en service masquerait une panne récente sous des mois de bon fonctionnement.
+     */
+    @GetMapping("/statistiques-diffusion")
+    @PreAuthorize("hasAnyRole('DJ', 'DJA')")
+    public StatistiquesDiffusionResponse statistiquesDiffusion(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateDebut,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFin) {
+        return alerteService.statistiquesDiffusion(dateDebut, dateFin);
+    }
+
     @PutMapping("/seuils")
-    @PreAuthorize("hasRole('DJ')")
+    @PreAuthorize("hasAnyRole('DJ', 'DJA')")
     public ConfigurationResponse modifierSeuil(@Valid @RequestBody ModifierSeuilRequest request) {
         if (request.type() != TypeAlerte.CHARGE_MAX_AVOCAT) {
             throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
@@ -56,16 +89,22 @@ public class AlerteController {
      * donc atterrir sur n'importe quelle page — et une même alerte apparaître deux fois, ou
      * disparaître, en changeant de page. {@code id} départage les alertes déclenchées dans la même
      * transaction, qui portent l'horodatage à la milliseconde près.
+     * <p>
+     * {@code type} et {@code dossierId} sont arrivés en M22 (Q-102) : avec dix-sept types d'alerte
+     * et des rappels d'audience à J-7, J-3 et J-1, la liste se remplit vite, et rien ne permettait
+     * d'y chercher. Le destinataire, lui, reste résolu sur le jeton — il n'est pas un paramètre.
      */
     @GetMapping("/mes-notifications")
     @PreAuthorize("isAuthenticated()")
     public PageResponse<AlerteResponse> mesNotifications(
             @RequestParam(required = false) StatutAlerte statut,
+            @RequestParam(required = false) TypeAlerte type,
+            @RequestParam(required = false) Long dossierId,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "10") int size) {
         Pageable pageable = PageRequest.of(page, size,
                 Sort.by(Sort.Direction.DESC, "dateDeclenchement", "id"));
-        return alerteService.mesNotifications(statut, pageable);
+        return alerteService.mesNotifications(statut, type, dossierId, pageable);
     }
 
     @PatchMapping("/{id}/traiter")

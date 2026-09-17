@@ -94,6 +94,7 @@ class HabilitationFrontendIntegrationTest {
     void setUp() {
         provisionner("kc-juriste-m15", "JURISTE");
         provisionner("kc-dj-m15", "DJ");
+        provisionner("kc-dja-m15", "DJA");
         provisionner("kc-sh-m15", "SH");
         provisionner("kc-assistante-m15", "ASSISTANTE");
         avocatId = avocatRepository.findByCompteKeycloak("kc-avocat-m15")
@@ -233,8 +234,9 @@ class HabilitationFrontendIntegrationTest {
                         .with(role("kc-juriste-m15", "ROLE_CONSULTATION")))
                 .andExpect(status().isOk())
                 .andReturn());
-        assertThat(avocats.findValues("id")).anySatisfy(n -> assertThat(n.asLong()).isEqualTo(id));
-        avocats.forEach(a -> assertThat(a.get("type").asText()).isEqualTo("AVOCAT"));
+        // Q-100 : la réponse est paginée — `{content, totalPages, totalElements}`.
+        assertThat(avocats.get("content").findValues("id")).anySatisfy(n -> assertThat(n.asLong()).isEqualTo(id));
+        avocats.get("content").forEach(a -> assertThat(a.get("type").asText()).isEqualTo("AVOCAT"));
     }
 
     @Test
@@ -302,7 +304,8 @@ class HabilitationFrontendIntegrationTest {
         mockMvc.perform(get(api("/ged/demandes-suppression")).param("statut", "EN_ATTENTE")
                         .with(role("kc-dj-m15", "ROLE_DJ")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray());
+                .andExpect(jsonPath("$.content").isArray())
+                .andExpect(jsonPath("$.totalElements").exists());
         mockMvc.perform(get(api("/ged/demandes-suppression"))
                         .with(role("kc-juriste-m15", "ROLE_JURISTE")))
                 .andExpect(status().isForbidden());
@@ -311,7 +314,8 @@ class HabilitationFrontendIntegrationTest {
         mockMvc.perform(get(api("/constitutions/prestataires")).param("statut", "EN_ATTENTE")
                         .with(role("kc-sh-m15", "ROLE_SH")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray());
+                .andExpect(jsonPath("$.content").isArray())
+                .andExpect(jsonPath("$.totalElements").exists());
         mockMvc.perform(get(api("/constitutions/prestataires"))
                         .with(role("kc-assistante-m15", "ROLE_ASSISTANTE")))
                 .andExpect(status().isForbidden());
@@ -324,12 +328,26 @@ class HabilitationFrontendIntegrationTest {
     void sousRessourcesDossier() throws Exception {
         long dossierId = creerDossier();
 
-        for (String sousRessource : List.of("audiences", "deliberes", "alarmes")) {
+        /*
+         * Q-100 : audiences et alarmes sont paginées — elles grandissent avec la vie du dossier. Les
+         * délibérés restent une liste : un dossier en compte un par étape, trois au maximum. Cette
+         * asymétrie est délibérée, et ce test la fige pour qu'elle ne soit pas « corrigée » par
+         * mégarde dans un sens ou dans l'autre.
+         */
+        for (String sousRessource : List.of("audiences", "alarmes")) {
             mockMvc.perform(get(api("/dossiers/" + dossierId + "/" + sousRessource))
                             .with(role("kc-juriste-m15", "ROLE_CONSULTATION")))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$").isArray());
+                    .andExpect(jsonPath("$.content").isArray())
+                    .andExpect(jsonPath("$.totalElements").exists());
+        }
 
+        mockMvc.perform(get(api("/dossiers/" + dossierId + "/deliberes"))
+                        .with(role("kc-juriste-m15", "ROLE_CONSULTATION")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray());
+
+        for (String sousRessource : List.of("audiences", "deliberes", "alarmes")) {
             mockMvc.perform(get(api("/dossiers/999999/" + sousRessource))
                             .with(role("kc-juriste-m15", "ROLE_CONSULTATION")))
                     .andExpect(status().isNotFound());
@@ -625,6 +643,99 @@ class HabilitationFrontendIntegrationTest {
     }
 
     // ---------------------------------------------------------------- Helpers
+
+    // ---------------------------------------------------------------- Pagination (Q-100)
+
+    /**
+     * L'exigence du porteur du projet, vérifiée là où elle se joue : **dix lignes par page, et la
+     * onzième sur la page suivante**.
+     *
+     * <p>Ce test ne se contente pas de compter dix lignes — une page qui perdrait la onzième
+     * passerait encore. Il vérifie que la onzième **existe**, qu'elle est **sur la page 2**, et
+     * qu'elle est **différente** de celles de la page 1 : c'est la garantie « aucune perte de
+     * données » prise au mot.
+     */
+    @Test
+    @DisplayName("Q-100 : onze alarmes tiennent sur deux pages, sans perte ni doublon")
+    void paginationDixLignes_laOnziemeEstSurLaPageSuivante() throws Exception {
+        long dossierId = creerDossier();
+        long etapeId = lireJson(mockMvc.perform(get(api("/dossiers/" + dossierId))
+                        .with(role("kc-juriste-m15", "ROLE_CONSULTATION")))
+                .andExpect(status().isOk())
+                .andReturn())
+                .get("etapes").get(0).get("id").asLong();
+
+        for (int i = 1; i <= 11; i++) {
+            mockMvc.perform(post(api("/dossiers/" + dossierId + "/alarmes"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json(Map.of("etapeId", etapeId, "objet", "Alarme " + i,
+                                    "dateEcheance", LocalDate.now().plusDays(i).atStartOfDay().toString())))
+                            .with(role("kc-juriste-m15", "ROLE_JURISTE")))
+                    .andExpect(status().isCreated());
+        }
+
+        JsonNode page1 = lireJson(mockMvc.perform(get(api("/dossiers/" + dossierId + "/alarmes"))
+                        .with(role("kc-juriste-m15", "ROLE_CONSULTATION")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(10))
+                .andExpect(jsonPath("$.totalElements").value(11))
+                .andExpect(jsonPath("$.totalPages").value(2))
+                .andReturn());
+
+        JsonNode page2 = lireJson(mockMvc.perform(get(api("/dossiers/" + dossierId + "/alarmes"))
+                        .param("page", "1")
+                        .with(role("kc-juriste-m15", "ROLE_CONSULTATION")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andReturn());
+
+        var idsPage1 = page1.get("content").findValues("id").stream().map(JsonNode::asLong).toList();
+        var idsPage2 = page2.get("content").findValues("id").stream().map(JsonNode::asLong).toList();
+        assertThat(idsPage1).hasSize(10).doesNotContainAnyElementsOf(idsPage2);
+        assertThat(idsPage2).hasSize(1);
+    }
+
+    /** Q-101 — le filtre demandé par le porteur du projet : la file des sensibilités à valider. */
+    @Test
+    @DisplayName("Q-101 : les dossiers sensibles et leur statut de validation sont filtrables")
+    void filtreSensibilite() throws Exception {
+        creerDossier();
+
+        mockMvc.perform(get(api("/dossiers")).param("estSensible", "true")
+                        .with(role("kc-juriste-m15", "ROLE_CONSULTATION")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isArray());
+
+        mockMvc.perform(get(api("/dossiers")).param("sensibiliteStatut", "EN_ATTENTE")
+                        .with(role("kc-juriste-m15", "ROLE_CONSULTATION")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isArray());
+    }
+
+    /** Q-105 — la recherche au fil de la frappe des sélecteurs. */
+    @Test
+    @DisplayName("Q-105 : le référentiel se cherche par fragment de nom")
+    void rechercheIntervenantParNom() throws Exception {
+        int n = COMPTEUR.incrementAndGet();
+        String nom = "Me Rechercheable " + n;
+        mockMvc.perform(post(api("/intervenants"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("type", "AVOCAT", "nom", nom,
+                                "compteKeycloak", "kc-recherche-" + n)))
+                        .with(role("kc-dj-m15", "ROLE_DJ")))
+                .andExpect(status().isCreated());
+
+        // Fragment au milieu du nom : c'est ce qu'un index B-tree ne sait pas servir (Q-106).
+        mockMvc.perform(get(api("/intervenants")).param("nom", "Rechercheable")
+                        .with(role("kc-juriste-m15", "ROLE_CONSULTATION")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)));
+
+        mockMvc.perform(get(api("/intervenants")).param("nom", "IntrouvableXYZ")
+                        .with(role("kc-juriste-m15", "ROLE_CONSULTATION")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(0));
+    }
 
     private long creerDossier() throws Exception {
         int n = COMPTEUR.incrementAndGet();
@@ -1178,7 +1289,8 @@ class HabilitationFrontendIntegrationTest {
         // Contrairement à la reprogrammation, aucune alarme de remplacement n'a été créée.
         mockMvc.perform(get(api("/dossiers/" + dossierId + "/alarmes")).with(juriste))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1));
+                // Paginé depuis Q-100 : `$.length()` compterait les trois clés de l'enveloppe.
+                .andExpect(jsonPath("$.totalElements").value(1));
     }
 
     /** Passe la première étape du dossier « en cours » : la condition d'une audience (RG-AUD-01). */
@@ -1231,11 +1343,18 @@ class HabilitationFrontendIntegrationTest {
                 .andReturn());
         assertThat(enAttente.findValues("documentId").stream().map(JsonNode::asLong).toList()).doesNotContain(documentId);
 
-        JsonNode toutes = lireJson(mockMvc.perform(get(api("/ged/demandes-suppression")).with(dj))
+        /*
+         * `size` explicite : la file est paginée depuis Q-100, et ce test cherche **une** demande
+         * précise dans tout l'historique. S'en remettre à la page par défaut le rendrait dépendant du
+         * nombre de demandes créées par les autres tests — vert aujourd'hui, rouge le jour où la
+         * classe en compte onze.
+         */
+        JsonNode toutes = lireJson(mockMvc.perform(get(api("/ged/demandes-suppression"))
+                        .param("size", "200").with(dj))
                 .andExpect(status().isOk())
                 .andReturn());
         JsonNode demande = null;
-        for (JsonNode candidate : toutes) {
+        for (JsonNode candidate : toutes.get("content")) {
             if (candidate.get("documentId").asLong() == documentId) {
                 demande = candidate;
             }
@@ -1257,6 +1376,215 @@ class HabilitationFrontendIntegrationTest {
         }
         mockMvc.perform(get(api("/ged/rapport-journalier")).with(role("kc-sh-m15", "ROLE_SH")))
                 .andExpect(status().isForbidden());
+    }
+
+    // ---------------------------------------------------------------- Administration (Q-108)
+
+    /**
+     * Q-108 — l'écriture des paramètres système est ouverte au DJ <b>et</b> à la DJA.
+     *
+     * <p>Ces deux endpoints n'avaient <b>aucun</b> test d'habilitation : la restriction ne tenait
+     * qu'à une annotation, sur une règle que la documentation énonce pourtant explicitement. Le
+     * constat a été fait en relevant les habilitations DJ/DJA à la demande du porteur du projet ;
+     * l'ouverture à la DJA est sa décision, motivée par la continuité de service — le DJ absent,
+     * personne ne pouvait plus relever un seuil.
+     */
+    @Test
+    @DisplayName("Q-108 : le DJ et la DJA écrivent les paramètres système, les autres profils sont refusés")
+    void configurations_ecriture_ouverteAuDjEtALaDja() throws Exception {
+        mockMvc.perform(put(api("/configurations/SEUIL_PROROGATIONS"))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(Map.of("valeur", "11")))
+                        .with(role("kc-dj-m15", "ROLE_DJ")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.valeur").value("11"));
+
+        mockMvc.perform(put(api("/configurations/SEUIL_PROROGATIONS"))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(Map.of("valeur", "12")))
+                        .with(role("kc-dja-m15", "ROLE_DJA")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.valeur").value("12"));
+
+        for (String profil : List.of("ROLE_JURISTE", "ROLE_ASSISTANTE", "ROLE_SH")) {
+            mockMvc.perform(put(api("/configurations/SEUIL_PROROGATIONS"))
+                            .contentType(MediaType.APPLICATION_JSON).content(json(Map.of("valeur", "13")))
+                            .with(role("kc-refus-" + profil, profil)))
+                    .andExpect(status().isForbidden());
+        }
+    }
+
+    @Test
+    @DisplayName("Q-108 : le seuil CHARGE_MAX_AVOCAT suit la même règle que les autres paramètres")
+    void seuilChargeMaxAvocat_ouvertAuDjEtALaDja() throws Exception {
+        mockMvc.perform(put(api("/alertes/seuils"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("type", "CHARGE_MAX_AVOCAT", "seuil", 21)))
+                        .with(role("kc-dj-m15", "ROLE_DJ")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.valeur").value("21"));
+
+        mockMvc.perform(put(api("/alertes/seuils"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("type", "CHARGE_MAX_AVOCAT", "seuil", 22)))
+                        .with(role("kc-dja-m15", "ROLE_DJA")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.valeur").value("22"));
+
+        mockMvc.perform(put(api("/alertes/seuils"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("type", "CHARGE_MAX_AVOCAT", "seuil", 23)))
+                        .with(role("kc-juriste-m15", "ROLE_JURISTE")))
+                .andExpect(status().isForbidden());
+    }
+
+    /**
+     * Le pendant du test précédent, et il compte autant : l'ouverture consentie à la DJA est <b>à
+     * sens unique</b>. Le contrôle d'opportunité reste réservé à la DJA, sans quoi RG-INT-03
+     * perdrait la séparation de ses deux étapes — le même profil préparerait l'avis puis voterait la
+     * validation conjointe. Ce test empêche qu'on « harmonise » les deux rôles par symétrie.
+     */
+    @Test
+    @DisplayName("Q-108 : le contrôle d'opportunité des frais reste refusé au DJ")
+    void controleOpportunite_resteReserveALaDja() throws Exception {
+        String corps = json(Map.of("accord", true));
+
+        mockMvc.perform(put(api("/frais/demandes/999999/opportunite"))
+                        .contentType(MediaType.APPLICATION_JSON).content(corps)
+                        .with(role("kc-dj-m15", "ROLE_DJ")))
+                .andExpect(status().isForbidden());
+
+        // La DJA franchit la garde : la demande est introuvable, ce qui n'est plus une question de droits.
+        mockMvc.perform(put(api("/frais/demandes/999999/opportunite"))
+                        .contentType(MediaType.APPLICATION_JSON).content(corps)
+                        .with(role("kc-dja-m15", "ROLE_DJA")))
+                .andExpect(result -> assertThat(result.getResponse().getStatus()).isNotEqualTo(403));
+    }
+
+    /**
+     * Q-109 — la supervision du canal applicatif est une lecture d'administration : DJ et DJA, comme
+     * l'écriture des paramètres. Elle expose un taux global, tous destinataires confondus ; l'ouvrir
+     * plus largement reviendrait à publier l'activité de chacun.
+     */
+    @Test
+    @DisplayName("Q-109 : le taux de délivrance des alertes est réservé au DJ et à la DJA")
+    void statistiquesDiffusion_reserveesAuDjEtALaDja() throws Exception {
+        for (String compte : List.of("kc-dj-m15", "kc-dja-m15")) {
+            String profil = compte.contains("dja") ? "ROLE_DJA" : "ROLE_DJ";
+            mockMvc.perform(get(api("/alertes/statistiques-diffusion"))
+                            .param("dateDebut", "2026-09-01").param("dateFin", "2026-09-30")
+                            .with(role(compte, profil)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.observees").exists())
+                    .andExpect(jsonPath("$.tauxDelivrance").exists())
+                    .andExpect(jsonPath("$.tauxDiffusionTempsReel").exists());
+        }
+
+        for (String profil : List.of("ROLE_JURISTE", "ROLE_ASSISTANTE", "ROLE_SH")) {
+            mockMvc.perform(get(api("/alertes/statistiques-diffusion"))
+                            .param("dateDebut", "2026-09-01").param("dateFin", "2026-09-30")
+                            .with(role("kc-superv-" + profil, profil)))
+                    .andExpect(status().isForbidden());
+        }
+    }
+
+    /**
+     * Une fenêtre inversée est une erreur de saisie, pas une fenêtre vide : la laisser passer
+     * renverrait un taux de 0 % parfaitement silencieux, que l'on prendrait pour une panne.
+     */
+    @Test
+    @DisplayName("Q-109 : une fenêtre inversée est refusée plutôt que renvoyée à zéro")
+    void statistiquesDiffusion_refusentUneFenetreInversee() throws Exception {
+        mockMvc.perform(get(api("/alertes/statistiques-diffusion"))
+                        .param("dateDebut", "2026-09-30").param("dateFin", "2026-09-01")
+                        .with(role("kc-dj-m15", "ROLE_DJ")))
+                .andExpect(status().isBadRequest());
+    }
+
+    /**
+     * Q-110 — le journal des actions hors dossier.
+     *
+     * <p>Le test le plus important du lot n'est pas l'habilitation mais le <b>périmètre</b> : le
+     * journal ne doit jamais laisser filtrer l'activité des juristes sur leurs dossiers. C'est une
+     * vue d'administration, pas une vue sur les personnes — la nuance est ce qui la rend acceptable
+     * tant que NF-CONF-01 (RGPD, conservation) reste à définir avec la DRH.
+     */
+    @Test
+    @DisplayName("Q-110 : le journal ne contient que des actions sans dossier, et jamais celles d'un dossier")
+    void journalSysteme_neContientQueLesActionsHorsDossier() throws Exception {
+        // Une action AVEC dossier, qui ne doit pas apparaître.
+        long dossierId = creerDossier();
+        // Une action SANS dossier : la modification d'un paramètre système.
+        mockMvc.perform(put(api("/configurations/SEUIL_PROROGATIONS"))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(Map.of("valeur", "14")))
+                        .with(role("kc-dj-m15", "ROLE_DJ")))
+                .andExpect(status().isOk());
+
+        JsonNode journal = lireJson(mockMvc.perform(get(api("/historique/systeme")).param("size", "100")
+                        .with(role("kc-dj-m15", "ROLE_DJ")))
+                .andExpect(status().isOk())
+                .andReturn());
+
+        assertThat(journal.get("totalElements").asLong()).isPositive();
+        assertThat(journal.get("content")).isNotEmpty();
+        // La création du dossier est historisée, mais avec un dossier : elle reste hors du journal.
+        for (JsonNode entree : journal.get("content")) {
+            assertThat(entree.get("action").asText()).doesNotContain("Création du dossier");
+        }
+        assertThat(journal.get("actionsDisponibles")).isNotEmpty();
+        assertThat(dossierId).isPositive();
+    }
+
+    @Test
+    @DisplayName("Q-110 : le journal est réservé au DJ et à la DJA")
+    void journalSysteme_reserveAuDjEtALaDja() throws Exception {
+        for (String profil : List.of("ROLE_DJ", "ROLE_DJA")) {
+            mockMvc.perform(get(api("/historique/systeme")).with(role("kc-journal-" + profil, profil)))
+                    .andExpect(status().isOk());
+        }
+        for (String profil : List.of("ROLE_JURISTE", "ROLE_ASSISTANTE", "ROLE_SH")) {
+            mockMvc.perform(get(api("/historique/systeme")).with(role("kc-journal-" + profil, profil)))
+                    .andExpect(status().isForbidden());
+        }
+    }
+
+    @Test
+    @DisplayName("Q-110 : le journal filtre par auteur, par libellé et par période ; une fenêtre inversée est refusée")
+    void journalSysteme_filtre() throws Exception {
+        mockMvc.perform(put(api("/configurations/SEUIL_PROROGATIONS"))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(Map.of("valeur", "15")))
+                        .with(role("kc-dja-m15", "ROLE_DJA")))
+                .andExpect(status().isOk());
+        Long djaId = utilisateurRepository.findByKeycloakId("kc-dja-m15").orElseThrow().getId();
+
+        JsonNode parAuteur = lireJson(mockMvc.perform(get(api("/historique/systeme"))
+                        .param("utilisateurId", String.valueOf(djaId)).param("size", "100")
+                        .with(role("kc-dj-m15", "ROLE_DJ")))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(parAuteur.get("content")).isNotEmpty();
+        for (JsonNode entree : parAuteur.get("content")) {
+            assertThat(entree.get("utilisateurId").asLong()).isEqualTo(djaId);
+        }
+
+        // Libellé exact, jamais « contient » : `action` est une phrase libre (QF-24).
+        JsonNode parLibelle = lireJson(mockMvc.perform(get(api("/historique/systeme"))
+                        .param("action", "Modification de la configuration SEUIL_PROROGATIONS")
+                        .param("size", "100").with(role("kc-dj-m15", "ROLE_DJ")))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(parLibelle.get("content")).isNotEmpty();
+
+        // Une période antérieure à toute activité ne renvoie rien, sans erreur.
+        JsonNode horsPeriode = lireJson(mockMvc.perform(get(api("/historique/systeme"))
+                        .param("dateDebut", "2020-01-01").param("dateFin", "2020-01-31")
+                        .with(role("kc-dj-m15", "ROLE_DJ")))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(horsPeriode.get("totalElements").asLong()).isZero();
+
+        mockMvc.perform(get(api("/historique/systeme"))
+                        .param("dateDebut", "2026-09-30").param("dateFin", "2026-09-01")
+                        .with(role("kc-dj-m15", "ROLE_DJ")))
+                .andExpect(status().isBadRequest());
     }
 
     private String api(String chemin) {

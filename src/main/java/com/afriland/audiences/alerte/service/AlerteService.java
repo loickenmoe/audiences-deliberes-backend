@@ -3,10 +3,12 @@ package com.afriland.audiences.alerte.service;
 import com.afriland.audiences.alerte.domain.Alerte;
 import com.afriland.audiences.alerte.domain.CanalAlerte;
 import com.afriland.audiences.alerte.domain.StatutAlerte;
+import com.afriland.audiences.alerte.domain.StatutDiffusion;
 import com.afriland.audiences.alerte.domain.TypeAlerte;
 import com.afriland.audiences.alerte.mapper.AlerteMapper;
 import com.afriland.audiences.alerte.repository.AlerteRepository;
 import com.afriland.audiences.alerte.web.dto.AlerteResponse;
+import com.afriland.audiences.alerte.web.dto.StatistiquesDiffusionResponse;
 import com.afriland.audiences.common.error.ApiException;
 import com.afriland.audiences.common.error.ErrorCodes;
 import com.afriland.audiences.common.security.CurrentUserService;
@@ -16,10 +18,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.messaging.simp.user.SimpUserRegistry;
 import org.springframework.messaging.MessagingException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
@@ -48,6 +52,8 @@ public class AlerteService {
     private final AlerteMapper alerteMapper;
     private final CurrentUserService currentUserService;
     private final SimpMessagingTemplate messagingTemplate;
+    /** Sessions STOMP vivantes, indexées par le {@code sub} du jeton — cf. {@code pousserNotification}. */
+    private final SimpUserRegistry simpUserRegistry;
 
     @Transactional
     public Alerte declencher(TypeAlerte type, Long dossierId, Utilisateur destinataire, String declencheur) {
@@ -60,30 +66,81 @@ public class AlerteService {
                 .statut(StatutAlerte.DECLENCHEE)
                 .build();
         alerte = alerteRepository.save(alerte);
+        // L'issue de la diffusion est posée sur une entité **déjà gérée**, dans la transaction
+        // ouverte par @Transactional : le suivi des modifications la persiste au commit. Un second
+        // save() serait redondant, et donnerait à croire que l'enregistrement de l'alerte dépend du
+        // succès de sa diffusion — c'est l'inverse, la persistance est inconditionnelle (Q-32).
         pousserNotification(destinataire, alerte);
         return alerte;
     }
 
+    /**
+     * Diffuse l'alerte en temps réel et <b>enregistre l'issue</b> (Q-109, NF-ALR-02).
+     *
+     * <p><b>Pourquoi observer la présence du destinataire avant de pousser.</b>
+     * {@code convertAndSendToUser} ne lève aucune exception lorsque personne n'est abonné à la file
+     * visée : elle réussit silencieusement. Se contenter du {@code try/catch} reviendrait donc à
+     * déclarer 100 % de diffusions réussies en permanence, panne comprise. C'est
+     * {@link SimpUserRegistry} qui distingue les deux cas — il connaît les sessions STOMP vivantes,
+     * indexées par le nom du principal, c'est-à-dire le {@code sub} du jeton Keycloak, celui-là
+     * même que porte {@code Utilisateur.keycloakId}.
+     *
+     * <p><b>Le repli reste garanti</b> (Q-32) : l'alerte est persistée avant toute tentative de
+     * diffusion, et {@code GET /alertes/mes-notifications} la sert quoi qu'il arrive. Une issue
+     * {@link StatutDiffusion#DIFFEREE} n'est pas une perte, seulement une remise plus tardive.
+     */
     private void pousserNotification(Utilisateur destinataire, Alerte alerte) {
+        boolean connecte = simpUserRegistry.getUser(destinataire.getKeycloakId()) != null;
+        alerte.setDateDiffusion(LocalDateTime.now());
         try {
             messagingTemplate.convertAndSendToUser(destinataire.getKeycloakId(), DESTINATION_UTILISATEUR,
                     alerteMapper.toResponse(alerte));
+            alerte.setStatutDiffusion(connecte ? StatutDiffusion.DIFFUSEE : StatutDiffusion.DIFFEREE);
         } catch (MessagingException e) {
-            // Best-effort : le destinataire peut être hors ligne ou le broker temporairement
-            // indisponible. L'alerte reste consultable via GET /alertes/mes-notifications (repli
-            // garanti, Q-32) — aucune notification n'est jamais perdue, seul le push temps réel
-            // peut manquer.
+            // Le courtier est indisponible ou le transport est rompu : c'est le seul cas où le canal
+            // applicatif n'a pas fait son travail, et le seul que NF-ALR-02 compte contre nous.
+            // L'alerte reste consultable via GET /alertes/mes-notifications — rien n'est perdu, mais
+            // la remise n'est plus immédiate et cela doit se voir dans le taux.
+            alerte.setStatutDiffusion(StatutDiffusion.ECHEC);
             log.warn("Échec de la diffusion WebSocket de l'alerte {} au destinataire {} : {}",
                     alerte.getId(), destinataire.getId(), e.getMessage());
         }
     }
 
+    /**
+     * Taux de délivrance du canal applicatif sur une fenêtre (Q-109, NF-ALR-02).
+     *
+     * <p><b>Deux taux, pas un.</b> Les confondre serait la première erreur. Le taux de
+     * <i>délivrance</i> mesure ce que NF-ALR-02 exige — le canal a-t-il fait son travail —
+     * et ne retient donc que les échecs contre nous. Le taux de <i>diffusion temps réel</i>
+     * mesure tout autre chose : à quel point les destinataires sont connectés quand on les alerte.
+     * Un second taux bas n'est pas un défaut du système ; un premier taux bas, si.
+     *
+     * <p>Les alertes antérieures à V16, dont l'issue n'a pas été observée, sont exclues : le
+     * dénominateur ne compte que ce qui a été réellement mesuré.
+     */
     @Transactional(readOnly = true)
-    public PageResponse<AlerteResponse> mesNotifications(StatutAlerte statut, Pageable pageable) {
+    public StatistiquesDiffusionResponse statistiquesDiffusion(LocalDate dateDebut, LocalDate dateFin) {
+        if (dateDebut.isAfter(dateFin)) {
+            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
+                    "La date de début ne peut pas être postérieure à la date de fin");
+        }
+        LocalDateTime debut = dateDebut.atStartOfDay();
+        LocalDateTime fin = dateFin.plusDays(1).atStartOfDay();
+
+        long diffusees = alerteRepository.compterParDiffusion(StatutDiffusion.DIFFUSEE, debut, fin);
+        long differees = alerteRepository.compterParDiffusion(StatutDiffusion.DIFFEREE, debut, fin);
+        long echecs = alerteRepository.compterParDiffusion(StatutDiffusion.ECHEC, debut, fin);
+        long nonTraitees = alerteRepository.compterNonTraitees(debut, fin);
+
+        return StatistiquesDiffusionResponse.calculer(dateDebut, dateFin, diffusees, differees, echecs, nonTraitees);
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<AlerteResponse> mesNotifications(StatutAlerte statut, TypeAlerte type,
+                                                            Long dossierId, Pageable pageable) {
         Utilisateur utilisateur = currentUserService.getCurrentUser();
-        var page = statut == null
-                ? alerteRepository.findByDestinataireId(utilisateur.getId(), pageable)
-                : alerteRepository.findByDestinataireIdAndStatut(utilisateur.getId(), statut, pageable);
+        var page = alerteRepository.rechercher(utilisateur.getId(), statut, type, dossierId, pageable);
         return PageResponse.of(page, alerteMapper::toResponse);
     }
 

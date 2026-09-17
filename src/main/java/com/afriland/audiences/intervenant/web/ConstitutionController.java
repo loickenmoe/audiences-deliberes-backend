@@ -34,10 +34,12 @@ public class ConstitutionController {
     /** M15 (Q-68) : file de travail « constitutions à signer » du SH — endpoint 🆕. */
     @org.springframework.web.bind.annotation.GetMapping("${api.prefix}/constitutions/prestataires")
     @PreAuthorize("hasAnyRole('SH', 'JURISTE')")
-    public java.util.List<DemandeConstitutionResponse> lister(
+    public com.afriland.audiences.common.web.PageResponse<DemandeConstitutionResponse> lister(
             @org.springframework.web.bind.annotation.RequestParam(required = false)
-            com.afriland.audiences.intervenant.domain.StatutConstitution statut) {
-        return constitutionService.lister(statut);
+            com.afriland.audiences.intervenant.domain.StatutConstitution statut,
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue = "0") int page,
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue = "10") int size) {
+        return constitutionService.lister(statut, org.springframework.data.domain.PageRequest.of(page, size));
     }
 
     @PutMapping("${api.prefix}/constitutions/prestataires/{id}/validation")

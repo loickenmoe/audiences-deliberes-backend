@@ -2,6 +2,8 @@ package com.afriland.audiences.audience.repository;
 
 import com.afriland.audiences.audience.domain.Audience;
 import com.afriland.audiences.audience.domain.StatutAudience;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -30,5 +32,5 @@ public interface AudienceRepository extends JpaRepository<Audience, Long> {
     long countByStatutAndDateTenueBetween(StatutAudience statut, LocalDate debut, LocalDate fin);
 
     /** M15 : onglet « Audiences » de la fiche dossier (Q-68), plus récente d'abord. */
-    List<Audience> findByDossierIdOrderByDatePlanifieeDesc(Long dossierId);
+    Page<Audience> findByDossierIdOrderByDatePlanifieeDesc(Long dossierId, Pageable pageable);
 }

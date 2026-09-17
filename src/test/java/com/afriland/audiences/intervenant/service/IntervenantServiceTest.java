@@ -10,6 +10,10 @@ import com.afriland.audiences.referentiel.domain.Intervenant;
 import com.afriland.audiences.referentiel.repository.AvocatRepository;
 import com.afriland.audiences.referentiel.repository.IntervenantRepository;
 import org.junit.jupiter.api.BeforeEach;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.eq;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -114,25 +118,40 @@ class IntervenantServiceTest {
 
     @Test
     void lister_sansFiltre_retourneLesDeuxTypes() {
-        when(intervenantRepository.findAll()).thenReturn(List.of(
+        when(intervenantRepository.rechercher(any(), any(), any())).thenReturn(new PageImpl<>(List.of(
                 Avocat.builder().id(1L).nom("Me Fotso").compteKeycloak("kc-1").build(),
-                AutrePrestataire.builder().id(2L).nom("Notaire").notification(false).build()));
+                AutrePrestataire.builder().id(2L).nom("Notaire").notification(false).build())));
 
-        List<IntervenantResponse> result = service.lister(null);
+        List<IntervenantResponse> result = service.lister(null, null, PageRequest.of(0, 10)).content();
 
         assertThat(result).hasSize(2);
         assertThat(result).extracting(IntervenantResponse::type)
                 .containsExactly(TypeIntervenant.AVOCAT, TypeIntervenant.AUTRE_PRESTATAIRE);
     }
 
+    /**
+     * Q-100 : le filtre de type est désormais **poussé en SQL** par le discriminant de la hiérarchie,
+     * là où le service chargeait tout l'annuaire pour le trier en mémoire. Le test vérifie donc la
+     * traduction du type en critère de requête, et non plus un filtrage Java.
+     */
     @Test
-    void lister_filtreParType() {
-        List<Intervenant> tous = List.of(
-                Avocat.builder().id(1L).nom("Me Fotso").compteKeycloak("kc-1").build(),
-                AutrePrestataire.builder().id(2L).nom("Notaire").notification(false).build());
-        when(intervenantRepository.findAll()).thenReturn(tous);
+    void lister_traduitLeTypeEnCritereDeRequete() {
+        when(intervenantRepository.rechercher(any(), any(), any())).thenReturn(new PageImpl<>(List.of()));
 
-        assertThat(service.lister(TypeIntervenant.AVOCAT)).hasSize(1);
-        assertThat(service.lister(TypeIntervenant.AUTRE_PRESTATAIRE)).hasSize(1);
+        service.lister(TypeIntervenant.AVOCAT, null, PageRequest.of(0, 10));
+        verify(intervenantRepository).rechercher(eq(Boolean.TRUE), isNull(), any());
+
+        service.lister(TypeIntervenant.AUTRE_PRESTATAIRE, null, PageRequest.of(0, 10));
+        verify(intervenantRepository).rechercher(eq(Boolean.FALSE), isNull(), any());
+    }
+
+    /** Q-105 — la recherche au fil de la frappe : un nom vide ne doit pas devenir un critère. */
+    @Test
+    void lister_ignoreUnNomVide() {
+        when(intervenantRepository.rechercher(any(), any(), any())).thenReturn(new PageImpl<>(List.of()));
+
+        service.lister(null, "   ", PageRequest.of(0, 10));
+
+        verify(intervenantRepository).rechercher(isNull(), isNull(), any());
     }
 }

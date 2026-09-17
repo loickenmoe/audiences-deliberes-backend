@@ -25,6 +25,8 @@ import com.afriland.audiences.dossier.repository.EtapeProcedureRepository;
 import com.afriland.audiences.referentiel.domain.Utilisateur;
 import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
 import lombok.RequiredArgsConstructor;
+import com.afriland.audiences.common.web.PageResponse;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -158,13 +160,15 @@ public class AudienceService {
                 .orElseThrow(() -> ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE, "Dossier introuvable : " + id));
     }
 
-    /** M15 (Q-68) : onglet « Audiences » de la fiche dossier — 404 si le dossier n'existe pas. */
+    /**
+     * M15 (Q-68) : onglet « Audiences » de la fiche dossier — 404 si le dossier n'existe pas.
+     * Paginé depuis Q-100 : une procédure suivie sur plusieurs années accumule ses audiences.
+     */
     @Transactional(readOnly = true)
-    public List<AudienceResponse> listerParDossier(Long dossierId) {
+    public PageResponse<AudienceResponse> listerParDossier(Long dossierId, Pageable pageable) {
         getDossierOrThrow(dossierId);
-        return audienceRepository.findByDossierIdOrderByDatePlanifieeDesc(dossierId).stream()
-                .map(audienceMapper::toResponse)
-                .toList();
+        return PageResponse.of(audienceRepository.findByDossierIdOrderByDatePlanifieeDesc(dossierId, pageable),
+                audienceMapper::toResponse);
     }
 
     @Transactional(readOnly = true)

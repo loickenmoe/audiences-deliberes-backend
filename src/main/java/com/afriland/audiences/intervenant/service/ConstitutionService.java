@@ -4,6 +4,7 @@ import com.afriland.audiences.alerte.domain.TypeAlerte;
 import com.afriland.audiences.alerte.service.AlerteService;
 import com.afriland.audiences.common.audit.HistoriqueActionService;
 import com.afriland.audiences.common.error.ApiException;
+import com.afriland.audiences.common.web.PageResponse;
 import com.afriland.audiences.common.error.ErrorCodes;
 import com.afriland.audiences.common.security.CurrentUserService;
 import com.afriland.audiences.dossier.domain.Dossier;
@@ -27,6 +28,7 @@ import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
 import com.afriland.audiences.referentiel.service.CompteAvocatService;
 import lombok.RequiredArgsConstructor;
 import org.hibernate.Hibernate;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -119,11 +121,11 @@ public class ConstitutionService {
      * {@code statut=EN_ATTENTE} alimente son écran ; sans filtre, l'historique complet.
      */
     @Transactional(readOnly = true)
-    public List<DemandeConstitutionResponse> lister(StatutConstitution statut) {
+    public PageResponse<DemandeConstitutionResponse> lister(StatutConstitution statut, Pageable pageable) {
         var demandes = statut == null
-                ? demandeConstitutionRepository.findByOrderByDateDemandeDesc()
-                : demandeConstitutionRepository.findByStatutOrderByDateDemandeAsc(statut);
-        return demandes.stream().map(demandeConstitutionMapper::toResponse).toList();
+                ? demandeConstitutionRepository.findByOrderByDateDemandeDesc(pageable)
+                : demandeConstitutionRepository.findByStatutOrderByDateDemandeAsc(statut, pageable);
+        return PageResponse.of(demandes, demandeConstitutionMapper::toResponse);
     }
 
     /** RG-INT-08 : la validation génère la lettre de constitution, stockée dans la GED (M8). */

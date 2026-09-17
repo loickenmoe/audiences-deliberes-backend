@@ -17,6 +17,8 @@ import com.afriland.audiences.dossier.repository.DossierRepository;
 import com.afriland.audiences.dossier.repository.EtapeProcedureRepository;
 import com.afriland.audiences.referentiel.domain.Utilisateur;
 import lombok.RequiredArgsConstructor;
+import com.afriland.audiences.common.web.PageResponse;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -122,12 +124,11 @@ public class AlarmeService {
 
     /** M15 (Q-68) : alarmes d'un dossier — 404 si le dossier n'existe pas. */
     @Transactional(readOnly = true)
-    public java.util.List<AlarmeResponse> listerParDossier(Long dossierId) {
+    public PageResponse<AlarmeResponse> listerParDossier(Long dossierId, Pageable pageable) {
         if (!dossierRepository.existsById(dossierId)) {
             throw ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE, "Dossier introuvable : " + dossierId);
         }
-        return alarmeRepository.findByDossierIdOrderByDateEcheanceAsc(dossierId).stream()
-                .map(alarmeMapper::toResponse)
-                .toList();
+        return PageResponse.of(alarmeRepository.findByDossierIdOrderByDateEcheanceAsc(dossierId, pageable),
+                alarmeMapper::toResponse);
     }
 }

@@ -27,6 +27,8 @@ import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
 import com.afriland.audiences.referentiel.service.CompteAvocatService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.PageImpl;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -195,28 +197,29 @@ class ConstitutionServiceTest {
     @Test
     void lister_filtreParStatut_alimenteLaFileDuSh() {
         Intervenant prestataire = AutrePrestataire.builder().id(5L).nom("Notaire").build();
-        when(demandeConstitutionRepository.findByStatutOrderByDateDemandeAsc(StatutConstitution.EN_ATTENTE))
-                .thenReturn(List.of(DemandeConstitution.builder().id(100L).dossier(dossier)
+        when(demandeConstitutionRepository.findByStatutOrderByDateDemandeAsc(eq(StatutConstitution.EN_ATTENTE), any()))
+                .thenReturn(new PageImpl<>(List.of(DemandeConstitution.builder().id(100L).dossier(dossier)
                         .prestataire(prestataire).demandeur(juriste).motif("Acte notarié")
-                        .statut(StatutConstitution.EN_ATTENTE).build()));
+                        .statut(StatutConstitution.EN_ATTENTE).build())));
 
-        var result = service.lister(StatutConstitution.EN_ATTENTE);
+        var result = service.lister(StatutConstitution.EN_ATTENTE, PageRequest.of(0, 10)).content();
 
         assertThat(result).singleElement()
                 .satisfies(d -> assertThat(d.statut()).isEqualTo(StatutConstitution.EN_ATTENTE));
-        verify(demandeConstitutionRepository, never()).findByOrderByDateDemandeDesc();
+        verify(demandeConstitutionRepository, never()).findByOrderByDateDemandeDesc(any());
     }
 
     @Test
     void lister_sansFiltre_retourneToutLHistorique() {
         Intervenant prestataire = AutrePrestataire.builder().id(5L).nom("Notaire").build();
-        when(demandeConstitutionRepository.findByOrderByDateDemandeDesc()).thenReturn(List.of(
+        when(demandeConstitutionRepository.findByOrderByDateDemandeDesc(any())).thenReturn(new PageImpl<>(List.of(
                 DemandeConstitution.builder().id(101L).dossier(dossier).prestataire(prestataire)
                         .demandeur(juriste).statut(StatutConstitution.VALIDEE).validePar(sh).build(),
                 DemandeConstitution.builder().id(100L).dossier(dossier).prestataire(prestataire)
                         .demandeur(juriste).statut(StatutConstitution.REJETEE).validePar(sh)
-                        .motifRejet("Hors budget").build()));
+                        .motifRejet("Hors budget").build())));
 
-        assertThat(service.lister(null)).extracting(DemandeConstitutionResponse::id).containsExactly(101L, 100L);
+        assertThat(service.lister(null, PageRequest.of(0, 10)).content())
+                .extracting(DemandeConstitutionResponse::id).containsExactly(101L, 100L);
     }
 }

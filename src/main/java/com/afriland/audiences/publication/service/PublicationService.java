@@ -348,7 +348,8 @@ public class PublicationService {
     private Avocat getAvocatCourantOrThrow() {
         Utilisateur utilisateur = currentUserService.getCurrentUser();
         return compteAvocatService.avocatDe(utilisateur)
-                .orElseThrow(() -> ApiException.forbidden(ErrorCodes.DROITS_INSUFFISANTS, "Aucun avocat associé à cet utilisateur"));
+                .orElseThrow(() -> ApiException.forbidden(ErrorCodes.AVOCAT_NON_RATTACHE,
+                        "Aucun avocat du référentiel n'est rattaché à ce compte"));
     }
 
     private Publication getPublicationOrThrow(Long id) {

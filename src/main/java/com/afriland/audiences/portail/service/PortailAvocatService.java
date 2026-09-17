@@ -16,6 +16,7 @@ import com.afriland.audiences.portail.web.dto.AudienceAvocatResponse;
 import com.afriland.audiences.portail.web.dto.DossierAvocatResponse;
 import com.afriland.audiences.portail.web.dto.PieceJustificativeResponse;
 import com.afriland.audiences.publication.mapper.PublicationMapper;
+import com.afriland.audiences.publication.domain.StatutPublication;
 import com.afriland.audiences.publication.repository.PublicationRepository;
 import com.afriland.audiences.publication.web.dto.PublicationResponse;
 import com.afriland.audiences.referentiel.domain.Avocat;
@@ -82,7 +83,13 @@ public class PortailAvocatService {
             throw ApiException.forbidden(ErrorCodes.DROITS_INSUFFISANTS,
                     "Vous n'êtes pas affecté à ce dossier");
         }
-        return audienceRepository.findByDossierIdOrderByDatePlanifieeDesc(dossierId).stream()
+        /*
+         * `unpaged` volontairement : cette liste alimente le **sélecteur d'audience** du formulaire
+         * de dépôt (écran 33), pas un tableau. La paginer amputerait silencieusement le choix de
+         * l'avocat — le compilateur a d'ailleurs signalé cet appel quand la requête est passée en
+         * `Page`, ce qui a évité de le découvrir en recette.
+         */
+        return audienceRepository.findByDossierIdOrderByDatePlanifieeDesc(dossierId, Pageable.unpaged()).stream()
                 .map(audience -> new AudienceAvocatResponse(audience.getId(), audience.getDatePlanifiee(),
                         audience.getDateTenue(), audience.getStatut()))
                 .toList();
@@ -111,10 +118,12 @@ public class PortailAvocatService {
 
     /** Périmètre ajouté : ses propres dépôts, avec leur statut et le motif d'un rejet. */
     @Transactional(readOnly = true)
-    public PageResponse<PublicationResponse> mesPublications(Pageable pageable) {
+    public PageResponse<PublicationResponse> mesPublications(StatutPublication statut, Pageable pageable) {
         Avocat avocat = avocatCourant();
-        return PageResponse.of(publicationRepository.findByAvocatId(avocat.getId(), pageable),
-                publicationMapper::toResponse);
+        var page = statut == null
+                ? publicationRepository.findByAvocatId(avocat.getId(), pageable)
+                : publicationRepository.findByAvocatIdAndStatutValidation(avocat.getId(), statut, pageable);
+        return PageResponse.of(page, publicationMapper::toResponse);
     }
 
     /** Périmètre ajouté : les lettres de constitution qui le désignent. */
@@ -133,7 +142,7 @@ public class PortailAvocatService {
      */
     private Avocat avocatCourant() {
         return compteAvocatService.avocatDe(currentUserService.getCurrentUser())
-                .orElseThrow(() -> ApiException.forbidden(ErrorCodes.DROITS_INSUFFISANTS,
+                .orElseThrow(() -> ApiException.forbidden(ErrorCodes.AVOCAT_NON_RATTACHE,
                         "Aucun avocat du référentiel n'est rattaché à ce compte"));
     }
 }

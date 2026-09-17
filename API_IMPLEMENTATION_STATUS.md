@@ -1,7 +1,8 @@
 # API_IMPLEMENTATION_STATUS
 
 > Inventaire exhaustif des endpoints et état d'implémentation.
-> Dernière mise à jour : 2026-09-14 (M19 — portail Avocat, quatre lectures cadrées Q-96 ; pièces justificatives réellement téléversées Q-97).
+> Dernière mise à jour : 2026-09-15 (M22 — pagination généralisée à huit endpoints, filtres et recherche au fil de la frappe ; Q-100 à Q-106).
+> Précédente : 2026-09-14 (M19 — portail Avocat, quatre lectures cadrées Q-96 ; pièces justificatives réellement téléversées Q-97).
 > Précédente : 2026-09-14 (M18 — tableau de bord exécutif ouvert à la DJA, Q-95).
 > Précédente : 2026-09-14 (M17 — paramètres système validés par clé Q-91 ; listes triées Q-92/Q-93 ; vue consolidée d'un client sans N+1 Q-94).
 > Précédente : 2026-09-11 (M16 — cycle du délibéré Q-78 ; GED : demande orpheline et file nommée Q-79, rapport journalier Q-80).
@@ -18,6 +19,22 @@
 `✅` implémenté et testé · `🟡` partiel · `❌` non implémenté ·
 `📋` spécifié dans l'OpenAPI REF-07 §3 · `📄` cité dans le tableau REF-07 §2 mais **absent de l'OpenAPI** ·
 `💡` « à proposer » (identifié par les user stories, absent du contrat) · `🆕` manquant partout, déduit d'une règle
+
+
+> **Pagination généralisée et filtres (M22, Q-100 à Q-106).** Huit endpoints renvoyaient une liste
+> entière et passent en `PageResponse` : `/repertoire/avocats`, `/constitutions/prestataires`,
+> `/intervenants`, `/ged/demandes-suppression`, et les onglets Documents, Audiences et Alarmes d'un
+> dossier ; `GET /dossiers/{id}/historique` est créé. La **taille par défaut est 10** sur les
+> endpoints de tableau, 20 sur `/intervenants` qui alimente aussi des listes déroulantes.
+>
+> Filtres ajoutés : `estSensible` et `sensibiliteStatut` sur **#2** (la seconde ouvre la file des
+> sensibilités à valider du DJ/DJA) ; `type` et `dossierId` sur **#45** ; `dossierId`, `avocatId`,
+> `referenceFacture`, `dateDebut` et `dateFin` sur **#28** ; `statut` sur `/avocat/mes-publications` ;
+> `nom` sur **#62**, qui porte la recherche au fil de la frappe des sélecteurs.
+>
+> ⚠ Deux paramètres **ne sont pas** des filtres : le destinataire d'une notification et, pour un
+> avocat, l'`avocatId` des frais. Ils restent résolus sur le jeton — les rendre filtrables aurait
+> ouvert la lecture des données d'un collègue.
 
 ---
 
@@ -276,15 +293,15 @@ automatisés dédiés. Voir `DECISIONS_AND_OPEN_QUESTIONS.md` Q-20, Q-25, Q-55, 
 |---|---|---|---|---|---|---|
 | 35 | POST | `/constitutions/prestataires` | `ROLE_JURISTE` | FR-INT-06 / US 5.6 | 💡 | ✅ M9 |
 | 36 | PUT | `/constitutions/prestataires/{id}/validation` | `ROLE_SH` | FR-INT-07 / US 5.7 | 💡 | ✅ M9 |
-| 37 | GET | `/repertoire/avocats` | `ROLE_JURISTE`, `ROLE_ASSISTANTE` | FR-INT-08 / US 5.8 | 💡 | ✅ M9 |
-| 60 | GET | `/constitutions/prestataires?statut=` | `ROLE_SH`, `ROLE_JURISTE` | UC-INT-07 (« constitutions à signer ») | 🆕 | ✅ M15 |
+| 37 | GET | `/repertoire/avocats?nom&page&size` | `ROLE_JURISTE`, `ROLE_ASSISTANTE` | FR-INT-08 / US 5.8 | 💡 | ✅ M9 |
+| 60 | GET | `/constitutions/prestataires?statut&page&size` *(paginé M22)* | `ROLE_SH`, `ROLE_JURISTE` | UC-INT-07 (« constitutions à signer ») | 🆕 | ✅ M15 |
 
 > **M16 (Q-86, Q-87).** `DemandeConstitutionResponse` porte `referenceDossier`, `prestataireNom`,
 > `prestataireType`, `demandeurNom`, `valideParNom`. **#36** : l'avocat constitué est désormais
 > réellement notifié — le prestataire, chargé à la demande, était un proxy d'`Intervenant` que
 > `instanceof Avocat` ne reconnaissait jamais (`Hibernate.unproxy`).
 | 61 | POST | `/intervenants` | `ROLE_DJ`, `ROLE_DJA` | RG-INT-01/02 (administration du référentiel) | 🆕 | ✅ M15 |
-| 62 | GET | `/intervenants?type=` | `ROLE_CONSULTATION` | RG-DOS-03 (sélecteurs d'affectation) | 🆕 | ✅ M15 |
+| 62 | GET | `/intervenants?type&nom&page&size` *(paginé + recherche, M22)* | `ROLE_CONSULTATION` | RG-DOS-03 (sélecteurs d'affectation) | 🆕 | ✅ M15 |
 
 > **#35/#36** : `demande_constitution.motif` obligatoire ; l'approbation génère la lettre de
 > constitution (PDFBox) et l'attache comme `Document` GED (M8) ; seul un `Avocat` avec compte
@@ -319,7 +336,7 @@ notifiant le demandeur, décision déjà prise refusée (409). 11 tests automati
 | 41 | PUT | `/ged/documents/{id}/approbation-suppression` | `ROLE_DJ`, `ROLE_DJA` | FR-GED-03 / US 6.4 | 💡 | ✅ M8 |
 | 42 | GET | `/ged/rapport-journalier` | `ROLE_JURISTE`, `ROLE_DJ`, `ROLE_DJA`, `ROLE_ASSISTANTE` (Q-80) | FR-GED-04 / US 6.6 | 📋 | ✅ M8 |
 | 43 | GET | `/dossiers/{id}/documents` | `ROLE_CONSULTATION` | UC-GED-02 | 🆕 | ✅ M8 |
-| 63 | GET | `/ged/demandes-suppression?statut=` | `ROLE_DJ`, `ROLE_DJA` | UC-GED-04 (« demandes en attente ») | 🆕 | ✅ M15 |
+| 63 | GET | `/ged/demandes-suppression?statut&page&size` *(paginé M22)* | `ROLE_DJ`, `ROLE_DJA` | UC-GED-04 (« demandes en attente ») | 🆕 | ✅ M15 |
 
 > **M16 (Q-79, Q-80)** : `DemandeSuppressionResponse` (#40 en 202, #41, #63) porte `documentNom`,
 > `typeDocument`, `dossierId`, `referenceDossier` — la file dit quoi supprimer, historique compris.
@@ -373,7 +390,7 @@ coup. Réponses réduites à ce que l'usage exige.
 | # | Méthode | Endpoint | Rôle requis | FR / US | Src | Statut |
 |---|---|---|---|---|---|---|
 | 44 | PUT | `/alertes/seuils` | `ROLE_DJ` | FR-ALR-01 / US 7.1 | 📋 | ✅ M5 |
-| 45 | GET | `/alertes/mes-notifications` | authentifié | FR-ALR-02 / US 7.3 | 📋 | ✅ M5 · **trié M17** (Q-92) |
+| 45 | GET | `/alertes/mes-notifications?statut&type&dossierId&page&size` | authentifié | FR-ALR-02 / US 7.3 | 📋 | ✅ M5 · **trié M17** (Q-92) |
 | 46 | PATCH | `/alertes/{id}/traiter` | destinataire | US 7.4 | 💡 | ✅ M5 |
 | 47 | GET | `/configurations` | `ROLE_CONSULTATION` | CONF01-07 | 📋 | ✅ M5 · **enrichi M17** (Q-91) |
 | 48 | PUT | `/configurations/{cle}` | `ROLE_DJ` | CONF01-07 | 📋 | ✅ M5 · **validé par clé M17** (Q-91) |

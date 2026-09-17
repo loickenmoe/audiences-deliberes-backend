@@ -2,7 +2,8 @@
 
 > Contradictions documentaires, ambiguïtés et lacunes nécessitant un **arbitrage explicite**.
 > Aucune de ces questions n'a été tranchée silencieusement.
-> Dernière mise à jour : 2026-09-15 (jalon M21 — Q-99, index adossés aux tris des listes paginées).
+> Dernière mise à jour : 2026-09-15 (jalon M22 — Q-100 à Q-106 : pagination généralisée, filtres, recherche au fil de la frappe).
+> Précédente : 2026-09-15 (jalon M21 — Q-99, index adossés aux tris des listes paginées).
 > Précédente : 2026-09-14 (jalon M20 — Q-98, pièce jointe facultative au compte rendu
 > d'audience). Q-70 à Q-98 ont toutes été ouvertes par la consommation réelle de l'API par le
 > frontend, jalons M16 à M20 : ce sont les défauts qu'aucun test backend ne pouvait voir.
@@ -2044,6 +2045,252 @@ descendant.
 — le planificateur **ignorera ces index**, et il aura raison : un balayage séquentiel y est plus
 rapide qu'un parcours d'index. Ce n'est pas un échec de la migration. Le gain se mesure au volume,
 et c'est pourquoi la mesure ci-dessus a été faite sur 200 000 lignes.
+
+### Q-106 ✅ Un index B-tree ne peut rien pour une recherche « contient » — tranché (M22)
+
+Trouvé en écrivant les index des filtres de M22, et c'est un défaut **antérieur** qui passait
+inaperçu depuis M16.
+
+**A — Le constat.** Trois recherches de l'application cherchent un fragment **au milieu** d'un
+texte : la référence d'un dossier (`LIKE '%…%'`, Q-72), celle d'une facture (Q-103) et le nom d'un
+intervenant (Q-105). Or un index B-tree ordonne les chaînes **par leur début** : il sert
+`LIKE 'DOS%'` et ne peut **rien** pour `LIKE '%DOS%'`.
+
+`idx_dossier_reference` existait donc depuis V1 et semblait couvrir le filtre de référence — il ne
+l'a jamais servi. Personne ne pouvait s'en apercevoir : la requête est correcte, elle est seulement
+exécutée par balayage complet.
+
+**B — Tranché** : extension `pg_trgm` et index **GIN trigramme** sur les trois colonnes. Les
+trigrammes découpent le texte en triplets de caractères et les indexent ; la recherche d'un fragment
+interne devient alors une recherche indexée.
+
+**C — Prérequis d'exploitation, à porter à la DSI.** `CREATE EXTENSION` demande des droits élevés.
+L'utilisateur applicatif les a sur le poste de développement ; **en production, l'extension devra
+être créée par la DSI avant le premier démarrage**, sans quoi la migration échouera. L'échec est
+franc et visible au démarrage — jamais silencieux, contrairement au défaut qu'il corrige.
+
+### Q-100 à Q-105 ✅ Pagination généralisée, filtres et recherche au fil de la frappe — tranché (M22)
+
+Demandé par le porteur du projet le 2026-09-15 : **dix lignes par tableau au maximum**, et des
+filtres partout où ils manquent. Objectifs énoncés : « ni perte de données, ni lenteur », pour une
+application « amenée à recevoir beaucoup de données ».
+
+**Q-100 — pagination.** Huit endpoints renvoyaient une liste entière : `/repertoire/avocats`,
+`/constitutions/prestataires`, `/intervenants`, `/ged/demandes-suppression`, et les onglets
+Documents, Audiences et Alarmes d'un dossier. Tous passent en `PageResponse`. S'y ajoute
+`GET /dossiers/{id}/historique`, créé : RG-DOS-06 historise toute action, et la fiche transportait
+l'historique **entier** à chaque ouverture. La fiche n'en embarque plus que les **dix entrées les
+plus récentes** — le champ du contrat garde sa forme, l'onglet pagine pour le reste, aucune entrée
+n'est perdue.
+
+**Deux limites assumées, écrites dans le code.** Le **répertoire des avocats** n'est paginé qu'à
+moitié : US 5.8 le classe par charge croissante, or la charge vient d'un comptage agrégé joint en
+Java et non d'une colonne. Aucun `ORDER BY` SQL ne peut produire cet ordre, donc la base ne peut pas
+découper ce qu'elle ne sait pas trier — la pagination réduit ce qui **voyage**, pas ce que la base
+lit. Et **trois listes restent entières** parce qu'elles sont structurellement bornées : étapes (trois
+au maximum), délibérés et décisions d'un dossier. Y ajouter une pagination serveur aurait été du
+contrat à maintenir pour toujours en échange de rien.
+
+**Q-101 — filtrer les dossiers sensibles**, sur rappel explicite du porteur du projet. `estSensible`
+et `sensibiliteStatut` s'ajoutent à `GET /dossiers`. Le second ne relève pas du confort :
+`EN_ATTENTE` donne au DJ et à la DJA la **file des sensibilités à valider**, que rien n'exposait.
+C'est la moitié de **QF-08**, que j'avais close à tort en concluant que la notification suffisait —
+une notification prévient d'un événement, elle ne dit pas ce qui reste en attente.
+
+**Q-102 — notifications** : `type` et `dossierId`. Avec dix-sept types d'alerte et des rappels à
+J-7, J-3 et J-1, la liste se remplit vite et rien ne permettait d'y chercher.
+
+**Q-103 — circuit des frais** : `dossierId`, `avocatId`, `referenceFacture`, `dateDebut`, `dateFin`.
+
+**Q-104 — portail** : l'avocat filtre ses dépôts par `statut`.
+
+**Q-105 — recherche au fil de la frappe** : `nom` sur `/intervenants`. C'est la réponse **durable**
+au problème des sélecteurs, autorisée par le porteur du projet hors du périmètre initial. Une liste
+déroulante qui demandait « une grande page » cassait silencieusement dès que l'annuaire la dépassait ;
+elle interroge désormais le serveur pendant la frappe et n'a plus besoin de tout détenir. La taille
+par défaut de `/intervenants` est donc **redescendue de 200 à 20** : ce qu'affiche une liste
+déroulante, non ce qu'elle contient.
+
+**Deux verrous de sécurité, posés parce que ces filtres touchent des données restreintes.** Le
+**destinataire** d'une notification n'est pas filtrable : il reste résolu sur le jeton. Et pour un
+avocat, `avocatId` est **imposé** à son propre identifiant, jamais lu depuis l'URL — sans quoi le
+filtre destiné à l'instruction serait devenu un moyen de lire les demandes d'un confrère en changeant
+un chiffre.
+
+**Trois pièges de sélecteur, dont deux signalés par le compilateur.** `GET /intervenants` alimente
+trois listes déroulantes et un seul tableau ; `PortailAvocatService` réutilise la requête des
+audiences pour le sélecteur du formulaire de dépôt. Paginer sans regarder aurait amputé ces listes en
+silence — exactement la « perte de données » que le porteur du projet demandait d'écarter, et
+invisible en recette. Le sélecteur d'audiences passe donc explicitement `Pageable.unpaged()`.
+
+### Q-107 ✅ Un avocat non inscrit au répertoire recevait un refus de droits — tranché (M22)
+
+Signalé par le porteur du projet le 2026-09-15, après une réinitialisation de la base de
+développement : connecté en avocat, il voyait « Le chargement a échoué — Aucun avocat du référentiel
+n'est rattaché à ce compte » sur *Mon espace* et sur *Frais d'avocats*.
+
+**A — Ce n'était pas un défaut de comportement.** Deux choses différentes portent le mot « avocat ».
+Le **compte de connexion** vit dans Keycloak, et le backend crée à la volée la ligne `utilisateur`
+correspondante. L'**avocat du référentiel** est une fiche métier, créée par le DJ ou la DJA
+(UC-INT-01) et portant son identifiant de connexion (`compteKeycloak`, RG-INT-01). Le portail ne
+travaille que sur la seconde. Sur une base vierge, la table est vide : le refus est donc conforme aux
+sources — un avocat existe pour le métier parce qu'un juriste l'a inscrit, jamais parce qu'il possède
+un compte.
+
+**B — Le défaut était dans ce que l'application en disait.** Elle présentait un **état d'inscription**
+comme une **panne**. L'avocat lisait un message technique, ne pouvait rien y faire, et ne savait pas
+à qui s'adresser. Or ce cas n'est pas rare : il se produit à chaque mise en service, et pour chaque
+nouvel avocat, tant que la Direction Juridique ne l'a pas inscrit.
+
+**C — Tranché** : un code d'erreur **dédié**, `ERR-AVOCAT-NON-RATTACHE`, lève les quatre points
+concernés (portail, frais ×2, publications), et l'interface l'affiche comme un état, avec ce qui
+manque et à qui s'adresser.
+
+**Pourquoi un code et non une lecture du message.** `ERR-FORBIDDEN` couvre aussi les **vrais** refus
+de droits : s'en servir aurait fait dire « votre compte n'est pas rattaché » à un avocat qui force
+une URL interdite — un mensonge. Et comparer des phrases se briserait à la première reformulation ou
+traduction. C'est le parti déjà retenu pour `ERR-009` (accès restreint à une publication), qui isole
+un état légitime d'un refus.
+
+**Au passage**, les quatre points levaient **deux formulations** pour une cause unique (« Aucun avocat
+associé à cet utilisateur » et « Aucun avocat du référentiel n'est rattaché à ce compte »). Elles
+sont unifiées.
+
+**Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
+inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
+
+### Q-110 ✅ Les actions historisées hors dossier deviennent lisibles — tranché (2026-09-17)
+
+**Point de départ** : une analyse de l'auditabilité demandée par le porteur du projet. RG-DOS-06
+historise chaque modification — **42 points d'écriture, 11 services, 45 libellés distincts, 100 %
+des lignes portant des `details`** — mais l'unique point de lecture, `GET /dossiers/{id}/historique`,
+part d'un dossier. Les actions qui n'en ont pas étaient donc **écrites et jamais relues** :
+modifications de paramètres système, et indexations de jurisprudence sans dossier. Mesuré sur la base
+de recette : **26 lignes sur 657, soit 4 %**.
+
+**Ce que la mesure a corrigé dans l'analyse.** Une lecture statique du code n'avait trouvé qu'une
+famille d'actions concernée (`ConfigurationService`). La base en a révélé une seconde —
+`JurisprudenceService` passe un `dossierId` qui peut être nul, ce qu'aucun `grep` ne voit.
+
+**Pourquoi c'était devenu pressant.** Q-108 a ouvert l'administration des paramètres à la DJA. Il
+avait alors été argumenté que « la traçabilité n'y perd rien, chaque écriture étant historisée avec
+son auteur » : exact en base, mais le nombre de détenteurs de ce pouvoir doublait sans qu'aucun écran
+ne permette d'en relire l'exercice. « Qui a abaissé le seuil de validation conjointe ? » exigeait une
+requête SQL.
+
+**Livré** : `GET /historique/systeme`, réservé au **DJ et à la DJA**, filtrable par auteur, libellé
+et période, et un bloc sur l'écran 41, sous les paramètres — l'adjacence est la bonne, vingt-deux des
+vingt-six lignes étant des modifications de réglages.
+
+**Quatre décisions de conception.**
+
+1. **Le périmètre est structurel, pas conventionnel.** `HistoriqueActionSpecifications.Perimetre`
+   est une énumération à trois valeurs exclusives ; l'endpoint fige `HORS_DOSSIER`. Ouvrir un jour la
+   vue transversale serait une décision, pas l'effet d'un paramètre oublié.
+2. **Le filtre par libellé est une liste fermée**, construite à partir des libellés réellement
+   présents en base, et **indépendante des filtres en cours** — sinon choisir un libellé ferait
+   disparaître les autres choix. `action` étant une phrase française libre (QF-24), un `LIKE '%…%'`
+   aurait paru commode et menti par omission dès qu'un libellé change d'un mot.
+3. **DJ et DJA, pas `ROLE_CONSULTATION`**, alors que l'historique d'un dossier est ouvert à tout
+   profil interne. Sur une fiche, on regarde un dossier ; ici la lecture est agrégée et filtrable par
+   auteur — même contenu, autre nature. La restreindre est le minimum tant que **NF-CONF-01**
+   (RGPD, conservation) reste « à définir avec la DRH » dans les sources.
+4. **« Journal », jamais « Audit ».** Seules les modifications sont historisées ; **aucune
+   consultation ne l'est**. Ouvrir un dossier sensible ou télécharger une pièce ne laisse aucune
+   trace. L'écran le dit lui-même, plutôt que de laisser le défaut se découvrir au moment où l'on en
+   aurait besoin.
+
+**Ce que cela ne règle pas, et qui reste ouvert.** Le manque comblé était une question de
+*couverture* ; il reste une question de *point d'entrée*. Trois questions demeurent sans réponse :
+« qu'a fait X le mois dernier ? », « toutes les suppressions du trimestre ? », « que s'est-il passé
+entre le 1er et le 15 ? ». Y répondre suppose deux préalables — un **code d'action typé** (QF-24), et
+**NF-CONF-01** tranché. La décision d'ouvrir ou non cette vue est laissée au porteur du projet.
+
+**Statut (2026-09-17)** : appliqué — V17 (deux index partiels), spécification, endpoint, écran,
+tests. Backend 385/385, frontend 299/299, bout en bout vérifié contre la pile réelle.
+
+### Q-109 ✅ Le taux de délivrance des alertes devient mesurable — tranché (2026-09-16)
+
+**Point de départ** : un recensement de l'observabilité de l'application, demandé par le porteur du
+projet. NF-ALR-02 fait du canal applicatif le canal **obligatoire**, avec une délivrance supérieure
+à 99 %. Ce taux n'était mesuré **nulle part** : un échec de diffusion produisait une ligne de journal,
+que personne ne lit. C'était la seule exigence non fonctionnelle dont la rupture était **silencieuse
+pour tout le monde**, y compris pour la personne qu'elle pénalise — un juriste qui découvre après
+coup l'audience qu'on ne lui a pas rappelée.
+
+**Le piège, et la raison d'être de la conception retenue.**
+`SimpMessagingTemplate.convertAndSendToUser` **ne lève aucune exception** lorsque le destinataire
+est déconnecté : elle route vers une file sans abonné et retourne normalement. La mesure évidente —
+« pas d'exception, donc délivré » — aurait donc affiché **100 % en permanence, panne comprise**.
+Une mesure qui ment est pire que pas de mesure. Il faut interroger
+{@code SimpUserRegistry} **avant** de pousser, pour distinguer l'absence de destinataire, qui est
+normale, de la rupture du canal, qui est le défaut.
+
+**Trois issues, enregistrées sur l'alerte** (`statut_diffusion`, migration V16) :
+
+| Issue | Sens | Délivrée ? |
+|---|---|---|
+| `DIFFUSEE` | session WebSocket vivante, poussée aboutie | oui |
+| `DIFFEREE` | aucune session ; l'alerte attend dans `GET /alertes/mes-notifications` | **oui** |
+| `ECHEC` | courtier indisponible ou transport rompu | **non** |
+
+**Deux taux, et les confondre serait la première erreur.** Le **taux de délivrance**
+(`1 − ECHEC/observées`) répond à NF-ALR-02 : le canal a-t-il fait son travail ? Le **taux de
+diffusion temps réel** (`DIFFUSEE/observées`) répond à tout autre chose : à quel point les gens
+sont-ils connectés quand on les alerte. Un second taux bas n'est pas un défaut du système — c'est
+une information sur les usages, et souvent la raison de brancher enfin un second canal. Aucun seuil
+ne lui est opposé, et l'écran le dit explicitement.
+
+**Ce qui est délibérément exclu du calcul.** Les alertes antérieures à V16 n'ont pas d'issue
+observée : les compter comme réussies gonflerait le taux d'une valeur inventée, les compter comme
+échouées l'effondrerait autant. Elles sont hors dénominateur — le taux ne porte que sur ce qui a été
+réellement mesuré. De même, une **fenêtre sans aucune alerte** est déclarée conforme : il n'y a rien
+à respecter ni à enfreindre, et afficher « 0 % » ferait sonner une alarme sur du vide.
+
+**`nonTraitees` ne participe à aucun taux**, et c'est voulu : une alerte techniquement délivrée que
+personne n'a ouverte relève d'un autre problème que la délivrance. Les mélanger brouillerait les
+deux signaux.
+
+**Statut (2026-09-16)** : appliqué — V16, `GET /alertes/statistiques-diffusion` (DJ/DJA), bloc de
+supervision sur l'écran 41. Backend 378/378, frontend 294/294.
+
+### Q-108 ✅ L'administration des paramètres est ouverte à la DJA — tranché (2026-09-16)
+
+**Point de départ** : le porteur du projet demande un relevé complet des habilitations du DJ et de
+la DJA, partant de l'hypothèse que « la DJA peut tout ce que fait le DJ ».
+
+**Ce que le relevé a montré — et l'hypothèse était presque juste.** `ROLE_DJ` et `ROLE_DJA` sont
+**tous deux** composites de `ROLE_JURISTE` + `ROLE_SAISIE` : vérifié sur les jetons réels, les deux
+profils portent exactement les mêmes rôles à un près. Sur les 80 `@PreAuthorize` du backend, **65
+leur sont communs**. Il ne restait que **deux écarts, symétriques** :
+
+| Capacité | Endpoints | DJ | DJA |
+|---|---|---|---|
+| Écriture des paramètres | `PUT /configurations/{cle}`, `PUT /alertes/seuils` | ✅ | ❌ |
+| Contrôle d'opportunité | `PUT /frais/demandes/{id}/opportunite` | ❌ | ✅ |
+
+**Décision du porteur du projet** : ouvrir l'écriture des paramètres à la DJA. Le motif est la
+**continuité de service** — le DJ absent, plus personne ne pouvait relever un seuil de prorogation
+ou la taille maximale d'un document, alors qu'un Adjoint existe précisément pour suppléer. La
+traçabilité ne s'y perd pas : `ConfigurationService.modifier` historise déjà chaque écriture avec
+son auteur.
+
+**Pourquoi les deux endpoints et pas un seul.** Une ouverture limitée à `PUT /alertes/seuils` avait
+été envisagée puis écartée : `CHARGE_MAX_AVOCAT` est une clé de `configuration_systeme` comme les
+autres et s'affiche sur le **même écran**. La DJA aurait pu enregistrer un champ et pas ses voisins,
+ce qui aurait imposé d'inventer une permission par clé.
+
+**L'ouverture est à sens unique, et c'est délibéré.** Le contrôle d'opportunité **reste réservé à la
+DJA** : le donner aussi au DJ effondrerait sur un même profil les deux étapes que RG-INT-03 sépare —
+préparer l'avis d'opportunité, puis voter la validation conjointe. Un test dédié verrouille ce refus,
+pour qu'on ne « harmonise » pas les deux rôles par symétrie.
+
+**Défaut de couverture révélé au passage** : ces deux endpoints n'avaient **aucun** test
+d'habilitation. La restriction ne tenait qu'à une annotation, sur une règle pourtant écrite deux fois
+dans les sources. Trois tests d'intégration comblent le manque.
+
+**Statut (2026-09-16)** : appliqué — `hasAnyRole('DJ', 'DJA')` sur les deux endpoints,
+`PROJECT_CONTEXT.md` §4 et `FUNCTIONAL_MAP.md` (FR-ALR-01, UC-ALR-01) mis à jour.
 
 ### Q-27 ✅ `dossier.parties` défini deux fois — tranché (M2)
 Le dictionnaire REF-06 §2.1.2 déclare `parties JSONB` **deux fois**, avec deux structures

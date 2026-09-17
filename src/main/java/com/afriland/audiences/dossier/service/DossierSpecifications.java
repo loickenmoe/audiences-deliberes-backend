@@ -2,6 +2,7 @@ package com.afriland.audiences.dossier.service;
 
 import com.afriland.audiences.dossier.domain.Dossier;
 import com.afriland.audiences.dossier.domain.DossierJuriste;
+import com.afriland.audiences.dossier.domain.StatutValidation;
 import com.afriland.audiences.referentiel.domain.CategorieDossier;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.util.StringUtils;
@@ -14,6 +15,12 @@ import org.springframework.util.StringUtils;
  * juriste suivant plusieurs dizaines de dossiers n'avait aucun moyen de retrouver le sien. Filtrer
  * côté client n'était pas une option : sur une liste paginée, cela n'aurait cherché que dans la
  * page affichée et aurait donc renvoyé des résultats faux.
+ * <p>
+ * {@code estSensible} et {@code sensibiliteStatut} ont été ajoutés au jalon M22 (Q-101), à la
+ * demande du porteur du projet. Le second ne sert pas qu'au confort : {@code EN_ATTENTE} donne au DJ
+ * et à la DJA la **file des sensibilités à valider**, que rien n'exposait — c'est la moitié de QF-08,
+ * que j'avais close à tort en concluant que la notification suffisait. Une notification prévient
+ * d'un événement ; elle ne dit pas ce qui reste en attente.
  */
 public final class DossierSpecifications {
 
@@ -22,7 +29,8 @@ public final class DossierSpecifications {
 
     public static Specification<Dossier> withFilters(String nature, CategorieDossier categorie,
                                                      String juridiction, String reference,
-                                                     Long clientId, Long juristeId) {
+                                                     Long clientId, Long juristeId,
+                                                     Boolean estSensible, StatutValidation sensibiliteStatut) {
         return (root, query, cb) -> {
             var predicate = cb.conjunction();
             if (StringUtils.hasText(nature)) {
@@ -42,6 +50,12 @@ public final class DossierSpecifications {
             }
             if (clientId != null) {
                 predicate = cb.and(predicate, cb.equal(root.get("client").get("id"), clientId));
+            }
+            if (estSensible != null) {
+                predicate = cb.and(predicate, cb.equal(root.get("estSensible"), estSensible));
+            }
+            if (sensibiliteStatut != null) {
+                predicate = cb.and(predicate, cb.equal(root.get("sensibiliteStatut"), sensibiliteStatut));
             }
             /*
              * « Mes dossiers ». Sous-requête EXISTS plutôt que jointure : `Dossier` ne mappe aucune

@@ -70,6 +70,7 @@ FR-AUD-01, FR-AUD-03, FR-DEL-02, FR-DEL-04, FR-INT-01, FR-INT-05, FR-GED-01, FR-
 | — | — | — | RG-DOS-09 | `dossier`, `audit_seuil_dossier` | `POST /dossiers/{id}/seuil-derogation` | Juriste propose un nouveau seuil + motif obligatoire → `EN_ATTENTE` ; 400 si dossier non sensible ; **201** | ✅ |
 | — | — | — | RG-DOS-09 | `audit_seuil_dossier` | `PUT /dossiers/{id}/seuil-derogation/{auditId}` | DJ/DJA valide ou rejette (motif obligatoire si rejet) ; si validée → `dossier.seuil_montant` + `seuil_origine='DEROGATION'` | ✅ |
 | FR-DOS-01 | 1.6 | toutes | RG-DOS-06 | `historique_action` | *(transversal)* | Chaque opération de modification insère une ligne `{dossier_id, utilisateur_id, action, details JSONB, date_action}` | ✅ |
+| — | 1.6 | — | RG-DOS-06 | `historique_action` | `GET /historique/systeme?utilisateurId&action&dateDebut&dateFin&page&size` | **`ROLE_DJ` ou `ROLE_DJA` (Q-110)** ; les actions historisées **sans dossier** — paramètres système, référentiels — qui n'avaient jusque-là **aucun point de lecture**. Périmètre figé côté serveur : l'activité des dossiers n'y entre jamais. Filtre par libellé en **liste fermée**, alimentée par les libellés présents en base (QF-24 interdit une recherche « contient » fiable). **Ne recense que les modifications** : aucune consultation n'est tracée | ✅ |
 | FR-REP-03 | 8.6 | UC-REP-03 | RG-REP-04 | `client`, `dossier` | `GET /clients`, `GET /clients/{id}` | Recherche par nom (partielle) / référence, paginée | ✅ |
 
 **Tests attendus** : création nominale, référence en doublon, client inexistant, champs
@@ -239,9 +240,10 @@ réels), y compris la relance à 72 h en conditions réelles (cron accéléré, 
 
 | FR | US | UC | RG | Entités | Endpoint | Comportement attendu | Statut |
 |---|---|---|---|---|---|---|---|
-| FR-ALR-01 | 7.1 | UC-ALR-01 | RG-ALR-02 | `configuration_systeme` | `PUT /alertes/seuils` | `ROLE_DJ` ; `type = CHARGE_MAX_AVOCAT`, `seuil` entier positif ; alerte déclenchée quand un avocat atteint le seuil | ✅ |
-| — | — | UC-ALR-01 | — | `configuration_systeme` | `GET /configurations`, `PUT /configurations/{cle}` | Lecture : `ROLE_CONSULTATION`. Écriture : `ROLE_DJ`. Clés au minimum : `SEUIL_MONTANT_DEFAUT`, `SEUIL_PROROGATIONS`, `CANAUX_NOTIFICATION_DEFAUT`, `DELAI_VALIDATION_CONJOINTE`, `TAILLE_MAX_GED`, `FORMATS_GED` (CONF01…CONF07) | ✅ |
+| FR-ALR-01 | 7.1 | UC-ALR-01 | RG-ALR-02 | `configuration_systeme` | `PUT /alertes/seuils` | **`ROLE_DJ` ou `ROLE_DJA` (Q-108)** ; `type = CHARGE_MAX_AVOCAT`, `seuil` entier positif ; alerte déclenchée quand un avocat atteint le seuil | ✅ |
+| — | — | UC-ALR-01 | — | `configuration_systeme` | `GET /configurations`, `PUT /configurations/{cle}` | Lecture : `ROLE_CONSULTATION`. Écriture : **`ROLE_DJ` ou `ROLE_DJA` (Q-108)**. Clés au minimum : `SEUIL_MONTANT_DEFAUT`, `SEUIL_PROROGATIONS`, `CANAUX_NOTIFICATION_DEFAUT`, `DELAI_VALIDATION_CONJOINTE`, `TAILLE_MAX_GED`, `FORMATS_GED` (CONF01…CONF07) | ✅ |
 | FR-ALR-02 | 7.2 | UC-ALR-02 | RG-ALR-01, RG-ALR-03 | `alerte` | *(déclenchement interne : `@Scheduled` + événements)* | Détecte la condition → identifie les destinataires → enregistre `DECLENCHEE` → diffuse (applicatif obligatoire, Outlook et Teams optionnels) **< 1 minute**, délivrance > 99 % | 🟡 |
+| — | 7.2 | UC-ALR-02 | RG-ALR-03, **NF-ALR-02** | `alerte` (`statut_diffusion`, V16) | `GET /alertes/statistiques-diffusion?dateDebut&dateFin` | **`ROLE_DJ` ou `ROLE_DJA` (Q-109)** ; rend le taux de délivrance **observable**, ce qu'il n'était pas. Trois issues enregistrées à chaque déclenchement : `DIFFUSEE` (session vivante), `DIFFEREE` (destinataire déconnecté, repli garanti), `ECHEC` (canal rompu). **Taux de délivrance = 1 − ECHEC/observées** — les différées sont délivrées, le canal applicatif comprenant la liste des notifications. Un second taux, **diffusion temps réel = DIFFUSEE/observées**, décrit les usages et **n'est opposable à aucun seuil** | ✅ |
 | FR-ALR-02 | 7.3 | UC-ALR-02 | RG-ALR-03 | `alerte` | `GET /alertes/mes-notifications` | Alertes de l'utilisateur, filtre `statut`, paginé | ✅ |
 | — | 7.4 | UC-ALR-02 | RG-ALR-01 | `alerte`, `historique_action` | `PATCH /alertes/{id}/traiter` **(à proposer)** | Seul le destinataire (403 sinon) ; `TRAITEE` + `date_traitement` | ✅ |
 
@@ -269,7 +271,8 @@ canal applicatif, marquage `TRAITEE` par un non-destinataire (403), seuil config
 pris en compte immédiatement, relance 72 h des demandes de suppression.
 
 **Écrans frontend** : *Mes notifications* (badge, liste, marquer comme traitée) ·
-*(DJ)* Configuration des seuils et paramètres · *(DSI/DJ)* Supervision des alertes (REF-05 §11.5).
+*(DJ/DJA)* Configuration des seuils et paramètres · *(DJ/DJA)* **Supervision des alertes** — taux de
+délivrance du canal applicatif sur une fenêtre, adossé à NF-ALR-02 (Q-109, écran 41).
 
 ---
 

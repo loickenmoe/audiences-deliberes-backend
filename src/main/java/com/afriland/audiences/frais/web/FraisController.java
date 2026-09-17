@@ -12,6 +12,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import java.time.LocalDate;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -67,14 +69,27 @@ public class FraisController {
         return fraisService.enregistrerPaiement(id);
     }
 
-    /** Plus récentes d'abord ; l'identifiant départage deux dépôts de la même seconde (Q-82). */
+    /**
+     * Plus récentes d'abord ; l'identifiant départage deux dépôts de la même seconde (Q-82).
+     *
+     * <p>Filtres ajoutés en M22 (Q-103) : le circuit des frais est le plus fréquenté de
+     * l'application, et l'instructeur n'avait que le statut pour s'y retrouver. {@code avocatId} est
+     * sans effet pour un avocat, qui reste borné à ses propres demandes — la restriction d'accès
+     * n'est pas un filtre.
+     */
     @GetMapping
     @PreAuthorize("hasAnyRole('AVOCAT', 'ASSISTANTE', 'DJA', 'DJ')")
     public PageResponse<DemandeFraisResponse> lister(
             @RequestParam(required = false) StatutCircuitFrais statut,
+            @RequestParam(required = false) Long dossierId,
+            @RequestParam(required = false) Long avocatId,
+            @RequestParam(required = false) String referenceFacture,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateDebut,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFin,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
-        return fraisService.lister(statut, PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt", "id")));
+            @RequestParam(defaultValue = "10") int size) {
+        return fraisService.lister(statut, dossierId, avocatId, referenceFacture, dateDebut, dateFin,
+                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt", "id")));
     }
 
     /** Q-82 : détail d'une demande et décisions du circuit — l'avocat ne lit que les siennes. */
