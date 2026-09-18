@@ -2,6 +2,8 @@ package com.afriland.audiences.common.audit;
 
 import com.afriland.audiences.common.error.ApiException;
 import com.afriland.audiences.common.error.ErrorCodes;
+import com.afriland.audiences.common.pdf.MetadonneesPdf;
+import com.afriland.audiences.common.pdf.TextePdf;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
@@ -26,10 +28,10 @@ import java.util.stream.Collectors;
  * Met en forme une extraction d'audit (Q-113), sur le modèle de
  * {@code CalendrierExportService} : une liste de lignes, et non un agrégat.
  *
- * <p><b>Le PDF est écrit en Helvetica, qui ne couvre pas tout l'Unicode.</b> Les libellés d'audit
- * portent des accents et des apostrophes typographiques ; une seule d'entre elles suffit à faire
- * échouer PDFBox en pleine génération. Le texte est donc replié sur ce que la police accepte,
- * plutôt que de laisser l'export tomber sur un caractère.
+ * <p><b>Le PDF est écrit en Helvetica, qui ne couvre pas tout l'Unicode.</b> Une seule apostrophe
+ * typographique suffit à faire échouer PDFBox en pleine génération. Le repli vit désormais dans
+ * {@link com.afriland.audiences.common.pdf.TextePdf}, partagé par les quatre documents du système :
+ * la copie privée qui se trouvait ici ne protégeait qu'un générateur sur quatre (A1).
  */
 @Service
 public class AuditExportRenderer {
@@ -121,6 +123,7 @@ public class AuditExportRenderer {
             } finally {
                 if (cs != null) cs.close();
             }
+            MetadonneesPdf.appliquer(document, titre, auteur);
             document.save(out);
             return out.toByteArray();
         } catch (IOException e) {
@@ -208,28 +211,8 @@ public class AuditExportRenderer {
         cs.setFont(police, taille);
         cs.beginText();
         cs.newLineAtOffset(x, y);
-        cs.showText(replierSurLatin1(texte));
+        cs.showText(TextePdf.replier(texte));
         cs.endText();
-    }
-
-    /**
-     * Replie le texte sur ce qu'Helvetica sait écrire.
-     *
-     * <p>Les libellés d'audit portent des apostrophes typographiques et des tirets longs, que la
-     * police standard de PDFBox refuse en levant une exception <b>au milieu de la génération</b> :
-     * l'export échouerait alors sur une ligne, sans indiquer laquelle. Mieux vaut une apostrophe
-     * droite dans le PDF qu'un export qui tombe.
-     */
-    private static String replierSurLatin1(String texte) {
-        String replie = texte.replace('’', '\'').replace('‘', '\'')
-                .replace('“', '"').replace('”', '"')
-                .replace('—', '-').replace('–', '-')
-                .replace('…', '.');
-        StringBuilder accepte = new StringBuilder(replie.length());
-        for (char c : replie.toCharArray()) {
-            accepte.append(c < 256 ? c : '?');
-        }
-        return accepte.toString();
     }
 
     private static String ligneTexte(String date, String auteur, String dossier, String action, String details) {

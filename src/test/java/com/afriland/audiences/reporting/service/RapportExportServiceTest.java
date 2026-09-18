@@ -1,5 +1,6 @@
 package com.afriland.audiences.reporting.service;
 
+import com.afriland.audiences.common.pdf.LecturePdf;
 import com.afriland.audiences.reporting.domain.TypeRapport;
 import com.afriland.audiences.reporting.web.dto.RapportResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,6 +34,23 @@ class RapportExportServiceTest {
 
         assertThat(pdf).isNotEmpty();
         assertThat(new String(pdf, 0, 5, StandardCharsets.ISO_8859_1)).isEqualTo("%PDF-");
+    }
+
+    /** Les indicateurs sont-ils reellement dans le fichier, et pas seulement dans le CSV ? (A1) */
+    @Test
+    void exportPdf_contientLesIndicateurs() throws Exception {
+        String texte = LecturePdf.texte(service.exportPdf(rapport));
+
+        assertThat(texte).contains("MENSUEL").contains("2026-09-01").contains("2026-09-30");
+        assertThat(texte).contains("Nouveaux dossiers : 4");
+        assertThat(texte).contains("Audiences tenues : 3");
+        assertThat(texte).containsPattern("Taux de succ.s recouvrement : 75[.,]00 %");
+    }
+
+    @Test
+    void exportPdf_porteSesProprietes() throws Exception {
+        assertThat(LecturePdf.proprietes(service.exportPdf(rapport)).getTitle())
+                .isEqualTo("Rapport MENSUEL du 2026-09-01 au 2026-09-30");
     }
 
     @Test

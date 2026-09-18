@@ -1,5 +1,7 @@
 package com.afriland.audiences.reporting.service;
 
+import com.afriland.audiences.common.pdf.MetadonneesPdf;
+import com.afriland.audiences.common.pdf.TextePdf;
 import com.afriland.audiences.reporting.web.dto.RapportResponse;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
@@ -35,18 +37,22 @@ public class RapportExportService {
                 cs.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD), 14);
                 cs.beginText();
                 cs.newLineAtOffset(x, y);
-                cs.showText("Rapport " + rapport.type() + " (" + rapport.dateDebut() + " - " + rapport.dateFin() + ")");
+                cs.showText(TextePdf.replier(
+                        "Rapport " + rapport.type() + " (" + rapport.dateDebut() + " - " + rapport.dateFin() + ")"));
                 cs.endText();
                 y -= 30;
                 cs.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 11);
                 for (Map.Entry<String, String> entree : indicateurs(rapport).entrySet()) {
                     cs.beginText();
                     cs.newLineAtOffset(x, y);
-                    cs.showText(entree.getKey() + " : " + entree.getValue());
+                    cs.showText(TextePdf.replier(entree.getKey() + " : " + entree.getValue()));
                     cs.endText();
                     y -= 20;
                 }
             }
+            MetadonneesPdf.appliquer(document,
+                    "Rapport " + rapport.type() + " du " + rapport.dateDebut() + " au " + rapport.dateFin(),
+                    null);
             document.save(out);
             return out.toByteArray();
         } catch (IOException e) {

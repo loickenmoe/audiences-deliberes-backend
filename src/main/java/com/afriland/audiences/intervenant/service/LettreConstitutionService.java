@@ -1,6 +1,9 @@
 package com.afriland.audiences.intervenant.service;
 
+import com.afriland.audiences.common.pdf.MetadonneesPdf;
+import com.afriland.audiences.common.pdf.TextePdf;
 import com.afriland.audiences.intervenant.domain.DemandeConstitution;
+import com.afriland.audiences.referentiel.domain.Utilisateur;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
@@ -35,6 +38,9 @@ public class LettreConstitutionService {
                 y = ecrireLigne(cs, x, y, "Validée par : " + demande.getValidePar().getNom() + " " + demande.getValidePar().getPrenom());
                 ecrireLigne(cs, x, y, "Date : " + demande.getDateDecision().toLocalDate().format(FORMAT_DATE));
             }
+            MetadonneesPdf.appliquer(document,
+                    "Lettre de constitution - dossier " + demande.getDossier().getReference(),
+                    nomComplet(demande.getValidePar()));
             document.save(out);
             return out.toByteArray();
         } catch (IOException e) {
@@ -42,10 +48,17 @@ public class LettreConstitutionService {
         }
     }
 
+    /** Le validateur : c'est lui qui engage la banque, pas le juriste qui a sollicite. */
+    private static String nomComplet(Utilisateur utilisateur) {
+        return utilisateur == null ? null : utilisateur.getPrenom() + " " + utilisateur.getNom();
+    }
+
     private float ecrireLigne(PDPageContentStream cs, float x, float y, String texte) throws IOException {
         cs.beginText();
         cs.newLineAtOffset(x, y);
-        cs.showText(texte);
+        // Le motif et le nom du prestataire sont des saisies libres : sans repli, un simple
+        // retour a la ligne fait echouer la validation de la constitution (A1).
+        cs.showText(TextePdf.replier(texte));
         cs.endText();
         return y - 20f;
     }

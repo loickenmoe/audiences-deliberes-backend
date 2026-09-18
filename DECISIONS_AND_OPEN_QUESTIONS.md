@@ -2159,6 +2159,58 @@ sont unifiées.
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
 
+### Q-115 · A1 ✅ Les PDF cessent d'échouer sur ce qu'on y écrit — tranché (2026-09-18)
+
+**Premier jalon du chantier de mise en forme des documents.** Il ne touche **à aucune mise en page** :
+c'est le socle sur lequel les jalons visuels deviennent vérifiables. Une seule chose change à l'œil,
+et elle est assumée plus bas : la typographie se replie désormais partout, non plus sur le seul audit.
+
+**Le défaut trouvé, et pourquoi il dépassait la mise en forme.** Les quatre documents du système sont
+écrits en Helvetica, encodée en `WinAnsiEncoding`. PDFBox **lève** — il ne remplace pas
+silencieusement — dès qu'on lui demande un caractère absent de cet encodage. Seul le rendu d'audit
+(Q-113) s'en protégeait ; les trois autres appelaient `showText` en direct. Sur la lettre de
+constitution, quatre saisies parfaitement ordinaires faisaient échouer la génération, prouvées par un
+test écrit avant le correctif — **4 échecs sur 4** :
+
+| Point de code | Origine |
+|---|---|
+| `U+000A` | la touche Entrée : le motif est saisi dans un `<Textarea>` |
+| `U+0009` | une tabulation, invisible à l'écran |
+| `U+202F` | l'espace fine insécable, que tout collage depuis un traitement de texte apporte |
+| `U+1EC5` | la lettre « ễ » d'un nom vietnamien |
+
+La lettre est produite **dans la transaction de validation** (`ConstitutionService#valider`) :
+l'exception annulait la validation elle-même. La demande restait `EN_ATTENTE`, le SH recevait une
+erreur technique, le prestataire n'était pas notifié — et comme le motif est enregistré, chaque
+nouvelle tentative échouait à l'identique. **Un processus métier bloqué par une saisie légitime**, et
+non un export raté.
+
+**Le repli partagé** (`common/pdf/TextePdf`) applique trois gestes, dans cet ordre : les caractères de
+contrôle deviennent une espace — une ligne de PDF ne se coupe pas toute seule ; la typographie est
+repliée sur l'ASCII, ce qui sert au passage QF-48 ; ce qui reste hors encodage est **décomposé**,
+« Nguyễn » s'écrivant « Nguyen » plutôt qu'un point d'interrogation qui effacerait l'information. Un
+idéogramme, lui, n'a pas de lettre de base : il devient `?`, seul cas de perte, et toujours préférable
+à une exception.
+
+La copie privée qui vivait dans `AuditExportRenderer` est supprimée : elle ne protégeait qu'un
+générateur sur quatre. Elle retenait « inférieur à 256 », intervalle qui **laisse passer** `U+007F` à
+`U+009F` — des caractères de contrôle que la police refuse tout autant.
+
+**Les métadonnées** (`common/pdf/MetadonneesPdf`). Aucun des quatre documents n'en portait : dans un
+explorateur de fichiers, une messagerie ou un moteur documentaire, ils étaient anonymes. Chacun porte
+désormais un titre, un producteur et sa date. L'auteur de la lettre est le **validateur**, jamais le
+juriste demandeur : c'est la seconde signature qui engage la banque (RG-INT-08).
+
+**Les tests montent d'un cran, et c'est la moitié du jalon.** Les trois générateurs historiques
+n'étaient éprouvés que par « non vide, commence par `%PDF-` » : un document ayant perdu toutes ses
+données passait au vert. Ils lisent désormais le contenu avec `PDFTextStripper`, comme
+`AuditExportRendererTest` le faisait déjà. Vérification faite en cassant volontairement le calendrier :
+le test tombe. Sans cela, « ne rien casser » serait resté une affirmation au lieu d'être une mesure.
+
+**Une micro-conséquence assumée** : le repli de la typographie s'applique maintenant aux quatre
+documents, donc `…` devient `.` et `’` devient `'` hors de l'audit aussi. C'est le comportement que
+l'audit a depuis Q-113, et la cohérence valait mieux que deux typographies selon le document.
+
 ### Q-114 ✅ L'empreinte devient utilisable — tranché (2026-09-17)
 
 **Le constat de recette.** Q-113 scellait correctement les archives, mais l'écran affichait

@@ -1,6 +1,8 @@
 package com.afriland.audiences.audience.service;
 
 import com.afriland.audiences.audience.web.dto.CalendrierEntreeResponse;
+import com.afriland.audiences.common.pdf.MetadonneesPdf;
+import com.afriland.audiences.common.pdf.TextePdf;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
@@ -41,6 +43,7 @@ public class CalendrierExportService {
             for (List<CalendrierEntreeResponse> page : pages) {
                 ecrirePage(document, page);
             }
+            MetadonneesPdf.appliquer(document, "Calendrier des audiences", null);
             document.save(out);
             return out.toByteArray();
         } catch (IOException e) {
@@ -77,7 +80,12 @@ public class CalendrierExportService {
             if (i > 0) {
                 cs.newLineAtOffset(largeurColonne, 0);
             }
-            cs.showText(tronquer(colonnes[i]));
+            /*
+             * Repli **avant** troncature : couper d'abord risquerait de sectionner un caractere
+             * compose en son milieu. Le point de suspension qu'ajoute `tronquer` est, lui, rendu
+             * par WinAnsi : il n'a pas besoin d'etre replie (A1).
+             */
+            cs.showText(tronquer(TextePdf.replier(colonnes[i])));
         }
         cs.endText();
         return y - LIGNE_HAUTEUR;

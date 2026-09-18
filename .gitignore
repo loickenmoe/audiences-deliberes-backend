@@ -168,3 +168,9 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+### Documents de reference deposes a la racine pour analyse (Q-115)
+# Ils portent des donnees personnelles - un contrat nominatif, un releve de notes.
+# Ils ont servi a definir la charte graphique ; ils n'ont rien a faire dans l'historique.
+AFB_contract_modify.jpeg
+Transcript_*.pdf
