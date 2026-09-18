@@ -2,14 +2,8 @@ package com.afriland.audiences.common.audit;
 
 import com.afriland.audiences.common.error.ApiException;
 import com.afriland.audiences.common.error.ErrorCodes;
-import com.afriland.audiences.common.pdf.MetadonneesPdf;
+import com.afriland.audiences.common.pdf.DocumentPdf;
 import com.afriland.audiences.common.pdf.TextePdf;
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.pdmodel.PDPage;
-import org.apache.pdfbox.pdmodel.PDPageContentStream;
-import org.apache.pdfbox.pdmodel.common.PDRectangle;
-import org.apache.pdfbox.pdmodel.font.PDType1Font;
-import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -37,6 +31,13 @@ import java.util.stream.Collectors;
 public class AuditExportRenderer {
 
     private static final String[] EN_TETES = {"Date", "Auteur", "Dossier", "Action", "Détails"};
+
+    /**
+     * Largeur de chaque colonne, en points, sur les 762 utiles d'une A4 paysage. Les deux colonnes
+     * longues — l'action et ses détails — reçoivent les deux tiers de la place : ce sont elles qu'on
+     * lit, les trois autres ne servent qu'à situer.
+     */
+    private static final float[] LARGEURS = {80f, 115f, 75f, 190f, 302f};
     private static final DateTimeFormatter HORODATAGE = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
     /** Une ligne prête à écrire : le service a déjà résolu l'auteur et mis les détails à plat. */
@@ -49,85 +50,73 @@ public class AuditExportRenderer {
      *               octets en y étant écrit, donc changerait ce qu'il décrit
      * @param auteur nom de qui a demandé l'extraction, porté par le pied de page
      */
+    /**
+     * L'archive d'audit, mise en page par la charte commune (Q-115 A3).
+     *
+     * <p><b>Ce que cette version corrige.</b> Les colonnes étaient calées par des espaces
+     * ({@code String.format("%-17s %-22s …")}) dans une police <b>proportionnelle</b> : sur mille
+     * cinq cents lignes, elles ondulaient. La charte positionne chaque colonne à son abscisse et
+     * coupe à la largeur mesurée.
+     *
+     * <p><b>Les archives déjà produites ne bougent pas.</b> Leurs octets dorment dans MinIO et leur
+     * empreinte reste vérifiable : seules les extractions à venir prennent cette allure.
+     *
+     * <p><b>Le colophon est conservé</b>, et reste en dernière page. Il n'est pas décoratif : il
+     * explique pourquoi l'empreinte ne peut pas figurer dans le fichier qu'elle scelle, et donne à
+     * qui reçoit la pièce le moyen de la vérifier.
+     *
+     * <p><b>La langue reste le français, et c'est une décision.</b> Une archive d'audit est une
+     * pièce, remise à un contrôleur : elle garde la langue de la procédure, là où le calendrier et
+     * le rapport suivent leur lecteur. C'est aussi ce qui évite de porter côté serveur la table des
+     * quarante-six codes d'action, dont la traduction vit côté client depuis QF-24.
+     *
+     * @param titre  porte la référence de l'archive, seule chose l'identifiant que le fichier puisse
+     *               contenir : tout ce qui décrit son contenu — l'empreinte d'abord — changerait les
+     *               octets en y étant écrit, donc changerait ce qu'il décrit
+     * @param auteur nom de qui a demandé l'extraction, porté par le pied de page
+     */
     public byte[] pdf(List<LigneExport> lignes, LocalDate dateDebut, LocalDate dateFin, String titre,
-                         String auteur) {
-        try (PDDocument document = new PDDocument(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-            // Paysage : cinq colonnes dont deux longues ne tiennent pas en portrait.
-            PDRectangle format = new PDRectangle(PDRectangle.A4.getHeight(), PDRectangle.A4.getWidth());
-            var police = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
-            var policeGrasse = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
-
-            PDPage page = null;
-            PDPageContentStream cs = null;
-            float y = 0;
-            try {
-                for (int i = 0; i < lignes.size(); i++) {
-                    if (cs == null || y < 40) {
-                        if (cs != null) cs.close();
-                        page = new PDPage(format);
-                        document.addPage(page);
-                        cs = new PDPageContentStream(document, page);
-                        y = format.getHeight() - 45;
-                        ecrire(cs, policeGrasse, 12, 40, y, titre);
-                        y -= 16;
-                        ecrire(cs, police, 8, 40, y,
-                                "Periode du " + dateDebut + " au " + dateFin + " - " + lignes.size() + " ligne(s)");
-                        y -= 18;
-                        ecrire(cs, policeGrasse, 8, 40, y, ligneTexte(
-                                EN_TETES[0], EN_TETES[1], EN_TETES[2], EN_TETES[3], EN_TETES[4]));
-                        y -= 12;
-                    }
-                    LigneExport l = lignes.get(i);
-                    ecrire(cs, police, 8, 40, y,
-                            ligneTexte(l.horodatage(), l.auteur(), l.dossier(), l.action(), l.details()));
-                    y -= 11;
-                }
-                if (cs == null) {
-                    // Aucune ligne : une page qui le dit vaut mieux qu'un PDF vide, illisible et
-                    // qu'on prendrait pour un fichier corrompu.
-                    page = new PDPage(format);
-                    document.addPage(page);
-                    cs = new PDPageContentStream(document, page);
-                    ecrire(cs, policeGrasse, 12, 40, format.getHeight() - 45, titre);
-                    ecrire(cs, police, 10, 40, format.getHeight() - 70,
-                            "Aucune action sur la periode du " + dateDebut + " au " + dateFin + ".");
-                }
-                /*
-                 * Pied de page auto-descriptif. Un document d'audit détaché de l'application doit
-                 * dire lui-même ce qu'il est : sans quoi une page imprimée devient anonyme, et il
-                 * faut recalculer son empreinte rien que pour savoir de quoi on parle.
-                 */
-                if (cs != null) {
-                    cs.close();
-                    cs = null;
-                }
-                PDPage colophon = new PDPage(format);
-                document.addPage(colophon);
-                cs = new PDPageContentStream(document, colophon);
-                float yc = format.getHeight() - 60;
-                ecrire(cs, policeGrasse, 11, 40, yc, titre);
-                yc -= 22;
-                for (String mention : List.of(
-                        "Periode couverte  : du " + dateDebut + " au " + dateFin,
-                        "Lignes            : " + lignes.size(),
-                        "Extrait par       : " + (auteur == null || auteur.isBlank() ? "-" : auteur),
-                        "Extrait le        : " + horodater(java.time.LocalDateTime.now()),
-                        "",
-                        "L'empreinte SHA-256 de ce fichier est consignee dans l'application sous cette",
-                        "reference. Elle n'y figure pas : l'y ecrire changerait les octets du fichier,",
-                        "donc l'empreinte elle-meme. Pour verifier, deposez ce fichier dans l'ecran",
-                        "d'audit : l'application recalcule son empreinte et indique s'il correspond.")) {
-                    ecrire(cs, police, 9, 40, yc, mention);
-                    yc -= 14;
-                }
-            } finally {
-                if (cs != null) cs.close();
+                      String auteur) {
+        String periode = "Période du " + dateDebut + " au " + dateFin + " - " + lignes.size() + " ligne(s)";
+        try (DocumentPdf document = new DocumentPdf(DocumentPdf.paysage(), titre, periode, auteur, null)) {
+            document.nouvellePage();
+            if (lignes.isEmpty()) {
+                // Une page qui le dit vaut mieux qu'un PDF vide, qu'on prendrait pour un fichier
+                // corrompu — et une archive vide reste une archive : elle atteste qu'il n'y a rien.
+                document.ligne("Aucune action sur la periode du " + dateDebut + " au " + dateFin + ".", false, 10f);
+            } else {
+                document.tableau(List.of(EN_TETES), LARGEURS,
+                        lignes.stream().map(AuditExportRenderer::cellules).toList());
             }
-            MetadonneesPdf.appliquer(document, titre, auteur);
-            document.save(out);
-            return out.toByteArray();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
+            colophon(document, dateDebut, dateFin, lignes.size(), auteur);
+            return document.finaliser();
+        }
+    }
+
+    private static List<String> cellules(LigneExport ligne) {
+        return List.of(ligne.horodatage(), ligne.auteur(), ligne.dossier(), ligne.action(), ligne.details());
+    }
+
+    /**
+     * La dernière page, qui dit ce qu'est le fichier qu'on tient.
+     *
+     * <p>Un document d'audit détaché de l'application doit se décrire lui-même : sans quoi une page
+     * imprimée devient anonyme, et il faudrait recalculer son empreinte rien que pour savoir de quoi
+     * l'on parle.
+     */
+    private void colophon(DocumentPdf document, LocalDate dateDebut, LocalDate dateFin, int lignes, String auteur) {
+        document.nouvellePage();
+        for (String mention : List.of(
+                "Periode couverte  : du " + dateDebut + " au " + dateFin,
+                "Lignes            : " + lignes,
+                "Extrait par       : " + (auteur == null || auteur.isBlank() ? "-" : auteur),
+                "Extrait le        : " + horodater(java.time.LocalDateTime.now()),
+                "",
+                "L'empreinte SHA-256 de ce fichier est consignee dans l'application sous cette",
+                "reference. Elle n'y figure pas : l'y ecrire changerait les octets du fichier,",
+                "donc l'empreinte elle-meme. Pour verifier, deposez ce fichier dans l'ecran",
+                "d'audit : l'application recalcule son empreinte et indique s'il correspond.")) {
+            document.ligne(mention, false, 9f);
         }
     }
 
@@ -204,26 +193,6 @@ public class AuditExportRenderer {
         return details.entrySet().stream()
                 .map(e -> e.getKey() + " = " + (e.getValue() == null ? "" : e.getValue()))
                 .collect(Collectors.joining(" ; "));
-    }
-
-    private void ecrire(PDPageContentStream cs, PDType1Font police, float taille, float x, float y, String texte)
-            throws IOException {
-        cs.setFont(police, taille);
-        cs.beginText();
-        cs.newLineAtOffset(x, y);
-        cs.showText(TextePdf.replier(texte));
-        cs.endText();
-    }
-
-    private static String ligneTexte(String date, String auteur, String dossier, String action, String details) {
-        return String.format("%-17s %-22s %-10s %-42s %s",
-                tronquer(date, 17), tronquer(auteur, 22), tronquer(dossier, 10),
-                tronquer(action, 42), tronquer(details, 60));
-    }
-
-    private static String tronquer(String texte, int longueur) {
-        if (texte == null) return "";
-        return texte.length() <= longueur ? texte : texte.substring(0, longueur - 1) + ".";
     }
 
     /** Refus explicite plutôt qu'un fichier tronqué : cf. {@code AuditExportService}. */

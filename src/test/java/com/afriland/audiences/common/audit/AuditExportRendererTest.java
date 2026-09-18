@@ -54,6 +54,9 @@ class AuditExportRendererTest {
             // Et l'explication de ce qu'est l'empreinte : sans elle, celui qui reçoit la pièce
             // ignore qu'il peut la vérifier, et l'empreinte ne sert alors à personne.
             assertThat(texte).contains("SHA-256");
+            // La charte commune, que l'archive n'avait pas jusqu'ici (A3).
+            assertThat(texte).contains("Afriland First Bank").contains("Direction Juridique");
+            assertThat(texte).contains("Page 1 sur");
         }
     }
 
@@ -100,5 +103,72 @@ class AuditExportRendererTest {
 
             assertThat(texte.toString()).contains("Extrait par : -").doesNotContain("null");
         }
+    }
+
+    /**
+     * Le colophon doit rester la **dernière** page (A3).
+     *
+     * <p>Il ferme la pièce : le placer ailleurs le ferait prendre pour un préambule, et celui qui
+     * feuillette s'arrêterait avant de savoir comment vérifier ce qu'il tient.
+     */
+    @Test
+    @DisplayName("le colophon ferme le document, après les lignes")
+    void colophonEnDernierePage() throws Exception {
+        byte[] contenu = renderer.pdf(beaucoupDeLignes(200), DEBUT, FIN, TITRE, "Paule Directrice");
+
+        try (PDDocument document = Loader.loadPDF(contenu)) {
+            int pages = document.getNumberOfPages();
+            assertThat(pages).as("200 lignes plus le colophon").isGreaterThan(2);
+
+            PDFTextStripper lecteur = new PDFTextStripper();
+            lecteur.setStartPage(pages);
+            lecteur.setEndPage(pages);
+            String derniere = lecteur.getText(document);
+
+            assertThat(derniere).contains("Periode couverte").contains("SHA-256");
+            /*
+             * Et la dernière page ne porte aucune ligne d'audit : le colophon y est seul. On vise une
+             * référence **complète** : « D-2026- » seul est contenu dans « AUD-2026-0042 », qui figure
+             * au titre de chaque page — l'assertion aurait échoué sur le titre, pas sur une donnée.
+             */
+            assertThat(derniere).doesNotContain("D-2026-100").doesNotContain("Modification d'un parametre");
+        }
+    }
+
+    /**
+     * Sur mille cinq cents lignes, perdre les en-têtes en page 2 rendrait les colonnes indéchiffrables
+     * — et c'est précisément ce qu'un contrôleur lit.
+     */
+    @Test
+    @DisplayName("les en-têtes de colonnes sont répétés sur chaque page de lignes")
+    void entetesRepetes() throws Exception {
+        byte[] contenu = renderer.pdf(beaucoupDeLignes(200), DEBUT, FIN, TITRE, "Paule Directrice");
+
+        try (PDDocument document = Loader.loadPDF(contenu)) {
+            String texte = new PDFTextStripper().getText(document);
+            long avecEntete = texte.lines().filter(l -> l.contains("Horodatage") || l.contains("Auteur")).count();
+            // Toutes les pages sauf le colophon.
+            assertThat(avecEntete).isEqualTo(document.getNumberOfPages() - 1L);
+        }
+    }
+
+    /** Aucune ligne ne doit se perdre en franchissant une page. */
+    @Test
+    @DisplayName("aucune ligne n'est perdue entre les pages")
+    void aucuneLignePerdue() throws Exception {
+        byte[] contenu = renderer.pdf(beaucoupDeLignes(200), DEBUT, FIN, TITRE, null);
+
+        String texte;
+        try (PDDocument document = Loader.loadPDF(contenu)) {
+            texte = new PDFTextStripper().getText(document);
+        }
+        assertThat(texte).contains("D-2026-000").contains("D-2026-100").contains("D-2026-199");
+    }
+
+    private static List<LigneExport> beaucoupDeLignes(int nombre) {
+        return java.util.stream.IntStream.range(0, nombre)
+                .mapToObj(i -> new LigneExport("01/09/2026 08:%02d".formatted(i % 60), "Paul Adjoint",
+                        "D-2026-%03d".formatted(i), "Modification d'un parametre", "Portee : TOUT"))
+                .toList();
     }
 }

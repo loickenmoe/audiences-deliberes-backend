@@ -2159,6 +2159,44 @@ sont unifiées.
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
 
+### Q-115 · A3 ✅ L'archive d'audit reprend la charte, et ses colonnes s'alignent — tranché (2026-09-18)
+
+**Troisième jalon, et dernier avant la lettre.** L'archive d'audit était le document le plus abouti
+du système — en-tête répété, colophon, repli de caractères — et pourtant celui dont le défaut de mise
+en page était le plus visible.
+
+**Les colonnes ondulaient.** Elles étaient calées par du remplissage d'espaces
+(`String.format("%-17s %-22s %-10s %-42s %s")`) dans une police **proportionnelle**. Sur mille cinq
+cents lignes, aucune colonne ne tombait droit. Le calendrier, lui, positionnait ses colonnes à une
+abscisse fixe depuis toujours : la bonne méthode existait dans le dépôt, à deux fichiers de là. La
+charte la generalise et coupe désormais à la **largeur mesurée**.
+
+**Ce que l'archive gagne** : le logo et la dénomination, un pied qui numérote (« Page 96 sur 96 ») et
+attribue. Ce qu'elle **garde** : sa référence `AUD-2026-0044` en titre, et son **colophon en dernière
+page** — qui n'est pas décoratif, puisqu'il explique pourquoi l'empreinte ne peut pas figurer dans le
+fichier qu'elle scelle, et donne à qui reçoit la pièce le moyen de la vérifier.
+
+**La langue reste le français, et c'est une décision, pas un oubli.** Une archive d'audit est une
+**pièce**, remise à un contrôleur : elle garde la langue de la procédure, là où le calendrier et le
+rapport suivent leur lecteur. C'est aussi ce qui évite de porter côté serveur la table des
+quarante-six codes d'action, dont la traduction vit côté client depuis QF-24 — duplication qui
+aurait dérivé.
+
+**Le scellement est intact, et cela a été mesuré, pas supposé.** Sur la pile réelle :
+
+| Vérification | Résultat |
+|---|---|
+| Empreinte annoncée en en-tête = empreinte du fichier reçu | identiques |
+| Le vérificateur de Q-114 reconnaît l'extraction fraîche | `AUD-2026-0044` |
+| Les trois plus anciennes archives, produites avant A1 | **intactes**, empreintes inchangées |
+
+Ce dernier point est l'essentiel : refondre la mise en page ne pouvait pas invalider les pièces déjà
+remises. Leurs octets dorment dans MinIO et n'ont pas été touchés ; seules les extractions à venir
+prennent la nouvelle allure.
+
+**Trois méthodes privées disparaissent** (`ecrire`, `ligneTexte`, `tronquer`) : la charte les rend
+inutiles. Le rendu d'audit passe de 252 à 204 lignes tout en faisant davantage.
+
 ### Q-115 · A2 ✅ Une charte commune, portée par le calendrier et le rapport — tranché (2026-09-18)
 
 **Deuxième jalon.** A1 avait rendu les documents robustes sans rien changer à leur allure ; A2 leur
