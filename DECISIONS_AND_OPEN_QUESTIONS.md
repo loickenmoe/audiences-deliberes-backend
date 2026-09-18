@@ -2159,6 +2159,57 @@ sont unifiées.
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
 
+### Q-115 · A2 ✅ Une charte commune, portée par le calendrier et le rapport — tranché (2026-09-18)
+
+**Deuxième jalon.** A1 avait rendu les documents robustes sans rien changer à leur allure ; A2 leur
+donne une allure, et une seule.
+
+**Ce que les deux documents n'avaient pas.** Le calendrier ne portait **ni titre, ni date, ni numéro
+de page** — une feuille détachée de la liasse ne disait plus ce qu'elle était. Le rapport tenait sur
+une page écrite à la main, sans garde de pagination : six indicateurs passaient, trente auraient
+débordé hors de la feuille sans la moindre erreur. Ni l'un ni l'autre ne portait la marque.
+
+**La charte** (`common/pdf/DocumentPdf`) tient en trois choses, et chacune corrige un manque mesuré :
+
+- **L'en-tête** : logo, dénomination, « Direction Juridique », titre, portée, filet rouge. Pas les
+  mentions légales — capital, RC, agrément, SWIFT appartiennent au **papier à en-tête** de la
+  correspondance. Les porter sur un export de calendrier ferait passer un tableau de travail pour
+  une communication officielle de la banque.
+- **Le pied** : titre, « Page n sur N », et l'**attribution** — « Édité par Marie Directrice ». Un
+  fait, pas une signature en attente : un trait à signer qui reste vide dévalorise le document qu'il
+  prétend solenniser. Le bloc de signature est réservé à la lettre (B), seul acte adressé à un tiers.
+  Le pied ne peut s'écrire **qu'à la fin** : « Page 2 sur 7 » suppose de connaître 7, qu'on ignore
+  tant que la dernière ligne n'est pas posée. Les pages sont donc reprises une seconde fois, en ajout.
+- **Le tableau franchit les pages** : les en-têtes de colonnes sont **redessinés à chaque page**, et
+  les cellules coupées à la **largeur mesurée** de la police. L'ancienne troncature à dix-huit
+  caractères ignorait qu'Helvetica est proportionnelle : « IIIIIIII » et « WWWWWWWW » n'occupent pas
+  la même place, et compter les signes revenait à empiéter sur la colonne voisine ou à tronquer trop tôt.
+
+**La `Locale` est là dès A2, alors qu'on ne sert que le français.** Le pied et les en-têtes sont du
+texte ; les écrire en dur aurait obligé à rouvrir les générateurs au jalon C. Les libellés vivent
+dans `resources/pdf/libelles.properties` ; C n'aura qu'à poser `libelles_en.properties` à côté et à
+brancher `Accept-Language`. Le français reste le défaut, et ce n'est pas un repli technique : c'est
+la langue de la procédure.
+
+**Le titre du fichier n'est pas celui de la page.** Sur la page, la période est juste sous le titre ;
+dans un explorateur ou une messagerie, « Rapport MENSUEL » ne distinguerait pas deux mois. Le fichier
+porte donc « Rapport MENSUEL - Du 2026-09-01 au 2026-09-30 ».
+
+**Deux défauts trouvés par les tests avant qu'un document ne sorte.** Le premier était de moi : je
+« rétablissais » l'encodage des `.properties`, alors que `PropertyResourceBundle` les lit en UTF-8
+depuis Java 9 — les pieds de page affichaient « ?dit? par », et seuls les libellés sans accent en
+réchappaient. Le second est la perte du titre de fichier, signalée plus haut.
+
+**Une leçon d'outillage, notée parce qu'elle a failli produire un faux diagnostic.** Trois inspections
+successives ont conclu à tort que « Référence », « Étape » et l'attribution manquaient du document
+réel. PDFBox écrit en **chaînes hexadécimales** (`<52E966E972656E6365>`) dès qu'un octet dépasse 0x7F,
+et mon extracteur ne lisait que les chaînes littérales. Le document était juste ; l'instrument ne
+l'était pas. `PDFTextStripper`, lui, disait vrai depuis le début.
+
+**Ce qui ne change pas** : l'Excel et le CSV du rapport gardent leurs libellés français et leur
+structure — ils alimentent des retraitements existants, où renommer une colonne casserait ce qui les
+consomme.
+
 ### Q-115 · A1 ✅ Les PDF cessent d'échouer sur ce qu'on y écrit — tranché (2026-09-18)
 
 **Premier jalon du chantier de mise en forme des documents.** Il ne touche **à aucune mise en page** :

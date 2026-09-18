@@ -44,15 +44,23 @@ class CalendrierExportServiceTest {
     void exportPdf_contientLesDonnees() throws Exception {
         String texte = LecturePdf.texte(service.exportPdf(entrees()));
 
-        assertThat(texte).contains("Juridiction").contains("Client");
+        // Les sept en-têtes, **accents compris** : « Référence » et « Étape » passent par le repli de
+        // TextePdf, et c'est précisément là qu'un caractère se perd sans qu'on le remarque.
+        assertThat(texte).contains("Référence").contains("Juridiction").contains("Étape")
+                .contains("Client").contains("Agence d'origine").contains("Risque encouru").contains("Date");
         assertThat(texte).contains("DOS-2026-001").contains("Client Test").contains("AG01");
+        // La marque et la numérotation, que le document n'avait jamais portées (A2).
+        assertThat(texte).contains("Afriland First Bank").contains("Direction Juridique");
+        assertThat(texte).contains("Page 1 sur 1");
     }
 
     @Test
     @DisplayName("le fichier porte un titre, la ou il n'en avait aucun")
     void exportPdf_porteSesProprietes() throws Exception {
+        // Le titre du fichier porte la période couverte, déduite des entrées : deux calendriers
+        // extraits à deux semaines d'intervalle ne doivent pas se confondre dans un explorateur (A2).
         assertThat(LecturePdf.proprietes(service.exportPdf(entrees())).getTitle())
-                .isEqualTo("Calendrier des audiences");
+                .startsWith("Calendrier des audiences - Du ");
     }
 
     /**

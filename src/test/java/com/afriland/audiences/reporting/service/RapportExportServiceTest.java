@@ -42,15 +42,24 @@ class RapportExportServiceTest {
         String texte = LecturePdf.texte(service.exportPdf(rapport));
 
         assertThat(texte).contains("MENSUEL").contains("2026-09-01").contains("2026-09-30");
-        assertThat(texte).contains("Nouveaux dossiers : 4");
-        assertThat(texte).contains("Audiences tenues : 3");
-        assertThat(texte).containsPattern("Taux de succ.s recouvrement : 75[.,]00 %");
+        /*
+         * Les indicateurs sont désormais présentés en **tableau** (A2) et non plus en « libellé :
+         * valeur » : on vérifie donc que chaque valeur reste sur la ligne de son libellé, ce qui est
+         * la seule chose qui compte et qui se lit encore dans le texte extrait.
+         */
+        assertThat(texte).containsPattern("Nouveaux dossiers\s+4");
+        assertThat(texte).containsPattern("Audiences tenues\s+3");
+        assertThat(texte).containsPattern("Taux de succ.s recouvrement\s+75[.,]00 %");
+        // La marque est sur la page, et la page est numérotée.
+        assertThat(texte).contains("Afriland First Bank").contains("Page 1 sur 1");
     }
 
     @Test
     void exportPdf_porteSesProprietes() throws Exception {
+        // Le titre du fichier porte la portée, là où celui de la page s'en dispense : deux rapports
+        // mensuels de mois différents ne doivent pas se confondre dans un explorateur (A2).
         assertThat(LecturePdf.proprietes(service.exportPdf(rapport)).getTitle())
-                .isEqualTo("Rapport MENSUEL du 2026-09-01 au 2026-09-30");
+                .isEqualTo("Rapport MENSUEL - Du 2026-09-01 au 2026-09-30");
     }
 
     @Test
