@@ -50,6 +50,9 @@ public final class DocumentPdf implements AutoCloseable {
     private static final float[] TRAME = {237 / 255f, 238 / 255f, 241 / 255f};
 
     private static final float MARGE = 40f;
+    /** Largeur de la colonne latérale du papier à en-tête, et souffle entre elle et le texte. */
+    private static final float COLONNE = 118f;
+    private static final float ECART_COLONNE = 22f;
     private static final float HAUTEUR_LOGO = 26f;
     private static final float HAUTEUR_LIGNE = 14f;
     private static final float PIED = 34f;
@@ -75,6 +78,13 @@ public final class DocumentPdf implements AutoCloseable {
     private final PDType1Font normale = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
     private final PDType1Font grasse = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
 
+    /**
+     * Vrai pour la correspondance : colonne latérale des mentions légales, logo centré, pas de
+     * bandeau de titre. Faux pour les documents de travail — un export de calendrier portant
+     * l'agrément ministériel se ferait passer pour une communication officielle de la banque.
+     */
+    private final boolean papierEnTete;
+
     private PDPageContentStream flux;
     private PDImageXObject logo;
     private float y;
@@ -87,11 +97,37 @@ public final class DocumentPdf implements AutoCloseable {
      * @param langue    langue des libellés ; {@code null} vaut français
      */
     public DocumentPdf(PDRectangle format, String titre, String sousTitre, String auteur, Locale langue) {
+        this(format, titre, sousTitre, auteur, langue, false);
+    }
+
+    private DocumentPdf(PDRectangle format, String titre, String sousTitre, String auteur, Locale langue,
+                        boolean papierEnTete) {
         this.format = format;
         this.titre = titre;
         this.sousTitre = sousTitre;
         this.auteur = auteur;
         this.libelles = LibellesPdf.pour(langue);
+        this.papierEnTete = papierEnTete;
+    }
+
+    /**
+     * Le papier à en-tête de la banque, pour la correspondance (B1).
+     *
+     * <p>Le titre ne s'imprime pas sur la page — une lettre n'en porte pas — mais il nomme le
+     * fichier et son pied : il reste donc utile.
+     */
+    public static DocumentPdf papierEnTete(String titre, String auteur, Locale langue) {
+        return new DocumentPdf(PDRectangle.A4, titre, null, auteur, langue, true);
+    }
+
+    /** L'abscisse où le contenu commence : après la colonne latérale, s'il y en a une. */
+    private float margeGauche() {
+        return papierEnTete ? MARGE + COLONNE + ECART_COLONNE : MARGE;
+    }
+
+    /** La largeur utile pour du texte, entre la marge gauche et la marge droite. */
+    public float largeurUtile() {
+        return format.getWidth() - margeGauche() - MARGE;
     }
 
     /** A4 à l'italienne — pour les tableaux larges, que le portrait comprime. */
@@ -119,8 +155,105 @@ public final class DocumentPdf implements AutoCloseable {
 
     /** Écrit une ligne de texte et descend d'un pas. */
     public void ligne(String texte, boolean gras, float taille) {
-        ecrire(texte, MARGE, y, gras ? grasse : normale, taille, ANTHRACITE);
+        ecrire(texte, margeGauche(), y, gras ? grasse : normale, taille, ANTHRACITE);
         y -= HAUTEUR_LIGNE;
+    }
+
+    /**
+     * Écrit un paragraphe en le repliant sur la largeur utile (B1).
+     *
+     * <p>C'est ce qu'une lettre exige et qu'un tableau n'a jamais demandé : un texte long doit
+     * revenir à la ligne de lui-même. Le repli se fait sur la <b>largeur mesurée</b>, mot à mot ; les
+     * retours à la ligne déjà présents dans le texte sont respectés, ce qui permet à un rédacteur de
+     * décider lui-même où couper.
+     *
+     * <p>Un mot plus long que la ligne entière — une référence, une adresse électronique — est écrit
+     * tel quel plutôt que tronqué : dans une lettre, mieux vaut un débordement visible qu'une
+     * information amputée en silence.
+     */
+    public void paragraphe(String texte, float taille) {
+        if (texte == null) {
+            return;
+        }
+        /*
+         * On découpe **avant** de replier, et non l'inverse. `TextePdf.replier` transforme les
+         * caractères de contrôle en espaces — sauts de ligne compris, puisque PDFBox les refuse : le
+         * replier d'abord écraserait les paragraphes du texte en un seul bloc. Défaut trouvé par le
+         * test, qui rendait le gabarit en un pavé continu là où il compte trois paragraphes.
+         *
+         * `lines()` traite aussi bien les fins de ligne Windows qu'Unix, et conserve les lignes
+         * vides qui séparent les paragraphes.
+         */
+        for (String ligneBrute : texte.lines().toList()) {
+            String ligneSource = TextePdf.replier(ligneBrute);
+            if (ligneSource.isBlank()) {
+                y -= taille * 0.9f;
+                continue;
+            }
+            StringBuilder courante = new StringBuilder();
+            for (String mot : ligneSource.split(" ")) {
+                String essai = courante.isEmpty() ? mot : courante + " " + mot;
+                if (!courante.isEmpty() && largeurDe(essai, normale, taille) > largeurUtile()) {
+                    ecrireEtDescendre(courante.toString(), taille);
+                    courante = new StringBuilder(mot);
+                } else {
+                    courante = new StringBuilder(essai);
+                }
+            }
+            if (!courante.isEmpty()) {
+                ecrireEtDescendre(courante.toString(), taille);
+            }
+        }
+    }
+
+    private void ecrireEtDescendre(String texte, float taille) {
+        if (y < MARGE + PIED) {
+            nouvellePage();
+        }
+        ecrire(texte, margeGauche(), y, normale, taille, ANTHRACITE);
+        y -= taille * 1.45f;
+    }
+
+    /** Écrit un texte centré sur la largeur utile — le bloc de signature, notamment. */
+    public void centre(String texte, boolean gras, float taille) {
+        PDType1Font police = gras ? grasse : normale;
+        float x = margeGauche() + (largeurUtile() - largeurDe(texte, police, taille)) / 2;
+        ecrire(texte, x, y, police, taille, ANTHRACITE);
+        y -= taille * 1.6f;
+    }
+
+    /** Écrit un texte aligné à droite de la largeur utile — « Yaoundé, le … ». */
+    public void ligneADroite(String texte, float taille) {
+        float x = format.getWidth() - MARGE - largeurDe(texte, normale, taille);
+        ecrire(texte, x, y, normale, taille, ANTHRACITE);
+        y -= taille * 1.6f;
+    }
+
+    /** Écrit un texte à une abscisse choisie, sans descendre — le bloc destinataire, en retrait. */
+    public void ligneEnRetrait(String texte, float retrait, boolean gras, float taille) {
+        ecrire(texte, margeGauche() + retrait, y, gras ? grasse : normale, taille, ANTHRACITE);
+        y -= taille * 1.35f;
+    }
+
+    /**
+     * Écrit une étiquette soulignée suivie de sa valeur : « <u>Objet:</u> Lettre de constitution… ».
+     * Le soulignement est tracé, non simulé par des tirets — c'est ainsi que le gabarit le porte.
+     */
+    public void etiquetteEtValeur(String etiquette, String valeur, float taille) {
+        try {
+            float x = margeGauche();
+            ecrire(etiquette, x, y, grasse, taille, ANTHRACITE);
+            float largeur = largeurDe(etiquette, grasse, taille);
+            flux.setStrokingColor(ANTHRACITE[0], ANTHRACITE[1], ANTHRACITE[2]);
+            flux.setLineWidth(0.6f);
+            flux.moveTo(x, y - 1.5f);
+            flux.lineTo(x + largeur, y - 1.5f);
+            flux.stroke();
+            ecrire(" " + valeur, x + largeur, y, normale, taille, ANTHRACITE);
+            y -= taille * 1.6f;
+        } catch (IOException e) {
+            throw new UncheckedIOException("Échec du soulignement", e);
+        }
     }
 
     /** Descend sans rien écrire — une respiration entre deux blocs. */
@@ -145,7 +278,7 @@ public final class DocumentPdf implements AutoCloseable {
                 nouvellePage();
                 dessinerEnTeteTableau(entetes, largeurs);
             }
-            float x = MARGE;
+            float x = margeGauche();
             for (int i = 0; i < largeurs.length; i++) {
                 String cellule = i < ligne.size() ? ligne.get(i) : "";
                 ecrire(couper(cellule, largeurs[i] - 6, normale, 8f), x + 3, y, normale, 8f, ANTHRACITE);
@@ -197,6 +330,10 @@ public final class DocumentPdf implements AutoCloseable {
     // ───────────────────────────────────────────────────────────────────────────────────────────
 
     private void dessinerEnTete() throws IOException {
+        if (papierEnTete) {
+            dessinerPapierEnTete();
+            return;
+        }
         float hautDuBloc = y;
         if (LOGO.length > 0) {
             if (logo == null) {
@@ -228,6 +365,45 @@ public final class DocumentPdf implements AutoCloseable {
         y -= 16;
     }
 
+    /**
+     * Le papier à en-tête : logo centré, puis la colonne des mentions légales à gauche.
+     *
+     * <p>C'est la disposition réelle de la banque, relevée sur sa correspondance — et non une
+     * invention. La colonne se lit de haut en bas comme un bandeau ; un filet vertical la sépare du
+     * texte, ce qui évite d'encadrer et alourdir.
+     */
+    private void dessinerPapierEnTete() throws IOException {
+        float haut = format.getHeight() - MARGE;
+        if (LOGO.length > 0) {
+            if (logo == null) {
+                logo = PDImageXObject.createFromByteArray(document, LOGO, "logo");
+            }
+            float hauteur = 30f;
+            float largeur = hauteur * logo.getWidth() / logo.getHeight();
+            flux.drawImage(logo, (format.getWidth() - largeur) / 2, haut - hauteur, largeur, hauteur);
+            haut -= hauteur + 24;
+        }
+
+        float yColonne = haut;
+        for (String mention : IdentiteBancaire.COLONNE) {
+            // Une entrée vide n'imprime rien : elle sépare deux groupes de mentions.
+            if (!mention.isEmpty()) {
+                ecrire(mention, MARGE, yColonne, normale, 6.5f, ANTHRACITE);
+            }
+            yColonne -= 8.5f;
+        }
+
+        // Le filet vertical borne la colonne sans l'encadrer.
+        float xFilet = MARGE + COLONNE;
+        flux.setStrokingColor(GRIS[0], GRIS[1], GRIS[2]);
+        flux.setLineWidth(0.5f);
+        flux.moveTo(xFilet, haut + 4);
+        flux.lineTo(xFilet, Math.min(yColonne + 6, MARGE + PIED));
+        flux.stroke();
+
+        y = haut;
+    }
+
     private void dessinerEnTeteTableau(List<String> entetes, float[] largeurs) {
         try {
             float largeurTotale = 0;
@@ -235,10 +411,10 @@ public final class DocumentPdf implements AutoCloseable {
                 largeurTotale += largeur;
             }
             flux.setNonStrokingColor(TRAME[0], TRAME[1], TRAME[2]);
-            flux.addRect(MARGE, y - 4, largeurTotale, HAUTEUR_LIGNE);
+            flux.addRect(margeGauche(), y - 4, largeurTotale, HAUTEUR_LIGNE);
             flux.fill();
 
-            float x = MARGE;
+            float x = margeGauche();
             for (int i = 0; i < largeurs.length; i++) {
                 ecrire(couper(entetes.get(i), largeurs[i] - 6, grasse, 8f), x + 3, y, grasse, 8f, ANTHRACITE);
                 x += largeurs[i];

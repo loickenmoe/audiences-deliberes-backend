@@ -2159,6 +2159,58 @@ sont unifiées.
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
 
+### Q-115 · B1 ✅ La lettre de constitution prend le papier à en-tête de la banque — tranché (2026-09-18)
+
+**Le jalon change la nature du document.** La lettre était un **calcul** : cinq données mises en forme
+au moment de la validation, puis oubliées. À la question « pourquoi cette lettre dit-elle ceci ? », la
+GED ne répondait rien. Elle devient un **document**, avec son contenu enregistré, son numéro et son
+instant de gel — ce qui permettra, au jalon B2, de la laisser rédiger.
+
+**La forme, relevée sur le gabarit réel de la direction juridique** (et non inventée) : ligne de
+numéro à gauche, lieu et date à droite, destinataire en retrait, `Concerne` et `Objet` soulignés,
+corps, signataire centré. S'y ajoute ce que le gabarit papier n'a pas et que la banque met sur sa
+correspondance : le **logo** et la **colonne latérale** des mentions institutionnelles.
+
+**Les pointillés sont conservés.** Le gabarit est fait pour être complété à la main — c'est la
+pratique actuelle. Un champ vide rend donc `..........................`, jamais du vide ni « null ».
+Les supprimer aurait retiré une possibilité que la direction juridique emploie.
+
+**Le numéro.** `N° 4 /First Bank/DAJR/DR/CM/ABN/18`. Le compteur est la valeur qui **suit** `N°`
+(confirmé par la direction juridique) et **ne repart pas à 1 chaque année** : il court. Il vient d'une
+séquence dédiée — même raison qu'en Q-114 : le numéro figure *dans* le fichier, il doit donc exister
+*avant* de le produire, alors que l'identifiant de la ligne n'existe qu'après l'insertion.
+
+La séquence **propose** ; le numéro reste modifiable, et c'est la contrainte d'unicité en base qui
+interdit d'en servir deux fois le même. Il est **réservé à la génération**, pas à l'ouverture d'un
+brouillon : un brouillon abandonné brûlerait un numéro dans une série qui ne se remet jamais à zéro.
+
+**Le suffixe est stocké d'un bloc** (`First Bank/DAJR/DR/CM/ABN/18`) et découpé sur « / » par l'écran.
+Le papier de la DRH en compte quatre segments, celui du recouvrement six : figer leur nombre en
+colonnes aurait exigé une migration à chaque convention nouvelle.
+
+**Le motif disparaît de la lettre.** C'est une justification interne, adressée au supérieur
+hiérarchique et absente du gabarit officiel : un huissier n'a pas à lire pourquoi la banque a décidé
+en interne de le constituer. La traçabilité du validateur demeure — propriétés du fichier et GED.
+
+**Le gel.** `date_generation` marque la production du PDF. Passé ce point, la lettre ne se réécrit
+pas : une correction donne une **nouvelle** lettre, un **nouveau** numéro, et la première reste dans
+la GED. Une pièce qu'on peut retoucher en silence ne prouve rien — même raisonnement qu'en Q-113.
+
+**Deux défauts trouvés par les tests avant qu'une lettre ne sorte.**
+`TextePdf.replier` transforme les caractères de contrôle en espaces, sauts de ligne compris — PDFBox
+les refuse. Le repli s'appliquant **avant** le découpage, les trois paragraphes du gabarit se
+fondaient en un pavé continu. On découpe désormais d'abord, on replie ensuite.
+Le second était une assertion de test qui enjambait un retour à la ligne automatique : elle vérifiait
+la mise en page en croyant vérifier le contenu.
+
+**⚠ À faire avant la mise en production** : initialiser la séquence sur le compteur réel du service
+(`SELECT setval('lettre_constitution_numero_seq', <dernier numéro émis>)`). Sans cela, la première
+lettre porterait `N° 1` alors que le service en est à `N° 33`.
+
+**Ce que B1 ne fait pas, volontairement** : le contenu n'est pas encore éditable. Le flux est
+identique à aujourd'hui — le juriste sollicite, le SH valide, la lettre se produit. L'édition par le
+juriste et la consultation par le SH sont le jalon **B2**.
+
 ### Q-115 · A3 ✅ L'archive d'audit reprend la charte, et ses colonnes s'alignent — tranché (2026-09-18)
 
 **Troisième jalon, et dernier avant la lettre.** L'archive d'audit était le document le plus abouti

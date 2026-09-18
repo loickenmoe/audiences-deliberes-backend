@@ -15,9 +15,11 @@ import com.afriland.audiences.ged.domain.FormatDocument;
 import com.afriland.audiences.ged.repository.DocumentRepository;
 import com.afriland.audiences.ged.service.MinioStorageService;
 import com.afriland.audiences.intervenant.domain.DemandeConstitution;
+import com.afriland.audiences.intervenant.domain.LettreConstitution;
 import com.afriland.audiences.intervenant.domain.StatutConstitution;
 import com.afriland.audiences.intervenant.mapper.DemandeConstitutionMapper;
 import com.afriland.audiences.intervenant.repository.DemandeConstitutionRepository;
+import com.afriland.audiences.intervenant.repository.LettreConstitutionRepository;
 import com.afriland.audiences.intervenant.web.dto.CreerConstitutionRequest;
 import com.afriland.audiences.intervenant.web.dto.DemandeConstitutionResponse;
 import com.afriland.audiences.intervenant.web.dto.ValiderConstitutionRequest;
@@ -51,6 +53,7 @@ public class ConstitutionService {
     private final HistoriqueActionService historiqueActionService;
     private final AlerteService alerteService;
     private final LettreConstitutionService lettreConstitutionService;
+    private final LettreConstitutionRepository lettreConstitutionRepository;
     private final MinioStorageService minioStorageService;
     private final DocumentRepository documentRepository;
     private final DemandeConstitutionMapper demandeConstitutionMapper;
@@ -129,10 +132,26 @@ public class ConstitutionService {
         return PageResponse.of(demandes, demandeConstitutionMapper::toResponse);
     }
 
-    /** RG-INT-08 : la validation génère la lettre de constitution, stockée dans la GED (M8). */
+    /**
+     * RG-INT-08 : la validation produit la lettre, stockée dans la GED (M8).
+     *
+     * <p><b>La lettre est désormais un document, plus un calcul (Q-115 B1).</b> Son contenu est
+     * enregistré avant d'être mis en page : c'est ce qui permettra, au jalon suivant, de le laisser
+     * rédiger par le juriste — et c'est déjà ce qui répond à « pourquoi cette lettre dit-elle ceci ? ».
+     *
+     * <p>Le numéro est <b>réservé ici</b>, au moment de produire le fichier, et non à l'ouverture
+     * d'un brouillon : un brouillon abandonné brûlerait un numéro dans une série qui ne repart
+     * jamais à un.
+     */
     private void genererEtAttacherLettre(DemandeConstitution demande, Utilisateur sh) {
-        byte[] pdf = lettreConstitutionService.generer(demande);
-        String nomFichier = "lettre-constitution-" + demande.getId() + ".pdf";
+        LettreConstitution lettre = lettreConstitutionRepository.findByDemandeId(demande.getId())
+                .orElseGet(() -> lettreConstitutionService.brouillonPour(
+                        demande, (int) lettreConstitutionRepository.prochainNumero()));
+        lettre.setDateGeneration(LocalDateTime.now());
+        lettre = lettreConstitutionRepository.save(lettre);
+
+        byte[] pdf = lettreConstitutionService.generer(lettre);
+        String nomFichier = "lettre-constitution-" + lettre.getNumero() + ".pdf";
         String cle = minioStorageService.deposer(demande.getDossier().getId(), nomFichier, "application/pdf", pdf);
 
         Document document = documentRepository.save(Document.builder()
