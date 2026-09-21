@@ -2159,6 +2159,51 @@ sont unifiées.
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
 
+### Q-115 · B2 ✅ Le juriste rédige la lettre, le SH la consulte — tranché (2026-09-18)
+
+**La répartition des rôles est tout le jalon.** Le juriste rédige — c'est lui qui tient le dossier,
+connaît le débiteur, le montant et le tiers saisi. Le supérieur hiérarchique **consulte** avant de
+signer, sans pouvoir récrire. Lui refuser la lecture reviendrait à lui demander de signer sans voir ;
+lui donner la plume viderait la seconde signature de son sens. Aucun rôle nouveau, aucune habilitation
+nouvelle : `solliciterConstitution` ouvre la rédaction, `signerConstitution` la lecture.
+
+**Le brouillon naît avec la demande, sans numéro.** V23 lève le `NOT NULL` posé en B1 — où la lettre
+naissait à la validation et avait donc toujours son numéro. Réserver dès la rédaction en **brûlerait**
+un à chaque demande sans suite, et le compteur ne repart jamais à un : les trous resteraient
+définitivement dans une série de courrier officiel, où l'absence de la lettre n° 35 se remarque et se
+justifie mal. PostgreSQL n'ajoutant pas les valeurs nulles à un index unique, plusieurs brouillons
+coexistent sans se gêner.
+
+**Ce qui est obligatoire, et ce qui ne l'est pas.** Seuls le suffixe du numéro, l'objet et le
+signataire le sont — sans eux, le document n'est plus une lettre de la banque. Le débiteur, le
+montant, le tiers saisi restent facultatifs : le gabarit est fait pour être complété, à la main le
+cas échéant, et l'exiger à la saisie interdirait une pratique existante. Ce qui manque rend des
+pointillés.
+
+**Le gel n'est pas un message, c'est une action qui n'est plus offerte.** Une fois signée, la lettre
+est partie chez un huissier et figure dans la GED : le bouton de rédaction disparaît, et le serveur
+refuse par un **409** si l'on passe outre l'écran. Une correction donne une nouvelle demande, donc
+une nouvelle lettre et un nouveau numéro — la première reste consultable.
+
+**Le numéro reste modifiable**, comme la direction juridique l'a demandé, mais un numéro déjà employé
+est refusé : dans une série de courrier officiel, un numéro servi deux fois ne désigne plus rien.
+
+**Les segments s'éditent séparément**, l'écran découpant sur « / » ce que le serveur stocke d'un
+bloc. Leur nombre varie d'un service à l'autre — quatre sur le papier de la DRH, six sur celui du
+recouvrement — et le figer en colonnes aurait exigé une migration à chaque convention nouvelle.
+
+**Deux garde-fous ont fait leur travail, dans les deux dépôts.** Le premier, côté backend : la
+contrainte `chk_historique_code` énumère les codes **en dur** depuis V18, et un code ajouté à
+l'énumération Java sans migration compile sans bruit puis **échoue à l'écriture, en production**, sur
+l'action qu'on venait d'instrumenter. D'où V24. Le second, côté écran : le test qui compte les
+natures d'action traduites a rappelé d'ajouter la traduction — sans quoi l'audit aurait affiché la
+phrase du backend au lieu du libellé, exactement le défaut de QF-24.
+
+**Chaîne vérifiée sur la pile réelle** : demande → brouillon sans numéro → rédaction du juriste (200)
+→ lecture du SH (200) → tentative de réécriture par le SH (**403**) → signature (200) → numéro
+attribué et `modifiable: false` → tentative de réécriture par le juriste (**409**). Le PDF produit
+porte bien la rédaction du juriste, et l'audit en garde trace.
+
 ### Q-115 · B1 ✅ La lettre de constitution prend le papier à en-tête de la banque — tranché (2026-09-18)
 
 **Le jalon change la nature du document.** La lettre était un **calcul** : cinq données mises en forme

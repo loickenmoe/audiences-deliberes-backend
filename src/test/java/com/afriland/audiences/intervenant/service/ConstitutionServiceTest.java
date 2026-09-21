@@ -161,10 +161,14 @@ class ConstitutionServiceTest {
          * La lettre est désormais un document enregistré, non plus un calcul (Q-115 B1) : le service
          * compose un brouillon, le dépôt lui donne son numéro, puis le rendu le met en page.
          */
+        /*
+         * Le brouillon naît **sans numéro** (B2) : celui-ci n'est tiré qu'à la signature, pour ne pas
+         * en brûler un sur une demande sans suite — la série ne repart jamais à un.
+         */
         when(lettreConstitutionRepository.findByDemandeId(any())).thenReturn(Optional.empty());
         when(lettreConstitutionRepository.prochainNumero()).thenReturn(4L);
-        when(lettreConstitutionService.brouillonPour(any(), eq(4)))
-                .thenReturn(LettreConstitution.builder().numero(4).suffixeNumero("First Bank/DAJR").build());
+        when(lettreConstitutionService.brouillonPour(any(), eq(null)))
+                .thenReturn(LettreConstitution.builder().suffixeNumero("First Bank/DAJR").build());
         when(lettreConstitutionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(lettreConstitutionService.generer(any(LettreConstitution.class))).thenReturn(new byte[]{1, 2, 3});
         when(minioStorageService.deposer(eq(1L), any(), eq("application/pdf"), any())).thenReturn("dossiers/1/lettre.pdf");
@@ -194,10 +198,14 @@ class ConstitutionServiceTest {
          * La lettre est désormais un document enregistré, non plus un calcul (Q-115 B1) : le service
          * compose un brouillon, le dépôt lui donne son numéro, puis le rendu le met en page.
          */
+        /*
+         * Le brouillon naît **sans numéro** (B2) : celui-ci n'est tiré qu'à la signature, pour ne pas
+         * en brûler un sur une demande sans suite — la série ne repart jamais à un.
+         */
         when(lettreConstitutionRepository.findByDemandeId(any())).thenReturn(Optional.empty());
         when(lettreConstitutionRepository.prochainNumero()).thenReturn(4L);
-        when(lettreConstitutionService.brouillonPour(any(), eq(4)))
-                .thenReturn(LettreConstitution.builder().numero(4).suffixeNumero("First Bank/DAJR").build());
+        when(lettreConstitutionService.brouillonPour(any(), eq(null)))
+                .thenReturn(LettreConstitution.builder().suffixeNumero("First Bank/DAJR").build());
         when(lettreConstitutionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(lettreConstitutionService.generer(any(LettreConstitution.class))).thenReturn(new byte[]{1, 2, 3});
         when(minioStorageService.deposer(eq(1L), any(), eq("application/pdf"), any())).thenReturn("dossiers/1/lettre.pdf");

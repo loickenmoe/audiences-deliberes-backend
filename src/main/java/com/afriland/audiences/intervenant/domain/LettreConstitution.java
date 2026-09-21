@@ -50,11 +50,14 @@ public class LettreConstitution {
     private DemandeConstitution demande;
 
     /**
-     * Le compteur qui suit « N° ». Il <b>ne repart pas à 1 chaque année</b> : il court. La séquence
-     * en propose la valeur suivante ; il reste modifiable, et l'unicité en base interdit d'en servir
-     * deux fois le même.
+     * Le compteur qui suit « N° ». Il <b>ne repart pas à 1 chaque année</b> : il court.
+     *
+     * <p><b>Nul tant que la lettre est un brouillon</b> (B2). Le réserver dès la rédaction
+     * reviendrait à en brûler un à chaque demande sans suite, et les trous s'accumuleraient
+     * définitivement dans une série de courrier officiel. Il est tiré de la séquence à la signature
+     * — sauf si le rédacteur en a imposé un, ce que l'unicité protège.
      */
-    @Column(nullable = false, unique = true)
+    @Column(unique = true)
     private Integer numero;
 
     /**
@@ -107,9 +110,14 @@ public class LettreConstitution {
         return dateGeneration != null;
     }
 
-    /** La ligne complète, telle qu'elle s'imprime : {@code N° 4 /First Bank/DAJR/DR/CM/ABN/18}. */
+    /**
+     * La ligne complète, telle qu'elle s'imprime : {@code N° 4 /First Bank/DAJR/DR/CM/ABN/18}.
+     *
+     * <p>Sans numéro — un brouillon — la place reste vide, comme sur le gabarit papier où elle
+     * attend d'être remplie. Écrire « N° null » serait pire que ne rien écrire.
+     */
     public String referenceComplete() {
-        return "N° " + numero + " /" + suffixeNumero;
+        return "N° " + (numero == null ? "" : numero) + " /" + suffixeNumero;
     }
 
     @PrePersist

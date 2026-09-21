@@ -67,9 +67,11 @@ public class LettreConstitutionService {
     /**
      * Le brouillon d'une demande : tout ce qui est certain, le reste en pointillés.
      *
-     * @param numero proposé par la séquence, et modifiable — l'unicité en base fait le reste
+     * @param numero {@code null} tant que la lettre n'est pas signée — le réserver dès la rédaction
+     *               brûlerait un numéro à chaque demande sans suite, et les trous s'accumuleraient
+     *               définitivement dans une série qui ne repart jamais à un (B2)
      */
-    public LettreConstitution brouillonPour(DemandeConstitution demande, int numero) {
+    public LettreConstitution brouillonPour(DemandeConstitution demande, Integer numero) {
         return LettreConstitution.builder()
                 .demande(demande)
                 .numero(numero)

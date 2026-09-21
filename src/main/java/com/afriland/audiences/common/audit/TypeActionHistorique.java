@@ -68,6 +68,8 @@ public enum TypeActionHistorique {
     // ── Constitutions de prestataires ─────────────────────────────────────────
     CONSTITUTION_DEMANDEE("Demande de constitution d'un prestataire"),
     CONSTITUTION_ARBITREE("Décision sur une demande de constitution"),
+    /** Q-115 B2 : la lettre devient rédigeable, donc sa rédaction doit être traçable. */
+    LETTRE_CONSTITUTION_REDIGEE("Rédaction de la lettre de constitution"),
 
     // ── Publications ──────────────────────────────────────────────────────────
     PUBLICATION_CR_DEPOSE("Dépôt d'un compte rendu d'audience"),
