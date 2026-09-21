@@ -48,11 +48,31 @@ public final class DocumentPdf implements AutoCloseable {
     private static final float[] ANTHRACITE = {35 / 255f, 31 / 255f, 32 / 255f};
     private static final float[] GRIS = {95 / 255f, 90 / 255f, 91 / 255f};
     private static final float[] TRAME = {237 / 255f, 238 / 255f, 241 / 255f};
+    /**
+     * Le fond de la colonne du papier à en-tête. Teinte distincte de {@link #TRAME} bien
+     * qu'elles coïncident aujourd'hui : le bandeau d'une lettre et la trame d'un tableau n'ont
+     * aucune raison d'évoluer ensemble, et ajuster l'un ne doit pas changer l'allure du
+     * calendrier, du rapport et de l'archive d'audit.
+     */
+    private static final float[] FOND_COLONNE = {208 / 255f, 211 / 255f, 217 / 255f};
 
     private static final float MARGE = 40f;
-    /** Largeur de la colonne latérale du papier à en-tête, et souffle entre elle et le texte. */
-    private static final float COLONNE = 118f;
-    private static final float ECART_COLONNE = 22f;
+    /*
+     * La colonne latérale, **relevée au pixel sur le papier de la banque** (AFB, 1141 px de large) :
+     * son aplat s'arrête à x=157, soit 13,76 % de la largeur — 82 pt sur A4. Les mentions y
+     * commencent à 5,5 pt du bord, et la plus large (« N° COSUMAF-LMFAC-01/2015 ») occupe 68,9 pt,
+     * ce qui impose une police de 5 pt : à 6,5 pt elle en réclamerait 91,4 et déborderait.
+     *
+     * {@code COLONNE} est la largeur **totale** de l'aplat depuis le bord gauche de la feuille,
+     * bord perdu compris — et non la largeur du texte à partir de {@link #MARGE}.
+     */
+    private static final float COLONNE = 82f;
+    /** Marge interne gauche de la colonne : le texte y commence presque au bord. */
+    private static final float MARGE_COLONNE = 5.5f;
+    /** Corps de la police des mentions — contraint par la largeur de la colonne. */
+    private static final float TAILLE_COLONNE = 5f;
+    /** Souffle entre l'aplat et le texte : le corps commence à 102 pt sur le contrat. */
+    private static final float ECART_COLONNE = 20f;
     private static final float HAUTEUR_LOGO = 26f;
     private static final float HAUTEUR_LIGNE = 14f;
     private static final float PIED = 34f;
@@ -122,7 +142,7 @@ public final class DocumentPdf implements AutoCloseable {
 
     /** L'abscisse où le contenu commence : après la colonne latérale, s'il y en a une. */
     private float margeGauche() {
-        return papierEnTete ? MARGE + COLONNE + ECART_COLONNE : MARGE;
+        return papierEnTete ? COLONNE + ECART_COLONNE : MARGE;
     }
 
     /** La largeur utile pour du texte, entre la marge gauche et la marge droite. */
@@ -219,6 +239,19 @@ public final class DocumentPdf implements AutoCloseable {
         PDType1Font police = gras ? grasse : normale;
         float x = margeGauche() + (largeurUtile() - largeurDe(texte, police, taille)) / 2;
         ecrire(texte, x, y, police, taille, ANTHRACITE);
+        y -= taille * 1.6f;
+    }
+
+    /**
+     * Écrit deux textes sur **une même ligne** : l'un au fil de la marge, l'autre aligné à droite.
+     *
+     * C'est la première ligne du papier de la banque — le numéro à gauche, le lieu et la date à
+     * droite, à la même hauteur. Les écrire l'un après l'autre les décalait d'un interligne.
+     */
+    public void ligneGaucheEtDroite(String gauche, String droite, float taille) {
+        ecrire(gauche, margeGauche(), y, normale, taille, ANTHRACITE);
+        ecrire(droite, format.getWidth() - MARGE - largeurDe(droite, normale, taille), y, normale,
+                taille, ANTHRACITE);
         y -= taille * 1.6f;
     }
 
@@ -369,8 +402,9 @@ public final class DocumentPdf implements AutoCloseable {
      * Le papier à en-tête : logo centré, puis la colonne des mentions légales à gauche.
      *
      * <p>C'est la disposition réelle de la banque, relevée sur sa correspondance — et non une
-     * invention. La colonne se lit de haut en bas comme un bandeau ; un filet vertical la sépare du
-     * texte, ce qui évite d'encadrer et alourdir.
+     * invention. La colonne se lit de haut en bas comme un bandeau, posé sur un <b>aplat de fond
+     * gris</b> qui court du bord gauche de la feuille jusqu'au bord bas, bien au-delà de la dernière
+     * mention : sur le papier de la banque, c'est le fond qui borne la colonne, pas un filet.
      */
     private void dessinerPapierEnTete() throws IOException {
         float haut = format.getHeight() - MARGE;
@@ -384,22 +418,34 @@ public final class DocumentPdf implements AutoCloseable {
             haut -= hauteur + 24;
         }
 
-        float yColonne = haut;
-        for (String mention : IdentiteBancaire.COLONNE) {
-            // Une entrée vide n'imprime rien : elle sépare deux groupes de mentions.
-            if (!mention.isEmpty()) {
-                ecrire(mention, MARGE, yColonne, normale, 6.5f, ANTHRACITE);
+        /*
+         * L'aplat de la colonne. Son bord haut tombe **juste sous la ligne du numéro** — le haut de
+         * la feuille reste blanc sur toute sa largeur — et il descend jusqu'au bord bas, en fond
+         * perdu à gauche, bien au-delà de la dernière mention. C'est ce que fait le papier de la
+         * banque, relevé au pixel. Dessiné avant les mentions, sans quoi il les
+         * recouvrirait.
+         */
+        float hautAplat = haut - 20f;
+        flux.setNonStrokingColor(FOND_COLONNE[0], FOND_COLONNE[1], FOND_COLONNE[2]);
+        flux.addRect(0, 0, COLONNE, hautAplat);
+        flux.fill();
+
+        float yColonne = hautAplat - 10f;
+        for (IdentiteBancaire.Mention mention : IdentiteBancaire.COLONNE) {
+            if (mention.barre()) {
+                // Les trois barres du gabarit : elles courent sur la largeur de la colonne, moins
+                // la respiration de droite, et se posent a mi-interligne.
+                flux.setStrokingColor(ANTHRACITE[0], ANTHRACITE[1], ANTHRACITE[2]);
+                flux.setLineWidth(0.6f);
+                flux.moveTo(MARGE_COLONNE, yColonne + 2f);
+                flux.lineTo(COLONNE - 10f, yColonne + 2f);
+                flux.stroke();
+            } else if (!mention.texte().isEmpty()) {
+                ecrire(mention.texte(), MARGE_COLONNE, yColonne,
+                        mention.gras() ? grasse : normale, TAILLE_COLONNE, ANTHRACITE);
             }
             yColonne -= 8.5f;
         }
-
-        // Le filet vertical borne la colonne sans l'encadrer.
-        float xFilet = MARGE + COLONNE;
-        flux.setStrokingColor(GRIS[0], GRIS[1], GRIS[2]);
-        flux.setLineWidth(0.5f);
-        flux.moveTo(xFilet, haut + 4);
-        flux.lineTo(xFilet, Math.min(yColonne + 6, MARGE + PIED));
-        flux.stroke();
 
         y = haut;
     }
@@ -426,6 +472,23 @@ public final class DocumentPdf implements AutoCloseable {
     }
 
     private void dessinerPieds() throws IOException {
+        /*
+         * **Le papier à en-tête n'en porte pas.** Le gabarit de la banque s'arrête au bloc de
+         * signature : ni numérotation, ni mention d'édition. Un pied y traverserait d'ailleurs
+         * l'aplat de la colonne, que rien ne borne à gauche.
+         *
+         * Ce que cela coûte, et qui est assumé : une lettre de plusieurs feuillets ne dira plus
+         * « Page 1 sur 2 », si bien qu'un destinataire ne verra pas qu'il en manque une. C'est le
+         * choix du papier réel, pas un oubli.
+         *
+         * Les documents de travail — calendrier, rapport, archive d'audit — gardent le leur : ils
+         * se lisent à l'écran ou s'impriment en liasse, et la pagination y est la seule garantie
+         * qu'on tient le document entier (A2).
+         */
+        if (papierEnTete) {
+            return;
+        }
+
         String editePar = auteur == null || auteur.isBlank()
                 ? libelles.texte("pied.editeLe", LocalDate.now().format(JOUR))
                 : libelles.texte("pied.editePar", auteur);

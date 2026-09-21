@@ -61,7 +61,7 @@ class LettreConstitutionServiceTest {
         assertThat(texte).contains("Me Fotso").contains("Huissier de Justice");
         assertThat(texte).contains("DOSSIER DOS-2026-001");
         assertThat(texte).contains("Lettre de constitution contenant transmission de pièces.");
-        assertThat(texte).contains("Le Département du Recouvrement");
+        assertThat(texte).contains("La Direction Juridique");
     }
 
     /**

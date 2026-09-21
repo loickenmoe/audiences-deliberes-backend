@@ -39,7 +39,7 @@ public class LettreConstitutionService {
     public static final String SUFFIXE_PAR_DEFAUT = "First Bank/DAJR/DR/CM/ABN/18";
     public static final String LIEU_PAR_DEFAUT = "Yaoundé";
     public static final String OBJET_PAR_DEFAUT = "Lettre de constitution contenant transmission de pièces.";
-    public static final String SIGNATAIRE_PAR_DEFAUT = "Le Département du Recouvrement";
+    public static final String SIGNATAIRE_PAR_DEFAUT = "La Direction Juridique";
     public static final String QUALITE_PAR_DEFAUT = "Huissier de Justice";
 
     /**
@@ -94,10 +94,11 @@ public class LettreConstitutionService {
         try (DocumentPdf document = DocumentPdf.papierEnTete(titre, nomComplet(validateur), Locale.FRENCH)) {
             document.nouvellePage();
 
-            // La ligne du numéro à gauche, le lieu et la date à droite — comme sur le gabarit.
-            document.ligne(lettre.referenceComplete(), false, 10f);
-            document.ligneADroite(ou(lettre.getLieu(), LIEU_PAR_DEFAUT) + " le "
-                    + LocalDate.now().format(FORMAT_DATE), 10f);
+            // La ligne du numéro à gauche, le lieu et la date à droite — sur la MÊME ligne, comme sur
+            // le gabarit. Deux écritures successives les décalaient d'un interligne.
+            document.ligneGaucheEtDroite(lettre.referenceComplete(),
+                    ou(lettre.getLieu(), LIEU_PAR_DEFAUT) + " le " + LocalDate.now().format(FORMAT_DATE),
+                    10f);
             document.espace(18f);
 
             // Le destinataire, en retrait : c'est la disposition d'une lettre, pas d'un formulaire.
