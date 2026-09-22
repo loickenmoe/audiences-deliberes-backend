@@ -186,15 +186,30 @@ Livrée, en attente du commit de l'utilisateur.
 - Tests : 7 unitaires, et 7 d'intégration sur PostgreSQL réel (`@DataJpaTest` avec Testcontainers).
   Suite complète : 491 tests verts.
 
-### ⬜ Étape 3 : clés de configuration du DJ et du DJA, et écran 42
+### ✅ Étape 3 : réglages du DJ et du DJA (écran 41, paramètres système)
 
-- Nouvelles clés dans `RegleConfiguration` :
-  - canaux externes actifs ;
-  - grille type × canal.
-- Traitement de l'existant :
-  - on réconcilie `CANAUX_NOTIFICATION_DEFAUT`, qui n'est lu nulle part aujourd'hui (Q-37) ;
-  - on consigne la décision dans `DECISIONS_AND_OPEN_QUESTIONS.md`.
-- Dans le frontend, édition de la grille avec ses libellés FR et EN.
+Livrée, en attente du commit de l'utilisateur. Décision consignée : **Q-118**.
+- **Backend**
+  - `CanalPrestataire` (COURRIEL_PERSONNEL, SMS et WHATSAPP, avec leur canal Engine) et
+    `EvenementPrestataire` (les 9 événements de D19).
+  - `CANAUX_NOTIFICATION_DEFAUT` garde sa valeur et devient le réglage des internes (Q-37 soldée).
+  - Six clés nouvelles : `CANAUX_NOTIFICATION_PRESTATAIRES` et `GRILLE_NOTIFICATION_{OUTLOOK, TEAMS,
+    COURRIEL_PERSONNEL, SMS, WHATSAPP}`.
+  - Liste vide autorisée pour ces seules clés (`videAutorise`, exposé sous `listeVideAutorisee`).
+    La requête passe de `@NotBlank` à `@NotNull`, et une clé sans règle refuse toujours le vide.
+  - V28 : `valeur` passe à VARCHAR(1000) et reçoit les valeurs initiales. Les grilles cochent tous
+    les événements. Les canaux prestataires sont le courriel personnel et le SMS, **WhatsApp éteint**.
+- **Frontend**
+  - Écran 41 : les colonnes de grille sont retirées de la liste générique et regroupées dans
+    `GrilleNotifications`, un tableau par public (événements × canaux), avec la mention
+    « Canal coupé » et un enregistrement colonne par colonne.
+  - Les cases des clés `CANAUX_*` affichent un libellé traduit plutôt que le code.
+- Tests :
+  - backend : unitaires sur les règles et le service, et `ConfigurationMigreeIntegrationTest`
+    (chaque règle a sa ligne migrée, et sa valeur initiale est déjà normalisée) ;
+  - frontend : Vitest sur la logique et le composant, deux parcours Playwright (grille vidée puis
+    rétablie, vide refusé sur `FORMATS_GED`).
+  - Suites complètes : backend 519 tests, Vitest 349.
 
 ### ⬜ Étape 4 : routage
 
@@ -241,7 +256,7 @@ Livrée, en attente du commit de l'utilisateur.
 
 - Tableau par canal, liste des échecs et relance manuelle.
 
-### ⬜ Étape 11 : validation des coordonnées sur l'écran 42
+### ⬜ Étape 11 : validation des coordonnées dans le référentiel des intervenants
 
 - Format du téléphone (E.164, `237…` ou `6…`) et du courriel, pour les avocats et les autres
   prestataires.
@@ -276,6 +291,8 @@ Livrée, en attente du commit de l'utilisateur.
 - **Enveloppe du message** : l'Engine accepte-t-il un message Kafka publié directement, sans
   l'enveloppe standard ajoutée par Dapr ? Cela conditionne le repli Kafka.
 - **Pièces jointes** : quel bucket et quelle instance MinIO le claim-check doit-il utiliser ?
+- **WhatsApp** : faut-il des modèles de message préapprouvés, ce qui est la règle habituelle de
+  WhatsApp Business ? Le canal reste éteint par défaut (V28) jusqu'à la réponse de l'administrateur.
 - **Limites non documentées dans le Guide** : longueur maximale d'un SMS, gabarits WhatsApp requis ou
   non, format des messages Teams, quotas.
 - **Environnements non documentés** : les valeurs de PROD sont absentes du Guide, ce qui est sans
@@ -304,3 +321,19 @@ Livrée, en attente du commit de l'utilisateur.
     Seule `marquerEnvoyee` existe déjà, car elle porte la règle de conservation D16.
 - Piège de test : dans une transaction PostgreSQL, un refus de contrainte fait échouer toutes les
   requêtes suivantes. D'où un test par contrainte.
+- Étape 3, choix d'implémentation (à respecter dans les étapes suivantes) :
+  - **Routage des internes (étape 4)** : un canal part si `CANAUX_NOTIFICATION_DEFAUT` le contient
+    **et** si le type d'alerte figure dans `GRILLE_NOTIFICATION_<CANAL>`. Même principe pour les
+    prestataires, avec `CANAUX_NOTIFICATION_PRESTATAIRES` et les grilles des prestataires.
+  - **Un avocat qui a un compte** reçoit ses alertes applicatives comme aujourd'hui. Ses canaux
+    externes suivent la grille des prestataires (D2), jamais Outlook ou Teams. Le branchement de
+    l'étape 6 devra donc écarter les utilisateurs de profil AVOCAT, que l'étape 7 prend en charge.
+  - Les grilles internes reprennent les 17 types d'alerte, y compris les 3 jamais déclenchés
+    (DOUBLON_FACTURE, DELIBERE_ATTENDU, DOSSIER_INCOMPLET). C'est sans effet tant qu'ils ne se
+    déclenchent pas, et cela évite une liste parallèle à maintenir.
+  - **Piège** : les tests `@SpringBootTest` sans Testcontainers (`AudiencesApplicationTests`)
+    démarrent sur la base locale du `.env`. `./mvnw install` applique donc les nouvelles migrations
+    à la base de développement. Dès l'étape 3, V28 y était déjà appliquée avant tout démarrage
+    manuel.
+- Point ouvert ajouté : WhatsApp exige-t-il des modèles préapprouvés côté Engine ? Le canal reste
+  éteint par défaut tant que la réponse n'est pas connue.

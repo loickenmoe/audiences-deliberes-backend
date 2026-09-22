@@ -52,7 +52,7 @@ public class ConfigurationService {
         ConfigurationSysteme configuration = getOrThrow(cle);
         String valeurRetenue = RegleConfiguration.pour(cle)
                 .map(regle -> regle.valider(nouvelleValeur))
-                .orElse(nouvelleValeur);
+                .orElseGet(() -> exigerNonVide(cle, nouvelleValeur));
         String ancienneValeur = configuration.getValeur();
         configuration.setValeur(valeurRetenue);
         // Q-112 : l'écran des paramètres répond désormais sur place à « qui l'a mis là ? », question
@@ -68,5 +68,14 @@ public class ConfigurationService {
                 Map.of("cle", cle, "ancienneValeur", ancienneValeur, "nouvelleValeur", valeurRetenue));
 
         return configurationMapper.toResponse(configuration);
+    }
+
+    /** Clé sans règle déclarée : on garde l'exigence historique d'une valeur non vide. */
+    private static String exigerNonVide(String cle, String valeur) {
+        if (valeur == null || valeur.isBlank()) {
+            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
+                    "Configuration " + cle + " : la valeur est obligatoire");
+        }
+        return valeur;
     }
 }

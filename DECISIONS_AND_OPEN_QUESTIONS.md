@@ -2160,6 +2160,52 @@ sont unifiées.
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
 
+### Q-118 ✅ Le DJ règle les notifications externes : canaux actifs et grille par canal — tranché (2026-09-22)
+
+**Contexte.** Le Notification Engine de la banque (SMS, courriel, WhatsApp, Teams) remplace les
+infrastructures SMTP et webhook Teams que Q-37 attendait. Le porteur du projet a tranché : les
+utilisateurs internes reçoivent Outlook et/ou Teams, les prestataires le courriel personnel, le SMS et
+WhatsApp, et le DJ et la DJA règlent **à la fois les canaux et la grille type × canal**. Le plan
+complet est dans `NOTIFICATION_ENGINE_PLAN.md` (décisions D1 à D19).
+
+**Q-37 est soldée, pas contredite.** `CANAUX_NOTIFICATION_DEFAUT` garde sa valeur
+(`APPLICATIF,OUTLOOK`) et sa règle (applicatif obligatoire). Elle devient le réglage des canaux des
+**utilisateurs internes**, ce que disait déjà sa description (RG-ALR-03). `alerte` reste la
+représentation du seul canal applicatif, comme Q-37 le recommandait ; les envois externes vivent dans
+`notification_envoi` (V27).
+
+**Six clés nouvelles (V28)** :
+- `CANAUX_NOTIFICATION_PRESTATAIRES` : courriel personnel, SMS, WhatsApp ;
+- `GRILLE_NOTIFICATION_OUTLOOK` et `GRILLE_NOTIFICATION_TEAMS` : les types d'alerte envoyés sur
+  chaque canal interne ;
+- `GRILLE_NOTIFICATION_COURRIEL_PERSONNEL`, `GRILLE_NOTIFICATION_SMS` et
+  `GRILLE_NOTIFICATION_WHATSAPP` : les événements prestataires envoyés sur chaque canal externe.
+
+**Pourquoi une clé par canal, et non une table dédiée.** Les clés de configuration apportent déjà
+tout ce qu'il faut : la validation par règle (Q-91), les droits du DJ et de la DJA (Q-108), l'auteur
+de la dernière modification (Q-112) et la trace dans l'audit. Une table dédiée aurait demandé de
+reconstruire ces quatre garanties.
+
+**Une liste peut désormais être vide, et seulement pour ces clés.** Couper tous les canaux
+prestataires, ou ne rien envoyer par SMS, est un réglage et non un oubli. La règle déclare ce droit
+(`videAutorise`) et le contrat l'expose (`listeVideAutorisee`) pour que l'écran l'applique sans le
+redéclarer. Les autres clés refusent toujours le vide, y compris celles qui n'ont pas de règle.
+
+**Valeurs initiales.**
+- Grilles : tous les événements. Le DJ retire ce qu'il ne veut pas plutôt que de découvrir qu'un
+  événement ne partait jamais.
+- Canaux prestataires : courriel personnel et SMS. **WhatsApp reste éteint** tant qu'on ignore si le
+  moteur exige des modèles de message préapprouvés, ce qui est la règle habituelle de WhatsApp
+  Business pour un message à l'initiative de l'entreprise.
+
+La colonne `valeur` passe à 1 000 caractères : une grille complète de types d'alerte dépasse 255.
+
+**Vérifié** :
+- tests unitaires des règles et du service (vide accepté ou refusé selon la clé, valeurs inconnues
+  refusées) ;
+- test d'intégration sur PostgreSQL : chaque règle a sa ligne migrée, et chaque valeur initiale est
+  déjà normalisée.
+
 ### Q-117 ✅ Un intervenant se corrige, son type et son identifiant Keycloak restent figés — tranché (2026-09-22)
 
 **Même besoin que Q-116, pour le référentiel des intervenants.** Aucun endpoint ne permettait de

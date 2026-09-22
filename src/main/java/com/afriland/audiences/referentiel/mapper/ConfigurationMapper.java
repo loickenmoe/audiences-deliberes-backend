@@ -26,6 +26,7 @@ public interface ConfigurationMapper {
                 regle == null ? null : regle.type(),
                 regle == null ? null : regle.minimum(),
                 regle == null ? null : regle.maximum(),
-                regle == null ? List.of() : regle.valeursPossibles());
+                regle == null ? List.of() : regle.valeursPossibles(),
+                regle != null && regle.videAutorise());
     }
 }
