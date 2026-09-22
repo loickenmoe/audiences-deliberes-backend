@@ -231,10 +231,26 @@ Livrée, en attente du commit de l'utilisateur. Backend seulement ; aucun appela
 - Tests : 26 sur les coordonnées, 13 sur le routage, 2 d'intégration sur PostgreSQL (réglages de
   V28). Suite complète : 560 tests verts.
 
-### ⬜ Étape 5 : contenus par canal
+### ✅ Étape 5 : contenus par canal
 
-- Textes versionnés par type d'événement et par canal, en appliquant le niveau de détail de D18.
-- Tests qui vérifient l'absence de marqueurs, de codes internes, de noms de client et de montants.
+Livrée, en attente du commit de l'utilisateur. Backend seulement ; aucun appelant pour l'instant.
+- Gabarits versionnés : `src/main/resources/notifications/textes_fr.properties`. Chaque événement
+  a un titre et une phrase générique (17 types d'alerte, 9 événements prestataires), plus des
+  formules communes.
+- `RedacteurNotification` : `pourUtilisateur` et `pourPrestataire` prennent un `Contexte`, limité à
+  la référence du dossier et au lien.
+  - Niveau **complet** (Outlook et Teams) : phrase, dossier, lien et pied de message.
+  - Niveau **modéré** (courriel personnel) : salutation, phrase et dossier, puis le lien de l'espace
+    avocat, ou à défaut une invitation à contacter la Direction Juridique.
+  - Niveau **minimal** (SMS et WhatsApp) : titre seul, 160 caractères au plus, sans référence ni lien.
+  - Les courriels partent en HTML échappé, Teams, SMS et WhatsApp en texte brut. L'objet est
+    `[Audiences et délibérés] <titre> - <référence>`.
+- `LiensApplication` : `NOTIFICATION_LIEN_APPLICATION` (par défaut `http://localhost:3000`),
+  `/dossiers/{id}`, `/notifications` (alerte hors dossier), `/portail`.
+- Tests : 19. Toutes les combinaisons événement × canal sont passées aux garde-fous : ni marqueur,
+  ni code de règle, ni montant, ni chiffre hors référence et lien. On vérifie aussi que chaque
+  événement a son texte, qu'aucun texte n'est orphelin et que le HTML est échappé.
+  Suite complète : 579 tests verts.
 
 ### ⬜ Étape 6 : branchement dans `AlerteService.declencher`
 
@@ -306,6 +322,8 @@ Livrée, en attente du commit de l'utilisateur. Backend seulement ; aucun appela
 - **Pièces jointes** : quel bucket et quelle instance MinIO le claim-check doit-il utiliser ?
 - **WhatsApp** : faut-il des modèles de message préapprouvés, ce qui est la règle habituelle de
   WhatsApp Business ? Le canal reste éteint par défaut (V28) jusqu'à la réponse de l'administrateur.
+- **Référence du dossier** : elle est saisie librement. Peut-elle contenir un nom de client ? Si oui,
+  il faut la retirer des courriels personnels (elle n'est déjà jamais dans les SMS et WhatsApp).
 - **Limites non documentées dans le Guide** : longueur maximale d'un SMS, gabarits WhatsApp requis ou
   non, format des messages Teams, quotas.
 - **Environnements non documentés** : les valeurs de PROD sont absentes du Guide, ce qui est sans
@@ -361,3 +379,25 @@ Livrée, en attente du commit de l'utilisateur. Backend seulement ; aucun appela
     donnent le canal Engine EMAIL : un même destinataire est soit interne, soit prestataire.
   - Un utilisateur désactivé n'est pas écarté par le routage : aucune règle ne le dit, et ce sont
     les appelants de `declencher` qui choisissent les destinataires.
+- Étape 5, choix d'implémentation (à respecter dans les étapes suivantes) :
+  - **Le texte `declencheur` de l'alerte ne sort jamais.** Il est écrit pour l'écran et contient,
+    selon les cas, un motif de rejet (frais), l'objet libre d'une alarme, le nom d'un prestataire
+    (constitution), des marqueurs `[xxxId:n]` et des codes « (RG-…) ».
+  - **Phrases génériques par type** : un même TypeAlerte couvre plusieurs situations
+    (SUPPRESSION_DOCUMENT est tour à tour demande, arbitrage et relance ; CONSTITUTION_A_SIGNER est
+    demande, validation et rejet ; NOUVELLE_PUBLICATION couvre quatre cas). Le détail se lit dans
+    l'application.
+  - **Référence du dossier** : elle est saisie librement à la création (`Dossier.reference`), sans
+    format imposé. Elle figure dans les messages complets et modérés, jamais dans les minimaux. Si
+    la pratique de la banque était d'y mettre un nom de client, il faudrait la retirer aussi des
+    courriels personnels (point ouvert).
+  - L'étape 6 devra fournir la référence : `AlerteService` ne connaît que `dossierId`, et le module
+    alerte ne doit pas dépendre du module dossier. Il faudra une interface dans `notification`,
+    implémentée par le module `dossier`.
+  - Les gabarits se remplacent par un simple `replace("{0}", …)` et non par `MessageFormat`, qui
+    traite l'apostrophe comme un caractère d'échappement.
+- Points ouverts ajoutés :
+  - la référence du dossier peut-elle contenir un nom de client ?
+  - quelle est la limite de longueur d'un SMS côté Engine ? Les textes accentués passent en UCS-2,
+    soit 70 caractères par segment : nos SMS de 160 caractères au plus peuvent donc faire 2 ou 3
+    segments.
