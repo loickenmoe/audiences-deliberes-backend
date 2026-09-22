@@ -602,7 +602,8 @@ saisies manuellement** ». Sans création, aucun dossier n'est créable. **C** :
 formel) dans `ClientController`/`API_IMPLEMENTATION_STATUS.md`, `ROLE_SAISIE` requis, vérifié en
 conditions réelles. `PUT /clients/{id}` **non implémenté** — aucune US ni cas d'usage M4 ne
 l'exigeait explicitement (seule la création bloquait `POST /dossiers`) ; à réévaluer si un besoin
-de modification client émerge dans un module ultérieur.
+de modification client émerge dans un module ultérieur. **Soldé en Q-116 (2026-09-22)** : le besoin a
+émergé, `PUT /clients/{id}` est implémenté, référence figée.
 
 ### Q-24 ✅ Files de travail (listes) non spécifiées — close (M15)
 UC-INT-02/03/04, UC-GED-03, UC-INT-06/10 supposent tous des **listes d'éléments en attente**
@@ -2158,6 +2159,34 @@ sont unifiées.
 
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
+
+### Q-116 ✅ Un client se corrige, sa référence reste figée — tranché (2026-09-22)
+
+**Le besoin que Q-23 attendait.** Q-23 avait recommandé `PUT /clients/{id}` dès le 2026-09-04, puis
+l'avait différé : « à réévaluer si un besoin de modification client émerge ». Il a émergé en recette :
+un client créé avec une coquille, ou dont le courriel change, ne pouvait plus être corrigé. Ce n'était
+donc pas un refus qu'on défait, mais un report qu'on solde.
+
+**La référence est figée — décision du porteur du projet.** Elle est l'identifiant du client : c'est
+elle qu'on recherche, et elle doit rester la clé d'un futur référentiel externe (INT-05). La modifier
+ferait changer un identifiant sous les yeux de ceux qui le connaissaient. Elle n'est donc **pas dans
+le corps** de la requête : un client qui en enverrait une la verrait ignorée, ce que le test
+d'intégration vérifie. Le revers est assumé : une coquille dans la référence reste définitive.
+
+**La modification est tracée — décision du porteur du projet.** `CLIENT_MODIFIE`, hors dossier, donc
+visible dans l'audit par le filtre `HORS_DOSSIER` sans extension de périmètre. Les `details` portent la
+référence et, pour chaque champ **réellement changé**, sa valeur d'avant et d'après (`ancienNom` /
+`nouveauNom`, `ancienEmail` / `nouvelEmail`, `ancienTelephone` / `nouveauTelephone`) : une ligne par
+modification, lisible sans jeton technique. Une requête qui ne change rien n'écrit rien — ni la base,
+ni le journal, qui sinon mentirait sur ce qui s'est passé. V25 ajoute le code à
+`chk_historique_code`, pour la raison déjà vécue en V24.
+
+**Même garde que la création**, `ROLE_SAISIE` : qui peut créer un client peut en corriger une coquille.
+Un champ facultatif vidé est enregistré comme absent (`null`), et non comme une chaîne vide.
+
+**Vérifié** : 5 tests unitaires (seuls les champs changés sont historisés ; rien n'est écrit sans
+changement ; un champ vidé devient absent ; 404) et un parcours d'intégration sur PostgreSQL neuf —
+403 pour l'avocat, référence ignorée, 400 pour un nom vide, trace lue dans l'audit. 459 tests.
 
 ### Q-115 · B2 ✅ Le juriste rédige la lettre, le SH la consulte — tranché (2026-09-18)
 

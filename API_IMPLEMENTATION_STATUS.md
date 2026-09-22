@@ -112,11 +112,15 @@ Q-10, Q-11, Q-12, Q-26, Q-34, Q-35 pour le détail des arbitrages pris pendant l
 | 10 | GET | `/clients/{id}` | `ROLE_CONSULTATION` | US 8.6 | 📋 | ✅ M4 |
 | 11 | GET | `/clients/{clientId}/dossiers` | `ROLE_CONSULTATION` | FR-REP-03 / US 8.6 | 📋 | ✅ M4 · **N+1 supprimé M17** (Q-94) |
 | 12 | POST | `/clients` | `ROLE_SAISIE` | INT-05 | 🆕 | ✅ M4 |
+| 12 bis | PUT | `/clients/{id}` | `ROLE_SAISIE` | INT-05 | 🆕 | ✅ Q-116 |
 
 > **#12** : le contrat expose la lecture des clients mais **aucun endpoint de création**, alors que
 > `dossier.client_id` est `NOT NULL` et que « les données clients peuvent être saisies manuellement »
-> (US §11.3, INT-05). Implémenté sous `ROLE_SAISIE` — cf. Q-23. `PUT /clients/{id}` non retenu,
-> aucun besoin identifié en M4.
+> (US §11.3, INT-05). Implémenté sous `ROLE_SAISIE` — cf. Q-23. `PUT /clients/{id}` non retenu en M4, faute de besoin.
+>
+> **#12 bis** (Q-116, 2026-09-22) : le besoin est apparu — un client créé ne pouvait plus être corrigé.
+> Nom, courriel et téléphone se modifient ; **la référence reste figée**, elle n'est pas dans le corps.
+> Chaque modification effective est historisée (`CLIENT_MODIFIE`, hors dossier, V25).
 
 ## 3. Audiences
 

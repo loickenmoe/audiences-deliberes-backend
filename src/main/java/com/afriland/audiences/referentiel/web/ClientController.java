@@ -5,6 +5,7 @@ import com.afriland.audiences.dossier.service.DossierService;
 import com.afriland.audiences.referentiel.service.ClientService;
 import com.afriland.audiences.referentiel.web.dto.ClientResponse;
 import com.afriland.audiences.referentiel.web.dto.CreerClientRequest;
+import com.afriland.audiences.referentiel.web.dto.ModifierClientRequest;
 import com.afriland.audiences.referentiel.web.dto.VueClientDossiersResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +17,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -61,6 +63,17 @@ public class ClientController {
     @PreAuthorize("hasRole('SAISIE')")
     public ResponseEntity<ClientResponse> creerClient(@Valid @RequestBody CreerClientRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(clientService.creerClient(request));
+    }
+
+    /**
+     * 🆕 Modifie le nom et les coordonnées d'un client. La référence reste figée — cf.
+     * {@link ModifierClientRequest}. Même garde que la création : qui peut créer un client peut en
+     * corriger une coquille.
+     */
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('SAISIE')")
+    public ClientResponse modifierClient(@PathVariable Long id, @Valid @RequestBody ModifierClientRequest request) {
+        return clientService.modifierClient(id, request);
     }
 
     @GetMapping("/{clientId}/dossiers")

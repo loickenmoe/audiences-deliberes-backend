@@ -428,6 +428,57 @@ class HabilitationFrontendIntegrationTest {
                 .andExpect(jsonPath("$.content[0].id").value(dossierId));
     }
 
+    // ---------------------------------------------------------------- Modification d'un client
+
+    /**
+     * {@code PUT /clients/{id}} : recommandé en Q-23, ouvert le 2026-09-22. Trois règles, vérifiées
+     * ensemble sur la pile réelle : la garde est celle de la création, la référence reste figée même
+     * si le corps en porte une autre, et la modification laisse une trace lisible dans l'audit.
+     */
+    @Test
+    @DisplayName("un client se corrige, sa référence reste figée, et la modification est tracée")
+    void client_seModifie_referenceFigee_etTrace() throws Exception {
+        RequestPostProcessor juriste = role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_SAISIE", "ROLE_CONSULTATION");
+        String reference = "CLI-MOD-" + COMPTEUR.incrementAndGet();
+        long clientId = extraireId(mockMvc.perform(post(api("/clients")).with(juriste)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("reference", reference, "nom", "Nom avec coquile"))))
+                .andExpect(status().isCreated()).andReturn());
+
+        // L'avocat n'a pas ROLE_SAISIE : il ne corrige pas un client de la banque.
+        mockMvc.perform(put(api("/clients/" + clientId))
+                        .with(role("kc-avocat-m15", "ROLE_AVOCAT"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("nom", "Intrusion"))))
+                .andExpect(status().isForbidden());
+
+        // Le corps porte une autre référence : elle est ignorée, l'identifiant ne bouge pas.
+        mockMvc.perform(put(api("/clients/" + clientId)).with(juriste)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("reference", "AUTRE-" + reference, "nom", "Nom corrigé",
+                                "email", "contact@client.cm"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.reference").value(reference))
+                .andExpect(jsonPath("$.nom").value("Nom corrigé"))
+                .andExpect(jsonPath("$.email").value("contact@client.cm"));
+
+        // Un nom vide est refusé, comme à la création.
+        mockMvc.perform(put(api("/clients/" + clientId)).with(juriste)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("nom", " "))))
+                .andExpect(status().isBadRequest());
+
+        // La trace : hors dossier, avec la référence et les deux valeurs du nom.
+        mockMvc.perform(get(api("/historique")).param("perimetre", "HORS_DOSSIER")
+                        .param("code", "CLIENT_MODIFIE").param("size", "1")
+                        .with(role("kc-dj-m15", "ROLE_DJ", "ROLE_CONSULTATION")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].details.reference").value(reference))
+                .andExpect(jsonPath("$.content[0].details.ancienNom").value("Nom avec coquile"))
+                .andExpect(jsonPath("$.content[0].details.nouveauNom").value("Nom corrigé"))
+                .andExpect(jsonPath("$.content[0].details.nouvelEmail").value("contact@client.cm"));
+    }
+
     // ---------------------------------------------------------------- Vue consolidée par client (QF-41)
 
     /**

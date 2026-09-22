@@ -89,6 +89,14 @@ public enum TypeActionHistorique {
     CONFIGURATION_MODIFIEE("Modification de la configuration"),
 
     /**
+     * Modification d'un client (hors dossier). {@code details} porte la {@code reference} du client
+     * et, pour chaque champ réellement changé, sa valeur d'avant et d'après : {@code ancienNom} /
+     * {@code nouveauNom}, {@code ancienEmail} / {@code nouvelEmail}, {@code ancienTelephone} /
+     * {@code nouveauTelephone}. Une ligne par modification, lisible sans jeton technique.
+     */
+    CLIENT_MODIFIE("Modification d'un client"),
+
+    /**
      * Consultation de l'écran d'audit (Q-112). {@code details} porte les critères employés :
      * {@code perimetre}, et le cas échéant {@code auteurRecherche}, {@code dossierId},
      * {@code codeRecherche}, {@code dateDebut}, {@code dateFin}.
