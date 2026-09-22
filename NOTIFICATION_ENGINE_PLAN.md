@@ -170,20 +170,21 @@ Commit `980b0b2` (backend).
   32 caractères, ou aucun transport réel disponible. Ce dernier garde-fou est à retirer à l'étape 8.
 - Tests : 11 unitaires. Suite complète : 477 tests verts.
 
-### ⬜ Étape 2 : table `notification_envoi` (file d'attente)
+### ✅ Étape 2 : table `notification_envoi` (file d'attente)
 
-- Migration Flyway (numéro suivant) et entité avec son dépôt.
-- Colonnes pressenties :
-  - identifiant, type d'alerte, dossier, catégorie de destinataire (interne ou prestataire) et
-    référence du destinataire ;
-  - canal, destinataire effectif et destinataire d'origine (utile si redirection) ;
-  - `event_id` unique, sujet ;
-  - statut (EN_ATTENTE, PUBLIEE, ENVOYEE, ECHEC, NON_JOIGNABLE…), tentatives, prochaine tentative,
-    dernière erreur ;
-  - dates de création, de publication et d'accusé.
-- Pas de texte intégral pour SMS et WhatsApp (D16). Le texte est régénéré depuis les données métier
-  à l'envoi, ou conservé seulement pour EMAIL et TEAMS. Le choix sera arrêté en début d'étape.
-- Tests : migration appliquée par Testcontainers, contrainte d'unicité sur `event_id`.
+Livrée, en attente du commit de l'utilisateur.
+- Migration `V27__notification_envoi.sql` :
+  - une ligne par destinataire et par canal ;
+  - références libres, sans clé étrangère (`dossier_id`, `alerte_id`, `destinataire_ref`) ;
+  - statuts EN_ATTENTE, PUBLIEE, ENVOYEE, ECHEC et NON_JOIGNABLE ;
+  - `event_id` unique ;
+  - contraintes sur le statut, le canal, la nature du destinataire, et « destinataire présent sauf
+    NON_JOIGNABLE » ;
+  - index partiel pour le dispatcher, index pour la supervision.
+- Entité `NotificationEnvoi`, créée uniquement par les fabriques `aRemettre` et `nonJoignable`,
+  avec `Origine`, `StatutEnvoi`, `TypeDestinataire` et `NotificationEnvoiRepository.findByEventId`.
+- Tests : 7 unitaires, et 7 d'intégration sur PostgreSQL réel (`@DataJpaTest` avec Testcontainers).
+  Suite complète : 491 tests verts.
 
 ### ⬜ Étape 3 : clés de configuration du DJ et du DJA, et écran 42
 
@@ -289,3 +290,17 @@ Commit `980b0b2` (backend).
 
 - 2026-09-22 : étape 1 livrée. Le secret est masqué dans la représentation texte des paramètres, et
   les coordonnées sont masquées dans les journaux.
+- Étape 2, choix d'implémentation (à respecter dans les étapes suivantes) :
+  - **`event_id` = référence métier + « : » + canal** (par exemple `alerte-42:SMS`). Sans le canal,
+    l'Engine dédoublonnerait les canaux d'un même événement entre eux. La référence métier sera
+    fixée à l'étape 6 (alertes) et à l'étape 7 (prestataires).
+  - **D16 appliquée** : le texte est conservé tant que l'envoi n'est pas confirmé, car il faut
+    pouvoir retenter. Il est effacé pour SMS et WhatsApp dès l'accusé positif (`marquerEnvoyee`).
+  - **D14 précisée** : chaque canal routé sans coordonnée donne une ligne NON_JOIGNABLE. Rien ne
+    part sur ce canal, mais l'écart reste visible canal par canal sur l'écran 41.
+  - **`type_evenement`** est une chaîne libre (VARCHAR(60)). L'énumération des événements, avec la
+    contrainte CHECK correspondante, arrivera quand la liste sera figée (étapes 4 à 7).
+  - Les transitions PUBLIEE, ECHEC et nouvelle tentative sont reportées aux étapes 8 et 9.
+    Seule `marquerEnvoyee` existe déjà, car elle porte la règle de conservation D16.
+- Piège de test : dans une transaction PostgreSQL, un refus de contrainte fait échouer toutes les
+  requêtes suivantes. D'où un test par contrainte.
