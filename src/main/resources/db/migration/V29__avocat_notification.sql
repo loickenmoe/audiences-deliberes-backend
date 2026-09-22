@@ -1,0 +1,13 @@
+-- Notification Engine, étape 7 : consentement de l'avocat aux notifications externes
+-- (NOTIFICATION_ENGINE_PLAN.md, D15 ; DECISIONS_AND_OPEN_QUESTIONS.md Q-119).
+--
+-- L'autre prestataire porte déjà `autre_prestataire.notification` depuis V1, décoché par défaut
+-- (RG-INT-02). L'avocat n'avait pas d'équivalent : il n'était joignable que par son compte
+-- applicatif. SMS, WhatsApp et courriel personnel visent désormais ses coordonnées personnelles,
+-- ce qui suppose son accord et, surtout, la possibilité de le retirer.
+--
+-- Coché par défaut, contrairement à l'autre prestataire : l'avocat est déjà en relation suivie avec
+-- la banque, ses coordonnées sont au dossier pour cet usage, et le DJ peut le décocher à tout
+-- moment. Le canal lui-même reste sous le contrôle du DJ (Q-118), et rien ne part tant que le
+-- Notification Engine est désactivé.
+ALTER TABLE avocat ADD COLUMN notification BOOLEAN NOT NULL DEFAULT TRUE;

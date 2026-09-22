@@ -16,6 +16,7 @@ import com.afriland.audiences.intervenant.domain.DemandeConstitution;
 import com.afriland.audiences.intervenant.domain.StatutConstitution;
 import com.afriland.audiences.intervenant.mapper.DemandeConstitutionMapper;
 import com.afriland.audiences.intervenant.repository.DemandeConstitutionRepository;
+import com.afriland.audiences.notification.service.NotificationPrestataireService;
 import com.afriland.audiences.intervenant.web.dto.CreerConstitutionRequest;
 import com.afriland.audiences.intervenant.web.dto.DemandeConstitutionResponse;
 import com.afriland.audiences.intervenant.web.dto.ValiderConstitutionRequest;
@@ -77,13 +78,16 @@ class ConstitutionServiceTest {
     private Utilisateur juriste;
     private Utilisateur sh;
 
+    @Mock
+    private NotificationPrestataireService notificationPrestataireService;
+
     @BeforeEach
     void setUp() {
         service = new ConstitutionService(demandeConstitutionRepository, dossierRepository, intervenantRepository,
                 utilisateurRepository, currentUserService, historiqueActionService, alerteService,
                 lettreConstitutionService, lettreConstitutionRepository, minioStorageService,
                 documentRepository, mapper,
-                new CompteAvocatService(avocatRepository, utilisateurRepository));
+                new CompteAvocatService(avocatRepository, utilisateurRepository), notificationPrestataireService);
 
         dossier = Dossier.builder().id(1L).reference("DOS-2026-001").build();
         juriste = Utilisateur.builder().id(10L).nom("Juriste").prenom("Test").build();

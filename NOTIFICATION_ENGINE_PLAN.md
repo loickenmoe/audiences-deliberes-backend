@@ -276,11 +276,37 @@ Livrée, en attente du commit de l'utilisateur.
   EN_ATTENTE, 6 alertes d'avocats aucune, et aucun texte ne contenait de marqueur, de code ni de
   montant. Les 60 lignes de test ont été supprimées de la base locale.
 
-### ⬜ Étape 7 : point d'entrée prestataires
+### ✅ Étape 7 : point d'entrée prestataires
 
-- Les 9 événements de D19.
-- Le champ de consentement de l'avocat (D15), dans la migration, l'API et le formulaire.
-- L'autre prestataire enfin notifié, par son courriel et son téléphone.
+Livrée, en attente du commit de l'utilisateur. Décision consignée : **Q-119**.
+- `NotificationPrestataireService.notifier(evenement, prestataire, dossierId, referenceEvenement)` :
+  routage, rédaction, `event_id` = `<référence>-p<idPrestataire>:<CANAL>`, lien du portail seulement
+  pour un avocat qui a un compte, et un événement déjà en file est ignoré (`existsByEventId`).
+- **V29** : `avocat.notification`, coché par défaut. `Intervenant.accepteNotificationsExternes()` est
+  abstraite et implémentée par les deux types. `POST` et `PUT /intervenants` acceptent le champ pour
+  un avocat ; le refus de Q-117 tombe.
+- Les 9 événements branchés, avec leur référence :
+  | Événement | Appelant | Référence |
+  |---|---|---|
+  | CONSTITUTION_VALIDEE | `ConstitutionService` (avocat **et** autre prestataire) | `constitution-{id}` |
+  | FRAIS_REJETES | `FraisService.rejeter` | `frais-{id}-rejet` |
+  | PAIEMENT_EFFECTUE | `FraisService` (paiement) | `frais-{id}-paiement` |
+  | PUBLICATION_ARBITREE | `PublicationService.arbitrer` (validation **et** rejet) | `publication-{id}-arbitrage` |
+  | CORRESPONDANCE_TRANSMISE | `PublicationService` | `correspondance-{id}` |
+  | RAPPEL_AUDIENCE | `RappelAudienceScheduler`, avocats affectés | `audience-{id}-J{n}` |
+  | AFFECTATION_DOSSIER | `DossierService.affecterAvocats` | `affectation-{dossierId}` |
+  | DELAI_RECOURS | `DelaiRecoursScheduler`, avocats affectés | `delibere-{id}-recours` |
+  | SUPPRESSION_DOCUMENT_ARBITREE | `GedService`, si le demandeur est un avocat | `suppression-{id}-arbitrage` |
+- **Frontend** : la case de consentement s'affiche pour les deux types, avec son texte d'aide, et
+  n'est plus réservée à l'autre prestataire ; libellés FR et EN revus (elle ne parle plus du seul
+  courriel).
+- Tests : 7 unitaires du point d'entrée, mise à jour des tests des 7 services appelants et des
+  règles de Q-117. Backend 594 verts, Vitest 349 verts.
+- **Contre la vraie pile** : suite Playwright 168 sur 169 (l'échec est un aléa d'affichage de la
+  liste des clients, vert en relance : 11 sur 11). Les avocats des parcours n'ont pas de
+  coordonnées, d'où des lignes NON_JOIGNABLE ; en donnant courriel et téléphone à un avocat de test,
+  l'affectation a produit un courriel détaillé avec le lien du portail et un SMS minimal. L'état
+  initial de la fiche a été remis, et la file de test vidée.
 
 ### ⬜ Étape 8 : dispatcher et passerelle réelle
 
@@ -426,6 +452,16 @@ Livrée, en attente du commit de l'utilisateur.
     une heure locale explicite, pas à `now() - interval`.
   - **L'aléa Playwright** « Me Claire Avocat » (clic sur une option du sélecteur d'avocats sous la
     charge de la suite complète) préexiste à ce chantier. Il est vert en relance, et hors périmètre.
+- Étape 7, choix d'implémentation (à respecter dans les étapes suivantes) :
+  - **Deux extensions à confirmer en recette** : la publication **validée** notifie désormais
+    l'avocat (l'alerte applicative ne le faisait que pour un rejet), et l'autre prestataire est
+    notifié de sa constitution validée, ce que Q-52 avait laissé de côté.
+  - **`existsByEventId` avant écriture** : sans lui, une relance planifiée ou une réaffectation
+    heurterait la contrainte d'unicité et ferait échouer l'action métier.
+  - Le rappel d'audience et le délai de recours ne portent pas de garde « déjà déclenchée » propre
+    aux prestataires : la clé de déduplication (audience + échéance, délibéré) suffit.
+  - Les tests de sept services construisent ces services à la main : toute nouvelle dépendance
+    demande de les mettre à jour.
 - Points ouverts ajoutés :
   - la référence du dossier peut-elle contenir un nom de client ?
   - quelle est la limite de longueur d'un SMS côté Engine ? Les textes accentués passent en UCS-2,

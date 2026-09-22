@@ -26,6 +26,8 @@ import com.afriland.audiences.publication.mapper.PublicationMapper;
 import com.afriland.audiences.publication.repository.CommentairePublicationRepository;
 import com.afriland.audiences.publication.repository.CorrespondanceAvocatRepository;
 import com.afriland.audiences.publication.repository.PublicationRepository;
+import com.afriland.audiences.notification.domain.EvenementPrestataire;
+import com.afriland.audiences.notification.service.NotificationPrestataireService;
 import com.afriland.audiences.publication.web.dto.CommentaireRequest;
 import com.afriland.audiences.publication.web.dto.CommentaireResponse;
 import com.afriland.audiences.publication.web.dto.CorrespondanceRequest;
@@ -66,6 +68,7 @@ public class PublicationService {
     private final DossierRepository dossierRepository;
     private final AudienceRepository audienceRepository;
     private final CompteAvocatService compteAvocatService;
+    private final NotificationPrestataireService notificationPrestataireService;
     private final UtilisateurRepository utilisateurRepository;
     private final CurrentUserService currentUserService;
     private final HistoriqueActionService historiqueActionService;
@@ -184,6 +187,11 @@ public class PublicationService {
         }
         publicationRepository.save(publication);
 
+        // Canaux externes (Q-118) : l'avocat est prévenu de l'arbitrage, validation comme rejet ; le
+        // motif d'un rejet, lui, reste dans l'application (D18).
+        notificationPrestataireService.notifier(EvenementPrestataire.PUBLICATION_ARBITREE, publication.getAvocat(),
+                publication.getDossier().getId(), "publication-" + id + "-arbitrage");
+
         historiqueActionService.enregistrer(publication.getDossier().getId(), TypeActionHistorique.PUBLICATION_ARBITREE,
                 Map.of("publicationId", id, "statut", request.statut().name()));
 
@@ -278,6 +286,8 @@ public class PublicationService {
         compteAvocatService.utilisateurDe(publication.getAvocat())
                 .ifPresent(u -> alerteService.declencher(TypeAlerte.NOUVELLE_PUBLICATION, publication.getDossier().getId(), u,
                         "Une correspondance a été transmise concernant votre publication " + id + " (RG-INT-07)."));
+        notificationPrestataireService.notifier(EvenementPrestataire.CORRESPONDANCE_TRANSMISE, publication.getAvocat(),
+                publication.getDossier().getId(), "correspondance-" + correspondance.getId());
 
         return versReponse(id, correspondance);
     }

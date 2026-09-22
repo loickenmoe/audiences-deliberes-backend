@@ -65,7 +65,8 @@ class IntervenantServiceTest {
         assertThat(result.id()).isEqualTo(1L);
         assertThat(result.type()).isEqualTo(TypeIntervenant.AVOCAT);
         assertThat(result.compteKeycloak()).isEqualTo("kc-1");
-        assertThat(result.notification()).isNull();
+        // Q-119 : l'avocat consent par défaut aux canaux externes.
+        assertThat(result.notification()).isTrue();
     }
 
     @Test
@@ -92,11 +93,15 @@ class IntervenantServiceTest {
     }
 
     @Test
-    void creerAvocat_avecNotification_estRefuse() {
-        assertThatThrownBy(() -> service.creer(new CreerIntervenantRequest(
-                TypeIntervenant.AVOCAT, "Me Fotso", null, null, "kc-2", true)))
-                .isInstanceOf(ApiException.class)
-                .hasMessageContaining("notification");
+    void creerAvocat_sansConsentement_estAccepte() {
+        when(avocatRepository.findByCompteKeycloak("kc-2")).thenReturn(Optional.empty());
+        when(avocatRepository.save(any(Avocat.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // Q-119 : le consentement de l'avocat se refuse à la création comme il se retire ensuite.
+        IntervenantResponse result = service.creer(new CreerIntervenantRequest(
+                TypeIntervenant.AVOCAT, "Me Fotso", null, null, "kc-2", false));
+
+        assertThat(result.notification()).isFalse();
     }
 
     @Test
@@ -202,13 +207,16 @@ class IntervenantServiceTest {
     }
 
     @Test
-    void modifierAvocat_avecUneNotification_estRefuse() {
+    void modifierAvocat_retireSonConsentement() {
         when(intervenantRepository.findById(7L)).thenReturn(Optional.of(avocat()));
+        when(intervenantRepository.save(any(Intervenant.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        assertThatThrownBy(() -> service.modifier(7L, new ModifierIntervenantRequest("Me Fotso", null, null, true)))
-                .isInstanceOf(ApiException.class)
-                .hasMessageContaining("notification");
-        verify(intervenantRepository, never()).save(any());
+        // Q-119 : coché par défaut, il se retire ; le changement est historisé comme les autres.
+        IntervenantResponse result = service.modifier(7L, new ModifierIntervenantRequest("Me Fotso", null, null, false));
+
+        assertThat(result.notification()).isFalse();
+        assertThat(detailsHistorises()).containsEntry("ancienneNotification", true)
+                .containsEntry("nouvelleNotification", false);
     }
 
     @Test

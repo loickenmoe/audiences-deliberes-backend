@@ -5,7 +5,10 @@ import com.afriland.audiences.alerte.service.AlerteService;
 import com.afriland.audiences.audience.domain.Audience;
 import com.afriland.audiences.audience.domain.StatutAudience;
 import com.afriland.audiences.audience.repository.AudienceRepository;
+import com.afriland.audiences.dossier.repository.DossierAvocatRepository;
 import com.afriland.audiences.dossier.repository.DossierJuristeRepository;
+import com.afriland.audiences.notification.domain.EvenementPrestataire;
+import com.afriland.audiences.notification.service.NotificationPrestataireService;
 import com.afriland.audiences.referentiel.domain.Utilisateur;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -28,7 +31,9 @@ public class RappelAudienceScheduler {
 
     private final AudienceRepository audienceRepository;
     private final DossierJuristeRepository dossierJuristeRepository;
+    private final DossierAvocatRepository dossierAvocatRepository;
     private final AlerteService alerteService;
+    private final NotificationPrestataireService notificationPrestataireService;
 
     @Scheduled(cron = "${audience.rappel.cron:0 0 6 * * *}")
     @Transactional
@@ -52,6 +57,12 @@ public class RappelAudienceScheduler {
                 continue;
             }
             alerteService.declencher(TypeAlerte.RAPPEL_AUDIENCE, audience.getDossier().getId(), juriste, declencheur);
+        }
+        // D19 : l'avocat affecté est prévenu du même rappel, par ses canaux externes (Q-118). La clé
+        // porte l'audience et l'échéance : un rappel J-7 déjà mis en file ne se redouble pas.
+        for (var affectation : dossierAvocatRepository.findByDossierId(audience.getDossier().getId())) {
+            notificationPrestataireService.notifier(EvenementPrestataire.RAPPEL_AUDIENCE, affectation.getAvocat(),
+                    audience.getDossier().getId(), "audience-" + audience.getId() + "-J" + decalage);
         }
     }
 }

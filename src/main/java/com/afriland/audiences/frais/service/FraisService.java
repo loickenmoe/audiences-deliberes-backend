@@ -18,6 +18,8 @@ import com.afriland.audiences.frais.domain.StatutCircuitFrais;
 import com.afriland.audiences.frais.domain.StatutPaiementFrais;
 import com.afriland.audiences.frais.domain.ValidationFrais;
 import com.afriland.audiences.frais.repository.DemandeFraisRepository;
+import com.afriland.audiences.notification.domain.EvenementPrestataire;
+import com.afriland.audiences.notification.service.NotificationPrestataireService;
 import com.afriland.audiences.frais.repository.ValidationFraisRepository;
 import com.afriland.audiences.frais.web.dto.ControleConformiteRequest;
 import com.afriland.audiences.frais.web.dto.ControleOpportuniteRequest;
@@ -63,6 +65,7 @@ public class FraisService {
     private final DossierRepository dossierRepository;
     private final DossierAvocatRepository dossierAvocatRepository;
     private final CompteAvocatService compteAvocatService;
+    private final NotificationPrestataireService notificationPrestataireService;
     private final UtilisateurRepository utilisateurRepository;
     private final CurrentUserService currentUserService;
     private final HistoriqueActionService historiqueActionService;
@@ -222,6 +225,9 @@ public class FraisService {
                 + payee.getDossier().getReference() + " a été effectué (RG-INT-04).";
         compteAvocatService.utilisateurDe(payee.getAvocat())
                 .ifPresent(u -> alerteService.declencher(TypeAlerte.PAIEMENT_EFFECTUE, dossierId, u, message));
+        // Canaux externes (Q-118) : ni le montant ni la référence de la demande n'y figurent (D18).
+        notificationPrestataireService.notifier(EvenementPrestataire.PAIEMENT_EFFECTUE, payee.getAvocat(),
+                dossierId, "frais-" + demandeId + "-paiement");
         notifierProfil("DJ", dossierId, TypeAlerte.PAIEMENT_EFFECTUE, message);
         notifierProfil("DJA", dossierId, TypeAlerte.PAIEMENT_EFFECTUE, message);
 
@@ -297,6 +303,9 @@ public class FraisService {
                 + demande.getDossier().getReference() + " a été rejetée : " + motif;
         compteAvocatService.utilisateurDe(demande.getAvocat())
                 .ifPresent(u -> alerteService.declencher(TypeAlerte.NOUVELLE_DEMANDE_FRAIS, demande.getDossier().getId(), u, message));
+        // Canaux externes (Q-118) : le motif du rejet reste dans l'application (D18).
+        notificationPrestataireService.notifier(EvenementPrestataire.FRAIS_REJETES, demande.getAvocat(),
+                demande.getDossier().getId(), "frais-" + demande.getId() + "-rejet");
     }
 
     private void enregistrerValidation(DemandeFrais demande, EtapeValidationFrais etape, Utilisateur utilisateur,

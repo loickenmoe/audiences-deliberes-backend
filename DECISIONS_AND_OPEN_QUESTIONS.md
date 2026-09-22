@@ -2160,6 +2160,43 @@ sont unifiées.
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
 
+### Q-119 ✅ Les prestataires sont notifiés hors de l'application, avec leur consentement — tranché (2026-09-22)
+
+**Ce que cela solde.** Q-52 constatait qu'un prestataire n'était notifié que s'il avait un compte
+applicatif : un avocat sans compte, un notaire ou un huissier n'était jamais prévenu, faute
+d'infrastructure d'envoi. Le Notification Engine (Q-118) la fournit. Les canaux externes visent les
+coordonnées de la fiche et ne demandent plus de compte.
+
+**Neuf événements** (décision du porteur du projet, D19 de `NOTIFICATION_ENGINE_PLAN.md`) : les cinq
+qui existaient — constitution validée, frais rejetés, paiement effectué, publication arbitrée,
+correspondance transmise — et quatre nouveaux : rappel d'audience J-7/J-3/J-1, affectation à un
+dossier, délai de recours du délibéré, suppression de document arbitrée.
+
+**Le consentement devient un champ des deux types d'intervenant.** `autre_prestataire.notification`
+existait depuis V1, décoché par défaut (RG-INT-02) ; `avocat.notification` est ajouté par V29,
+**coché par défaut**. L'asymétrie est voulue : l'avocat est en relation suivie avec la banque et ses
+coordonnées sont au dossier pour cet usage, alors qu'un autre prestataire est ponctuel. Dans les deux
+cas, le DJ retire le consentement depuis la fiche, et le changement est historisé.
+
+Conséquence sur l'API : `POST` et `PUT /intervenants` n'écartent plus le champ `notification` pour un
+avocat. Le refus posé en Q-117 tombe, et son test avec lui.
+
+**Sans consentement, rien ne part** — pas même une ligne « non joignable » : c'est un choix du
+prestataire, pas un défaut à superviser. En revanche, un canal réglé sans coordonnée utilisable donne
+une ligne NON_JOIGNABLE avec son motif, visible en supervision (D14).
+
+**L'alerte applicative ne change pas.** Elle reste réservée à l'avocat qui a un compte, avec son texte
+actuel. Les canaux externes sont un second chemin, au texte distinct et sans donnée sensible (D18).
+
+**Deux extensions à confirmer en recette**, explicitées ici pour qu'elles ne passent pas inaperçues :
+- la publication **validée** déclenche désormais une notification externe à l'avocat, alors que
+  l'alerte applicative n'existait que pour un rejet. L'événement retenu est « publication arbitrée » ;
+- l'autre prestataire est notifié de la validation de sa constitution, ce que Q-52 avait laissé de côté.
+
+**Vérifié** : 7 tests unitaires du point d'entrée, mise à jour des tests des sept services appelants,
+suite complète (594) verte, et parcours Playwright — un avocat sans coordonnées produit des lignes
+NON_JOIGNABLE, un avocat renseigné reçoit un courriel détaillé et un SMS minimal.
+
 ### Q-118 ✅ Le DJ règle les notifications externes : canaux actifs et grille par canal — tranché (2026-09-22)
 
 **Contexte.** Le Notification Engine de la banque (SMS, courriel, WhatsApp, Teams) remplace les

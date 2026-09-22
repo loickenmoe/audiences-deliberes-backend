@@ -23,6 +23,7 @@ import com.afriland.audiences.dossier.mapper.EtapeProcedureMapper;
 import com.afriland.audiences.dossier.mapper.HistoriqueActionMapper;
 import com.afriland.audiences.dossier.repository.AuditSeuilDossierRepository;
 import com.afriland.audiences.dossier.repository.DossierAvocatRepository;
+import com.afriland.audiences.notification.service.NotificationPrestataireService;
 import com.afriland.audiences.dossier.repository.DossierJuristeRepository;
 import com.afriland.audiences.dossier.repository.DossierRepository;
 import com.afriland.audiences.dossier.repository.EtapeProcedureRepository;
@@ -86,11 +87,15 @@ class DossierServiceTest {
     private Client client;
     private Utilisateur juriste;
 
+    @Mock
+    private NotificationPrestataireService notificationPrestataireService;
+
     @BeforeEach
     void setUp() {
         service = new DossierService(dossierRepository, etapeProcedureRepository, dossierJuristeRepository,
                 dossierAvocatRepository, auditSeuilDossierRepository, historiqueActionRepository, clientRepository,
-                utilisateurRepository, avocatRepository, natureDossierRepository, typeClientSensibleRepository,
+                utilisateurRepository, avocatRepository, notificationPrestataireService,
+                natureDossierRepository, typeClientSensibleRepository,
                 transitionValidator, dossierMapper,
                 etapeProcedureMapper, auditSeuilMapper, historiqueActionMapper, historiqueActionService, currentUserService,
                 alerteService);

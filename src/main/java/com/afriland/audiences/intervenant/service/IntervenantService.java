@@ -41,7 +41,11 @@ public class IntervenantService {
 
     /**
      * RG-INT-01/02 : un {@code AVOCAT} porte obligatoirement un compte Keycloak (unique) ; un
-     * {@code AUTRE_PRESTATAIRE} n'en a jamais et porte à la place un indicateur de notification.
+     * {@code AUTRE_PRESTATAIRE} n'en a jamais.
+     * <p>
+     * Les deux portent désormais un indicateur de notification (Q-119) : il vaut l'accord du
+     * prestataire pour être joint hors de l'application (SMS, WhatsApp, courriel personnel). Il est
+     * coché par défaut pour un avocat, décoché pour un autre prestataire (RG-INT-02, inchangé).
      */
     @Transactional
     public IntervenantResponse creer(CreerIntervenantRequest request) {
@@ -56,10 +60,6 @@ public class IntervenantService {
             throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
                     "Un avocat doit porter un compte Keycloak (RG-INT-01)");
         }
-        if (request.notification() != null) {
-            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
-                    "Le champ notification ne s'applique qu'à un autre prestataire (RG-INT-02)");
-        }
         if (avocatRepository.findByCompteKeycloak(request.compteKeycloak()).isPresent()) {
             throw ApiException.conflictSurChamp(ErrorCodes.CONFLIT,
                     "Un avocat est déjà rattaché au compte « " + request.compteKeycloak() + " »", "compteKeycloak");
@@ -70,6 +70,8 @@ public class IntervenantService {
                 .email(request.email())
                 .telephone(request.telephone())
                 .compteKeycloak(request.compteKeycloak())
+                // Coché par défaut (Q-119) : l'avocat est en relation suivie avec la banque.
+                .notification(request.notification() == null || request.notification())
                 .build());
         return toResponse(avocat);
     }
@@ -111,12 +113,11 @@ public class IntervenantService {
         noterSiChange(details, "ancienEmail", "nouvelEmail", intervenant.getEmail(), email);
         noterSiChange(details, "ancienTelephone", "nouveauTelephone", intervenant.getTelephone(), telephone);
 
-        if (intervenant instanceof Avocat) {
-            // Son compte Keycloak ne bouge pas : il n'est pas dans la requête.
-            if (request.notification() != null) {
-                throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
-                        "Le champ notification ne s'applique qu'à un autre prestataire (RG-INT-02)");
-            }
+        if (intervenant instanceof Avocat avocat) {
+            // Son compte Keycloak ne bouge pas : il n'est pas dans la requête. Son consentement, si.
+            boolean notification = request.notification() == null || request.notification();
+            noterSiChange(details, "ancienneNotification", "nouvelleNotification", avocat.getNotification(), notification);
+            avocat.setNotification(notification);
         } else if (intervenant instanceof AutrePrestataire autre) {
             boolean notification = request.notification() != null && request.notification();
             noterSiChange(details, "ancienneNotification", "nouvelleNotification", autre.getNotification(), notification);
@@ -172,7 +173,7 @@ public class IntervenantService {
 
     private IntervenantResponse toResponse(Intervenant intervenant) {
         String compteKeycloak = intervenant instanceof Avocat avocat ? avocat.getCompteKeycloak() : null;
-        Boolean notification = intervenant instanceof AutrePrestataire autre ? autre.getNotification() : null;
+        Boolean notification = intervenant.accepteNotificationsExternes();
         return new IntervenantResponse(intervenant.getId(), typeDe(intervenant), intervenant.getNom(),
                 intervenant.getEmail(), intervenant.getTelephone(), compteKeycloak, notification,
                 intervenant.getCreatedAt());

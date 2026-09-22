@@ -27,6 +27,8 @@ import com.afriland.audiences.dossier.mapper.EtapeProcedureMapper;
 import com.afriland.audiences.dossier.mapper.HistoriqueActionMapper;
 import com.afriland.audiences.dossier.repository.AuditSeuilDossierRepository;
 import com.afriland.audiences.dossier.repository.DossierAvocatRepository;
+import com.afriland.audiences.notification.domain.EvenementPrestataire;
+import com.afriland.audiences.notification.service.NotificationPrestataireService;
 import com.afriland.audiences.dossier.repository.DossierJuristeRepository;
 import com.afriland.audiences.dossier.repository.DossierRepository;
 import com.afriland.audiences.dossier.repository.EtapeProcedureRepository;
@@ -81,6 +83,7 @@ public class DossierService {
     private final ClientRepository clientRepository;
     private final UtilisateurRepository utilisateurRepository;
     private final AvocatRepository avocatRepository;
+    private final NotificationPrestataireService notificationPrestataireService;
     private final NatureDossierRepository natureDossierRepository;
     private final TypeClientSensibleRepository typeClientSensibleRepository;
     private final EtapeTransitionValidator transitionValidator;
@@ -231,6 +234,9 @@ public class DossierService {
                     .affectePar(auteur)
                     .build();
             dossierAvocatRepository.save(affectation);
+            // D19 : l'avocat apprend qu'un dossier lui est confié, par ses canaux externes (Q-118).
+            notificationPrestataireService.notifier(EvenementPrestataire.AFFECTATION_DOSSIER, avocat,
+                    dossier.getId(), "affectation-" + dossier.getId());
             return avocatId;
         }).toList();
     }

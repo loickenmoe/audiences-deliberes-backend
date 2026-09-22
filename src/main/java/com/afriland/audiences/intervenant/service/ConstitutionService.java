@@ -25,6 +25,8 @@ import com.afriland.audiences.intervenant.web.dto.DemandeConstitutionResponse;
 import com.afriland.audiences.intervenant.web.dto.LettreConstitutionResponse;
 import com.afriland.audiences.intervenant.web.dto.RedigerLettreRequest;
 import com.afriland.audiences.intervenant.web.dto.ValiderConstitutionRequest;
+import com.afriland.audiences.notification.domain.EvenementPrestataire;
+import com.afriland.audiences.notification.service.NotificationPrestataireService;
 import com.afriland.audiences.referentiel.domain.Avocat;
 import com.afriland.audiences.referentiel.domain.Intervenant;
 import com.afriland.audiences.referentiel.domain.Utilisateur;
@@ -60,6 +62,7 @@ public class ConstitutionService {
     private final DocumentRepository documentRepository;
     private final DemandeConstitutionMapper demandeConstitutionMapper;
     private final CompteAvocatService compteAvocatService;
+    private final NotificationPrestataireService notificationPrestataireService;
 
     @Transactional
     public DemandeConstitutionResponse creerDemande(CreerConstitutionRequest request) {
@@ -249,18 +252,20 @@ public class ConstitutionService {
     }
 
     /**
-     * Notifie le prestataire constitué s'il dispose d'un compte applicatif — seul un {@link Avocat}
-     * (compte Keycloak, RG-INT-01) peut recevoir une alerte in-app. Un {@code AutrePrestataire}
-     * n'a pas de compte et ne peut être notifié « par email » : aucune infrastructure SMTP n'est
-     * fournie au projet (même limitation que Q-37) — non implémenté, documenté (Q-52).
+     * Notifie le prestataire constitué. L'alerte applicative reste réservée à un {@link Avocat}
+     * disposant d'un compte (RG-INT-01) ; les canaux externes (Q-118), eux, visent les coordonnées de
+     * la fiche et touchent donc aussi l'autre prestataire, qui n'était jusqu'ici jamais prévenu (Q-52).
      */
     private void notifierPrestataire(DemandeConstitution demande) {
+        Long dossierId = demande.getDossier().getId();
+        notificationPrestataireService.notifier(EvenementPrestataire.CONSTITUTION_VALIDEE, demande.getPrestataire(),
+                dossierId, "constitution-" + demande.getId());
         // Q-87 : le prestataire chargé à la demande est un proxy d'Intervenant, jamais « instanceof Avocat ».
         if (!(Hibernate.unproxy(demande.getPrestataire()) instanceof Avocat avocat)) {
             return;
         }
         compteAvocatService.utilisateurDe(avocat).ifPresent(destinataire ->
-                alerteService.declencher(TypeAlerte.CONSTITUTION_A_SIGNER, demande.getDossier().getId(), destinataire,
+                alerteService.declencher(TypeAlerte.CONSTITUTION_A_SIGNER, dossierId, destinataire,
                         "Votre constitution sur le dossier " + demande.getDossier().getReference()
                                 + " a été validée ; la lettre de constitution est disponible dans la GED du dossier."));
     }
