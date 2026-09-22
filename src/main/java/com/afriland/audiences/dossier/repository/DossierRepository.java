@@ -20,6 +20,10 @@ public interface DossierRepository extends JpaRepository<Dossier, Long>, JpaSpec
 
     boolean existsByReference(String reference);
 
+    /** Référence seule, pour les notifications externes : inutile de charger le dossier entier. */
+    @Query("SELECT d.reference FROM Dossier d WHERE d.id = :id")
+    Optional<String> findReferenceById(@Param("id") Long id);
+
     List<Dossier> findByClientId(Long clientId);
 
     /** FR-GED-04 (rapport journalier) : dossiers ouverts (affaires nouvelles) à une date donnée. */

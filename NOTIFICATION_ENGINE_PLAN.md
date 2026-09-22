@@ -252,10 +252,29 @@ Livrée, en attente du commit de l'utilisateur. Backend seulement ; aucun appela
   événement a son texte, qu'aucun texte n'est orphelin et que le HTML est échappé.
   Suite complète : 579 tests verts.
 
-### ⬜ Étape 6 : branchement dans `AlerteService.declencher`
+### ✅ Étape 6 : branchement dans `AlerteService.declencher`
 
-- Une ligne `notification_envoi` par canal externe routé, dans la même transaction que l'action métier.
-- Comportement de l'alerte applicative inchangé.
+Livrée, en attente du commit de l'utilisateur.
+- `AlerteService.declencher` publie `AlerteDeclenchee` (alerteId, type, dossierId, destinataire),
+  **sans le texte `declencheur`**. Le module alerte ne connaît pas le module notification.
+- `NotificationAlerteListener` (`@EventListener`, synchrone, même transaction) chaîne le routage,
+  la rédaction puis `saveAll`, avec une ligne par canal : `event_id` = `alerte-{id}:{CANAL}`, ou
+  NON_JOIGNABLE avec son motif dans `derniere_erreur`. Si la préparation échoue, l'erreur est
+  journalisée et l'alerte applicative est conservée.
+- `ReferencesDossier`, une interface du module notification, est implémentée par
+  `dossier.service.ReferencesDossierJpa` avec `DossierRepository.findReferenceById`.
+- `NotificationEnvoi.nonJoignable(origine, canal, motif)`.
+- Tests :
+  - 4 unitaires sur l'écouteur ;
+  - 4 d'intégration sur PostgreSQL : Outlook mis en file avec la référence et sans le texte de
+    l'alerte, rien pour un avocat, rien si Outlook est coupé, l'annulation emporte la
+    notification ;
+  - vérification de l'événement dans `AlerteServiceTest`.
+  - Suite complète : 587 tests verts.
+- **Contre la vraie pile** : suite Playwright complète (167 sur 169, les 2 échecs sont l'aléa connu
+  du sélecteur d'avocats, verts en relance). 60 alertes internes ont donné 60 lignes EMAIL
+  EN_ATTENTE, 6 alertes d'avocats aucune, et aucun texte ne contenait de marqueur, de code ni de
+  montant. Les 60 lignes de test ont été supprimées de la base locale.
 
 ### ⬜ Étape 7 : point d'entrée prestataires
 
@@ -396,6 +415,17 @@ Livrée, en attente du commit de l'utilisateur. Backend seulement ; aucun appela
     implémentée par le module `dossier`.
   - Les gabarits se remplacent par un simple `replace("{0}", …)` et non par `MessageFormat`, qui
     traite l'apostrophe comme un caractère d'échappement.
+- Étape 6, choix d'implémentation et pièges (à respecter dans les étapes suivantes) :
+  - **Accumulation avant l'étape 8** : dès maintenant, chaque alerte adressée à un interne crée une
+    ligne EN_ATTENTE, puisque Outlook est allumé par défaut. Aucun dispatcher ne les consomme
+    encore. **À l'étape 8, avant tout envoi réel, il faudra traiter ce stock** : soit le laisser
+    consommer par la passerelle journal (interrupteur coupé), soit ne jamais envoyer une ligne trop
+    ancienne. Sinon, la redirection DEV inonderait les destinataires de test d'alertes passées.
+  - **Horodatage** : les colonnes `TIMESTAMP` reçoivent l'heure locale de Java (`LocalDateTime`,
+    UTC+1), alors que `now()` de PostgreSQL est en UTC. Toute requête de contrôle doit comparer à
+    une heure locale explicite, pas à `now() - interval`.
+  - **L'aléa Playwright** « Me Claire Avocat » (clic sur une option du sélecteur d'avocats sous la
+    charge de la suite complète) préexiste à ce chantier. Il est vert en relance, et hors périmètre.
 - Points ouverts ajoutés :
   - la référence du dossier peut-elle contenir un nom de client ?
   - quelle est la limite de longueur d'un SMS côté Engine ? Les textes accentués passent en UCS-2,

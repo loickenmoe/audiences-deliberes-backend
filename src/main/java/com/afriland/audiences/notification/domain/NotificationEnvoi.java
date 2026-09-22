@@ -114,10 +114,14 @@ public class NotificationEnvoi {
         return envoi;
     }
 
-    /** Canal routé sans coordonnée : rien ne part, mais l'écart reste visible en supervision (D14). */
-    public static NotificationEnvoi nonJoignable(Origine origine, CanalEngine canal) {
+    /**
+     * Canal routé sans coordonnée utilisable : rien ne part, mais l'écart reste visible en supervision
+     * (D14), avec son motif (coordonnée absente ou invalide) dans {@code derniereErreur}.
+     */
+    public static NotificationEnvoi nonJoignable(Origine origine, CanalEngine canal, String motif) {
         NotificationEnvoi envoi = nouvelle(origine, canal);
         envoi.statut = StatutEnvoi.NON_JOIGNABLE;
+        envoi.derniereErreur = motif;
         return envoi;
     }
 

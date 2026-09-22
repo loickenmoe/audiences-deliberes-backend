@@ -1,6 +1,7 @@
 package com.afriland.audiences.alerte.service;
 
 import com.afriland.audiences.alerte.domain.Alerte;
+import com.afriland.audiences.alerte.domain.AlerteDeclenchee;
 import com.afriland.audiences.alerte.domain.CanalAlerte;
 import com.afriland.audiences.alerte.domain.StatutAlerte;
 import com.afriland.audiences.alerte.domain.StatutDiffusion;
@@ -16,6 +17,7 @@ import com.afriland.audiences.common.web.PageResponse;
 import com.afriland.audiences.referentiel.domain.Utilisateur;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Pageable;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.messaging.simp.user.SimpUserRegistry;
@@ -33,13 +35,14 @@ import java.time.LocalDateTime;
  * alerte} ait à connaître ces modules en retour (cf. Javadoc {@link
  * com.afriland.audiences.alerte.domain.Alerte}).
  * <p>
- * <b>Canal (Q-37, DECISIONS_AND_OPEN_QUESTIONS.md)</b> : seul {@link CanalAlerte#APPLICATIF} est
- * effectivement délivré en M5. {@code configuration_systeme.CANAUX_NOTIFICATION_DEFAUT} reste
- * consultable/modifiable via {@code ConfigurationService} mais Outlook/Teams ne sont pas câblés
- * — aucune infrastructure SMTP ni webhook Teams n'est fournie au projet ; l'implémenter sans elle
- * serait spéculatif. Chaque alerte est donc persistée avec {@code canal = APPLICATIF} et diffusée
- * en temps réel par WebSocket (Q-32) au destinataire s'il est connecté, avec {@code GET
+ * <b>Canal applicatif (Q-37)</b> : chaque alerte est persistée avec {@code canal = APPLICATIF} et
+ * diffusée en temps réel par WebSocket (Q-32) au destinataire s'il est connecté, avec {@code GET
  * /alertes/mes-notifications} comme repli garanti (l'enregistrement en base est inconditionnel).
+ * <p>
+ * <b>Canaux externes (Q-118)</b> : Outlook et Teams passent par le Notification Engine de la banque.
+ * Ce service n'en sait rien : il publie {@link AlerteDeclenchee} dans la transaction de l'action
+ * métier, et le module notification met en file les envois que les réglages du DJ prévoient. La
+ * table {@code alerte} reste la seule représentation du canal applicatif, comme Q-37 le recommandait.
  */
 @Slf4j
 @Service
@@ -54,6 +57,8 @@ public class AlerteService {
     private final SimpMessagingTemplate messagingTemplate;
     /** Sessions STOMP vivantes, indexées par le {@code sub} du jeton — cf. {@code pousserNotification}. */
     private final SimpUserRegistry simpUserRegistry;
+    /** Prolongements de l'alerte hors du canal applicatif (notifications externes, Q-118). */
+    private final ApplicationEventPublisher evenements;
 
     @Transactional
     public Alerte declencher(TypeAlerte type, Long dossierId, Utilisateur destinataire, String declencheur) {
@@ -71,6 +76,7 @@ public class AlerteService {
         // save() serait redondant, et donnerait à croire que l'enregistrement de l'alerte dépend du
         // succès de sa diffusion — c'est l'inverse, la persistance est inconditionnelle (Q-32).
         pousserNotification(destinataire, alerte);
+        evenements.publishEvent(new AlerteDeclenchee(alerte.getId(), type, dossierId, destinataire));
         return alerte;
     }
 

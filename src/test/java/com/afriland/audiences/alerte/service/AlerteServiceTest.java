@@ -1,6 +1,7 @@
 package com.afriland.audiences.alerte.service;
 
 import com.afriland.audiences.alerte.domain.Alerte;
+import com.afriland.audiences.alerte.domain.AlerteDeclenchee;
 import com.afriland.audiences.alerte.domain.CanalAlerte;
 import com.afriland.audiences.alerte.domain.StatutAlerte;
 import com.afriland.audiences.alerte.domain.StatutDiffusion;
@@ -18,6 +19,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.messaging.MessagingException;
@@ -63,6 +65,10 @@ class AlerteServiceTest {
     @Mock
     private SimpUserRegistry simpUserRegistry;
 
+    /** Q-118 — les notifications externes écoutent l'alerte ; ce service ne les connaît pas. */
+    @Mock
+    private ApplicationEventPublisher evenements;
+
     @InjectMocks
     private AlerteService alerteService;
 
@@ -90,6 +96,8 @@ class AlerteServiceTest {
         assertThat(saved.getStatut()).isEqualTo(StatutAlerte.DECLENCHEE);
         assertThat(result.getId()).isEqualTo(1L);
         verify(messagingTemplate).convertAndSendToUser(eq("kc-5"), eq("/queue/alertes"), any(AlerteResponse.class));
+        // Q-118 : l'événement porte ce qu'il faut aux canaux externes, et pas le texte de l'alerte.
+        verify(evenements).publishEvent(new AlerteDeclenchee(1L, TypeAlerte.DOUBLON_AFFECTATION, 99L, destinataire));
     }
 
     @Test

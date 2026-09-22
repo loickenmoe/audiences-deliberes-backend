@@ -67,7 +67,7 @@ class NotificationEnvoiRepositoryIntegrationTest {
 
     @Test
     void une_ligne_non_joignable_est_acceptee_sans_destinataire() {
-        repository.saveAndFlush(NotificationEnvoi.nonJoignable(origine("alerte-2"), CanalEngine.WHATSAPP));
+        repository.saveAndFlush(NotificationEnvoi.nonJoignable(origine("alerte-2"), CanalEngine.WHATSAPP, "COORDONNEE_INVALIDE"));
 
         assertThat(repository.findByEventId("alerte-2:WHATSAPP").orElseThrow().getDestinataire()).isNull();
     }

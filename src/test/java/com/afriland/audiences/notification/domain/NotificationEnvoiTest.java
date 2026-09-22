@@ -46,9 +46,10 @@ class NotificationEnvoiTest {
 
     @Test
     void nonJoignable_n_a_ni_destinataire_ni_echeance() {
-        NotificationEnvoi envoi = NotificationEnvoi.nonJoignable(ORIGINE, CanalEngine.SMS);
+        NotificationEnvoi envoi = NotificationEnvoi.nonJoignable(ORIGINE, CanalEngine.SMS, "COORDONNEE_ABSENTE");
 
         assertThat(envoi.getStatut()).isEqualTo(StatutEnvoi.NON_JOIGNABLE);
+        assertThat(envoi.getDerniereErreur()).isEqualTo("COORDONNEE_ABSENTE");
         assertThat(envoi.getDestinataire()).isNull();
         assertThat(envoi.getProchaineTentative()).isNull();
     }
