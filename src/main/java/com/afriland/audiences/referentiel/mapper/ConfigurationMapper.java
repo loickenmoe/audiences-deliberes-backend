@@ -22,6 +22,7 @@ public interface ConfigurationMapper {
                 configuration.getDescription(),
                 configuration.getModifiablePar(),
                 configuration.getDateModification(),
+                configuration.getDernierAuteurId(),
                 regle == null ? null : regle.type(),
                 regle == null ? null : regle.minimum(),
                 regle == null ? null : regle.maximum(),

@@ -114,6 +114,22 @@ public class SecurityConfig {
         config.setAllowedOrigins(Arrays.asList(allowedOrigins.split(",")));
         config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         config.setAllowedHeaders(Arrays.asList("Authorization", "Cache-Control", "Content-Type"));
+        /*
+         * En-tetes que le navigateur est autorise a **lire** dans la reponse (Q-114).
+         *
+         * CORS n'expose par defaut qu'une poignee d'en-tetes ; tous les autres existent sur le fil
+         * mais restent invisibles au code appelant. Deux d'entre eux portent ici de l'information
+         * qui n'est nulle part ailleurs :
+         *
+         * - `Content-Disposition` : le nom sous lequel l'archive est consignee, reference comprise.
+         *   Sans lui, le front reconstruit un nom plausible mais different de celui qu'on citera.
+         * - `X-Empreinte-SHA256` : l'empreinte annoncee au telechargement, qui permet de recouper
+         *   sans interroger l'application.
+         *
+         * Defaut trouve en recette de Q-114 : l'ecran affichait « empreinte ... » vide depuis Q-113,
+         * l'en-tete etant emis mais illisible.
+         */
+        config.setExposedHeaders(Arrays.asList("Content-Disposition", "X-Empreinte-SHA256"));
         config.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

@@ -1,5 +1,7 @@
 package com.afriland.audiences.referentiel.service;
 
+import com.afriland.audiences.common.audit.HistoriqueActionService;
+import com.afriland.audiences.common.audit.TypeActionHistorique;
 import com.afriland.audiences.common.error.ApiException;
 import com.afriland.audiences.common.error.ErrorCodes;
 import com.afriland.audiences.common.web.PageResponse;
@@ -8,11 +10,16 @@ import com.afriland.audiences.referentiel.mapper.ClientMapper;
 import com.afriland.audiences.referentiel.repository.ClientRepository;
 import com.afriland.audiences.referentiel.web.dto.ClientResponse;
 import com.afriland.audiences.referentiel.web.dto.CreerClientRequest;
+import com.afriland.audiences.referentiel.web.dto.ModifierClientRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -20,6 +27,7 @@ public class ClientService {
 
     private final ClientRepository clientRepository;
     private final ClientMapper clientMapper;
+    private final HistoriqueActionService historiqueActionService;
 
     @Transactional(readOnly = true)
     public PageResponse<ClientResponse> rechercherClients(String nom, String reference, Pageable pageable) {
@@ -52,5 +60,49 @@ public class ClientService {
         Client client = clientMapper.toEntity(request);
         client = clientRepository.save(client);
         return clientMapper.toResponse(client);
+    }
+
+    /**
+     * Modifie le nom et les coordonnées d'un client. La référence n'est pas modifiable : elle est
+     * l'identifiant du client (cf. {@link ModifierClientRequest}).
+     *
+     * <p>Seuls les champs <b>réellement changés</b> sont historisés, avec leur valeur d'avant et
+     * d'après. Une requête qui ne change rien n'écrit aucune ligne : ce n'est pas une modification, et
+     * un journal qui en garderait trace mentirait sur ce qui s'est passé.
+     */
+    @Transactional
+    public ClientResponse modifierClient(Long id, ModifierClientRequest request) {
+        Client client = getClientOrThrow(id);
+        String nom = request.nom().trim();
+        String email = videEnNull(request.email());
+        String telephone = videEnNull(request.telephone());
+
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put("reference", client.getReference());
+        noterSiChange(details, "ancienNom", "nouveauNom", client.getNom(), nom);
+        noterSiChange(details, "ancienEmail", "nouvelEmail", client.getEmail(), email);
+        noterSiChange(details, "ancienTelephone", "nouveauTelephone", client.getTelephone(), telephone);
+
+        if (details.size() > 1) {
+            client.setNom(nom);
+            client.setEmail(email);
+            client.setTelephone(telephone);
+            client = clientRepository.save(client);
+            historiqueActionService.enregistrer(null, TypeActionHistorique.CLIENT_MODIFIE, details);
+        }
+        return clientMapper.toResponse(client);
+    }
+
+    private static void noterSiChange(Map<String, Object> details, String cleAvant, String cleApres,
+                                      String avant, String apres) {
+        if (!Objects.equals(avant, apres)) {
+            details.put(cleAvant, avant);
+            details.put(cleApres, apres);
+        }
+    }
+
+    /** Un champ facultatif vidé à l'écran arrive en chaîne vide : il est enregistré comme absent. */
+    private static String videEnNull(String valeur) {
+        return StringUtils.hasText(valeur) ? valeur.trim() : null;
     }
 }

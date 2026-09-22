@@ -1,5 +1,7 @@
 package com.afriland.audiences.intervenant.service;
 
+import com.afriland.audiences.intervenant.domain.LettreConstitution;
+import com.afriland.audiences.intervenant.repository.LettreConstitutionRepository;
 import com.afriland.audiences.alerte.domain.TypeAlerte;
 import com.afriland.audiences.alerte.service.AlerteService;
 import com.afriland.audiences.common.audit.HistoriqueActionService;
@@ -55,6 +57,7 @@ class ConstitutionServiceTest {
     @Mock private HistoriqueActionService historiqueActionService;
     @Mock private AlerteService alerteService;
     @Mock private LettreConstitutionService lettreConstitutionService;
+    @Mock private LettreConstitutionRepository lettreConstitutionRepository;
     @Mock private MinioStorageService minioStorageService;
     @Mock private DocumentRepository documentRepository;
     @Mock private AvocatRepository avocatRepository;
@@ -78,7 +81,8 @@ class ConstitutionServiceTest {
     void setUp() {
         service = new ConstitutionService(demandeConstitutionRepository, dossierRepository, intervenantRepository,
                 utilisateurRepository, currentUserService, historiqueActionService, alerteService,
-                lettreConstitutionService, minioStorageService, documentRepository, mapper,
+                lettreConstitutionService, lettreConstitutionRepository, minioStorageService,
+                documentRepository, mapper,
                 new CompteAvocatService(avocatRepository, utilisateurRepository));
 
         dossier = Dossier.builder().id(1L).reference("DOS-2026-001").build();
@@ -142,7 +146,7 @@ class ConstitutionServiceTest {
         assertThat(result.statut()).isEqualTo(StatutConstitution.REJETEE);
         assertThat(result.motifRejet()).isEqualTo("Pas de besoin identifié");
         verify(alerteService).declencher(eq(TypeAlerte.CONSTITUTION_A_SIGNER), eq(1L), eq(juriste), any());
-        verify(lettreConstitutionService, never()).generer(any());
+        verify(lettreConstitutionService, never()).generer(any(LettreConstitution.class));
     }
 
     @Test
@@ -153,7 +157,20 @@ class ConstitutionServiceTest {
                 .statut(StatutConstitution.EN_ATTENTE).demandeur(juriste).motif("Besoin local").build();
         when(demandeConstitutionRepository.findById(100L)).thenReturn(Optional.of(demande));
         when(currentUserService.getCurrentUser()).thenReturn(sh);
-        when(lettreConstitutionService.generer(demande)).thenReturn(new byte[]{1, 2, 3});
+        /*
+         * La lettre est désormais un document enregistré, non plus un calcul (Q-115 B1) : le service
+         * compose un brouillon, le dépôt lui donne son numéro, puis le rendu le met en page.
+         */
+        /*
+         * Le brouillon naît **sans numéro** (B2) : celui-ci n'est tiré qu'à la signature, pour ne pas
+         * en brûler un sur une demande sans suite — la série ne repart jamais à un.
+         */
+        when(lettreConstitutionRepository.findByDemandeId(any())).thenReturn(Optional.empty());
+        when(lettreConstitutionRepository.prochainNumero()).thenReturn(4L);
+        when(lettreConstitutionService.brouillonPour(any(), eq(null)))
+                .thenReturn(LettreConstitution.builder().suffixeNumero("First Bank/DAJR").build());
+        when(lettreConstitutionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(lettreConstitutionService.generer(any(LettreConstitution.class))).thenReturn(new byte[]{1, 2, 3});
         when(minioStorageService.deposer(eq(1L), any(), eq("application/pdf"), any())).thenReturn("dossiers/1/lettre.pdf");
         when(documentRepository.save(any(Document.class))).thenAnswer(inv -> {
             Document d = inv.getArgument(0);
@@ -177,7 +194,20 @@ class ConstitutionServiceTest {
                 .statut(StatutConstitution.EN_ATTENTE).demandeur(juriste).motif("Besoin local").build();
         when(demandeConstitutionRepository.findById(100L)).thenReturn(Optional.of(demande));
         when(currentUserService.getCurrentUser()).thenReturn(sh);
-        when(lettreConstitutionService.generer(demande)).thenReturn(new byte[]{1, 2, 3});
+        /*
+         * La lettre est désormais un document enregistré, non plus un calcul (Q-115 B1) : le service
+         * compose un brouillon, le dépôt lui donne son numéro, puis le rendu le met en page.
+         */
+        /*
+         * Le brouillon naît **sans numéro** (B2) : celui-ci n'est tiré qu'à la signature, pour ne pas
+         * en brûler un sur une demande sans suite — la série ne repart jamais à un.
+         */
+        when(lettreConstitutionRepository.findByDemandeId(any())).thenReturn(Optional.empty());
+        when(lettreConstitutionRepository.prochainNumero()).thenReturn(4L);
+        when(lettreConstitutionService.brouillonPour(any(), eq(null)))
+                .thenReturn(LettreConstitution.builder().suffixeNumero("First Bank/DAJR").build());
+        when(lettreConstitutionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(lettreConstitutionService.generer(any(LettreConstitution.class))).thenReturn(new byte[]{1, 2, 3});
         when(minioStorageService.deposer(eq(1L), any(), eq("application/pdf"), any())).thenReturn("dossiers/1/lettre.pdf");
         when(documentRepository.save(any(Document.class))).thenAnswer(inv -> {
             Document d = inv.getArgument(0);

@@ -1,6 +1,7 @@
 package com.afriland.audiences.referentiel.service;
 
 import com.afriland.audiences.common.audit.HistoriqueActionService;
+import com.afriland.audiences.common.audit.TypeActionHistorique;
 import com.afriland.audiences.common.error.ApiException;
 import com.afriland.audiences.common.security.CurrentUserService;
 import com.afriland.audiences.referentiel.domain.ConfigurationSysteme;
@@ -61,15 +62,17 @@ class ConfigurationServiceTest {
         when(configurationSystemeRepository.save(any(ConfigurationSysteme.class))).thenAnswer(inv -> inv.getArgument(0));
         when(currentUserService.getCurrentUser()).thenReturn(dj);
         when(configurationMapper.toResponse(any(ConfigurationSysteme.class))).thenReturn(
-                new ConfigurationResponse("SEUIL_PROROGATIONS", "12", null, "ROLE_DJ", null,
+                new ConfigurationResponse("SEUIL_PROROGATIONS", "12", null, "ROLE_DJ", null, 3L,
                         TypeValeurConfiguration.ENTIER, 1L, 1_000L, List.of()));
 
         ConfigurationResponse result = configurationService.modifier("SEUIL_PROROGATIONS", "12");
 
         assertThat(config.getValeur()).isEqualTo("12");
         assertThat(result.valeur()).isEqualTo("12");
-        verify(historiqueActionService).enregistrerPour(eq(dj), isNull(), eq("Modification de la configuration SEUIL_PROROGATIONS"),
-                eq(Map.of("ancienneValeur", "10", "nouvelleValeur", "12")));
+        // Q-111 : la clé n'est plus concaténée au libellé, elle est une donnée de `details`.
+        verify(historiqueActionService).enregistrerPour(eq(dj), isNull(),
+                eq(TypeActionHistorique.CONFIGURATION_MODIFIEE),
+                eq(Map.of("cle", "SEUIL_PROROGATIONS", "ancienneValeur", "10", "nouvelleValeur", "12")));
     }
 
     /** Q-91 : une saisie non numérique est refusée ici, au lieu de casser le module frais plus tard. */
@@ -94,7 +97,7 @@ class ConfigurationServiceTest {
         when(configurationSystemeRepository.save(any(ConfigurationSysteme.class))).thenAnswer(inv -> inv.getArgument(0));
         when(currentUserService.getCurrentUser()).thenReturn(Utilisateur.builder().id(3L).build());
         when(configurationMapper.toResponse(any(ConfigurationSysteme.class))).thenReturn(
-                new ConfigurationResponse("FORMATS_GED", "PDF,XLSX", null, "ROLE_DJ", null,
+                new ConfigurationResponse("FORMATS_GED", "PDF,XLSX", null, "ROLE_DJ", null, 3L,
                         TypeValeurConfiguration.LISTE, null, null, List.of()));
 
         configurationService.modifier("FORMATS_GED", " pdf , xlsx ");

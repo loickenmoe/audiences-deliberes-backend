@@ -1,5 +1,6 @@
 package com.afriland.audiences.reporting.web;
 
+import com.afriland.audiences.common.security.CurrentUserService;
 import com.afriland.audiences.reporting.domain.TypeRapport;
 import com.afriland.audiences.reporting.service.RapportExportService;
 import com.afriland.audiences.reporting.service.ReportingService;
@@ -29,6 +30,8 @@ public class ReportingController {
 
     private final ReportingService reportingService;
     private final RapportExportService rapportExportService;
+    /** Pour attribuer l'export dans le pied de page : un document dit qui l'a demandé (A2). */
+    private final CurrentUserService currentUserService;
 
     /**
      * Ouvert au DJ <b>et à la DJA</b> (Q-95). Le critère d'acceptation d'US 8.5 ne nomme que
@@ -58,7 +61,7 @@ public class ReportingController {
             case PDF -> ResponseEntity.ok()
                     .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=rapport.pdf")
                     .contentType(MediaType.APPLICATION_PDF)
-                    .body(rapportExportService.exportPdf(rapport));
+                    .body(rapportExportService.exportPdf(rapport, nomDemandeur(), null));
             case EXCEL -> ResponseEntity.ok()
                     .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=rapport.xlsx")
                     .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
@@ -68,5 +71,18 @@ public class ReportingController {
                     .contentType(MediaType.parseMediaType("text/csv"))
                     .body(rapportExportService.exportCsv(rapport));
         };
+    }
+
+    /**
+     * Le nom de qui demande l'export, pour le pied de page. Jamais bloquant : un document se produit
+     * même si le nom manque, le pied portant alors la date d'édition.
+     */
+    private String nomDemandeur() {
+        try {
+            var utilisateur = currentUserService.getCurrentUser();
+            return utilisateur == null ? null : utilisateur.getPrenom() + " " + utilisateur.getNom();
+        } catch (RuntimeException ignore) {
+            return null;
+        }
     }
 }

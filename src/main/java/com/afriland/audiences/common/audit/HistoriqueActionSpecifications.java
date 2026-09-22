@@ -1,19 +1,20 @@
 package com.afriland.audiences.common.audit;
 
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
 
 /**
  * Lecture filtrée de l'historique (Q-110).
  *
- * <p><b>Volontairement général, exposé partiellement.</b> Cette classe porte les quatre critères
- * d'une consultation d'historique — périmètre, auteur, libellé d'action, période — alors que le seul
- * point d'entrée actuel, {@code GET /historique/systeme}, n'en publie qu'une partie et fige le
- * périmètre sur les actions <b>sans dossier</b>. Ce n'est pas de l'anticipation gratuite : si une
- * vue transversale de l'historique est décidée plus tard, elle sera la même lecture sans la
- * restriction de périmètre, et non un second écran à écrire de zéro.
+ * <p><b>Écrite générale, elle a d'abord servi partiellement — et c'est ce qui a payé.</b> En Q-110,
+ * seul {@code GET /historique/systeme} l'employait, avec le périmètre figé sur les actions sans
+ * dossier. L'écran d'audit de Q-112 est la même lecture sans cette restriction : il n'a pas fallu
+ * écrire un second chemin, seulement cesser d'en brider un.
+ *
+ * <p>Le {@link Perimetre} reste une énumération exclusive plutôt qu'un couple de booléens : c'est ce
+ * qui empêche qu'une consultation se retrouve, par la combinaison de deux drapeaux, dans un état que
+ * personne n'a voulu.
  *
  * <p><b>Une spécification et non une requête à paramètres facultatifs</b>, pour la raison établie en
  * Q-103 : la forme {@code :param IS NULL OR colonne = :param} échoue sur PostgreSQL dès qu'un
@@ -26,22 +27,18 @@ public final class HistoriqueActionSpecifications {
     private HistoriqueActionSpecifications() {
     }
 
-    /**
-     * Périmètre d'une consultation. Les trois valeurs sont exclusives et doivent le rester : c'est
-     * ce qui empêche qu'une vue « système » se mette un jour à renvoyer, par un paramètre oublié,
-     * l'activité des juristes sur leurs dossiers.
-     */
+    /** Périmètre d'une consultation. Les trois valeurs sont exclusives et doivent le rester. */
     public enum Perimetre {
         /** Actions rattachées à aucun dossier : paramètres système, référentiels. */
         HORS_DOSSIER,
-        /** Actions rattachées à un dossier précis. */
+        /** Actions rattachées à un dossier précis ; exige {@code dossierId}. */
         UN_DOSSIER,
-        /** Tout l'historique. Aucun endpoint ne l'emprunte aujourd'hui (cf. Q-110). */
+        /** Tout l'historique. Ouvert en Q-112 à l'écran d'audit, réservé au DJ et à la DJA. */
         TOUT
     }
 
     public static Specification<HistoriqueAction> withFilters(Perimetre perimetre, Long dossierId,
-                                                                Long utilisateurId, String action,
+                                                                Long utilisateurId, TypeActionHistorique code,
                                                                 LocalDate dateDebut, LocalDate dateFin) {
         return (root, query, cb) -> {
             var predicate = cb.conjunction();
@@ -57,15 +54,13 @@ public final class HistoriqueActionSpecifications {
             }
 
             /*
-             * Égalité stricte, jamais « contient ». `action` est une phrase française libre (QF-24),
-             * parfois concaténée — « Modification de la configuration SEUIL_PROROGATIONS ». Un
-             * `LIKE '%…%'` y paraîtrait commode et mentirait par omission dès qu'un libellé change
-             * d'un mot. Le choix se fait donc dans une liste fermée, construite à partir des
-             * libellés réellement présents ; le jour où un code d'action typé existera, c'est lui
-             * qui alimentera cette liste.
+             * Depuis Q-111, le filtre porte sur le **code typé** et non plus sur la phrase. C'était
+             * le point faible de Q-110 : `action` est un texte libre, et l'égalité stricte qu'on y
+             * appliquait cessait de trouver la ligne dès qu'un libellé changeait d'un mot. Le code,
+             * lui, est contraint par la base et par l'énumération.
              */
-            if (StringUtils.hasText(action)) {
-                predicate = cb.and(predicate, cb.equal(root.get("action"), action));
+            if (code != null) {
+                predicate = cb.and(predicate, cb.equal(root.get("code"), code));
             }
 
             if (dateDebut != null) {

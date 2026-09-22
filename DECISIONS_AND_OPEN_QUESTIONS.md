@@ -602,7 +602,8 @@ saisies manuellement** ». Sans création, aucun dossier n'est créable. **C** :
 formel) dans `ClientController`/`API_IMPLEMENTATION_STATUS.md`, `ROLE_SAISIE` requis, vérifié en
 conditions réelles. `PUT /clients/{id}` **non implémenté** — aucune US ni cas d'usage M4 ne
 l'exigeait explicitement (seule la création bloquait `POST /dossiers`) ; à réévaluer si un besoin
-de modification client émerge dans un module ultérieur.
+de modification client émerge dans un module ultérieur. **Soldé en Q-116 (2026-09-22)** : le besoin a
+émergé, `PUT /clients/{id}` est implémenté, référence figée.
 
 ### Q-24 ✅ Files de travail (listes) non spécifiées — close (M15)
 UC-INT-02/03/04, UC-GED-03, UC-INT-06/10 supposent tous des **listes d'éléments en attente**
@@ -2158,6 +2159,495 @@ sont unifiées.
 
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
+
+### Q-117 ✅ Un intervenant se corrige, son type et son identifiant Keycloak restent figés — tranché (2026-09-22)
+
+**Même besoin que Q-116, pour le référentiel des intervenants.** Aucun endpoint ne permettait de
+corriger un avocat ou un autre prestataire après sa création. `PUT /intervenants/{id}` s'ouvre sur le
+modèle de `PUT /clients/{id}` : même garde que la création (`ROLE_DJ`, `ROLE_DJA`), mêmes règles
+RG-INT-01/02, modification tracée (`INTERVENANT_MODIFIE`, hors dossier, V26).
+
+**Le type est figé — décision technique, nommée.** Avocat et autre prestataire vivent dans deux tables
+distinctes (héritage `JOINED`), et les dossiers, frais, publications et constitutions pointent vers
+l'identifiant de l'avocat. Changer de type reviendrait à supprimer puis recréer l'intervenant. Le type
+n'est donc pas dans le corps ; un type envoyé quand même est ignoré, ce que le test d'intégration
+vérifie.
+
+**L'identifiant Keycloak d'un avocat est figé — décision du porteur du projet.** Une première version
+le laissait modifiable, pour permettre de corriger une faute de frappe à la création. Le porteur du
+projet l'a refusé, à raison : les comptes sont créés et authentifiés par Keycloak, et l'application ne
+fait que s'y rattacher (`CompteAvocatService`). Laisser ce rattachement modifiable ici ouvrait un second
+chemin, hors de Keycloak, pour décider qui se connecte en tant que quel avocat — donc qui voit ses
+dossiers, ses frais et ses publications. Même logique que la référence client (Q-116). Le coût est
+connu : une faute de frappe dans l'identifiant, à la création, se règle en recréant l'avocat. Une mise
+en garde à la création le réduirait à la source ; elle n'est pas implémentée.
+
+**Traçabilité.** `details` porte `prestataireId` et le nom courant (`intervenant`), puis les paires
+d'avant et d'après des seuls champs changés. Six clés existaient déjà depuis Q-116 (nom, courriel,
+téléphone) ; s'ajoutent `intervenant` et `ancienneNotification` / `nouvelleNotification`. Une requête
+qui ne change rien n'écrit rien.
+
+**Vérifié** : 5 tests unitaires (coordonnées corrigées et tracées, compte inchangé ; notification refusée
+sur un avocat ; notification d'un prestataire ; rien sans changement ; 404) et un parcours d'intégration
+sur PostgreSQL neuf — 403 pour le juriste, type et compte envoyés ignorés, trace lue dans l'audit.
+
+### Q-116 ✅ Un client se corrige, sa référence reste figée — tranché (2026-09-22)
+
+**Le besoin que Q-23 attendait.** Q-23 avait recommandé `PUT /clients/{id}` dès le 2026-09-04, puis
+l'avait différé : « à réévaluer si un besoin de modification client émerge ». Il a émergé en recette :
+un client créé avec une coquille, ou dont le courriel change, ne pouvait plus être corrigé. Ce n'était
+donc pas un refus qu'on défait, mais un report qu'on solde.
+
+**La référence est figée — décision du porteur du projet.** Elle est l'identifiant du client : c'est
+elle qu'on recherche, et elle doit rester la clé d'un futur référentiel externe (INT-05). La modifier
+ferait changer un identifiant sous les yeux de ceux qui le connaissaient. Elle n'est donc **pas dans
+le corps** de la requête : un client qui en enverrait une la verrait ignorée, ce que le test
+d'intégration vérifie. Le revers est assumé : une coquille dans la référence reste définitive.
+
+**La modification est tracée — décision du porteur du projet.** `CLIENT_MODIFIE`, hors dossier, donc
+visible dans l'audit par le filtre `HORS_DOSSIER` sans extension de périmètre. Les `details` portent la
+référence et, pour chaque champ **réellement changé**, sa valeur d'avant et d'après (`ancienNom` /
+`nouveauNom`, `ancienEmail` / `nouvelEmail`, `ancienTelephone` / `nouveauTelephone`) : une ligne par
+modification, lisible sans jeton technique. Une requête qui ne change rien n'écrit rien — ni la base,
+ni le journal, qui sinon mentirait sur ce qui s'est passé. V25 ajoute le code à
+`chk_historique_code`, pour la raison déjà vécue en V24.
+
+**Même garde que la création**, `ROLE_SAISIE` : qui peut créer un client peut en corriger une coquille.
+Un champ facultatif vidé est enregistré comme absent (`null`), et non comme une chaîne vide.
+
+**Vérifié** : 5 tests unitaires (seuls les champs changés sont historisés ; rien n'est écrit sans
+changement ; un champ vidé devient absent ; 404) et un parcours d'intégration sur PostgreSQL neuf —
+403 pour l'avocat, référence ignorée, 400 pour un nom vide, trace lue dans l'audit. 459 tests.
+
+### Q-115 · B2 ✅ Le juriste rédige la lettre, le SH la consulte — tranché (2026-09-18)
+
+**La répartition des rôles est tout le jalon.** Le juriste rédige — c'est lui qui tient le dossier,
+connaît le débiteur, le montant et le tiers saisi. Le supérieur hiérarchique **consulte** avant de
+signer, sans pouvoir récrire. Lui refuser la lecture reviendrait à lui demander de signer sans voir ;
+lui donner la plume viderait la seconde signature de son sens. Aucun rôle nouveau, aucune habilitation
+nouvelle : `solliciterConstitution` ouvre la rédaction, `signerConstitution` la lecture.
+
+**Le brouillon naît avec la demande, sans numéro.** V23 lève le `NOT NULL` posé en B1 — où la lettre
+naissait à la validation et avait donc toujours son numéro. Réserver dès la rédaction en **brûlerait**
+un à chaque demande sans suite, et le compteur ne repart jamais à un : les trous resteraient
+définitivement dans une série de courrier officiel, où l'absence de la lettre n° 35 se remarque et se
+justifie mal. PostgreSQL n'ajoutant pas les valeurs nulles à un index unique, plusieurs brouillons
+coexistent sans se gêner.
+
+**Ce qui est obligatoire, et ce qui ne l'est pas.** Seuls le suffixe du numéro, l'objet et le
+signataire le sont — sans eux, le document n'est plus une lettre de la banque. Le débiteur, le
+montant, le tiers saisi restent facultatifs : le gabarit est fait pour être complété, à la main le
+cas échéant, et l'exiger à la saisie interdirait une pratique existante. Ce qui manque rend des
+pointillés.
+
+**Le gel n'est pas un message, c'est une action qui n'est plus offerte.** Une fois signée, la lettre
+est partie chez un huissier et figure dans la GED : le bouton de rédaction disparaît, et le serveur
+refuse par un **409** si l'on passe outre l'écran. Une correction donne une nouvelle demande, donc
+une nouvelle lettre et un nouveau numéro — la première reste consultable.
+
+**Le numéro reste modifiable**, comme la direction juridique l'a demandé, mais un numéro déjà employé
+est refusé : dans une série de courrier officiel, un numéro servi deux fois ne désigne plus rien.
+
+**Les segments s'éditent séparément**, l'écran découpant sur « / » ce que le serveur stocke d'un
+bloc. Leur nombre varie d'un service à l'autre — quatre sur le papier de la DRH, six sur celui du
+recouvrement — et le figer en colonnes aurait exigé une migration à chaque convention nouvelle.
+
+**Deux garde-fous ont fait leur travail, dans les deux dépôts.** Le premier, côté backend : la
+contrainte `chk_historique_code` énumère les codes **en dur** depuis V18, et un code ajouté à
+l'énumération Java sans migration compile sans bruit puis **échoue à l'écriture, en production**, sur
+l'action qu'on venait d'instrumenter. D'où V24. Le second, côté écran : le test qui compte les
+natures d'action traduites a rappelé d'ajouter la traduction — sans quoi l'audit aurait affiché la
+phrase du backend au lieu du libellé, exactement le défaut de QF-24.
+
+**Chaîne vérifiée sur la pile réelle** : demande → brouillon sans numéro → rédaction du juriste (200)
+→ lecture du SH (200) → tentative de réécriture par le SH (**403**) → signature (200) → numéro
+attribué et `modifiable: false` → tentative de réécriture par le juriste (**409**). Le PDF produit
+porte bien la rédaction du juriste, et l'audit en garde trace.
+
+### Q-115 · B1 ✅ La lettre de constitution prend le papier à en-tête de la banque — tranché (2026-09-18)
+
+**Le jalon change la nature du document.** La lettre était un **calcul** : cinq données mises en forme
+au moment de la validation, puis oubliées. À la question « pourquoi cette lettre dit-elle ceci ? », la
+GED ne répondait rien. Elle devient un **document**, avec son contenu enregistré, son numéro et son
+instant de gel — ce qui permettra, au jalon B2, de la laisser rédiger.
+
+**La forme, relevée sur le gabarit réel de la direction juridique** (et non inventée) : ligne de
+numéro à gauche, lieu et date à droite, destinataire en retrait, `Concerne` et `Objet` soulignés,
+corps, signataire centré. S'y ajoute ce que le gabarit papier n'a pas et que la banque met sur sa
+correspondance : le **logo** et la **colonne latérale** des mentions institutionnelles.
+
+**Les pointillés sont conservés.** Le gabarit est fait pour être complété à la main — c'est la
+pratique actuelle. Un champ vide rend donc `..........................`, jamais du vide ni « null ».
+Les supprimer aurait retiré une possibilité que la direction juridique emploie.
+
+**Le numéro.** `N° 4 /First Bank/DAJR/DR/CM/ABN/18`. Le compteur est la valeur qui **suit** `N°`
+(confirmé par la direction juridique) et **ne repart pas à 1 chaque année** : il court. Il vient d'une
+séquence dédiée — même raison qu'en Q-114 : le numéro figure *dans* le fichier, il doit donc exister
+*avant* de le produire, alors que l'identifiant de la ligne n'existe qu'après l'insertion.
+
+La séquence **propose** ; le numéro reste modifiable, et c'est la contrainte d'unicité en base qui
+interdit d'en servir deux fois le même. Il est **réservé à la génération**, pas à l'ouverture d'un
+brouillon : un brouillon abandonné brûlerait un numéro dans une série qui ne se remet jamais à zéro.
+
+**Le suffixe est stocké d'un bloc** (`First Bank/DAJR/DR/CM/ABN/18`) et découpé sur « / » par l'écran.
+Le papier de la DRH en compte quatre segments, celui du recouvrement six : figer leur nombre en
+colonnes aurait exigé une migration à chaque convention nouvelle.
+
+**Le motif disparaît de la lettre.** C'est une justification interne, adressée au supérieur
+hiérarchique et absente du gabarit officiel : un huissier n'a pas à lire pourquoi la banque a décidé
+en interne de le constituer. La traçabilité du validateur demeure — propriétés du fichier et GED.
+
+**Le gel.** `date_generation` marque la production du PDF. Passé ce point, la lettre ne se réécrit
+pas : une correction donne une **nouvelle** lettre, un **nouveau** numéro, et la première reste dans
+la GED. Une pièce qu'on peut retoucher en silence ne prouve rien — même raisonnement qu'en Q-113.
+
+**Deux défauts trouvés par les tests avant qu'une lettre ne sorte.**
+`TextePdf.replier` transforme les caractères de contrôle en espaces, sauts de ligne compris — PDFBox
+les refuse. Le repli s'appliquant **avant** le découpage, les trois paragraphes du gabarit se
+fondaient en un pavé continu. On découpe désormais d'abord, on replie ensuite.
+Le second était une assertion de test qui enjambait un retour à la ligne automatique : elle vérifiait
+la mise en page en croyant vérifier le contenu.
+
+**⚠ À faire avant la mise en production** : initialiser la séquence sur le compteur réel du service
+(`SELECT setval('lettre_constitution_numero_seq', <dernier numéro émis>)`). Sans cela, la première
+lettre porterait `N° 1` alors que le service en est à `N° 33`.
+
+**Ce que B1 ne fait pas, volontairement** : le contenu n'est pas encore éditable. Le flux est
+identique à aujourd'hui — le juriste sollicite, le SH valide, la lettre se produit. L'édition par le
+juriste et la consultation par le SH sont le jalon **B2**.
+
+### Q-115 · A3 ✅ L'archive d'audit reprend la charte, et ses colonnes s'alignent — tranché (2026-09-18)
+
+**Troisième jalon, et dernier avant la lettre.** L'archive d'audit était le document le plus abouti
+du système — en-tête répété, colophon, repli de caractères — et pourtant celui dont le défaut de mise
+en page était le plus visible.
+
+**Les colonnes ondulaient.** Elles étaient calées par du remplissage d'espaces
+(`String.format("%-17s %-22s %-10s %-42s %s")`) dans une police **proportionnelle**. Sur mille cinq
+cents lignes, aucune colonne ne tombait droit. Le calendrier, lui, positionnait ses colonnes à une
+abscisse fixe depuis toujours : la bonne méthode existait dans le dépôt, à deux fichiers de là. La
+charte la generalise et coupe désormais à la **largeur mesurée**.
+
+**Ce que l'archive gagne** : le logo et la dénomination, un pied qui numérote (« Page 96 sur 96 ») et
+attribue. Ce qu'elle **garde** : sa référence `AUD-2026-0044` en titre, et son **colophon en dernière
+page** — qui n'est pas décoratif, puisqu'il explique pourquoi l'empreinte ne peut pas figurer dans le
+fichier qu'elle scelle, et donne à qui reçoit la pièce le moyen de la vérifier.
+
+**La langue reste le français, et c'est une décision, pas un oubli.** Une archive d'audit est une
+**pièce**, remise à un contrôleur : elle garde la langue de la procédure, là où le calendrier et le
+rapport suivent leur lecteur. C'est aussi ce qui évite de porter côté serveur la table des
+quarante-six codes d'action, dont la traduction vit côté client depuis QF-24 — duplication qui
+aurait dérivé.
+
+**Le scellement est intact, et cela a été mesuré, pas supposé.** Sur la pile réelle :
+
+| Vérification | Résultat |
+|---|---|
+| Empreinte annoncée en en-tête = empreinte du fichier reçu | identiques |
+| Le vérificateur de Q-114 reconnaît l'extraction fraîche | `AUD-2026-0044` |
+| Les trois plus anciennes archives, produites avant A1 | **intactes**, empreintes inchangées |
+
+Ce dernier point est l'essentiel : refondre la mise en page ne pouvait pas invalider les pièces déjà
+remises. Leurs octets dorment dans MinIO et n'ont pas été touchés ; seules les extractions à venir
+prennent la nouvelle allure.
+
+**Trois méthodes privées disparaissent** (`ecrire`, `ligneTexte`, `tronquer`) : la charte les rend
+inutiles. Le rendu d'audit passe de 252 à 204 lignes tout en faisant davantage.
+
+### Q-115 · A2 ✅ Une charte commune, portée par le calendrier et le rapport — tranché (2026-09-18)
+
+**Deuxième jalon.** A1 avait rendu les documents robustes sans rien changer à leur allure ; A2 leur
+donne une allure, et une seule.
+
+**Ce que les deux documents n'avaient pas.** Le calendrier ne portait **ni titre, ni date, ni numéro
+de page** — une feuille détachée de la liasse ne disait plus ce qu'elle était. Le rapport tenait sur
+une page écrite à la main, sans garde de pagination : six indicateurs passaient, trente auraient
+débordé hors de la feuille sans la moindre erreur. Ni l'un ni l'autre ne portait la marque.
+
+**La charte** (`common/pdf/DocumentPdf`) tient en trois choses, et chacune corrige un manque mesuré :
+
+- **L'en-tête** : logo, dénomination, « Direction Juridique », titre, portée, filet rouge. Pas les
+  mentions légales — capital, RC, agrément, SWIFT appartiennent au **papier à en-tête** de la
+  correspondance. Les porter sur un export de calendrier ferait passer un tableau de travail pour
+  une communication officielle de la banque.
+- **Le pied** : titre, « Page n sur N », et l'**attribution** — « Édité par Marie Directrice ». Un
+  fait, pas une signature en attente : un trait à signer qui reste vide dévalorise le document qu'il
+  prétend solenniser. Le bloc de signature est réservé à la lettre (B), seul acte adressé à un tiers.
+  Le pied ne peut s'écrire **qu'à la fin** : « Page 2 sur 7 » suppose de connaître 7, qu'on ignore
+  tant que la dernière ligne n'est pas posée. Les pages sont donc reprises une seconde fois, en ajout.
+- **Le tableau franchit les pages** : les en-têtes de colonnes sont **redessinés à chaque page**, et
+  les cellules coupées à la **largeur mesurée** de la police. L'ancienne troncature à dix-huit
+  caractères ignorait qu'Helvetica est proportionnelle : « IIIIIIII » et « WWWWWWWW » n'occupent pas
+  la même place, et compter les signes revenait à empiéter sur la colonne voisine ou à tronquer trop tôt.
+
+**La `Locale` est là dès A2, alors qu'on ne sert que le français.** Le pied et les en-têtes sont du
+texte ; les écrire en dur aurait obligé à rouvrir les générateurs au jalon C. Les libellés vivent
+dans `resources/pdf/libelles.properties` ; C n'aura qu'à poser `libelles_en.properties` à côté et à
+brancher `Accept-Language`. Le français reste le défaut, et ce n'est pas un repli technique : c'est
+la langue de la procédure.
+
+**Le titre du fichier n'est pas celui de la page.** Sur la page, la période est juste sous le titre ;
+dans un explorateur ou une messagerie, « Rapport MENSUEL » ne distinguerait pas deux mois. Le fichier
+porte donc « Rapport MENSUEL - Du 2026-09-01 au 2026-09-30 ».
+
+**Deux défauts trouvés par les tests avant qu'un document ne sorte.** Le premier était de moi : je
+« rétablissais » l'encodage des `.properties`, alors que `PropertyResourceBundle` les lit en UTF-8
+depuis Java 9 — les pieds de page affichaient « ?dit? par », et seuls les libellés sans accent en
+réchappaient. Le second est la perte du titre de fichier, signalée plus haut.
+
+**Une leçon d'outillage, notée parce qu'elle a failli produire un faux diagnostic.** Trois inspections
+successives ont conclu à tort que « Référence », « Étape » et l'attribution manquaient du document
+réel. PDFBox écrit en **chaînes hexadécimales** (`<52E966E972656E6365>`) dès qu'un octet dépasse 0x7F,
+et mon extracteur ne lisait que les chaînes littérales. Le document était juste ; l'instrument ne
+l'était pas. `PDFTextStripper`, lui, disait vrai depuis le début.
+
+**Ce qui ne change pas** : l'Excel et le CSV du rapport gardent leurs libellés français et leur
+structure — ils alimentent des retraitements existants, où renommer une colonne casserait ce qui les
+consomme.
+
+### Q-115 · A1 ✅ Les PDF cessent d'échouer sur ce qu'on y écrit — tranché (2026-09-18)
+
+**Premier jalon du chantier de mise en forme des documents.** Il ne touche **à aucune mise en page** :
+c'est le socle sur lequel les jalons visuels deviennent vérifiables. Une seule chose change à l'œil,
+et elle est assumée plus bas : la typographie se replie désormais partout, non plus sur le seul audit.
+
+**Le défaut trouvé, et pourquoi il dépassait la mise en forme.** Les quatre documents du système sont
+écrits en Helvetica, encodée en `WinAnsiEncoding`. PDFBox **lève** — il ne remplace pas
+silencieusement — dès qu'on lui demande un caractère absent de cet encodage. Seul le rendu d'audit
+(Q-113) s'en protégeait ; les trois autres appelaient `showText` en direct. Sur la lettre de
+constitution, quatre saisies parfaitement ordinaires faisaient échouer la génération, prouvées par un
+test écrit avant le correctif — **4 échecs sur 4** :
+
+| Point de code | Origine |
+|---|---|
+| `U+000A` | la touche Entrée : le motif est saisi dans un `<Textarea>` |
+| `U+0009` | une tabulation, invisible à l'écran |
+| `U+202F` | l'espace fine insécable, que tout collage depuis un traitement de texte apporte |
+| `U+1EC5` | la lettre « ễ » d'un nom vietnamien |
+
+La lettre est produite **dans la transaction de validation** (`ConstitutionService#valider`) :
+l'exception annulait la validation elle-même. La demande restait `EN_ATTENTE`, le SH recevait une
+erreur technique, le prestataire n'était pas notifié — et comme le motif est enregistré, chaque
+nouvelle tentative échouait à l'identique. **Un processus métier bloqué par une saisie légitime**, et
+non un export raté.
+
+**Le repli partagé** (`common/pdf/TextePdf`) applique trois gestes, dans cet ordre : les caractères de
+contrôle deviennent une espace — une ligne de PDF ne se coupe pas toute seule ; la typographie est
+repliée sur l'ASCII, ce qui sert au passage QF-48 ; ce qui reste hors encodage est **décomposé**,
+« Nguyễn » s'écrivant « Nguyen » plutôt qu'un point d'interrogation qui effacerait l'information. Un
+idéogramme, lui, n'a pas de lettre de base : il devient `?`, seul cas de perte, et toujours préférable
+à une exception.
+
+La copie privée qui vivait dans `AuditExportRenderer` est supprimée : elle ne protégeait qu'un
+générateur sur quatre. Elle retenait « inférieur à 256 », intervalle qui **laisse passer** `U+007F` à
+`U+009F` — des caractères de contrôle que la police refuse tout autant.
+
+**Les métadonnées** (`common/pdf/MetadonneesPdf`). Aucun des quatre documents n'en portait : dans un
+explorateur de fichiers, une messagerie ou un moteur documentaire, ils étaient anonymes. Chacun porte
+désormais un titre, un producteur et sa date. L'auteur de la lettre est le **validateur**, jamais le
+juriste demandeur : c'est la seconde signature qui engage la banque (RG-INT-08).
+
+**Les tests montent d'un cran, et c'est la moitié du jalon.** Les trois générateurs historiques
+n'étaient éprouvés que par « non vide, commence par `%PDF-` » : un document ayant perdu toutes ses
+données passait au vert. Ils lisent désormais le contenu avec `PDFTextStripper`, comme
+`AuditExportRendererTest` le faisait déjà. Vérification faite en cassant volontairement le calendrier :
+le test tombe. Sans cela, « ne rien casser » serait resté une affirmation au lieu d'être une mesure.
+
+**Une micro-conséquence assumée** : le repli de la typographie s'applique maintenant aux quatre
+documents, donc `…` devient `.` et `’` devient `'` hors de l'audit aussi. C'est le comportement que
+l'audit a depuis Q-113, et la cohérence valait mieux que deux typographies selon le document.
+
+### Q-114 ✅ L'empreinte devient utilisable — tranché (2026-09-17)
+
+**Le constat de recette.** Q-113 scellait correctement les archives, mais l'écran affichait
+`empreinte 59bde5c1748ce074555d0329ec96fbfb0cf270815292619023866c8fd04b807e` — soixante-quatre
+caractères d'un seul tenant, que personne ne compare et que personne ne dicte. Une empreinte que nul
+ne vérifie n'est pas une preuve : c'est une décoration. Trois manques, trois réponses.
+
+**1. Vérifier depuis l'application.** `GET /api/historique/exports/verification?empreinte=` répond
+`{reconnue, archive}`. **Seule l'empreinte circule** : elle est calculée par le navigateur
+(`crypto.subtle.digest`), et un document d'audit n'a aucune raison de traverser le réseau pour être
+comparé à lui-même. Un fichier inconnu **n'est pas une erreur, c'est une réponse** — `reconnue:false`
+et non un 404 : « je ne reconnais pas ce document » et « la vérification a échoué » n'engagent pas
+les mêmes suites. Le 400 reste réservé à ce qui n'est pas une empreinte du tout.
+
+**2. Une référence lisible à côté de l'empreinte.** `AUD-2026-0042` s'écrit, se prononce, se
+retrouve. **L'empreinte prouve, la référence désigne** : ce sont deux métiers, et les confondre est
+ce qui rendait l'empreinte pénible à l'usage.
+
+*Pourquoi une séquence dédiée et non l'identifiant de la ligne.* La référence doit figurer **dans le
+PDF**, donc être connue **avant** de produire le fichier — alors que l'identifiant n'existe qu'après
+l'insertion, laquelle exige l'empreinte, laquelle exige le fichier. Une séquence indépendante rompt
+ce cercle. C'est la même raison qui interdit de dériver la référence de l'empreinte : rien de ce qui
+décrit le contenu d'un fichier ne peut être écrit dedans sans le changer. Pas de compteur remis à
+zéro chaque année — il exigerait un verrou pour un gain nul ; l'année dit quand, le numéro dit lequel.
+
+**3. Un colophon dans le PDF.** Dernière page : période, nombre de lignes, auteur, instant de
+génération, et l'explication de ce que l'empreinte est et pourquoi elle ne peut pas figurer dans le
+fichier qu'elle scelle. Sans cette page, celui qui reçoit la pièce ignore qu'une empreinte existe.
+
+**Le nom du fichier porte la référence** (`aud-2026-0042-2026-09-01-2026-09-17.pdf`) : c'est ce nom
+qu'on cite dans un courrier de transmission.
+
+**Défaut trouvé en chemin, et corrigé (CORS).** `Content-Disposition` et `X-Empreinte-SHA256`
+n'étaient **pas exposés** : CORS ne laisse lire qu'une poignée d'en-têtes, les autres existent sur le
+fil mais restent invisibles au code appelant. Conséquence, depuis Q-113 : le bandeau de succès
+affichait « empreinte … » vide, et le front reconstruisait un nom de fichier plausible mais
+différent de celui sous lequel l'archive est consignée. `setExposedHeaders` le corrige. Le parcours
+e2e de Q-113 ne l'avait pas vu parce qu'il se contentait de la phrase d'accompagnement sans regarder
+la valeur — assertion resserrée depuis. **Une assertion qui ne regarde pas la valeur ne garde rien.**
+
+**Le classeur porte désormais sa provenance, comme le PDF.** Une feuille *Provenance*, en seconde
+position pour ne pas s'interposer entre celui qui ouvre le classeur et les lignes qu'il vient
+chercher : référence, période, nombre de lignes, auteur, instant. L'asymétrie précédente — colophon
+dans le PDF, rien dans l'Excel — laissait la matière qu'on trie sans provenance dès qu'on la
+renommait, alors qu'elle en a autant besoin que la pièce qu'on remet.
+
+**Ce que la vérification ne prouve pas, et l'écran le dit.** « Reconnue » démontre que le fichier n'a
+pas changé depuis son scellement. Elle n'établit pas son antériorité face à un tiers : l'application
+détient à la fois le fichier et la ligne qui l'atteste. L'horodatage opposable relèverait d'un tiers
+de confiance — hors périmètre, et énoncé plutôt que tu.
+
+### Q-113 ✅ L'export de l'audit, scellé — tranché (2026-09-17)
+
+**Jalon 3, et dernier du chantier d'audit.** Un inspecteur ne consulte pas un écran : il emporte une
+pièce. Mais une pièce qu'on peut rééditer en trois minutes ne prouve rien — c'était l'objection
+retenue contre l'archivage tel qu'il avait d'abord été envisagé.
+
+**La chaîne complète fait la valeur du jalon** : produire, calculer une **empreinte SHA-256**,
+déposer dans MinIO, consigner l'empreinte en base avec la période, l'auteur et l'instant. Le fichier
+remis et le fichier scellé sont alors démontrablement le même, des années plus tard. L'empreinte
+voyage aussi dans un en-tête de réponse : le destinataire peut la comparer sans interroger
+l'application.
+
+**Les deux formats, jamais l'un ou l'autre.** Le PDF produit une pièce figée qu'on remet ; l'Excel
+une matière qu'on trie et recoupe. Retenir un seul format aurait obligé l'un des deux usages à se
+contenter d'un outil qui ne lui convient pas.
+
+**Les six raccourcis de période sont calculés par l'écran, pas par l'API.** Ce sont des commodités de
+saisie : les exposer au serveur aurait figé six calendriers et interdit la **période libre**, celle
+que réclame la première inspection qui demande « du 12 mars au 4 juin ». Chaque raccourci couvre
+l'unité calendaire **écoulée** et s'arrête aujourd'hui — une archive ne doit pas prétendre couvrir
+des jours à venir.
+
+**La période est obligatoire à l'export, facultative à la consultation.** Une archive sans période ne
+dit pas ce qu'elle contient : son empreinte ne prouverait que son intégrité, jamais son exhaustivité.
+
+**Le plafond refuse plutôt que de tronquer.** Au-delà de 20 000 lignes, l'extraction est refusée avec
+la conduite à tenir — restreindre la période. Tronquer silencieusement aurait produit une archive qui
+ment sur ce qu'elle couvre, et dont l'empreinte aurait scellé ce mensonge.
+
+**Deux actions de plus sont historisées.** `AUDIT_EXPORTE` — exporter fait sortir le contenu de
+l'application, acte plus lourd que consulter. `ARCHIVE_TELECHARGEE` — sans elle, l'archive serait un
+trou plus large que la table qu'elle double, puisqu'on pourrait y puiser sans que rien ne le dise.
+La clé de stockage n'est jamais exposée : elle ne servirait qu'à contourner l'endpoint tracé.
+
+**Deux défauts rencontrés, et ce qu'ils ont appris.** La colonne d'empreinte était déclarée
+`CHAR(64)` en SQL face à un `@Column` ordinaire : PostgreSQL la rend en `bpchar` et la validation de
+schéma Hibernate l'a refusée — **62 erreurs d'un coup, sur un détail de type**. Corriger la migration
+après qu'elle eut été appliquée en base locale a ensuite fait échouer la validation Flyway : dérive
+locale sans effet sur une base neuve, nettoyée en retirant la ligne d'historique et la table.
+
+**Statut (2026-09-17)** : appliqué — V20, `GET /historique/export`, `GET /historique/exports`,
+`GET /historique/exports/{id}/telechargement`, bloc d'extraction sur l'écran 43.
+
+### Q-112 ✅ L'écran d'audit — tranché (2026-09-17)
+
+**Jalon 2 du chantier d'audit**, rendu possible par Q-111 : sans code d'action typé, les filtres
+auraient été approximatifs, et un écran approximatif ne se retire plus une fois entre les mains du
+métier.
+
+**Ce qu'il ouvre, et que Q-110 ne pouvait pas.** Le journal répondait à une question de
+*couverture* — des lignes existaient sans point de lecture. Restait une question de *point
+d'entrée* : « qu'a fait X le mois dernier ? », « toutes les suppressions du trimestre ? », « que
+s'est-il passé entre le 1er et le 15 ? ». Aucune ne part d'un dossier ; aucune n'était possible.
+
+**`GET /historique`** remplace `GET /historique/systeme`, supprimé. Le périmètre — tout /
+hors dossier / un dossier — devient un **critère** parmi les autres, et la vue « hors dossier » une
+valeur de filtre. Deux endroits où chercher la même trace étaient exactement la fragmentation qu'on
+voulait supprimer ; le journal était un palliatif assumé, il n'en était plus qu'un sous-ensemble.
+
+**Le périmètre cesse d'être structurel, et c'est assumé.** En Q-110, l'exclusivité de `Perimetre`
+protégeait l'interim : ouvrir la vue transversale devait être une décision, pas l'effet d'un
+paramètre oublié. La décision est prise (NF-CONF-01, filtre par personne autorisé). Ce qui protège
+désormais est explicite : la garde de rôle, et la trace de chaque consultation.
+
+**La consultation de l'audit s'audite elle-même** (`AUDIT_CONSULTE`, V19), avec ses critères.
+Ce n'est pas une contrainte imposée au DJ et à la DJA : c'est ce qui leur permet de **démontrer**
+qu'ils n'ont regardé que ce qu'ils devaient. Deux décisions de granularité : historisé **avant** la
+lecture, pour que la trace existe même si la requête échoue ; et **sur la première page seulement**,
+feuilleter un résultat n'étant pas une nouvelle consultation — compter chaque page produirait un
+bruit qui noierait ce qu'on cherche à voir. Le critère « personne » est consigné sous
+`auteurRecherche` et non `utilisateurId`, ce dernier désignant déjà celui qui a consulté.
+
+**Un défaut trouvé par les tests, et la propriété qu'il révèle.** La première version du test
+d'intégration lisait `content[0]` pour retrouver la trace : or **lire l'audit crée une ligne
+d'audit**, qui prend aussitôt la tête du classement. Le défaut était dans le test ; la propriété
+méritait d'être affirmée plutôt que contournée, et elle l'est désormais.
+
+**Le journal déménage, mais sa moitié utile reste.** La question qui naît *en regardant un réglage* —
+« pourquoi vaut-il 14, et qui l'a mis là ? » — mérite une réponse sur place. L'écran des paramètres
+affiche donc « modifié le … par … » sur chaque ligne (`configuration_systeme.dernier_auteur_id`,
+V19), et le tableau paginé à filtres s'en va. Administrer et enquêter sont deux tâches ; un outil
+d'enquête n'avait pas sa place sur un écran d'administration.
+
+**Habilitation** : capacité dédiée `consulterAudit`, **distincte** d'`administrerConfigurations` et
+de `superviserAlertes` bien qu'elle porte les mêmes rôles — lire l'activité nommée d'un collègue
+n'est ni écrire un seuil ni lire un taux global, et un assouplissement futur de l'une ne doit pas
+déplacer l'autre.
+
+**Ce qui reste, et l'écran le dit lui-même** : seules les **modifications** sont historisées. Aucune
+consultation ne l'est, hormis celle de cet écran. L'absence de ligne ne prouve pas l'absence
+d'action.
+
+**Statut (2026-09-17)** : appliqué — V19, `GET /historique`, écran 43, rappel contextuel sur
+l'écran 41.
+
+### Q-111 ✅ La nature des actions historisées est typée — tranché (2026-09-17)
+
+**Jalon 1 du chantier d'audit.** `historique_action.action` était une phrase française libre,
+parfois concaténée — « Modification de la configuration SEUIL_PROROGATIONS ». Filtrer sur une telle
+colonne suppose un `LIKE '%…%'`, qui paraît commode et **ment par omission** dès qu'un libellé change
+d'un mot : la ligne cesse d'être trouvée sans que rien ne le signale. C'est le préalable à toute vue
+d'audit, et la raison pour laquelle ce jalon **précède** l'écran au lieu de le suivre — un écran
+livré d'abord serait un outil dont les filtres sont approximatifs, et qu'on ne retire plus une fois
+entre les mains du métier.
+
+**Mesuré avant d'agir** : 42 points d'écriture, **un seul chemin** (`HistoriqueActionService` —
+aucune insertion directe, aucune ligne semée par migration), dont **36 libellés littéraux** et
+**6 construits**.
+
+**Le libellé est porté par l'énumération, pas transmis à l'appel.** Décision prise en cours de
+route, meilleure que ce qui avait été annoncé : les 42 sites ne passent plus qu'un code, et le
+service en dérive la phrase. Deux arguments côte à côte — un code et le texte censé le décrire —
+auraient fini par diverger ; l'écart est désormais impossible. La signature garde son arité.
+
+**Les six parties variables descendent dans `details`**, où elles deviennent interrogeables :
+
+| Avant | Code | `details` reçoit |
+|---|---|---|
+| « Changement de statut de l'étape INSTANCE » | `ETAPE_STATUT_MODIFIE` | `etape`, `ancienStatut`, `nouveauStatut` |
+| « Ouverture automatique de l'étape … » | `ETAPE_OUVERTE_AUTOMATIQUEMENT` | `etape`, `etapeId` |
+| « Positionnement direct à l'étape … » | `ETAPE_POSITIONNEE_DIRECTEMENT` | `etape`, `etapeId` |
+| « Décision sur la dérogation de seuil : … » | `DEROGATION_SEUIL_ARBITREE` | `decision`, `auditId`, `motif` |
+| « Décision sur la sensibilité du dossier : … » | `SENSIBILITE_ARBITREE` | `decision`, `motifRejet` |
+| « Modification de la configuration SEUIL_X » | `CONFIGURATION_MODIFIEE` | `cle`, `ancienneValeur`, `nouvelleValeur` |
+
+**Quatre décisions de conception.** La colonne est **obligatoire**, avec `NON_CLASSEE` pour ce que la
+reprise ne saurait rattacher — « on ne sait pas » doit se filtrer et se compter, là où un nul se
+glisserait hors de chaque requête. **La phrase reste en base** à côté du code : l'affichage existant
+ne change pas, et traduire un jour ce libellé (QF-24) sera un travail purement frontend, sans
+repasser sur les 42 sites. **Un code par action métier distincte**, soit 43 valeurs — regrouper pour
+faire court aurait rendu les filtres approximatifs. **Contrainte `CHECK`** en base, sur le modèle de
+`chk_alerte_type` : toute action auditée nouvelle demandera une migration, et un test rappelle ce
+lien, qu'une compilation réussie ne signale pas.
+
+**Reprise mesurée en réel** : 193 lignes existantes, **zéro `NON_CLASSEE`**. Les 41 libellés
+distincts se réduisent à 40 codes — la concaténation des clés de configuration est absorbée, et le
+filtre du journal ne propose plus une entrée par paramètre.
+
+**Statut (2026-09-17)** : appliqué — V18, énumération, 42 sites, filtre du journal basculé sur les
+codes. Backend 388/388, frontend 299/299.
 
 ### Q-110 ✅ Les actions historisées hors dossier deviennent lisibles — tranché (2026-09-17)
 

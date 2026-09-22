@@ -1,11 +1,14 @@
 package com.afriland.audiences.intervenant.service;
 
+import com.afriland.audiences.common.audit.HistoriqueActionService;
+import com.afriland.audiences.common.audit.TypeActionHistorique;
 import com.afriland.audiences.common.error.ApiException;
 import com.afriland.audiences.common.web.PageResponse;
 import com.afriland.audiences.common.error.ErrorCodes;
 import com.afriland.audiences.intervenant.domain.TypeIntervenant;
 import com.afriland.audiences.intervenant.web.dto.CreerIntervenantRequest;
 import com.afriland.audiences.intervenant.web.dto.IntervenantResponse;
+import com.afriland.audiences.intervenant.web.dto.ModifierIntervenantRequest;
 import com.afriland.audiences.referentiel.domain.AutrePrestataire;
 import com.afriland.audiences.referentiel.domain.Avocat;
 import com.afriland.audiences.referentiel.domain.Intervenant;
@@ -16,6 +19,10 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
 
 
 
@@ -30,6 +37,7 @@ public class IntervenantService {
 
     private final IntervenantRepository intervenantRepository;
     private final AvocatRepository avocatRepository;
+    private final HistoriqueActionService historiqueActionService;
 
     /**
      * RG-INT-01/02 : un {@code AVOCAT} porte obligatoirement un compte Keycloak (unique) ; un
@@ -79,6 +87,64 @@ public class IntervenantService {
                 .notification(request.notification() != null && request.notification())
                 .build());
         return toResponse(prestataire);
+    }
+
+    /**
+     * Modifie un intervenant (Q-117). Le type et l'identifiant Keycloak d'un avocat sont figés ;
+     * seules les informations descriptives se corrigent — cf. {@link ModifierIntervenantRequest}.
+     *
+     * <p>Comme pour un client (Q-116), seuls les champs <b>réellement changés</b> sont historisés, avec
+     * leur valeur d'avant et d'après, et une requête qui ne change rien n'écrit rien.
+     */
+    @Transactional
+    public IntervenantResponse modifier(Long id, ModifierIntervenantRequest request) {
+        Intervenant intervenant = intervenantRepository.findById(id)
+                .orElseThrow(() -> ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE, "Intervenant introuvable : " + id));
+        String nom = request.nom().trim();
+        String email = videEnNull(request.email());
+        String telephone = videEnNull(request.telephone());
+
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put("prestataireId", intervenant.getId());
+        details.put("intervenant", nom);
+        noterSiChange(details, "ancienNom", "nouveauNom", intervenant.getNom(), nom);
+        noterSiChange(details, "ancienEmail", "nouvelEmail", intervenant.getEmail(), email);
+        noterSiChange(details, "ancienTelephone", "nouveauTelephone", intervenant.getTelephone(), telephone);
+
+        if (intervenant instanceof Avocat) {
+            // Son compte Keycloak ne bouge pas : il n'est pas dans la requête.
+            if (request.notification() != null) {
+                throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
+                        "Le champ notification ne s'applique qu'à un autre prestataire (RG-INT-02)");
+            }
+        } else if (intervenant instanceof AutrePrestataire autre) {
+            boolean notification = request.notification() != null && request.notification();
+            noterSiChange(details, "ancienneNotification", "nouvelleNotification", autre.getNotification(), notification);
+            autre.setNotification(notification);
+        }
+
+        // prestataireId et intervenant identifient la ligne ; au-delà, c'est qu'un champ a changé.
+        if (details.size() > 2) {
+            intervenant.setNom(nom);
+            intervenant.setEmail(email);
+            intervenant.setTelephone(telephone);
+            intervenant = intervenantRepository.save(intervenant);
+            historiqueActionService.enregistrer(null, TypeActionHistorique.INTERVENANT_MODIFIE, details);
+        }
+        return toResponse(intervenant);
+    }
+
+    private static void noterSiChange(Map<String, Object> details, String cleAvant, String cleApres,
+                                      Object avant, Object apres) {
+        if (!Objects.equals(avant, apres)) {
+            details.put(cleAvant, avant);
+            details.put(cleApres, apres);
+        }
+    }
+
+    /** Un champ facultatif vidé à l'écran arrive en chaîne vide : il est enregistré comme absent. */
+    private static String videEnNull(String valeur) {
+        return StringUtils.hasText(valeur) ? valeur.trim() : null;
     }
 
     /**

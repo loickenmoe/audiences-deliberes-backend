@@ -1,5 +1,6 @@
 package com.afriland.audiences.audience.service;
 
+import com.afriland.audiences.common.audit.TypeActionHistorique;
 import com.afriland.audiences.alerte.domain.TypeAlerte;
 import com.afriland.audiences.alerte.service.AlerteService;
 import com.afriland.audiences.audience.domain.Audience;
@@ -218,7 +219,7 @@ class AudienceServiceTest {
         assertThat(result.statut()).isEqualTo(StatutAudience.ANNULEE);
         assertThat(result.motifAnnulation()).isEqualTo("Renvoi du tribunal");
         assertThat(result.dateAnnulation()).isNotNull();
-        verify(historiqueActionService).enregistrer(eq(1L), eq("Annulation d'une audience"), any());
+        verify(historiqueActionService).enregistrer(eq(1L), eq(TypeActionHistorique.AUDIENCE_ANNULEE), any());
     }
 
     @Test

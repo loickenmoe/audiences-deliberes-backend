@@ -1,5 +1,6 @@
 package com.afriland.audiences.reporting.service;
 
+import com.afriland.audiences.common.pdf.LecturePdf;
 import com.afriland.audiences.reporting.domain.TypeRapport;
 import com.afriland.audiences.reporting.web.dto.RapportResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,6 +34,32 @@ class RapportExportServiceTest {
 
         assertThat(pdf).isNotEmpty();
         assertThat(new String(pdf, 0, 5, StandardCharsets.ISO_8859_1)).isEqualTo("%PDF-");
+    }
+
+    /** Les indicateurs sont-ils reellement dans le fichier, et pas seulement dans le CSV ? (A1) */
+    @Test
+    void exportPdf_contientLesIndicateurs() throws Exception {
+        String texte = LecturePdf.texte(service.exportPdf(rapport));
+
+        assertThat(texte).contains("MENSUEL").contains("2026-09-01").contains("2026-09-30");
+        /*
+         * Les indicateurs sont désormais présentés en **tableau** (A2) et non plus en « libellé :
+         * valeur » : on vérifie donc que chaque valeur reste sur la ligne de son libellé, ce qui est
+         * la seule chose qui compte et qui se lit encore dans le texte extrait.
+         */
+        assertThat(texte).containsPattern("Nouveaux dossiers\s+4");
+        assertThat(texte).containsPattern("Audiences tenues\s+3");
+        assertThat(texte).containsPattern("Taux de succ.s recouvrement\s+75[.,]00 %");
+        // La marque est sur la page, et la page est numérotée.
+        assertThat(texte).contains("Afriland First Bank").contains("Page 1 sur 1");
+    }
+
+    @Test
+    void exportPdf_porteSesProprietes() throws Exception {
+        // Le titre du fichier porte la portée, là où celui de la page s'en dispense : deux rapports
+        // mensuels de mois différents ne doivent pas se confondre dans un explorateur (A2).
+        assertThat(LecturePdf.proprietes(service.exportPdf(rapport)).getTitle())
+                .isEqualTo("Rapport MENSUEL - Du 2026-09-01 au 2026-09-30");
     }
 
     @Test

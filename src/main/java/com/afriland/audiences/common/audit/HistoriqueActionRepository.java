@@ -18,16 +18,14 @@ public interface HistoriqueActionRepository extends JpaRepository<HistoriqueActi
     Page<HistoriqueAction> findByDossierIdOrderByDateActionDesc(Long dossierId, Pageable pageable);
 
     /**
-     * Libellés d'action réellement présents hors dossier (Q-110), pour alimenter un filtre à
-     * <b>liste fermée</b>.
+     * Natures d'action présentes dans tout l'historique (Q-112), pour le filtre de l'écran d'audit.
      *
-     * <p>Sans code d'action typé (QF-24), c'est le seul moyen honnête d'offrir un choix : la liste
-     * vient de la donnée, pas d'une énumération recopiée côté écran, qui divergerait au premier
-     * libellé ajouté. Elle reste courte par nature — une entrée par clé de configuration, plus les
-     * quelques actions de référentiel.
+     * <p>Volontairement <b>indépendante des filtres en cours</b> : une liste de choix qui se réduit
+     * à mesure qu'on filtre empêche de changer d'avis sans tout vider. Elle vient de la donnée et
+     * non de l'énumération complète, pour ne jamais proposer une nature qui ne renverrait rien.
      */
-    @Query("select distinct h.action from HistoriqueAction h where h.dossierId is null order by h.action")
-    List<String> actionsHorsDossier();
+    @Query("select distinct h.code from HistoriqueAction h order by h.code")
+    List<TypeActionHistorique> actionsPresentes();
 
     /** FR-GED-04 (rapport journalier) : nombre de dossiers distincts manipulés à une date donnée. */
     @Query("select count(distinct h.dossierId) from HistoriqueAction h "

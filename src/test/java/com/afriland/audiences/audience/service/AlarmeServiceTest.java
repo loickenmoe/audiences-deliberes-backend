@@ -1,5 +1,6 @@
 package com.afriland.audiences.audience.service;
 
+import com.afriland.audiences.common.audit.TypeActionHistorique;
 import com.afriland.audiences.audience.domain.Alarme;
 import com.afriland.audiences.audience.domain.StatutAlarme;
 import com.afriland.audiences.audience.mapper.AlarmeMapper;
@@ -149,7 +150,7 @@ class AlarmeServiceTest {
         assertThat(result.dateTraitement()).isNotNull();
         // Un seul enregistrement : l'alarme elle-même, aucune remplaçante.
         verify(alarmeRepository, times(1)).save(any(Alarme.class));
-        verify(historiqueActionService).enregistrerPour(eq(juriste), eq(1L), eq("Traitement d'une alarme"), any());
+        verify(historiqueActionService).enregistrerPour(eq(juriste), eq(1L), eq(TypeActionHistorique.ALARME_TRAITEE), any());
     }
 
     @Test

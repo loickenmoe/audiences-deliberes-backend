@@ -428,6 +428,101 @@ class HabilitationFrontendIntegrationTest {
                 .andExpect(jsonPath("$.content[0].id").value(dossierId));
     }
 
+    // ---------------------------------------------------------------- Modification d'un client
+
+    /**
+     * {@code PUT /clients/{id}} : recommandé en Q-23, ouvert le 2026-09-22. Trois règles, vérifiées
+     * ensemble sur la pile réelle : la garde est celle de la création, la référence reste figée même
+     * si le corps en porte une autre, et la modification laisse une trace lisible dans l'audit.
+     */
+    @Test
+    @DisplayName("un client se corrige, sa référence reste figée, et la modification est tracée")
+    void client_seModifie_referenceFigee_etTrace() throws Exception {
+        RequestPostProcessor juriste = role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_SAISIE", "ROLE_CONSULTATION");
+        String reference = "CLI-MOD-" + COMPTEUR.incrementAndGet();
+        long clientId = extraireId(mockMvc.perform(post(api("/clients")).with(juriste)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("reference", reference, "nom", "Nom avec coquile"))))
+                .andExpect(status().isCreated()).andReturn());
+
+        // L'avocat n'a pas ROLE_SAISIE : il ne corrige pas un client de la banque.
+        mockMvc.perform(put(api("/clients/" + clientId))
+                        .with(role("kc-avocat-m15", "ROLE_AVOCAT"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("nom", "Intrusion"))))
+                .andExpect(status().isForbidden());
+
+        // Le corps porte une autre référence : elle est ignorée, l'identifiant ne bouge pas.
+        mockMvc.perform(put(api("/clients/" + clientId)).with(juriste)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("reference", "AUTRE-" + reference, "nom", "Nom corrigé",
+                                "email", "contact@client.cm"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.reference").value(reference))
+                .andExpect(jsonPath("$.nom").value("Nom corrigé"))
+                .andExpect(jsonPath("$.email").value("contact@client.cm"));
+
+        // Un nom vide est refusé, comme à la création.
+        mockMvc.perform(put(api("/clients/" + clientId)).with(juriste)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("nom", " "))))
+                .andExpect(status().isBadRequest());
+
+        // La trace : hors dossier, avec la référence et les deux valeurs du nom.
+        mockMvc.perform(get(api("/historique")).param("perimetre", "HORS_DOSSIER")
+                        .param("code", "CLIENT_MODIFIE").param("size", "1")
+                        .with(role("kc-dj-m15", "ROLE_DJ", "ROLE_CONSULTATION")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].details.reference").value(reference))
+                .andExpect(jsonPath("$.content[0].details.ancienNom").value("Nom avec coquile"))
+                .andExpect(jsonPath("$.content[0].details.nouveauNom").value("Nom corrigé"))
+                .andExpect(jsonPath("$.content[0].details.nouvelEmail").value("contact@client.cm"));
+    }
+
+    // ---------------------------------------------------------------- Modification d'un intervenant
+
+    /**
+     * {@code PUT /intervenants/{id}} (Q-117) : la garde est celle de la création (DJ, DJA), et ni le
+     * type ni l'identifiant Keycloak ne bougent, même si le corps en porte d'autres — l'identité se
+     * gère dans Keycloak. Le nom et les coordonnées se corrigent, et la modification est tracée.
+     */
+    @Test
+    @DisplayName("Q-117 : un avocat se corrige, son type et son identifiant Keycloak restent figés, et c'est tracé")
+    void intervenant_seModifie_typeEtCompteFiges_etTrace() throws Exception {
+        RequestPostProcessor dj = role("kc-dj-m15", "ROLE_DJ", "ROLE_CONSULTATION", "ROLE_SAISIE");
+        long n = COMPTEUR.incrementAndGet();
+        String compte = "kc-q117-" + n;
+        long avocatId = extraireId(mockMvc.perform(post(api("/intervenants")).with(dj)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("type", "AVOCAT", "nom", "Me Coquile " + n, "compteKeycloak", compte))))
+                .andExpect(status().isCreated()).andReturn());
+        // Le juriste consulte le référentiel mais ne le modifie pas.
+        mockMvc.perform(put(api("/intervenants/" + avocatId))
+                        .with(role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_SAISIE", "ROLE_CONSULTATION"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("nom", "Intrusion"))))
+                .andExpect(status().isForbidden());
+
+        // Le corps porte un autre type et un autre compte : ils sont ignorés.
+        mockMvc.perform(put(api("/intervenants/" + avocatId)).with(dj).contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("type", "AUTRE_PRESTATAIRE", "nom", "Me Corrigé " + n,
+                                "email", "corrige@cab.cm", "compteKeycloak", compte + "-bis"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.type").value("AVOCAT"))
+                .andExpect(jsonPath("$.nom").value("Me Corrigé " + n))
+                .andExpect(jsonPath("$.email").value("corrige@cab.cm"))
+                .andExpect(jsonPath("$.compteKeycloak").value(compte));
+
+        mockMvc.perform(get(api("/historique")).param("perimetre", "HORS_DOSSIER")
+                        .param("code", "INTERVENANT_MODIFIE").param("size", "1")
+                        .with(role("kc-dj-m15", "ROLE_DJ", "ROLE_CONSULTATION")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].details.prestataireId").value(avocatId))
+                .andExpect(jsonPath("$.content[0].details.nouveauNom").value("Me Corrigé " + n))
+                .andExpect(jsonPath("$.content[0].details.nouvelEmail").value("corrige@cab.cm"))
+                .andExpect(jsonPath("$.content[0].details.nouveauCompteKeycloak").doesNotExist());
+    }
+
     // ---------------------------------------------------------------- Vue consolidée par client (QF-41)
 
     /**
@@ -1499,92 +1594,122 @@ class HabilitationFrontendIntegrationTest {
                 .andExpect(status().isBadRequest());
     }
 
+
+    // ---------------------------------------------------------------- Audit (Q-112)
+
     /**
-     * Q-110 — le journal des actions hors dossier.
+     * Le test le plus important du lot : la consultation de l'audit est <b>elle-même historisée</b>.
      *
-     * <p>Le test le plus important du lot n'est pas l'habilitation mais le <b>périmètre</b> : le
-     * journal ne doit jamais laisser filtrer l'activité des juristes sur leurs dossiers. C'est une
-     * vue d'administration, pas une vue sur les personnes — la nuance est ce qui la rend acceptable
-     * tant que NF-CONF-01 (RGPD, conservation) reste à définir avec la DRH.
+     * <p>Le filtre par personne étant autorisé, cet écran permet de suivre nommément l'activité d'un
+     * salarié. La trace de son usage protège le DJ et la DJA autant que ceux qu'ils consultent.
      */
     @Test
-    @DisplayName("Q-110 : le journal ne contient que des actions sans dossier, et jamais celles d'un dossier")
-    void journalSysteme_neContientQueLesActionsHorsDossier() throws Exception {
-        // Une action AVEC dossier, qui ne doit pas apparaître.
-        long dossierId = creerDossier();
-        // Une action SANS dossier : la modification d'un paramètre système.
-        mockMvc.perform(put(api("/configurations/SEUIL_PROROGATIONS"))
-                        .contentType(MediaType.APPLICATION_JSON).content(json(Map.of("valeur", "14")))
-                        .with(role("kc-dj-m15", "ROLE_DJ")))
+    @DisplayName("Q-112 : consulter l'audit laisse une trace portant les critères employés")
+    void audit_saPropreConsultationEstHistorisee() throws Exception {
+        Long djaId = utilisateurRepository.findByKeycloakId("kc-dja-m15").orElseThrow().getId();
+
+        mockMvc.perform(get(api("/historique")).param("utilisateurId", String.valueOf(djaId))
+                        .param("perimetre", "TOUT").with(role("kc-dj-m15", "ROLE_DJ")))
                 .andExpect(status().isOk());
 
-        JsonNode journal = lireJson(mockMvc.perform(get(api("/historique/systeme")).param("size", "100")
+        JsonNode trace = lireJson(mockMvc.perform(get(api("/historique"))
+                        .param("code", "AUDIT_CONSULTE").param("size", "5")
                         .with(role("kc-dj-m15", "ROLE_DJ")))
                 .andExpect(status().isOk())
                 .andReturn());
 
-        assertThat(journal.get("totalElements").asLong()).isPositive();
-        assertThat(journal.get("content")).isNotEmpty();
-        // La création du dossier est historisée, mais avec un dossier : elle reste hors du journal.
-        for (JsonNode entree : journal.get("content")) {
-            assertThat(entree.get("action").asText()).doesNotContain("Création du dossier");
+        assertThat(trace.get("totalElements").asLong()).isPositive();
+
+        /*
+         * La ligne la plus récente est **cette lecture-ci**, pas celle qu'on cherche : consulter
+         * l'audit laisse une trace, qui prend aussitôt la tête du classement. Une première version
+         * de ce test lisait content[0] et échouait pour cette raison — le défaut était dans le test,
+         * et la propriété qu'il révèle mérite d'être affirmée plutôt que contournée.
+         */
+        JsonNode derniere = trace.get("content").get(0);
+        assertThat(derniere.get("code").asText()).isEqualTo("AUDIT_CONSULTE");
+        assertThat(derniere.get("details").get("codeRecherche").asText()).isEqualTo("AUDIT_CONSULTE");
+
+        // Et parmi les traces, celle de la consultation par personne porte bien son critère — sous
+        // un nom distinct de l'auteur de la consultation, que confondre rendrait la trace illisible.
+        boolean recherchePersonneTracee = false;
+        for (JsonNode entree : trace.get("content")) {
+            if (entree.get("details").has("auteurRecherche")) recherchePersonneTracee = true;
         }
-        assertThat(journal.get("actionsDisponibles")).isNotEmpty();
-        assertThat(dossierId).isPositive();
+        assertThat(recherchePersonneTracee).as("la recherche par personne est tracée").isTrue();
     }
 
     @Test
-    @DisplayName("Q-110 : le journal est réservé au DJ et à la DJA")
-    void journalSysteme_reserveAuDjEtALaDja() throws Exception {
-        for (String profil : List.of("ROLE_DJ", "ROLE_DJA")) {
-            mockMvc.perform(get(api("/historique/systeme")).with(role("kc-journal-" + profil, profil)))
-                    .andExpect(status().isOk());
+    @DisplayName("Q-112 : l'audit couvre tout l'historique, dossiers compris, et reste réservé au DJ et à la DJA")
+    void audit_couvreToutEtResteReserve() throws Exception {
+        long dossierId = creerDossier();
+
+        JsonNode tout = lireJson(mockMvc.perform(get(api("/historique")).param("size", "100")
+                        .with(role("kc-dj-m15", "ROLE_DJ")))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(tout.get("totalElements").asLong()).isPositive();
+        assertThat(tout.get("actionsDisponibles")).isNotEmpty();
+
+        // Le périmètre d'un dossier ne renvoie que ses lignes — jamais les actions système.
+        JsonNode duDossier = lireJson(mockMvc.perform(get(api("/historique"))
+                        .param("perimetre", "UN_DOSSIER").param("dossierId", String.valueOf(dossierId))
+                        .param("size", "100").with(role("kc-dja-m15", "ROLE_DJA")))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(duDossier.get("content")).isNotEmpty();
+        for (JsonNode entree : duDossier.get("content")) {
+            assertThat(entree.get("code").asText()).isNotEqualTo("CONFIGURATION_MODIFIEE");
         }
+
         for (String profil : List.of("ROLE_JURISTE", "ROLE_ASSISTANTE", "ROLE_SH")) {
-            mockMvc.perform(get(api("/historique/systeme")).with(role("kc-journal-" + profil, profil)))
+            mockMvc.perform(get(api("/historique")).with(role("kc-audit-" + profil, profil)))
                     .andExpect(status().isForbidden());
         }
     }
 
+    /**
+     * Un périmètre « un dossier » sans dossier renverrait tout l'historique : le pire des résultats,
+     * puisqu'il ressemble à une réponse. Refusé plutôt qu'interprété.
+     */
     @Test
-    @DisplayName("Q-110 : le journal filtre par auteur, par libellé et par période ; une fenêtre inversée est refusée")
-    void journalSysteme_filtre() throws Exception {
+    @DisplayName("Q-112 : les combinaisons de critères sans signification sont refusées")
+    void audit_refuseLesCriteresIncoherents() throws Exception {
+        mockMvc.perform(get(api("/historique")).param("perimetre", "UN_DOSSIER")
+                        .with(role("kc-dj-m15", "ROLE_DJ")))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(get(api("/historique")).param("dateDebut", "2026-09-30").param("dateFin", "2026-09-01")
+                        .with(role("kc-dj-m15", "ROLE_DJ")))
+                .andExpect(status().isBadRequest());
+
+        // Un code inconnu est refusé par la conversion, là où une phrase libre renvoyait zéro ligne.
+        mockMvc.perform(get(api("/historique")).param("code", "CODE_QUI_NEXISTE_PAS")
+                        .with(role("kc-dj-m15", "ROLE_DJ")))
+                .andExpect(status().isBadRequest());
+    }
+
+    /** Q-112 : l'écran des paramètres répond sur place à « qui a mis ce réglage là ? ». */
+    @Test
+    @DisplayName("Q-112 : un paramètre porte l'auteur de sa dernière modification")
+    void configuration_porteLAuteurDeLaDerniereModification() throws Exception {
         mockMvc.perform(put(api("/configurations/SEUIL_PROROGATIONS"))
-                        .contentType(MediaType.APPLICATION_JSON).content(json(Map.of("valeur", "15")))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(Map.of("valeur", "16")))
                         .with(role("kc-dja-m15", "ROLE_DJA")))
                 .andExpect(status().isOk());
         Long djaId = utilisateurRepository.findByKeycloakId("kc-dja-m15").orElseThrow().getId();
 
-        JsonNode parAuteur = lireJson(mockMvc.perform(get(api("/historique/systeme"))
-                        .param("utilisateurId", String.valueOf(djaId)).param("size", "100")
-                        .with(role("kc-dj-m15", "ROLE_DJ")))
+        JsonNode configurations = lireJson(mockMvc.perform(get(api("/configurations"))
+                        .with(role("kc-juriste-m15", "ROLE_CONSULTATION")))
                 .andExpect(status().isOk())
                 .andReturn());
-        assertThat(parAuteur.get("content")).isNotEmpty();
-        for (JsonNode entree : parAuteur.get("content")) {
-            assertThat(entree.get("utilisateurId").asLong()).isEqualTo(djaId);
+
+        JsonNode seuil = null;
+        for (JsonNode c : configurations) {
+            if ("SEUIL_PROROGATIONS".equals(c.get("cle").asText())) seuil = c;
         }
-
-        // Libellé exact, jamais « contient » : `action` est une phrase libre (QF-24).
-        JsonNode parLibelle = lireJson(mockMvc.perform(get(api("/historique/systeme"))
-                        .param("action", "Modification de la configuration SEUIL_PROROGATIONS")
-                        .param("size", "100").with(role("kc-dj-m15", "ROLE_DJ")))
-                .andExpect(status().isOk())
-                .andReturn());
-        assertThat(parLibelle.get("content")).isNotEmpty();
-
-        // Une période antérieure à toute activité ne renvoie rien, sans erreur.
-        JsonNode horsPeriode = lireJson(mockMvc.perform(get(api("/historique/systeme"))
-                        .param("dateDebut", "2020-01-01").param("dateFin", "2020-01-31")
-                        .with(role("kc-dj-m15", "ROLE_DJ")))
-                .andExpect(status().isOk())
-                .andReturn());
-        assertThat(horsPeriode.get("totalElements").asLong()).isZero();
-
-        mockMvc.perform(get(api("/historique/systeme"))
-                        .param("dateDebut", "2026-09-30").param("dateFin", "2026-09-01")
-                        .with(role("kc-dj-m15", "ROLE_DJ")))
-                .andExpect(status().isBadRequest());
+        assertThat(seuil).isNotNull();
+        assertThat(seuil.get("dernierAuteurId").asLong()).isEqualTo(djaId);
     }
 
     private String api(String chemin) {

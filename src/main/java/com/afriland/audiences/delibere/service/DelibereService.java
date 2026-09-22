@@ -1,5 +1,6 @@
 package com.afriland.audiences.delibere.service;
 
+import com.afriland.audiences.common.audit.TypeActionHistorique;
 import com.afriland.audiences.alerte.domain.TypeAlerte;
 import com.afriland.audiences.alerte.service.AlerteService;
 import com.afriland.audiences.common.audit.HistoriqueActionService;
@@ -97,13 +98,13 @@ public class DelibereService {
                 .build());
 
         if (request.resultat() == null) {
-            historiqueActionService.enregistrer(dossierId, "Mise en délibéré",
+            historiqueActionService.enregistrer(dossierId, TypeActionHistorique.DELIBERE_MISE_EN_DELIBERE,
                     Map.of("delibereId", delibere.getId(), "dateDeliberee", request.dateDeliberee().toString()));
             return versReponse(delibere);
         }
 
         appliquerResultat(delibere, request.resultat(), request.dateEcheanceRecours());
-        historiqueActionService.enregistrer(dossierId, "Enregistrement d'un délibéré",
+        historiqueActionService.enregistrer(dossierId, TypeActionHistorique.DELIBERE_ENREGISTRE,
                 Map.of("delibereId", delibere.getId(), "resultat", request.resultat().name()));
         return versReponse(delibere);
     }
@@ -116,7 +117,7 @@ public class DelibereService {
         validerEcheanceRecours(request.resultat(), delibere.getDateDeliberee(), request.dateEcheanceRecours());
 
         appliquerResultat(delibere, request.resultat(), request.dateEcheanceRecours());
-        historiqueActionService.enregistrer(delibere.getDossier().getId(), "Délibéré vidé",
+        historiqueActionService.enregistrer(delibere.getDossier().getId(), TypeActionHistorique.DELIBERE_VIDE,
                 Map.of("delibereId", delibereId, "resultat", request.resultat().name()));
         return versReponse(delibere);
     }
@@ -195,7 +196,7 @@ public class DelibereService {
         delibere.setDateDeliberee(request.date());
         delibereRepository.save(delibere);
 
-        historiqueActionService.enregistrer(delibere.getDossier().getId(), "Prorogation d'un délibéré",
+        historiqueActionService.enregistrer(delibere.getDossier().getId(), TypeActionHistorique.DELIBERE_PROROGE,
                 Map.of("delibereId", delibereId, "compteur", compteur, "date", request.date().toString()));
 
         boolean alerte = compteur > seuilProrogations();
@@ -256,7 +257,7 @@ public class DelibereService {
         etape.setStatutCycleVie(StatutCycleVie.EN_COURS);
         etape = etapeProcedureRepository.save(etape);
 
-        historiqueActionService.enregistrer(delibere.getDossier().getId(), "Rabattement du délibéré",
+        historiqueActionService.enregistrer(delibere.getDossier().getId(), TypeActionHistorique.DELIBERE_RABATTU,
                 Map.of("delibereId", delibereId, "date", request.date().toString(), "motif", motif));
 
         return etapeProcedureMapper.toResponse(etape);
@@ -300,7 +301,7 @@ public class DelibereService {
         delibere.setStatutExpedition(request.statutExpedition());
         delibere = delibereRepository.save(delibere);
 
-        historiqueActionService.enregistrer(delibere.getDossier().getId(), "Modification du statut d'expédition",
+        historiqueActionService.enregistrer(delibere.getDossier().getId(), TypeActionHistorique.DELIBERE_EXPEDITION_MODIFIEE,
                 Map.of("delibereId", delibereId, "ancienStatut", ancien.name(), "nouveauStatut", request.statutExpedition().name()));
 
         return versReponse(delibere);

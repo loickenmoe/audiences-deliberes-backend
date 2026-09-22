@@ -1,6 +1,7 @@
 package com.afriland.audiences.referentiel.service;
 
 import com.afriland.audiences.common.audit.HistoriqueActionService;
+import com.afriland.audiences.common.audit.TypeActionHistorique;
 import com.afriland.audiences.common.error.ApiException;
 import com.afriland.audiences.common.error.ErrorCodes;
 import com.afriland.audiences.common.security.CurrentUserService;
@@ -54,12 +55,17 @@ public class ConfigurationService {
                 .orElse(nouvelleValeur);
         String ancienneValeur = configuration.getValeur();
         configuration.setValeur(valeurRetenue);
+        // Q-112 : l'écran des paramètres répond désormais sur place à « qui l'a mis là ? », question
+        // qui naît en regardant un réglage et n'a pas à faire changer d'écran.
+        configuration.setDernierAuteurId(currentUserService.getCurrentUser().getId());
         configuration = configurationSystemeRepository.save(configuration);
 
         // dossierId=null : action hors dossier (cf. Javadoc HistoriqueActionService#enregistrer).
         Utilisateur auteur = currentUserService.getCurrentUser();
-        historiqueActionService.enregistrerPour(auteur, null, "Modification de la configuration " + cle,
-                Map.of("ancienneValeur", ancienneValeur, "nouvelleValeur", valeurRetenue));
+        // Q-111 : la clé descend dans `details`. Concaténée dans la phrase, elle produisait un
+        // libellé distinct par paramètre — sept natures d'action là où il n'y en a qu'une.
+        historiqueActionService.enregistrerPour(auteur, null, TypeActionHistorique.CONFIGURATION_MODIFIEE,
+                Map.of("cle", cle, "ancienneValeur", ancienneValeur, "nouvelleValeur", valeurRetenue));
 
         return configurationMapper.toResponse(configuration);
     }

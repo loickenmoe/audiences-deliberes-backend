@@ -1,12 +1,9 @@
 package com.afriland.audiences.audience.service;
 
 import com.afriland.audiences.audience.web.dto.CalendrierEntreeResponse;
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.pdmodel.PDPage;
-import org.apache.pdfbox.pdmodel.PDPageContentStream;
-import org.apache.pdfbox.pdmodel.common.PDRectangle;
-import org.apache.pdfbox.pdmodel.font.PDType1Font;
-import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
+import com.afriland.audiences.common.pdf.DocumentPdf;
+import com.afriland.audiences.common.pdf.LibellesPdf;
+import com.afriland.audiences.common.pdf.MetadonneesPdf;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
@@ -16,7 +13,9 @@ import org.springframework.stereotype.Service;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Exports FR-AUD-05 (calendrier des audiences). Le format JSON est géré directement par le
@@ -29,73 +28,81 @@ public class CalendrierExportService {
     private static final String[] EN_TETES = {
             "Référence", "Juridiction", "Étape", "Client", "Agence d'origine", "Risque encouru", "Date"
     };
-    private static final float LIGNE_HAUTEUR = 16f;
-    private static final int LIGNES_PAR_PAGE = 40;
+    /**
+     * Largeur de chaque colonne, en points. Elles somment à 762 sur les 762 disponibles en A4
+     * paysage (842 moins deux marges de 40) : la place est répartie selon ce que chaque colonne a
+     * réellement à porter, et non également.
+     */
+    private static final float[] LARGEURS = {96f, 150f, 110f, 150f, 80f, 90f, 86f};
 
+    /**
+     * Le calendrier, mis en page par la charte commune (Q-115 A2).
+     *
+     * <p>Ce que cette version change, au-delà de l'habillage : le document portait jusqu'ici
+     * <b>ni titre, ni date, ni numéro de page</b>. Une feuille détachée de la liasse ne disait plus
+     * ce qu'elle était. Et les cellules étaient coupées à dix-huit caractères, sans égard pour la
+     * largeur réelle d'une police proportionnelle.
+     *
+     * @param auteur qui demande l'export ; porté par le pied de page
+     * @param langue langue des libellés — le calendrier est un document de travail, il suit son
+     *               lecteur (à la différence d'une pièce, qui garde la langue de la procédure)
+     */
+    public byte[] exportPdf(List<CalendrierEntreeResponse> entrees, String auteur, Locale langue) {
+        LibellesPdf libelles = LibellesPdf.pour(langue);
+        try (DocumentPdf document = new DocumentPdf(DocumentPdf.paysage(),
+                libelles.texte("calendrier.titre"), periode(entrees, libelles), auteur, langue)) {
+            document.nouvellePage();
+            if (entrees.isEmpty()) {
+                // Une page qui dit « rien sur cette période » vaut mieux qu'une page nue, qu'on
+                // prendrait pour un fichier abîmé.
+                document.ligne(libelles.texte("calendrier.vide"), false, 10f);
+            } else {
+                document.tableau(entetes(libelles), LARGEURS, entrees.stream().map(this::cellules).toList());
+            }
+            return document.finaliser();
+        }
+    }
+
+    /** Conservé pour les appels qui n'ont pas d'auteur sous la main. */
     public byte[] exportPdf(List<CalendrierEntreeResponse> entrees) {
-        try (PDDocument document = new PDDocument(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-            List<List<CalendrierEntreeResponse>> pages = decouperEnPages(entrees, LIGNES_PAR_PAGE);
-            if (pages.isEmpty()) {
-                pages = List.of(List.of());
-            }
-            for (List<CalendrierEntreeResponse> page : pages) {
-                ecrirePage(document, page);
-            }
-            document.save(out);
-            return out.toByteArray();
-        } catch (IOException e) {
-            throw new UncheckedIOException("Échec de la génération du calendrier PDF", e);
-        }
+        return exportPdf(entrees, null, null);
     }
 
-    private static final PDRectangle A4_PAYSAGE = new PDRectangle(PDRectangle.A4.getHeight(), PDRectangle.A4.getWidth());
-
-    private void ecrirePage(PDDocument document, List<CalendrierEntreeResponse> lignes) throws IOException {
-        PDPage page = new PDPage(A4_PAYSAGE);
-        document.addPage(page);
-        try (PDPageContentStream cs = new PDPageContentStream(document, page)) {
-            float x = 30, y = page.getMediaBox().getHeight() - 40;
-            cs.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD), 10);
-            y = ecrireLigne(cs, x, y, EN_TETES);
-            cs.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 9);
-            for (CalendrierEntreeResponse entree : lignes) {
-                y = ecrireLigne(cs, x, y, new String[]{
-                        vide(entree.referenceDossier()), vide(entree.juridiction()), vide(entree.etape()),
-                        vide(entree.clientNom()), vide(entree.codeAgenceOrigine()),
-                        entree.risqueEncouru() == null ? "" : String.valueOf(entree.risqueEncouru()),
-                        entree.datePlanifiee() == null ? "" : entree.datePlanifiee().toString()
-                });
-            }
-        }
+    private static List<String> entetes(LibellesPdf libelles) {
+        return List.of(
+                libelles.texte("calendrier.colonne.reference"),
+                libelles.texte("calendrier.colonne.juridiction"),
+                libelles.texte("calendrier.colonne.etape"),
+                libelles.texte("calendrier.colonne.client"),
+                libelles.texte("calendrier.colonne.agence"),
+                libelles.texte("calendrier.colonne.risque"),
+                libelles.texte("calendrier.colonne.date"));
     }
 
-    private float ecrireLigne(PDPageContentStream cs, float x, float y, String[] colonnes) throws IOException {
-        float largeurColonne = 110f;
-        cs.beginText();
-        cs.newLineAtOffset(x, y);
-        for (int i = 0; i < colonnes.length; i++) {
-            if (i > 0) {
-                cs.newLineAtOffset(largeurColonne, 0);
-            }
-            cs.showText(tronquer(colonnes[i]));
-        }
-        cs.endText();
-        return y - LIGNE_HAUTEUR;
+    private List<String> cellules(CalendrierEntreeResponse entree) {
+        return List.of(
+                vide(entree.referenceDossier()), vide(entree.juridiction()), vide(entree.etape()),
+                vide(entree.clientNom()), vide(entree.codeAgenceOrigine()),
+                entree.risqueEncouru() == null ? "" : String.valueOf(entree.risqueEncouru()),
+                entree.datePlanifiee() == null ? "" : entree.datePlanifiee().toString());
     }
 
-    private String tronquer(String valeur) {
-        return valeur.length() > 18 ? valeur.substring(0, 17) + "…" : valeur;
+    /**
+     * La période couverte, déduite des entrées elles-mêmes : l'appelant ne la transmet pas, et un
+     * calendrier qui ne dit pas ce qu'il couvre n'est qu'une liste.
+     */
+    private String periode(List<CalendrierEntreeResponse> entrees, LibellesPdf libelles) {
+        List<LocalDate> dates = entrees.stream()
+                .map(CalendrierEntreeResponse::datePlanifiee)
+                .filter(java.util.Objects::nonNull)
+                .sorted()
+                .toList();
+        return dates.isEmpty() ? null
+                : libelles.texte("calendrier.periode", dates.get(0).toString(), dates.get(dates.size() - 1).toString());
     }
 
     private String vide(String valeur) {
         return valeur == null ? "" : valeur;
-    }
-
-    private List<List<CalendrierEntreeResponse>> decouperEnPages(List<CalendrierEntreeResponse> entrees, int taille) {
-        return entrees.isEmpty() ? List.of()
-                : java.util.stream.IntStream.range(0, (entrees.size() + taille - 1) / taille)
-                .mapToObj(i -> entrees.subList(i * taille, Math.min(entrees.size(), (i + 1) * taille)))
-                .toList();
     }
 
     public byte[] exportExcel(List<CalendrierEntreeResponse> entrees) {

@@ -237,6 +237,25 @@
 					</execution>
 				</executions>
 			</plugin>
+			<!--
+			  Les tests d'integration (@Testcontainers) dialoguent avec le demon Docker via
+			  docker-java, qui s'adresse a lui en API 1.32 par defaut. Docker Engine 29 refuse
+			  toute version anterieure a 1.40 : la requete repart en HTTP 400 sans message, et
+			  Testcontainers conclut "Could not find a valid Docker environment". On epingle donc
+			  1.40 — le plancher accepte par les demons recents, et supporte depuis Docker 19.03,
+			  donc la valeur la plus compatible dans les deux sens. La variable d'environnement
+			  DOCKER_API_VERSION ne convient pas : Testcontainers construit sa configuration sans
+			  la lire. Ne concerne que l'execution des tests.
+			-->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<systemPropertyVariables>
+						<api.version>1.40</api.version>
+					</systemPropertyVariables>
+				</configuration>
+			</plugin>
 		</plugins>
 	</build>
 
