@@ -1,9 +1,12 @@
 package com.afriland.audiences.intervenant.service;
 
+import com.afriland.audiences.common.audit.HistoriqueActionService;
+import com.afriland.audiences.common.audit.TypeActionHistorique;
 import com.afriland.audiences.common.error.ApiException;
 import com.afriland.audiences.intervenant.domain.TypeIntervenant;
 import com.afriland.audiences.intervenant.web.dto.CreerIntervenantRequest;
 import com.afriland.audiences.intervenant.web.dto.IntervenantResponse;
+import com.afriland.audiences.intervenant.web.dto.ModifierIntervenantRequest;
 import com.afriland.audiences.referentiel.domain.AutrePrestataire;
 import com.afriland.audiences.referentiel.domain.Avocat;
 import com.afriland.audiences.referentiel.domain.Intervenant;
@@ -16,10 +19,12 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.eq;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -27,6 +32,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /** M15 (Q-68) — création d'un intervenant : les invariants RG-INT-01/02 sont portés par le service. */
@@ -35,12 +41,13 @@ class IntervenantServiceTest {
 
     @Mock private IntervenantRepository intervenantRepository;
     @Mock private AvocatRepository avocatRepository;
+    @Mock private HistoriqueActionService historiqueActionService;
 
     private IntervenantService service;
 
     @BeforeEach
     void setUp() {
-        service = new IntervenantService(intervenantRepository, avocatRepository);
+        service = new IntervenantService(intervenantRepository, avocatRepository, historiqueActionService);
     }
 
     @Test
@@ -153,5 +160,86 @@ class IntervenantServiceTest {
         service.lister(null, "   ", PageRequest.of(0, 10));
 
         verify(intervenantRepository).rechercher(isNull(), isNull(), any());
+    }
+
+    // ------------------------------------------------------------ Modification (PUT /intervenants)
+
+    private Avocat avocat() {
+        return Avocat.builder().id(7L).nom("Me Fotso").email("me@cab.cm").compteKeycloak("kc-1").build();
+    }
+
+    private AutrePrestataire huissier() {
+        return AutrePrestataire.builder().id(8L).nom("Huissier Nkoa").notification(false).build();
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> detailsHistorises() {
+        ArgumentCaptor<Map<String, Object>> details = ArgumentCaptor.forClass(Map.class);
+        verify(historiqueActionService).enregistrer(isNull(), eq(TypeActionHistorique.INTERVENANT_MODIFIE), details.capture());
+        return details.getValue();
+    }
+
+    @Test
+    void modifierAvocat_corrigeSesCoordonnees_etGardeSonCompte() {
+        when(intervenantRepository.findById(7L)).thenReturn(Optional.of(avocat()));
+        when(intervenantRepository.save(any(Intervenant.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        IntervenantResponse result = service.modifier(7L,
+                new ModifierIntervenantRequest("Me Fotso", "fotso@cab.cm", "690000000", null));
+
+        // Le compte Keycloak est figé : il n'est pas dans la requête, il ne bouge pas.
+        assertThat(result.compteKeycloak()).isEqualTo("kc-1");
+        assertThat(result.type()).isEqualTo(TypeIntervenant.AVOCAT);
+        // Le nom, identique, n'encombre pas la trace ; le téléphone, absent jusque-là, y figure
+        // avec une ancienne valeur nulle.
+        assertThat(detailsHistorises()).hasSize(6)
+                .containsEntry("prestataireId", 7L)
+                .containsEntry("intervenant", "Me Fotso")
+                .containsEntry("ancienEmail", "me@cab.cm")
+                .containsEntry("nouvelEmail", "fotso@cab.cm")
+                .containsEntry("ancienTelephone", null)
+                .containsEntry("nouveauTelephone", "690000000");
+    }
+
+    @Test
+    void modifierAvocat_avecUneNotification_estRefuse() {
+        when(intervenantRepository.findById(7L)).thenReturn(Optional.of(avocat()));
+
+        assertThatThrownBy(() -> service.modifier(7L, new ModifierIntervenantRequest("Me Fotso", null, null, true)))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("notification");
+        verify(intervenantRepository, never()).save(any());
+    }
+
+    @Test
+    void modifierAutrePrestataire_basculeLaNotification() {
+        when(intervenantRepository.findById(8L)).thenReturn(Optional.of(huissier()));
+        when(intervenantRepository.save(any(Intervenant.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        IntervenantResponse result = service.modifier(8L,
+                new ModifierIntervenantRequest("Huissier Nkoa", null, null, true));
+
+        assertThat(result.notification()).isTrue();
+        assertThat(detailsHistorises()).containsEntry("ancienneNotification", false)
+                .containsEntry("nouvelleNotification", true);
+    }
+
+    @Test
+    void modifier_sansAucunChangement_nEcritRien() {
+        when(intervenantRepository.findById(7L)).thenReturn(Optional.of(avocat()));
+
+        service.modifier(7L, new ModifierIntervenantRequest(" Me Fotso ", "me@cab.cm", "", null));
+
+        verify(intervenantRepository, never()).save(any());
+        verifyNoInteractions(historiqueActionService);
+    }
+
+    @Test
+    void modifierIntervenantInexistant_renvoie404() {
+        when(intervenantRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.modifier(99L, new ModifierIntervenantRequest("X", null, null, null)))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("Intervenant introuvable");
     }
 }

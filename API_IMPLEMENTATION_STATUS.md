@@ -305,6 +305,7 @@ automatisés dédiés. Voir `DECISIONS_AND_OPEN_QUESTIONS.md` Q-20, Q-25, Q-55, 
 > réellement notifié — le prestataire, chargé à la demande, était un proxy d'`Intervenant` que
 > `instanceof Avocat` ne reconnaissait jamais (`Hibernate.unproxy`).
 | 61 | POST | `/intervenants` | `ROLE_DJ`, `ROLE_DJA` | RG-INT-01/02 (administration du référentiel) | 🆕 | ✅ M15 |
+| 61 bis | PUT | `/intervenants/{id}` | `ROLE_DJ`, `ROLE_DJA` | RG-INT-01/02 — type et identifiant Keycloak figés | 🆕 | ✅ Q-117 |
 | 62 | GET | `/intervenants?type&nom&page&size` *(paginé + recherche, M22)* | `ROLE_CONSULTATION` | RG-DOS-03 (sélecteurs d'affectation) | 🆕 | ✅ M15 |
 
 > **#35/#36** : `demande_constitution.motif` obligatoire ; l'approbation génère la lettre de

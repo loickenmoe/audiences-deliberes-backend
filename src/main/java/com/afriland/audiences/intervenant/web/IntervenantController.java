@@ -4,6 +4,7 @@ import com.afriland.audiences.intervenant.domain.TypeIntervenant;
 import com.afriland.audiences.intervenant.service.IntervenantService;
 import com.afriland.audiences.intervenant.web.dto.CreerIntervenantRequest;
 import com.afriland.audiences.intervenant.web.dto.IntervenantResponse;
+import com.afriland.audiences.intervenant.web.dto.ModifierIntervenantRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import com.afriland.audiences.common.web.PageResponse;
@@ -13,7 +14,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -37,6 +40,16 @@ public class IntervenantController {
     @PreAuthorize("hasAnyRole('DJ', 'DJA')")
     public ResponseEntity<IntervenantResponse> creer(@Valid @RequestBody CreerIntervenantRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(intervenantService.creer(request));
+    }
+
+    /**
+     * 🆕 Modifie un intervenant (Q-117) — même garde que la création. Le type et l'identifiant
+     * Keycloak d'un avocat sont figés ; nom, courriel, téléphone et notification se corrigent.
+     */
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('DJ', 'DJA')")
+    public IntervenantResponse modifier(@PathVariable Long id, @Valid @RequestBody ModifierIntervenantRequest request) {
+        return intervenantService.modifier(id, request);
     }
 
     /**

@@ -48,9 +48,9 @@ class TypeActionHistoriqueTest {
     void leNombreDeCodesCorrespondAuxSitesInstrumentes() {
         // 42 points d'historisation recensés en Q-111, plus AUDIT_CONSULTE (Q-112),
         // AUDIT_EXPORTE et ARCHIVE_TELECHARGEE (Q-113), LETTRE_CONSTITUTION_REDIGEE (Q-115 B2),
-        // CLIENT_MODIFIE (PUT /clients),
+        // CLIENT_MODIFIE (PUT /clients), INTERVENANT_MODIFIE (PUT /intervenants),
         // et NON_CLASSEE pour la reprise.
-        assertThat(TypeActionHistorique.values()).hasSize(48);
+        assertThat(TypeActionHistorique.values()).hasSize(49);
         assertThat(TypeActionHistorique.NON_CLASSEE.libelle()).isEqualTo("Action non classée");
     }
 }

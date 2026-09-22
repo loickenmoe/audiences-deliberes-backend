@@ -2160,6 +2160,37 @@ sont unifiées.
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
 
+### Q-117 ✅ Un intervenant se corrige, son type et son identifiant Keycloak restent figés — tranché (2026-09-22)
+
+**Même besoin que Q-116, pour le référentiel des intervenants.** Aucun endpoint ne permettait de
+corriger un avocat ou un autre prestataire après sa création. `PUT /intervenants/{id}` s'ouvre sur le
+modèle de `PUT /clients/{id}` : même garde que la création (`ROLE_DJ`, `ROLE_DJA`), mêmes règles
+RG-INT-01/02, modification tracée (`INTERVENANT_MODIFIE`, hors dossier, V26).
+
+**Le type est figé — décision technique, nommée.** Avocat et autre prestataire vivent dans deux tables
+distinctes (héritage `JOINED`), et les dossiers, frais, publications et constitutions pointent vers
+l'identifiant de l'avocat. Changer de type reviendrait à supprimer puis recréer l'intervenant. Le type
+n'est donc pas dans le corps ; un type envoyé quand même est ignoré, ce que le test d'intégration
+vérifie.
+
+**L'identifiant Keycloak d'un avocat est figé — décision du porteur du projet.** Une première version
+le laissait modifiable, pour permettre de corriger une faute de frappe à la création. Le porteur du
+projet l'a refusé, à raison : les comptes sont créés et authentifiés par Keycloak, et l'application ne
+fait que s'y rattacher (`CompteAvocatService`). Laisser ce rattachement modifiable ici ouvrait un second
+chemin, hors de Keycloak, pour décider qui se connecte en tant que quel avocat — donc qui voit ses
+dossiers, ses frais et ses publications. Même logique que la référence client (Q-116). Le coût est
+connu : une faute de frappe dans l'identifiant, à la création, se règle en recréant l'avocat. Une mise
+en garde à la création le réduirait à la source ; elle n'est pas implémentée.
+
+**Traçabilité.** `details` porte `prestataireId` et le nom courant (`intervenant`), puis les paires
+d'avant et d'après des seuls champs changés. Six clés existaient déjà depuis Q-116 (nom, courriel,
+téléphone) ; s'ajoutent `intervenant` et `ancienneNotification` / `nouvelleNotification`. Une requête
+qui ne change rien n'écrit rien.
+
+**Vérifié** : 5 tests unitaires (coordonnées corrigées et tracées, compte inchangé ; notification refusée
+sur un avocat ; notification d'un prestataire ; rien sans changement ; 404) et un parcours d'intégration
+sur PostgreSQL neuf — 403 pour le juriste, type et compte envoyés ignorés, trace lue dans l'audit.
+
 ### Q-116 ✅ Un client se corrige, sa référence reste figée — tranché (2026-09-22)
 
 **Le besoin que Q-23 attendait.** Q-23 avait recommandé `PUT /clients/{id}` dès le 2026-09-04, puis

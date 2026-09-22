@@ -97,6 +97,14 @@ public enum TypeActionHistorique {
     CLIENT_MODIFIE("Modification d'un client"),
 
     /**
+     * Modification d'un intervenant (Q-117, hors dossier). {@code details} porte {@code prestataireId}
+     * et le nom courant ({@code intervenant}), puis les paires d'avant et d'après des seuls champs
+     * changés — nom, courriel, téléphone, et pour un autre prestataire {@code ancienneNotification} /
+     * {@code nouvelleNotification}. L'identifiant Keycloak d'un avocat est figé : il n'y figure jamais.
+     */
+    INTERVENANT_MODIFIE("Modification d'un intervenant"),
+
+    /**
      * Consultation de l'écran d'audit (Q-112). {@code details} porte les critères employés :
      * {@code perimetre}, et le cas échéant {@code auteurRecherche}, {@code dossierId},
      * {@code codeRecherche}, {@code dateDebut}, {@code dateFin}.

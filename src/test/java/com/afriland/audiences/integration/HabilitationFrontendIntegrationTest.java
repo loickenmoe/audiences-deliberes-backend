@@ -479,6 +479,50 @@ class HabilitationFrontendIntegrationTest {
                 .andExpect(jsonPath("$.content[0].details.nouvelEmail").value("contact@client.cm"));
     }
 
+    // ---------------------------------------------------------------- Modification d'un intervenant
+
+    /**
+     * {@code PUT /intervenants/{id}} (Q-117) : la garde est celle de la création (DJ, DJA), et ni le
+     * type ni l'identifiant Keycloak ne bougent, même si le corps en porte d'autres — l'identité se
+     * gère dans Keycloak. Le nom et les coordonnées se corrigent, et la modification est tracée.
+     */
+    @Test
+    @DisplayName("Q-117 : un avocat se corrige, son type et son identifiant Keycloak restent figés, et c'est tracé")
+    void intervenant_seModifie_typeEtCompteFiges_etTrace() throws Exception {
+        RequestPostProcessor dj = role("kc-dj-m15", "ROLE_DJ", "ROLE_CONSULTATION", "ROLE_SAISIE");
+        long n = COMPTEUR.incrementAndGet();
+        String compte = "kc-q117-" + n;
+        long avocatId = extraireId(mockMvc.perform(post(api("/intervenants")).with(dj)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("type", "AVOCAT", "nom", "Me Coquile " + n, "compteKeycloak", compte))))
+                .andExpect(status().isCreated()).andReturn());
+        // Le juriste consulte le référentiel mais ne le modifie pas.
+        mockMvc.perform(put(api("/intervenants/" + avocatId))
+                        .with(role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_SAISIE", "ROLE_CONSULTATION"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("nom", "Intrusion"))))
+                .andExpect(status().isForbidden());
+
+        // Le corps porte un autre type et un autre compte : ils sont ignorés.
+        mockMvc.perform(put(api("/intervenants/" + avocatId)).with(dj).contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("type", "AUTRE_PRESTATAIRE", "nom", "Me Corrigé " + n,
+                                "email", "corrige@cab.cm", "compteKeycloak", compte + "-bis"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.type").value("AVOCAT"))
+                .andExpect(jsonPath("$.nom").value("Me Corrigé " + n))
+                .andExpect(jsonPath("$.email").value("corrige@cab.cm"))
+                .andExpect(jsonPath("$.compteKeycloak").value(compte));
+
+        mockMvc.perform(get(api("/historique")).param("perimetre", "HORS_DOSSIER")
+                        .param("code", "INTERVENANT_MODIFIE").param("size", "1")
+                        .with(role("kc-dj-m15", "ROLE_DJ", "ROLE_CONSULTATION")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].details.prestataireId").value(avocatId))
+                .andExpect(jsonPath("$.content[0].details.nouveauNom").value("Me Corrigé " + n))
+                .andExpect(jsonPath("$.content[0].details.nouvelEmail").value("corrige@cab.cm"))
+                .andExpect(jsonPath("$.content[0].details.nouveauCompteKeycloak").doesNotExist());
+    }
+
     // ---------------------------------------------------------------- Vue consolidée par client (QF-41)
 
     /**
