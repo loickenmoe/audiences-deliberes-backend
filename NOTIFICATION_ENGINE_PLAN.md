@@ -211,12 +211,25 @@ Livrée, en attente du commit de l'utilisateur. Décision consignée : **Q-118**
     rétablie, vide refusé sur `FORMATS_GED`).
   - Suites complètes : backend 519 tests, Vitest 349.
 
-### ⬜ Étape 4 : routage
+### ✅ Étape 4 : routage
 
-- À partir du type d'alerte et du destinataire (utilisateur interne, avocat ou autre prestataire),
-  on calcule les canaux effectifs.
-- Le calcul applique la grille, le consentement (D15) et la présence des coordonnées (D14).
-- Pour les internes, on ne dispose que de l'adresse Keycloak : pas de téléphone.
+Livrée, en attente du commit de l'utilisateur. Backend seulement ; aucun appelant pour l'instant.
+- `ReglagesNotification` : photographie des réglages, lue en une requête par
+  `ReglagesNotificationService.charger()`, sans cache, pour qu'un réglage s'applique à l'événement
+  suivant. Un canal part si son interrupteur est allumé **et** si l'événement est dans sa grille.
+  Une clé absente ou une valeur inconnue ne fait rien partir.
+- `RoutageNotification` :
+  - `pourUtilisateur(TypeAlerte, Utilisateur)` : Outlook et/ou Teams vers l'adresse Keycloak.
+    **Liste vide pour le profil AVOCAT** (D2).
+  - `pourPrestataire(EvenementPrestataire, CoordonneesPrestataire)` : courriel personnel, SMS et
+    WhatsApp. **Liste vide sans consentement** (D15).
+- `Route` : canal réglé, canal Engine, destinataire mis en forme, ou motif COORDONNEE_ABSENTE ou
+  COORDONNEE_INVALIDE, pour une ligne NON_JOIGNABLE (D14).
+- `Coordonnees` : téléphone accepté seulement sous les trois formes du Guide. Un numéro local
+  `6xxxxxxxx` est complété en `2376xxxxxxxx`. Rien d'autre n'est deviné. Le courriel reçoit un
+  contrôle de forme minimal.
+- Tests : 26 sur les coordonnées, 13 sur le routage, 2 d'intégration sur PostgreSQL (réglages de
+  V28). Suite complète : 560 tests verts.
 
 ### ⬜ Étape 5 : contenus par canal
 
@@ -337,3 +350,14 @@ Livrée, en attente du commit de l'utilisateur. Décision consignée : **Q-118**
     manuel.
 - Point ouvert ajouté : WhatsApp exige-t-il des modèles préapprouvés côté Engine ? Le canal reste
   éteint par défaut tant que la réponse n'est pas connue.
+- Étape 4, choix d'implémentation (à respecter dans les étapes suivantes) :
+  - **Sans consentement, aucune ligne**, pas même NON_JOIGNABLE : le prestataire a refusé, ce n'est
+    pas un défaut à superviser. À l'inverse, une coordonnée absente ou invalide donne une ligne
+    NON_JOIGNABLE avec son motif. À l'étape 6, ce motif ira dans `derniere_erreur`.
+  - **`AutrePrestataire.notification` vaut `false` par défaut** depuis V1. Un autre prestataire
+    n'est donc notifié hors de l'application que si sa fiche le demande, ce qui est conforme à D15.
+    L'avocat recevra à l'étape 7 un champ coché par défaut.
+  - **Aucune collision d'`event_id` entre Outlook et le courriel personnel**, bien que les deux
+    donnent le canal Engine EMAIL : un même destinataire est soit interne, soit prestataire.
+  - Un utilisateur désactivé n'est pas écarté par le routage : aucune règle ne le dit, et ce sont
+    les appelants de `declencher` qui choisissent les destinataires.
