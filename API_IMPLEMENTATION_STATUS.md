@@ -1,7 +1,11 @@
 # API_IMPLEMENTATION_STATUS
 
 > Inventaire exhaustif des endpoints et état d'implémentation.
-> Dernière mise à jour : 2026-09-11 (M16 — cycle du délibéré aligné sur les sources, Q-78).
+> Dernière mise à jour : 2026-09-15 (M22 — pagination généralisée à huit endpoints, filtres et recherche au fil de la frappe ; Q-100 à Q-106).
+> Précédente : 2026-09-14 (M19 — portail Avocat, quatre lectures cadrées Q-96 ; pièces justificatives réellement téléversées Q-97).
+> Précédente : 2026-09-14 (M18 — tableau de bord exécutif ouvert à la DJA, Q-95).
+> Précédente : 2026-09-14 (M17 — paramètres système validés par clé Q-91 ; listes triées Q-92/Q-93 ; vue consolidée d'un client sans N+1 Q-94).
+> Précédente : 2026-09-11 (M16 — cycle du délibéré Q-78 ; GED : demande orpheline et file nommée Q-79, rapport journalier Q-80).
 > **Conformité vérifiée endpoint par endpoint en M14** : les 56 endpoints du code ont été audités
 > contre ce tableau — 54 strictement conformes, 2 écarts de rôle corrigés ici (`POST
 > /dossiers/{id}/etapes` et `DELETE /ged/documents/{id}` : `ROLE_JURISTE`, non `ROLE_SAISIE`) — Q-66.
@@ -15,6 +19,22 @@
 `✅` implémenté et testé · `🟡` partiel · `❌` non implémenté ·
 `📋` spécifié dans l'OpenAPI REF-07 §3 · `📄` cité dans le tableau REF-07 §2 mais **absent de l'OpenAPI** ·
 `💡` « à proposer » (identifié par les user stories, absent du contrat) · `🆕` manquant partout, déduit d'une règle
+
+
+> **Pagination généralisée et filtres (M22, Q-100 à Q-106).** Huit endpoints renvoyaient une liste
+> entière et passent en `PageResponse` : `/repertoire/avocats`, `/constitutions/prestataires`,
+> `/intervenants`, `/ged/demandes-suppression`, et les onglets Documents, Audiences et Alarmes d'un
+> dossier ; `GET /dossiers/{id}/historique` est créé. La **taille par défaut est 10** sur les
+> endpoints de tableau, 20 sur `/intervenants` qui alimente aussi des listes déroulantes.
+>
+> Filtres ajoutés : `estSensible` et `sensibiliteStatut` sur **#2** (la seconde ouvre la file des
+> sensibilités à valider du DJ/DJA) ; `type` et `dossierId` sur **#45** ; `dossierId`, `avocatId`,
+> `referenceFacture`, `dateDebut` et `dateFin` sur **#28** ; `statut` sur `/avocat/mes-publications` ;
+> `nom` sur **#62**, qui porte la recherche au fil de la frappe des sélecteurs.
+>
+> ⚠ Deux paramètres **ne sont pas** des filtres : le destinataire d'une notification et, pour un
+> avocat, l'`avocatId` des frais. Ils restent résolus sur le jeton — les rendre filtrables aurait
+> ouvert la lecture des données d'un collègue.
 
 ---
 
@@ -42,12 +62,13 @@ qu'après une décision d'ajout — traité comme tel dès M4.
   des intervenants (#61, #62), les deux référentiels de formulaire (#64, #65) et le répertoire des
   utilisateurs internes (#66, Q-69).
 
-- **M16 (5)** — corrections issues de l'intégration frontend : `GET /dossiers/{id}/seuil-derogation`
+- **M16 (7)** — corrections issues de l'intégration frontend : `GET /dossiers/{id}/seuil-derogation`
   (Q-74), `PATCH /audiences/{id}/annulation` (Q-76), `PATCH /alarmes/{id}/traiter` (Q-77),
-  `PUT /deliberes/{id}/resultat` et `GET /deliberes/{id}/prorogations` (Q-78).
+  `PUT /deliberes/{id}/resultat` et `GET /deliberes/{id}/prorogations` (Q-78),
+  `GET /frais/demandes/{id}` (Q-82), `GET /dossiers/{id}/decisions` (Q-88).
 
-Soit **72 endpoints HTTP exposés au total** : les 66 numérotés, `POST /dossiers/{id}/etapes` et les
-cinq ajouts de M16 — décompte des annotations de mapping du code, le 2026-09-11 (le « 66 » inscrit
+Soit **74 endpoints HTTP exposés au total** : les 66 numérotés, `POST /dossiers/{id}/etapes` et les
+sept ajouts de M16 — décompte des annotations de mapping du code, le 2026-09-11 (le « 66 » inscrit
 ici jusqu'au 2026-09-10 n'avait pas suivi les ajouts non numérotés).
 
 Le squelette de starter hors périmètre (Template/Admin/Staff/Dashboard/Chat, auth JWT maison) a
@@ -61,7 +82,7 @@ Le squelette de starter hors périmètre (Template/Admin/Staff/Dashboard/Chat, a
 | # | Méthode | Endpoint | Rôle requis | FR / US | Src | Statut |
 |---|---|---|---|---|---|---|
 | 1 | POST | `/dossiers` | `ROLE_SAISIE` | FR-DOS-01 / US 1.1 | 📋 | ✅ M4 |
-| 2 | GET | `/dossiers` | `ROLE_CONSULTATION` | FR-DOS-03 / US 1.3 | 📋 | ✅ M4 |
+| 2 | GET | `/dossiers` | `ROLE_CONSULTATION` | FR-DOS-03 / US 1.3 | 📋 | ✅ M4 · **trié M17** (Q-93) |
 | 3 | GET | `/dossiers/{id}` | `ROLE_CONSULTATION` | FR-DOS-03 / US 1.3 | 📋 | ✅ M4 |
 | 4 | PUT | `/dossiers/{id}/affectation` | `ROLE_JURISTE`, `ROLE_DJ` | FR-DOS-02 / US 1.2 | 📋 | ✅ M4 |
 | 5 | PATCH | `/dossiers/{id}/etapes/{etapeId}/statut` | `ROLE_JURISTE` | FR-DOS-04 / US 1.4 | 📋 | ✅ M4 |
@@ -87,15 +108,19 @@ Q-10, Q-11, Q-12, Q-26, Q-34, Q-35 pour le détail des arbitrages pris pendant l
 
 | # | Méthode | Endpoint | Rôle requis | FR / US | Src | Statut |
 |---|---|---|---|---|---|---|
-| 9 | GET | `/clients` | `ROLE_CONSULTATION` | US 8.6 | 📋 | ✅ M4 |
+| 9 | GET | `/clients` | `ROLE_CONSULTATION` | US 8.6 | 📋 | ✅ M4 · **trié M17** (Q-93) |
 | 10 | GET | `/clients/{id}` | `ROLE_CONSULTATION` | US 8.6 | 📋 | ✅ M4 |
-| 11 | GET | `/clients/{clientId}/dossiers` | `ROLE_CONSULTATION` | FR-REP-03 / US 8.6 | 📋 | ✅ M4 |
+| 11 | GET | `/clients/{clientId}/dossiers` | `ROLE_CONSULTATION` | FR-REP-03 / US 8.6 | 📋 | ✅ M4 · **N+1 supprimé M17** (Q-94) |
 | 12 | POST | `/clients` | `ROLE_SAISIE` | INT-05 | 🆕 | ✅ M4 |
+| 12 bis | PUT | `/clients/{id}` | `ROLE_SAISIE` | INT-05 | 🆕 | ✅ Q-116 |
 
 > **#12** : le contrat expose la lecture des clients mais **aucun endpoint de création**, alors que
 > `dossier.client_id` est `NOT NULL` et que « les données clients peuvent être saisies manuellement »
-> (US §11.3, INT-05). Implémenté sous `ROLE_SAISIE` — cf. Q-23. `PUT /clients/{id}` non retenu,
-> aucun besoin identifié en M4.
+> (US §11.3, INT-05). Implémenté sous `ROLE_SAISIE` — cf. Q-23. `PUT /clients/{id}` non retenu en M4, faute de besoin.
+>
+> **#12 bis** (Q-116, 2026-09-22) : le besoin est apparu — un client créé ne pouvait plus être corrigé.
+> Nom, courriel et téléphone se modifient ; **la référence reste figée**, elle n'est pas dans le corps.
+> Chaque modification effective est historisée (`CLIENT_MODIFIE`, hors dossier, V25).
 
 ## 3. Audiences
 
@@ -187,11 +212,27 @@ d'expédition (403 hors rôle JURISTE / 200 sinon). 14 tests automatisés dédi�
 | 26 | POST | `/frais/demandes/{id}/validation-conjointe` | `ROLE_DJ` **et** `ROLE_DJA` | FR-INT-04 / US 4.5 | 📋 | ✅ |
 | 27 | PATCH | `/frais/demandes/{id}/paiement` | `ROLE_ASSISTANTE` | FR-INT-05 / US 4.6 | 📋 | ✅ |
 | 28 | GET | `/frais/demandes` | selon profil | UC-INT-02/03/04 (« liste des demandes en attente ») | 🆕 | ✅ |
+| — | GET | `/frais/demandes/{id}` | `ROLE_AVOCAT` (les siennes), `ROLE_ASSISTANTE`, `ROLE_DJA`, `ROLE_DJ` | UC-INT-02 étape 3 (détail, Q-82) | 🆕 | ✅ M16 |
 
 > **#28** : les UC-INT-02/03/04 supposent tous une **file de travail** (« le système affiche la liste
 > des demandes validées en attente de paiement », « aucune demande en attente »). Implémenté en M10
 > — `GET /frais/demandes?statut=`, filtré sur les propres demandes pour `ROLE_AVOCAT`, transverse
-> pour le personnel interne. Cf. Q-24.
+> pour le personnel interne. Cf. Q-24. Depuis Q-82, triée de la plus récente à la plus ancienne.
+>
+> **Réponse enrichie (M16, Q-82)** : `DemandeFraisResponse` porte `referenceDossier`, `avocatNom`,
+> `dossierSensible`, `seuilApplicable`, `validationConjointeRequise` (RG-INT-03 appliquée) et
+> `validations` (étape, décision, motif, auteur nommé, date) — sur toutes les réponses du module.
+> **Détail** `GET /frais/demandes/{id}` : 403 pour un avocat sur la demande d'un confrère.
+>
+> **Relance CONF04 (M16, Q-83)** : `FraisRelanceScheduler`, horaire — une validation conjointe
+> restée sans suite `DELAI_VALIDATION_CONJOINTE` jours (5 par défaut) après l'accord d'opportunité,
+> puis après chaque relance, relance le DJ et/ou la DJA qui n'ont pas encore voté (alerte
+> `VALIDATION_CONJOINTE_REQUISE`). Migration `V11__frais_relance_validation_conjointe.sql`.
+>
+> **Avocat connecté (M16, Q-84)** : reconnu par son identifiant de connexion (`preferred_username`,
+> enregistré sur `utilisateur.identifiant`, V12) — c'est ce que le DJ saisit comme `compteKeycloak` —,
+> à défaut par son `sub`. Vaut pour #23, #28, le détail et les publications de l'avocat (#29, #31),
+> ainsi que pour les alertes qui lui sont destinées.
 
 **Circuit implémenté (M10)** : `FraisService` — dépôt (avocat affecté au dossier, RG-INT-01/Q-54),
 anti-doublon de facture (`ERR-006`, unique tous statuts confondus, y compris `REJETEE` — US 4.3),
@@ -203,13 +244,28 @@ si sensible ou montant > seuil, paiement (Assistante). Traçabilité complète v
 
 | # | Méthode | Endpoint | Rôle requis | FR / US | Src | Statut |
 |---|---|---|---|---|---|---|
-| 29 | POST | `/publications/cr-audience` | `ROLE_AVOCAT` | FR-INT-09 / US 5.1 | 📋 | ✅ |
+| 29 | POST | `/publications/cr-audience` (multipart) | `ROLE_AVOCAT` | FR-INT-09 / US 5.1 | 📋 | ✅ |
 | 30 | PUT | `/publications/{id}/validation` | `ROLE_ASSISTANTE` | FR-INT-09 / US 5.2 | 📋 | ✅ |
 | 31 | POST | `/publications/autres` (multipart) | `ROLE_AVOCAT` | FR-INT-09 / US 5.3 | 📋 | ✅ |
 | 32 | GET | `/publications/{id}` | `ROLE_CONSULTATION` | US 5.4 | 📋 | ✅ |
 | 33 | POST | `/publications/{id}/commentaires` | `ROLE_JURISTE` | FR-INT-09 / US 5.5 | 📋 | ✅ |
 | 34 | POST | `/publications/{id}/correspondance` | `ROLE_DJ`, `ROLE_DJA` | RG-INT-07 / US 5.5 | 💡 | ✅ |
 | 59 | GET | `/publications?dossierId=&statut=` | `ROLE_ASSISTANTE`, `ROLE_JURISTE`, `ROLE_DJ`, `ROLE_DJA` | UC-INT-09 (« file des publications à valider ») | 🆕 | ✅ M15 |
+
+> **Lecture et instruction (M16, Q-86).** `PublicationResponse` porte `referenceDossier`,
+> `avocatNom`, `audienceDate`, `restrictionAccesNom`, `nomFichier` ; le **détail #32** seul ajoute
+> `urlTelechargement` (pré-signée, 10 min), `commentaires` (auteur nommé) et `correspondance`.
+> **#32** : l'Assistante lit une publication `DEPOSE`/`REJETE` (404 pour les autres profils) ; la
+> restriction d'accès ne s'oppose ni à l'Assistante ni au DJ/DJA. **#59** : `statut=DEPOSE` en ordre
+> d'arrivée, sinon la plus récente d'abord. **#30** : une validation notifie les juristes du dossier,
+> ou le seul destinataire désigné.
+
+> **Pièce jointe du compte rendu (M16, Q-98).** **#29** est **multipart** : `dossierId`,
+> `audienceId`, `contenu` et `restrictionAcces` en paramètres, la pièce en partie `file`
+> **facultative** — le contrat le décrivait en JSON, l'écart est assumé et consigné. La pièce subit
+> les mêmes contrôles que la GED (`FORMATS_GED`, `TAILLE_MAX_GED`) et se relit par `nomFichier` /
+> `urlTelechargement` sur **#32**, comme celle d'une autre publication. Un dépôt sans pièce se
+> comporte exactement comme avant.
 
 > **#30** : chemin généralisé, sans le segment `cr-audience` du contrat — s'applique aux deux
 > sous-types de publication (Q-55), aucun second endpoint n'étant prévu pour valider une « autre »
@@ -241,10 +297,16 @@ automatisés dédiés. Voir `DECISIONS_AND_OPEN_QUESTIONS.md` Q-20, Q-25, Q-55, 
 |---|---|---|---|---|---|---|
 | 35 | POST | `/constitutions/prestataires` | `ROLE_JURISTE` | FR-INT-06 / US 5.6 | 💡 | ✅ M9 |
 | 36 | PUT | `/constitutions/prestataires/{id}/validation` | `ROLE_SH` | FR-INT-07 / US 5.7 | 💡 | ✅ M9 |
-| 37 | GET | `/repertoire/avocats` | `ROLE_JURISTE`, `ROLE_ASSISTANTE` | FR-INT-08 / US 5.8 | 💡 | ✅ M9 |
-| 60 | GET | `/constitutions/prestataires?statut=` | `ROLE_SH`, `ROLE_JURISTE` | UC-INT-07 (« constitutions à signer ») | 🆕 | ✅ M15 |
+| 37 | GET | `/repertoire/avocats?nom&page&size` | `ROLE_JURISTE`, `ROLE_ASSISTANTE` | FR-INT-08 / US 5.8 | 💡 | ✅ M9 |
+| 60 | GET | `/constitutions/prestataires?statut&page&size` *(paginé M22)* | `ROLE_SH`, `ROLE_JURISTE` | UC-INT-07 (« constitutions à signer ») | 🆕 | ✅ M15 |
+
+> **M16 (Q-86, Q-87).** `DemandeConstitutionResponse` porte `referenceDossier`, `prestataireNom`,
+> `prestataireType`, `demandeurNom`, `valideParNom`. **#36** : l'avocat constitué est désormais
+> réellement notifié — le prestataire, chargé à la demande, était un proxy d'`Intervenant` que
+> `instanceof Avocat` ne reconnaissait jamais (`Hibernate.unproxy`).
 | 61 | POST | `/intervenants` | `ROLE_DJ`, `ROLE_DJA` | RG-INT-01/02 (administration du référentiel) | 🆕 | ✅ M15 |
-| 62 | GET | `/intervenants?type=` | `ROLE_CONSULTATION` | RG-DOS-03 (sélecteurs d'affectation) | 🆕 | ✅ M15 |
+| 61 bis | PUT | `/intervenants/{id}` | `ROLE_DJ`, `ROLE_DJA` | RG-INT-01/02 — type et identifiant Keycloak figés | 🆕 | ✅ Q-117 |
+| 62 | GET | `/intervenants?type&nom&page&size` *(paginé + recherche, M22)* | `ROLE_CONSULTATION` | RG-DOS-03 (sélecteurs d'affectation) | 🆕 | ✅ M15 |
 
 > **#35/#36** : `demande_constitution.motif` obligatoire ; l'approbation génère la lettre de
 > constitution (PDFBox) et l'attache comme `Document` GED (M8) ; seul un `Avocat` avec compte
@@ -277,9 +339,15 @@ notifiant le demandeur, décision déjà prise refusée (409). 11 tests automati
 | 39 | GET | `/ged/documents/{id}` | `ROLE_CONSULTATION` | FR-GED-02 / US 6.3 | 📋 | ✅ M8 |
 | 40 | DELETE | `/ged/documents/{id}` | `ROLE_JURISTE` (202) / `ROLE_DJ`,`ROLE_DJA` (200) | FR-GED-03 / US 6.4, 6.5 | 📋 | ✅ M8 |
 | 41 | PUT | `/ged/documents/{id}/approbation-suppression` | `ROLE_DJ`, `ROLE_DJA` | FR-GED-03 / US 6.4 | 💡 | ✅ M8 |
-| 42 | GET | `/ged/rapport-journalier` | `ROLE_JURISTE` | FR-GED-04 / US 6.6 | 📋 | ✅ M8 |
+| 42 | GET | `/ged/rapport-journalier` | `ROLE_JURISTE`, `ROLE_DJ`, `ROLE_DJA`, `ROLE_ASSISTANTE` (Q-80) | FR-GED-04 / US 6.6 | 📋 | ✅ M8 |
 | 43 | GET | `/dossiers/{id}/documents` | `ROLE_CONSULTATION` | UC-GED-02 | 🆕 | ✅ M8 |
-| 63 | GET | `/ged/demandes-suppression?statut=` | `ROLE_DJ`, `ROLE_DJA` | UC-GED-04 (« demandes en attente ») | 🆕 | ✅ M15 |
+| 63 | GET | `/ged/demandes-suppression?statut&page&size` *(paginé M22)* | `ROLE_DJ`, `ROLE_DJA` | UC-GED-04 (« demandes en attente ») | 🆕 | ✅ M15 |
+
+> **M16 (Q-79, Q-80)** : `DemandeSuppressionResponse` (#40 en 202, #41, #63) porte `documentNom`,
+> `typeDocument`, `dossierId`, `referenceDossier` — la file dit quoi supprimer, historique compris.
+> Une suppression directe (#40 en 200) ferme la demande en attente sur le même document ; elle
+> restait sinon indécidable (404) et relancée toutes les 72 h (V10 ferme les orphelines existantes).
+> #42 est ouvert au DJ, à la DJA et à l'Assistante (« tout juriste », FR-GED-04 ; cf. Q-81).
 
 > **#38** : format dérivé de l'extension du fichier (pas du `Content-Type` déclaré, Q-46) ;
 > `typeDocument` reste un texte libre (Q-45). **#40** : double comportement selon le profil résolu
@@ -300,17 +368,39 @@ obligatoire) d'une demande, relance à 72 h déclenchée en conditions réelles 
 rapport journalier correct (actif et à zéro). 16 tests automatisés dédiés. Voir
 `DECISIONS_AND_OPEN_QUESTIONS.md` Q-02, Q-45, Q-46, Q-47, Q-48, Q-49, Q-50, Q-51.
 
+## 8bis. Portail Avocat (M19, Q-96)
+
+Quatre lectures propres au prestataire connecté — **surface distincte**, et non un élargissement des
+endpoints internes : la restriction est portée par la requête, pas par un filtre applicable après
+coup. Réponses réduites à ce que l'usage exige.
+
+| # | Méthode | Endpoint | Rôle requis | FR / US | Src | Statut |
+|---|---|---|---|---|---|---|
+| — | GET | `/avocat/mes-dossiers` 🆕 Q-96 | `ROLE_AVOCAT` | US 4.1, US 5.1 | 💡 | ✅ M19 |
+| — | GET | `/avocat/mes-dossiers/{id}/audiences` 🆕 Q-96 | `ROLE_AVOCAT` | US 5.1 | 💡 | ✅ M19 |
+| — | GET | `/avocat/mes-publications` 🆕 Q-96 | `ROLE_AVOCAT` | — | 💡 | ✅ M19 |
+| — | GET | `/avocat/mes-constitutions` 🆕 Q-96 | `ROLE_AVOCAT` | — | 💡 | ✅ M19 |
+| — | POST | `/avocat/pieces-justificatives` *(multipart)* 🆕 Q-97 | `ROLE_AVOCAT` | UC-INT-01 ét. 4 | 💡 | ✅ M19 |
+
+> **Un dossier ne montre que son identification** — référence, nature, juridiction saisie. Ni client,
+> ni risque encouru, ni sensibilité, ni juristes affectés. **Les audiences d'un dossier qui n'est pas
+> le sien répondent 403**, non 404 : le dossier existe, c'est l'accès qui est refusé.
+>
+> **Périmètre à confirmer** : `mes-publications` et `mes-constitutions` ne répondent à aucune
+> exigence écrite (US 5.4 vise le juriste) — livrées sur arbitrage du 2026-09-14, au motif qu'un
+> avocat notifié d'un rejet ne pouvait pas relire ce qui avait été rejeté.
+
 ## 9. Alertes, configurations, reporting
 
 | # | Méthode | Endpoint | Rôle requis | FR / US | Src | Statut |
 |---|---|---|---|---|---|---|
 | 44 | PUT | `/alertes/seuils` | `ROLE_DJ` | FR-ALR-01 / US 7.1 | 📋 | ✅ M5 |
-| 45 | GET | `/alertes/mes-notifications` | authentifié | FR-ALR-02 / US 7.3 | 📋 | ✅ M5 |
+| 45 | GET | `/alertes/mes-notifications?statut&type&dossierId&page&size` | authentifié | FR-ALR-02 / US 7.3 | 📋 | ✅ M5 · **trié M17** (Q-92) |
 | 46 | PATCH | `/alertes/{id}/traiter` | destinataire | US 7.4 | 💡 | ✅ M5 |
-| 47 | GET | `/configurations` | `ROLE_CONSULTATION` | CONF01-07 | 📋 | ✅ M5 |
-| 48 | PUT | `/configurations/{cle}` | `ROLE_DJ` | CONF01-07 | 📋 | ✅ M5 |
+| 47 | GET | `/configurations` | `ROLE_CONSULTATION` | CONF01-07 | 📋 | ✅ M5 · **enrichi M17** (Q-91) |
+| 48 | PUT | `/configurations/{cle}` | `ROLE_DJ` | CONF01-07 | 📋 | ✅ M5 · **validé par clé M17** (Q-91) |
 | 49 | GET | `/rapports` | `ROLE_JURISTE` | FR-REP-01 / US 8.4 | 📋 | ✅ |
-| 50 | GET | `/tableau-de-bord` | `ROLE_DJ` | FR-REP-02 / US 8.5 | 📋 | ✅ |
+| 50 | GET | `/tableau-de-bord` | `ROLE_DJ` **et `ROLE_DJA`** | FR-REP-02 / US 8.5 | 📋 | ✅ · **élargi M18** (Q-95) |
 
 > **#44** : `type` doit valoir `CHARGE_MAX_AVOCAT` (400 sinon) — seul type d'alerte du contrat
 > adossé à un seuil configurable (RG-ALR-02) ; délègue à `PUT /configurations/{cle}` en interne.
@@ -320,6 +410,17 @@ rapport journalier correct (actif et à zéro). 16 tests automatisés dédiés. 
 > anti-doublon, doublon d'affectation M4→M5, traitement par le seul destinataire, push WebSocket
 > best-effort) + 15 tests automatisés (`AlerteServiceTest`, `ChargeMaxAvocatSchedulerTest`,
 > `ConfigurationServiceTest`). Voir Q-22, Q-32, Q-36, Q-37, Q-38.
+>
+> **#47/#48 (M17, Q-91)** : chaque clé porte une règle de saisie appliquée dans
+> `ConfigurationService.modifier` — donc aussi sur **#44**, qui y délègue. Une valeur incohérente est
+> refusée en **400** au lieu de ressortir en 500 depuis un autre module (frais, délibéré, GED) ; une
+> valeur valide est **normalisée** avant enregistrement. La règle est publiée dans la réponse
+> (`typeValeur`, `valeurMinimale`, `valeurMaximale`, `valeursPossibles`) pour que l'écran
+> d'administration construise son champ à partir du contrat. +26 tests (`RegleConfigurationTest`,
+> `ConfigurationServiceTest`).
+>
+> **#45 (M17, Q-92)** : plus récente d'abord (`dateDeclenchement DESC, id DESC`). Sans tri, la
+> requête paginée n'avait aucun `ORDER BY` et l'ordre des lignes était laissé à PostgreSQL.
 >
 > **#49/#50 (M13)** : US 8.6 (vue consolidée par client) était déjà couverte depuis M4 par
 > `GET /clients/{clientId}/dossiers` (#11) — seuls le rapport périodique et le tableau de bord
@@ -340,6 +441,13 @@ rapport journalier correct (actif et à zéro). 16 tests automatisés dédiés. 
 | 53 | PATCH | `/condamnations/{id}/statut` | `ROLE_JURISTE` | FR-DEF-02 / US 8.2 | 💡 | ✅ |
 | 54 | POST | `/jurisprudences` (multipart) | `ROLE_JURISTE` | FR-DEF-03 / US 8.3 | 💡 | ✅ |
 | 55 | GET | `/jurisprudences` | `ROLE_CONSULTATION` | UC-DEF-03 (« consultable dans la base ») | 🆕 | ✅ |
+| — | GET | `/dossiers/{id}/decisions` | `ROLE_CONSULTATION` | US 8.1/8.2 (onglet « Décisions » de la fiche, Q-88) | 🆕 | ✅ M16 |
+
+> **Lecture des décisions (M16, Q-88).** `{adjudications, condamnations}`, chaque liste de la plus
+> récente à la plus ancienne ; 404 si le dossier est inconnu — symétrique de #56/#57/#58.
+> **#55 (M16, Q-89)** : filtres partiels et insensibles à la casse (un mot-clé est retenu dès qu'un
+> mot indexé le contient), paramètre `dossierId` pour les décisions archivées d'un dossier.
+> Les accents comptent (pas d'`unaccent`).
 
 **Circuit implémenté (M12)** : `DecisionDefinitiveService` — adjudication (étape `CLOTURE`
 requise, RG-DEF-01), condamnation pécuniaire (aucune précondition d'étape, asymétrie assumée —

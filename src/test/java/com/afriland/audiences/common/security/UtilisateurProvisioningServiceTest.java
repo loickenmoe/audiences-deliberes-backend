@@ -74,6 +74,33 @@ class UtilisateurProvisioningServiceTest {
         assertThat(provisioningService.provisionner(jwt).getProfil().getCode()).isEqualTo("ASSISTANTE");
     }
 
+    /**
+     * Q-81 : le DJ et la DJA portent aussi {@code ROLE_JURISTE} (rôle composite), et l'ordre des
+     * rôles dans le jeton n'est pas garanti. Le profil se choisit par priorité : un nouveau DJ ne
+     * doit jamais être enregistré comme juriste.
+     */
+    @Test
+    void provisionner_prefereLeProfilDjAuRoleJuristeComposite() {
+        Jwt jwt = jwtWithRoles("kc-dj-q81", List.of("ROLE_JURISTE", "ROLE_SAISIE", "ROLE_DJ", "ROLE_CONSULTATION"));
+        Profil djProfil = Profil.builder().id(2L).code("DJ").build();
+        when(utilisateurRepository.findByKeycloakId("kc-dj-q81")).thenReturn(Optional.empty());
+        when(profilRepository.findByCode("DJ")).thenReturn(Optional.of(djProfil));
+        when(utilisateurRepository.save(any(Utilisateur.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThat(provisioningService.provisionner(jwt).getProfil().getCode()).isEqualTo("DJ");
+    }
+
+    @Test
+    void provisionner_prefereLeProfilDjaAuRoleJuristeComposite() {
+        Jwt jwt = jwtWithRoles("kc-dja-q81", List.of("ROLE_JURISTE", "ROLE_DJA", "ROLE_SAISIE"));
+        Profil djaProfil = Profil.builder().id(3L).code("DJA").build();
+        when(utilisateurRepository.findByKeycloakId("kc-dja-q81")).thenReturn(Optional.empty());
+        when(profilRepository.findByCode("DJA")).thenReturn(Optional.of(djaProfil));
+        when(utilisateurRepository.save(any(Utilisateur.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThat(provisioningService.provisionner(jwt).getProfil().getCode()).isEqualTo("DJA");
+    }
+
     @Test
     void provisionner_rejectsTokenWithNoRecognizedBusinessRole() {
         Jwt jwt = jwtWithRoles("kc-000", List.of("ROLE_SAISIE", "ROLE_CONSULTATION"));

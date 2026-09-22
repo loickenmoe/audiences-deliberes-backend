@@ -2,7 +2,10 @@
 
 > Feuille de route séquentielle du backend. Un jalon = un objectif, un périmètre fermé,
 > une validation manuelle par le porteur du projet avant passage au suivant.
-> Dernière mise à jour : 2026-09-07 (M0 à M15 terminés et validés — feuille de route achevée,
+> Dernière mise à jour : 2026-09-15 (M0 à M22 terminés et validés). Les jalons **M16 à M20** ont été
+> ouverts hors feuille de route initiale, sur autorisation explicite du porteur du projet, pour
+> corriger ce que la consommation réelle de l'API par le frontend a révélé — Q-70 à Q-98.
+> Précédente : 2026-09-07 (M0 à M15 terminés et validés — feuille de route achevée,
 > M15 ajouté hors roadmap initiale pour rendre le backend consommable par un frontend).
 
 ---
@@ -1106,6 +1109,242 @@ réel (mise en délibéré, 409 sur un second, prorogation et historique, rabatt
 refusée sur un rabattu, nouvelle mise en délibéré, vidage, rabattement refusé après décision,
 états `VIDE`/`RABATTU` dans la liste). **287 tests au vert, `BUILD SUCCESS`.** **Vérifié en réel** :
 V9 appliquée à la base locale (rang 9), `resultat` facultatif, colonnes de rabattement présentes.
+
+### 10. GED : demande de suppression orpheline, file anonyme, rapport trop fermé (Q-79, Q-80) ✅
+
+Remonté par l'audit du jalon F10 du frontend (QF-34, QF-35). Une suppression directe (DJ/DJA) laissait
+en attente la demande du juriste sur le même document — indécidable (404) et relancée toutes les
+72 h sans fin ; la file ne nommait ni le fichier ni le dossier ; le rapport journalier n'était servi
+qu'au rôle juriste. **Implémenté** : la suppression directe ferme la demande (`APPROUVEE`, validée par
+l'auteur de la suppression) ; `DemandeSuppressionResponse` porte `documentNom`, `typeDocument`,
+`dossierId`, `referenceDossier` ; migration `V10__demandes_suppression_orphelines.sql` pour les
+orphelines existantes ; rapport journalier ouvert au juriste, au DJ, à la DJA et à l'Assistante.
+Q-81 (le DJ et la DJA sans `ROLE_JURISTE`), constaté au même audit, est traité au §11.
+
+**Testé** : 2 tests unitaires (`GedServiceTest`) et 2 tests d'intégration sur PostgreSQL réel
+(`HabilitationFrontendIntegrationTest` : demande 202 déjà nommée, suppression directe, plus de
+demande en attente, historique `APPROUVEE` nommé ; rapport servi aux quatre profils, refusé au SH).
+**291 tests au vert, `BUILD SUCCESS`.** **Vérifié en réel** : V10 appliquée (rang 10), une demande
+orpheline fermée — laissée par un parcours e2e —, aucune restante.
+
+### 11. Le DJ et la DJA n'avaient pas les droits d'un juriste (Q-81) ✅
+
+Les sources donnent au DJ et à la DJA « tous les droits d'un juriste, plus les leurs » ; le realm
+ne leur donnait que `ROLE_SAISIE`. **Implémenté, sur décision du porteur du projet** : `ROLE_JURISTE`
+ajouté aux composites de `ROLE_DJ` et `ROLE_DJA`, dans `keycloak/audiences-realm.json` et dans le
+Keycloak en service (`kcadm add-roles` — l'import au démarrage ignore un realm existant).
+**Précaution** : `UtilisateurProvisioningService` déduit désormais le profil par priorité (DJ, DJA,
+SH, ASSISTANTE, JURISTE, AVOCAT) et non plus par le premier rôle du jeton, dont l'ordre n'est pas
+garanti — sans quoi un nouveau DJ aurait pu être enregistré comme juriste.
+
+**Testé** : 2 tests unitaires (jeton juriste + DJ → DJ ; juriste + DJA → DJA). **293 tests au vert,
+`BUILD SUCCESS`.** **Vérifié en réel** : composites de `ROLE_DJ` et `ROLE_DJA` = `ROLE_JURISTE`,
+`ROLE_SAISIE` dans le Keycloak local. Un jeton émis avant le changement exige une reconnexion.
+
+### 12. Frais : détail, décisions du circuit, relance CONF04 (Q-82, Q-83) ✅
+
+Remonté par l'audit du jalon F11 du frontend, décidé par le porteur du projet le 2026-09-11. Aucun
+détail d'une demande de frais, décisions du circuit invisibles (le DJ ne voyait pas l'accord de la
+DJA, personne ne savait s'il avait déjà voté), réponse limitée à des identifiants, file sans ordre
+stable ; et la relance CONF04 n'était pas implémentée. **Implémenté** : `GET /frais/demandes/{id}`
+(l'avocat ne lit que les siennes) ; `DemandeFraisResponse` porte dossier et avocat nommés,
+sensibilité, seuil applicable, validation conjointe requise et décisions ; file triée par date
+décroissante ; `FraisRelanceScheduler` relance le DJ et/ou la DJA qui n'ont pas voté après
+`DELAI_VALIDATION_CONJOINTE` jours ; migration `V11__frais_relance_validation_conjointe.sql`.
+
+**Testé** : 3 tests unitaires (`FraisServiceTest`), 4 (`FraisRelanceSchedulerTest`), parcours
+d'intégration `p6` étendu sur PostgreSQL réel. **300 tests au vert, `BUILD SUCCESS`.** **Vérifié en
+réel** : V11 appliquée (rang 11), colonne `date_derniere_relance` présente.
+
+### 13. Avocat reconnu par son identifiant de connexion ; unicité concurrente en 409 (Q-84, Q-85) ✅
+
+Constaté en préparant les parcours e2e de F11, corrigé sur décision du porteur du projet avant la
+clôture du jalon. Le backend comparait `avocat.compte_keycloak` au `sub` du jeton, alors que le DJ y
+saisit l'identifiant de connexion : aucun avocat créé par l'interface n'était reconnu, et ses alertes
+ne partaient pas. **Implémenté** : `utilisateur.identifiant` (`preferred_username`, migration
+`V12__utilisateur_identifiant.sql`), renseigné au provisionnement ou à la requête suivante ;
+`CompteAvocatService` (identifiant de connexion d'abord, `sub` en second) dans `FraisService`,
+`PublicationService` et `ConstitutionService`. Et deux créations concurrentes (même avocat, même
+facture…) rendent 409 et non plus 500 : `GlobalExceptionHandler` traite la violation d'unicité.
+
+**Testé** : `CompteAvocatServiceTest` (5), `CurrentUserServiceTest` (+2), `GlobalExceptionHandlerTest`
+(+2), `HabilitationFrontendIntegrationTest` (+1, PostgreSQL réel). **310 tests au vert,
+`BUILD SUCCESS`.**
+
+### 14. Publications et constitutions lisibles par qui les instruit ; avocat constitué notifié (Q-86, Q-87) ✅
+
+Remonté par l'audit du jalon F12 du frontend, décidé par le porteur du projet le 2026-09-11.
+**Implémenté** : `GET /publications/{id}` lisible par l'Assistante avant validation, avec l'URL
+pré-signée du fichier, les commentaires nommés et la correspondance ; restriction d'accès sans effet
+sur les profils instructeurs (Assistante, DJ, DJA) ; publications et demandes de constitution
+nommées ; file des publications triée ; notification des juristes du dossier (ou du seul destinataire
+désigné) à la validation. **Q-87** : `Hibernate.unproxy` sur le prestataire d'une constitution — un
+proxy d'`Intervenant` n'était jamais reconnu comme avocat, qui n'était donc jamais notifié.
+
+**Testé** : `PublicationServiceTest` (+5), parcours d'intégration `p2` et `p7` étendus sur
+PostgreSQL réel. **315 tests au vert, `BUILD SUCCESS`.** Un premier passage avait révélé un défaut du
+nouveau code (`Set.of(...).contains(null)` lève une exception pour un utilisateur sans profil),
+corrigé avant ce résultat.
+
+### 15. Décisions définitives relisibles ; recherche jurisprudentielle souple (Q-88, Q-89) ✅
+
+Ouverture du jalon F13 du frontend, décidé par le porteur du projet le 2026-09-11 (QF-03).
+**Implémenté** : `GET /dossiers/{id}/decisions` — adjudications et condamnations du dossier ;
+`GET /jurisprudences` partiel et insensible à la casse sur mots-clés, nature et juridiction, avec un
+filtre `dossierId`. **Laissé ouvert (Q-90)** : la mise à jour d'une adjudication et le statut
+initial d'une condamnation, à confirmer avec la Direction Juridique.
+
+**Testé** : `JurisprudenceServiceTest` (+2, un mis à jour), `HabilitationFrontendIntegrationTest`
+(+2, PostgreSQL réel). **319 tests au vert, `BUILD SUCCESS`.**
+
+### 16. Paramètres système, tri des listes, vue consolidée (Q-91 à Q-94) ✅
+
+Ouverture du jalon F14 du frontend (écran 41), décidé par le porteur du projet le 2026-09-12.
+`PUT /configurations/{cle}` acceptait n'importe quelle chaîne non vide alors que cinq points de code
+reconvertissent ces valeurs : une saisie erronée du DJ ressortait en **erreur 500 dans un module
+sans rapport** (frais, délibéré, GED). **Implémenté** : `RegleConfiguration` — type, bornes et
+ensembles fermés par clé, appliqués dans `ConfigurationService.modifier` (donc aussi sur
+`PUT /alertes/seuils`, qui y délègue) ; valeur invalide refusée en **400**, valeur valide
+**normalisée** avant enregistrement ; règle **publiée** dans `ConfigurationResponse` pour que l'écran
+d'administration construise son champ à partir du contrat. **Laissé à confirmer** : les maxima de
+`SEUIL_PROROGATIONS`, `DELAI_VALIDATION_CONJOINTE` et `CHARGE_MAX_AVOCAT` sont des garde-fous que je
+propose, aucune source ne fixant de plafond.
+
+**Ajouté en cours de jalon (Q-92, Q-93)** : trois listes paginaient sans aucun `ORDER BY` —
+`GET /alertes/mes-notifications`, `GET /clients` et `GET /dossiers`. Une ligne pouvait atterrir sur
+n'importe quelle page, apparaître deux fois ou disparaître ; passé vingt clients, celui qu'un juriste
+venait de créer devenait **invisible pour son auteur**. Tri du plus récent au plus ancien, départagé
+par `id`, sur arbitrage du porteur du projet. `GET /jurisprudences`, `GET /frais/demandes` et
+`GET /publications` étaient déjà triés (Q-89, Q-82, M16).
+
+**Ajouté en fin de jalon (Q-94)** : `GET /clients/{id}/dossiers` interrogeait la base **trois fois
+par dossier** — 930 requêtes et 11 à 19 s pour un client portant 310 dossiers. Les trois collections
+sont désormais chargées en trois requêtes pour la liste entière ; `GET /dossiers` emprunte le même
+chemin. Mesuré après correction, sur 355 dossiers : **0,12 s** contre 11 à 19 s.
+
+**Précision apportée à Q-91 après relecture des sources.** Le tableau CONF01 à CONF07 (user stories
+§11.2) fixe des valeurs par défaut, jamais des maxima, et la story 7.1 n'exige qu'un « seuil (entier
+positif) ». Les plafonds que j'avais proposés pour `SEUIL_PROROGATIONS`, `DELAI_VALIDATION_CONJOINTE`
+et `CHARGE_MAX_AVOCAT` n'avaient donc pas d'assise : ils sont ramenés à `Integer.MAX_VALUE`, le type
+dans lequel le code convertit la valeur. Restent les deux bornes que les sources justifient — 10 Mo
+pour la GED (CONF06, « via configuration Spring Boot / MinIO ») et douze chiffres pour le seuil de
+montant, au-delà desquels le calcul en `double` perdrait en exactitude. **Le contrôle refuse ce qui
+casserait l'application, pas ce que la documentation autorise.**
+
+**Testé** : `RegleConfigurationTest` (27), `ConfigurationServiceTest` (+2),
+`HabilitationFrontendIntegrationTest` (+3, PostgreSQL réel), et en réel contre le backend démarré.
+**351 tests au vert, `BUILD SUCCESS`.**
+
+### 17. Tableau de bord exécutif ouvert à la DJA (Q-95) ✅
+
+Ouverture du jalon F15 du frontend (écran 39), décidé par le porteur du projet le 2026-09-14, en
+reprenant QF-04. `GET /tableau-de-bord` était `hasRole('DJ')` d'après le critère d'acceptation d'US
+8.5, mais les spécifications fonctionnelles décrivent le tableau consolidé comme obtenu « à travers
+le DJ/DJA » (STK-06). **Implémenté** : `hasAnyRole('DJ', 'DJA')` ; les autres profils restent exclus
+(RG-REP-03).
+
+À noter : `ROLE_DJ` et `ROLE_DJA` étant composites depuis Q-81, la direction atteignait déjà
+`GET /rapports`, `GET /audiences/calendrier` et `GET /repertoire/avocats` — effet de bord non
+consigné à l'époque, qui a clos l'essentiel de QF-04 sans modification.
+
+**Testé** : `ParcoursEndToEndIntegrationTest.p9_pilotage` étendu (DJA en 200, juriste et Assistante
+en 403) sur PostgreSQL réel, et en réel contre le backend démarré.
+
+### 18. Portail Avocat : lectures cadrées et pièces téléversées (Q-96, Q-97) ✅
+
+Ouverture du jalon F16 du frontend, sur la lacune QF-01 relevée dès l'audit initial. L'avocat ne
+porte pas `ROLE_CONSULTATION` : US 4.1 le faisait soumettre un `dossierId` et US 5.1 lui demandait de
+déposer « en choisissant le dossier et l'audience », alors que rien ne lui permettait de les
+découvrir — l'exigence était inapplicable.
+
+**Implémenté** : un module `portail`, quatre lectures sous `/avocat` (`mes-dossiers`,
+`mes-dossiers/{id}/audiences`, `mes-publications`, `mes-constitutions`), toutes `hasRole('AVOCAT')` et
+restreintes **dans la requête**. Une surface distincte plutôt que l'élargissement des endpoints
+internes : la confidentialité ne doit pas reposer sur un filtre qu'on peut oublier. Un dossier ne
+montre que son identification — ni client, ni risque, ni sensibilité.
+
+**À confirmer** : `mes-publications` et `mes-constitutions` ne répondent à aucune exigence écrite
+(US 5.4 vise le juriste) ; elles sont livrées sur arbitrage, au motif qu'un avocat notifié d'un rejet
+ne pouvait pas relire ce qui avait été rejeté.
+
+**Ajouté en fin de jalon (Q-97)**, sur signalement du porteur du projet : les **pièces
+justificatives** d'une demande de frais n'étaient jamais téléversées. UC-INT-01 dit que « l'avocat
+**charge** les pièces », UC-INT-02 que l'instructeur les **affiche**, et le dictionnaire décrit
+`pieces_justificatives` comme des « chemins ou références ». Téléversement en deux temps
+(`POST /avocat/pieces-justificatives` puis report des clés), URL pré-signées sur le détail. La
+validation de format et de poids est extraite de `GedService` en `ValidationFichierService` pour que
+`FORMATS_GED` et `TAILLE_MAX_GED` restent la seule source de vérité des deux.
+
+**Testé** : `HabilitationFrontendIntegrationTest` (+5, PostgreSQL réel) — cloisonnement, absence des
+champs du portefeuille, fermeture aux profils internes, téléversement et relecture par l'instructeur,
+format refusé.
+
+### 19. Une pièce facultative sur le compte rendu d'audience (Q-98) ✅
+
+Question du porteur du projet après le jalon F17 du frontend : l'avocat qui relate une audience
+dispose souvent du plumitif, et n'avait aucun moyen de le joindre à son compte rendu — il fallait le
+déposer à part, en « autre publication », où il perdait son rattachement à l'audience.
+
+**Implémenté** : `V13__compte_rendu_piece_jointe.sql` ajoute `chemin_stockage` **nullable** à
+`compte_rendu_audience` ; `POST /publications/cr-audience` passe en multipart (métadonnées en
+paramètres, partie `file` facultative) ; la pièce traverse `ValidationFichierService`, donc les mêmes
+`FORMATS_GED` et `TAILLE_MAX_GED` que la GED ; `GET /publications/{id}` renvoie désormais
+`nomFichier` et `urlTelechargement` pour **les deux** sous-types. Le récit reste obligatoire : la
+pièce l'étaye, elle ne le remplace pas. Le contrat d'API décrivait un corps JSON — l'écart est assumé
+et consigné (Q-98), au même titre que `/publications/autres` déjà multipart.
+
+**Testé** : 2 tests unitaires (dépôt avec pièce nommée, refus d'un format hors `FORMATS_GED`), le
+parcours P2 basculé en multipart avec relecture du `nomFichier` sur PostgreSQL réel, le refus d'un
+récit vide en 400, le test sans pièce conservé tel quel. **358 tests au vert.**
+
+**Vérifié en réel** : dépôt avec pièce 201 et URL pré-signée réellement téléchargeable depuis MinIO
+(HTTP 200) — ce que le client mocké ne pouvait pas montrer ; dépôt sans pièce 201 et `nomFichier`
+nul ; `.exe` et récit vide refusés en 400.
+
+---
+
+## M21 — Index adossés aux tris des listes paginées ✅ **Terminé**
+
+**Origine.** Relevé le 2026-09-15 dans le recensement d'améliorations demandé par le porteur du
+projet, et appliqué sur sa décision. Jalon d'une seule migration, sans code applicatif.
+
+**Implémenté** : `V14__index_tris_pagination.sql`. Six listes paginées triaient sur des colonnes
+qu'aucun des 37 index existants ne portait — `dossier`, `client`, `demande_frais` (`created_at`),
+`alerte` (`date_declenchement`), `publication` interne et portail (`date_depot`). Neuf index
+reproduisent désormais exactement l'ORDER BY de chaque requête, colonne de filtre en tête quand il y
+en a une.
+
+**Mesuré** sur une table jetable de 200 000 lignes reproduisant la forme de `dossier` : première page
+**62,5 ms → 0,094 ms** (balayage complet et tri, contre parcours d'index sur 20 lignes), page
+profonde `OFFSET 5000` à 5,4 ms sans tri complet. Table supprimée après mesure.
+
+**Testé** : 358 tests au vert, `BUILD SUCCESS`. Aucun contrat modifié, aucun impact frontend.
+
+---
+
+## M22 — Pagination généralisée, filtres et recherche au fil de la frappe ✅ **Terminé**
+
+**Origine.** Demande du porteur du projet le 2026-09-15 : **dix lignes par tableau au maximum**, et
+des filtres partout où ils manquent. Objectifs énoncés — « ni perte de données, ni lenteur » — pour
+une application « amenée à recevoir beaucoup de données ». La recherche au fil de la frappe a été
+autorisée en cours de jalon, hors du périmètre initial, comme réponse durable au problème des
+sélecteurs.
+
+**Implémenté** : huit endpoints passent de `List` à `PageResponse` et `GET /dossiers/{id}/historique`
+est créé ; filtres de sensibilité sur `#2`, de type et de dossier sur `#45`, de dossier, avocat,
+référence et période sur `#28`, de statut sur le portail ; recherche par nom sur `#62`. Migration
+`V15__index_filtres.sql` pour que ces filtres ne rendent pas à la base ce que V14 lui avait épargné.
+
+**Trois découvertes, consignées en Q-100 à Q-106.** Un index B-tree ne peut **rien** pour une
+recherche « contient » : `idx_dossier_reference` semblait couvrir le filtre de référence depuis M16
+et ne l'a jamais servi — corrigé par des index trigramme, qui imposent en contrepartie la création de
+l'extension `pg_trgm` par la DSI avant le premier démarrage en production. Le **répertoire des
+avocats** ne peut être paginé qu'à moitié, son tri venant d'un agrégat calculé hors SQL. Et **trois
+listes restent entières** parce qu'elles sont bornées par construction — trois étapes au maximum par
+dossier.
+
+**Deux verrous de sécurité** : le destinataire d'une notification et, pour un avocat, l'`avocatId`
+des frais restent résolus sur le jeton, jamais reçus en paramètre.
 
 ---
 

@@ -1,5 +1,7 @@
 package com.afriland.audiences.intervenant.service;
 
+import com.afriland.audiences.intervenant.domain.LettreConstitution;
+import com.afriland.audiences.intervenant.repository.LettreConstitutionRepository;
 import com.afriland.audiences.alerte.domain.TypeAlerte;
 import com.afriland.audiences.alerte.service.AlerteService;
 import com.afriland.audiences.common.audit.HistoriqueActionService;
@@ -21,10 +23,14 @@ import com.afriland.audiences.referentiel.domain.Avocat;
 import com.afriland.audiences.referentiel.domain.AutrePrestataire;
 import com.afriland.audiences.referentiel.domain.Intervenant;
 import com.afriland.audiences.referentiel.domain.Utilisateur;
+import com.afriland.audiences.referentiel.repository.AvocatRepository;
 import com.afriland.audiences.referentiel.repository.IntervenantRepository;
 import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
+import com.afriland.audiences.referentiel.service.CompteAvocatService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.PageImpl;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -51,8 +57,10 @@ class ConstitutionServiceTest {
     @Mock private HistoriqueActionService historiqueActionService;
     @Mock private AlerteService alerteService;
     @Mock private LettreConstitutionService lettreConstitutionService;
+    @Mock private LettreConstitutionRepository lettreConstitutionRepository;
     @Mock private MinioStorageService minioStorageService;
     @Mock private DocumentRepository documentRepository;
+    @Mock private AvocatRepository avocatRepository;
 
     private final DemandeConstitutionMapper mapper = demande -> new DemandeConstitutionResponse(
             demande.getId(), demande.getDossier() != null ? demande.getDossier().getId() : null,
@@ -60,7 +68,9 @@ class ConstitutionServiceTest {
             demande.getDemandeur() != null ? demande.getDemandeur().getId() : null, demande.getMotif(),
             demande.getStatut(), demande.getValidePar() != null ? demande.getValidePar().getId() : null,
             demande.getMotifRejet(), demande.getLettreDocument() != null ? demande.getLettreDocument().getId() : null,
-            demande.getDateDemande(), demande.getDateDecision());
+            demande.getDateDemande(), demande.getDateDecision(),
+            demande.getDossier() != null ? demande.getDossier().getReference() : null,
+            demande.getPrestataire() != null ? demande.getPrestataire().getNom() : null, null, null, null);
 
     private ConstitutionService service;
     private Dossier dossier;
@@ -71,7 +81,9 @@ class ConstitutionServiceTest {
     void setUp() {
         service = new ConstitutionService(demandeConstitutionRepository, dossierRepository, intervenantRepository,
                 utilisateurRepository, currentUserService, historiqueActionService, alerteService,
-                lettreConstitutionService, minioStorageService, documentRepository, mapper);
+                lettreConstitutionService, lettreConstitutionRepository, minioStorageService,
+                documentRepository, mapper,
+                new CompteAvocatService(avocatRepository, utilisateurRepository));
 
         dossier = Dossier.builder().id(1L).reference("DOS-2026-001").build();
         juriste = Utilisateur.builder().id(10L).nom("Juriste").prenom("Test").build();
@@ -134,7 +146,7 @@ class ConstitutionServiceTest {
         assertThat(result.statut()).isEqualTo(StatutConstitution.REJETEE);
         assertThat(result.motifRejet()).isEqualTo("Pas de besoin identifié");
         verify(alerteService).declencher(eq(TypeAlerte.CONSTITUTION_A_SIGNER), eq(1L), eq(juriste), any());
-        verify(lettreConstitutionService, never()).generer(any());
+        verify(lettreConstitutionService, never()).generer(any(LettreConstitution.class));
     }
 
     @Test
@@ -145,7 +157,20 @@ class ConstitutionServiceTest {
                 .statut(StatutConstitution.EN_ATTENTE).demandeur(juriste).motif("Besoin local").build();
         when(demandeConstitutionRepository.findById(100L)).thenReturn(Optional.of(demande));
         when(currentUserService.getCurrentUser()).thenReturn(sh);
-        when(lettreConstitutionService.generer(demande)).thenReturn(new byte[]{1, 2, 3});
+        /*
+         * La lettre est désormais un document enregistré, non plus un calcul (Q-115 B1) : le service
+         * compose un brouillon, le dépôt lui donne son numéro, puis le rendu le met en page.
+         */
+        /*
+         * Le brouillon naît **sans numéro** (B2) : celui-ci n'est tiré qu'à la signature, pour ne pas
+         * en brûler un sur une demande sans suite — la série ne repart jamais à un.
+         */
+        when(lettreConstitutionRepository.findByDemandeId(any())).thenReturn(Optional.empty());
+        when(lettreConstitutionRepository.prochainNumero()).thenReturn(4L);
+        when(lettreConstitutionService.brouillonPour(any(), eq(null)))
+                .thenReturn(LettreConstitution.builder().suffixeNumero("First Bank/DAJR").build());
+        when(lettreConstitutionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(lettreConstitutionService.generer(any(LettreConstitution.class))).thenReturn(new byte[]{1, 2, 3});
         when(minioStorageService.deposer(eq(1L), any(), eq("application/pdf"), any())).thenReturn("dossiers/1/lettre.pdf");
         when(documentRepository.save(any(Document.class))).thenAnswer(inv -> {
             Document d = inv.getArgument(0);
@@ -169,7 +194,20 @@ class ConstitutionServiceTest {
                 .statut(StatutConstitution.EN_ATTENTE).demandeur(juriste).motif("Besoin local").build();
         when(demandeConstitutionRepository.findById(100L)).thenReturn(Optional.of(demande));
         when(currentUserService.getCurrentUser()).thenReturn(sh);
-        when(lettreConstitutionService.generer(demande)).thenReturn(new byte[]{1, 2, 3});
+        /*
+         * La lettre est désormais un document enregistré, non plus un calcul (Q-115 B1) : le service
+         * compose un brouillon, le dépôt lui donne son numéro, puis le rendu le met en page.
+         */
+        /*
+         * Le brouillon naît **sans numéro** (B2) : celui-ci n'est tiré qu'à la signature, pour ne pas
+         * en brûler un sur une demande sans suite — la série ne repart jamais à un.
+         */
+        when(lettreConstitutionRepository.findByDemandeId(any())).thenReturn(Optional.empty());
+        when(lettreConstitutionRepository.prochainNumero()).thenReturn(4L);
+        when(lettreConstitutionService.brouillonPour(any(), eq(null)))
+                .thenReturn(LettreConstitution.builder().suffixeNumero("First Bank/DAJR").build());
+        when(lettreConstitutionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(lettreConstitutionService.generer(any(LettreConstitution.class))).thenReturn(new byte[]{1, 2, 3});
         when(minioStorageService.deposer(eq(1L), any(), eq("application/pdf"), any())).thenReturn("dossiers/1/lettre.pdf");
         when(documentRepository.save(any(Document.class))).thenAnswer(inv -> {
             Document d = inv.getArgument(0);
@@ -189,28 +227,29 @@ class ConstitutionServiceTest {
     @Test
     void lister_filtreParStatut_alimenteLaFileDuSh() {
         Intervenant prestataire = AutrePrestataire.builder().id(5L).nom("Notaire").build();
-        when(demandeConstitutionRepository.findByStatutOrderByDateDemandeAsc(StatutConstitution.EN_ATTENTE))
-                .thenReturn(List.of(DemandeConstitution.builder().id(100L).dossier(dossier)
+        when(demandeConstitutionRepository.findByStatutOrderByDateDemandeAsc(eq(StatutConstitution.EN_ATTENTE), any()))
+                .thenReturn(new PageImpl<>(List.of(DemandeConstitution.builder().id(100L).dossier(dossier)
                         .prestataire(prestataire).demandeur(juriste).motif("Acte notarié")
-                        .statut(StatutConstitution.EN_ATTENTE).build()));
+                        .statut(StatutConstitution.EN_ATTENTE).build())));
 
-        var result = service.lister(StatutConstitution.EN_ATTENTE);
+        var result = service.lister(StatutConstitution.EN_ATTENTE, PageRequest.of(0, 10)).content();
 
         assertThat(result).singleElement()
                 .satisfies(d -> assertThat(d.statut()).isEqualTo(StatutConstitution.EN_ATTENTE));
-        verify(demandeConstitutionRepository, never()).findByOrderByDateDemandeDesc();
+        verify(demandeConstitutionRepository, never()).findByOrderByDateDemandeDesc(any());
     }
 
     @Test
     void lister_sansFiltre_retourneToutLHistorique() {
         Intervenant prestataire = AutrePrestataire.builder().id(5L).nom("Notaire").build();
-        when(demandeConstitutionRepository.findByOrderByDateDemandeDesc()).thenReturn(List.of(
+        when(demandeConstitutionRepository.findByOrderByDateDemandeDesc(any())).thenReturn(new PageImpl<>(List.of(
                 DemandeConstitution.builder().id(101L).dossier(dossier).prestataire(prestataire)
                         .demandeur(juriste).statut(StatutConstitution.VALIDEE).validePar(sh).build(),
                 DemandeConstitution.builder().id(100L).dossier(dossier).prestataire(prestataire)
                         .demandeur(juriste).statut(StatutConstitution.REJETEE).validePar(sh)
-                        .motifRejet("Hors budget").build()));
+                        .motifRejet("Hors budget").build())));
 
-        assertThat(service.lister(null)).extracting(DemandeConstitutionResponse::id).containsExactly(101L, 100L);
+        assertThat(service.lister(null, PageRequest.of(0, 10)).content())
+                .extracting(DemandeConstitutionResponse::id).containsExactly(101L, 100L);
     }
 }

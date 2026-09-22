@@ -1,5 +1,7 @@
 package com.afriland.audiences.referentiel.service;
 
+import com.afriland.audiences.common.audit.HistoriqueActionService;
+import com.afriland.audiences.common.audit.TypeActionHistorique;
 import com.afriland.audiences.common.error.ApiException;
 import com.afriland.audiences.common.web.PageResponse;
 import com.afriland.audiences.referentiel.domain.Client;
@@ -7,15 +9,18 @@ import com.afriland.audiences.referentiel.mapper.ClientMapper;
 import com.afriland.audiences.referentiel.repository.ClientRepository;
 import com.afriland.audiences.referentiel.web.dto.ClientResponse;
 import com.afriland.audiences.referentiel.web.dto.CreerClientRequest;
+import com.afriland.audiences.referentiel.web.dto.ModifierClientRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -23,12 +28,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /** M14 — `ClientService` (M4) n'avait aucun test unitaire dédié : recherche, unicité, 404. */
 @ExtendWith(MockitoExtension.class)
 class ClientServiceTest {
 
     @Mock private ClientRepository clientRepository;
+    @Mock private HistoriqueActionService historiqueActionService;
 
     private final ClientMapper mapper = new ClientMapper() {
         @Override
@@ -48,7 +58,7 @@ class ClientServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new ClientService(clientRepository, mapper);
+        service = new ClientService(clientRepository, mapper, historiqueActionService);
         client = Client.builder().id(1L).reference("CLI-001").nom("Banque Test").build();
     }
 
@@ -125,5 +135,77 @@ class ClientServiceTest {
 
         assertThat(result.id()).isEqualTo(2L);
         assertThat(result.reference()).isEqualTo("CLI-002");
+    }
+
+    // ------------------------------------------------------------------ Modification (PUT /clients)
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> detailsHistorises() {
+        ArgumentCaptor<Map<String, Object>> details = ArgumentCaptor.forClass(Map.class);
+        verify(historiqueActionService).enregistrer(isNull(), eq(TypeActionHistorique.CLIENT_MODIFIE), details.capture());
+        return details.getValue();
+    }
+
+    @Test
+    void modifierClient_metAJourEtNHistoriseQueLesChampsChanges() {
+        client.setEmail("ancien@banque.cm");
+        client.setTelephone("+237 600 000 000");
+        when(clientRepository.findById(1L)).thenReturn(Optional.of(client));
+        when(clientRepository.save(any(Client.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ClientResponse result = service.modifierClient(1L,
+                new ModifierClientRequest("Banque Test", "nouveau@banque.cm", "+237 600 000 000"));
+
+        assertThat(result.email()).isEqualTo("nouveau@banque.cm");
+        // Seul l'e-mail a changé : le nom et le téléphone, identiques, n'encombrent pas la trace.
+        assertThat(detailsHistorises()).containsExactly(
+                Map.entry("reference", "CLI-001"),
+                Map.entry("ancienEmail", "ancien@banque.cm"),
+                Map.entry("nouvelEmail", "nouveau@banque.cm"));
+    }
+
+    @Test
+    void modifierClient_neTouchePasALaReference() {
+        when(clientRepository.findById(1L)).thenReturn(Optional.of(client));
+        when(clientRepository.save(any(Client.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ClientResponse result = service.modifierClient(1L, new ModifierClientRequest("Nouveau nom", null, null));
+
+        assertThat(result.reference()).isEqualTo("CLI-001");
+        assertThat(result.nom()).isEqualTo("Nouveau nom");
+    }
+
+    @Test
+    void modifierClient_sansAucunChangement_nEcritRien() {
+        when(clientRepository.findById(1L)).thenReturn(Optional.of(client));
+
+        // « Banque Test » à l'identique, espaces compris : ce n'est pas une modification.
+        service.modifierClient(1L, new ModifierClientRequest("  Banque Test ", "", "   "));
+
+        verify(clientRepository, never()).save(any());
+        verifyNoInteractions(historiqueActionService);
+    }
+
+    @Test
+    void modifierClient_unChampVide_devientAbsent() {
+        client.setTelephone("+237 600 000 000");
+        when(clientRepository.findById(1L)).thenReturn(Optional.of(client));
+        when(clientRepository.save(any(Client.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ClientResponse result = service.modifierClient(1L, new ModifierClientRequest("Banque Test", null, ""));
+
+        assertThat(result.telephone()).isNull();
+        assertThat(detailsHistorises()).containsEntry("ancienTelephone", "+237 600 000 000")
+                .containsEntry("nouveauTelephone", null);
+    }
+
+    @Test
+    void modifierClientInexistant_renvoie404() {
+        when(clientRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.modifierClient(99L, new ModifierClientRequest("X", null, null)))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("Client introuvable");
+        verifyNoInteractions(historiqueActionService);
     }
 }

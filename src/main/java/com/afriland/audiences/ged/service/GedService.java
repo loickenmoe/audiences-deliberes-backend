@@ -1,5 +1,6 @@
 package com.afriland.audiences.ged.service;
 
+import com.afriland.audiences.common.audit.TypeActionHistorique;
 import com.afriland.audiences.alerte.domain.TypeAlerte;
 import com.afriland.audiences.alerte.service.AlerteService;
 import com.afriland.audiences.audience.domain.Audience;
@@ -8,6 +9,7 @@ import com.afriland.audiences.audience.repository.AudienceRepository;
 import com.afriland.audiences.common.audit.HistoriqueActionRepository;
 import com.afriland.audiences.common.audit.HistoriqueActionService;
 import com.afriland.audiences.common.error.ApiException;
+import com.afriland.audiences.common.web.PageResponse;
 import com.afriland.audiences.common.error.ErrorCodes;
 import com.afriland.audiences.common.security.CurrentUserService;
 import com.afriland.audiences.dossier.domain.Dossier;
@@ -30,6 +32,7 @@ import com.afriland.audiences.referentiel.domain.Utilisateur;
 import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
 import com.afriland.audiences.referentiel.service.ConfigurationService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -58,12 +61,14 @@ public class GedService {
     private final HistoriqueActionService historiqueActionService;
     private final CurrentUserService currentUserService;
     private final MinioStorageService minioStorageService;
+    // RG-GED-04/08, partagé avec les pièces justificatives de frais (Q-97).
+    private final ValidationFichierService validationFichierService;
     private final DemandeSuppressionMapper demandeSuppressionMapper;
 
     @Transactional
     public DocumentResponse uploaderDocument(Long dossierId, String typeDocument, MultipartFile fichier) {
         Dossier dossier = getDossierOrThrow(dossierId);
-        FormatDocument format = validerFichier(fichier);
+        FormatDocument format = validationFichierService.valider(fichier);
         Utilisateur auteur = currentUserService.getCurrentUser();
 
         String cheminStockage = minioStorageService.deposer(dossierId, fichier);
@@ -78,41 +83,12 @@ public class GedService {
                 .cheminStockage(cheminStockage)
                 .build());
 
-        historiqueActionService.enregistrerPour(auteur, dossierId, "Chargement d'un document",
+        historiqueActionService.enregistrerPour(auteur, dossierId, TypeActionHistorique.DOCUMENT_CHARGE,
                 Map.of("documentId", document.getId(), "nomFichier", document.getNomFichier()));
 
         signalerDocumentCharge(dossier, document);
 
         return toResponse(document, null);
-    }
-
-    /** RG-GED-04/08 : format ∈ FORMATS_GED (dérivé de l'extension du fichier) et poids ≤ TAILLE_MAX_GED. */
-    private FormatDocument validerFichier(MultipartFile fichier) {
-        String nom = fichier.getOriginalFilename();
-        int pointIdx = nom == null ? -1 : nom.lastIndexOf('.');
-        if (!StringUtils.hasText(nom) || pointIdx < 0 || pointIdx == nom.length() - 1) {
-            throw ApiException.badRequest(ErrorCodes.DOCUMENT_NON_CONFORME, "Le fichier doit avoir une extension identifiable");
-        }
-        String extension = nom.substring(pointIdx + 1).toUpperCase();
-        FormatDocument format;
-        try {
-            format = FormatDocument.valueOf(extension);
-        } catch (IllegalArgumentException e) {
-            throw ApiException.badRequest(ErrorCodes.DOCUMENT_NON_CONFORME, "Format de fichier non conforme : " + extension);
-        }
-
-        Set<String> formatsAutorises = Set.of(configurationService.getOrThrow("FORMATS_GED").getValeur().split(","));
-        if (!formatsAutorises.contains(format.name())) {
-            throw ApiException.badRequest(ErrorCodes.DOCUMENT_NON_CONFORME,
-                    "Format « " + format + " » désactivé par la configuration FORMATS_GED");
-        }
-
-        long tailleMax = Long.parseLong(configurationService.getOrThrow("TAILLE_MAX_GED").getValeur());
-        if (fichier.getSize() > tailleMax) {
-            throw ApiException.badRequest(ErrorCodes.DOCUMENT_NON_CONFORME,
-                    "Poids du fichier (" + fichier.getSize() + " o) supérieur au maximum autorisé (" + tailleMax + " o)");
-        }
-        return format;
     }
 
     /** RG-GED-02 : notifie chaque juriste coté au dossier. */
@@ -131,11 +107,10 @@ public class GedService {
     }
 
     @Transactional(readOnly = true)
-    public List<DocumentResponse> listerDocumentsDossier(Long dossierId) {
+    public PageResponse<DocumentResponse> listerDocumentsDossier(Long dossierId, Pageable pageable) {
         getDossierOrThrow(dossierId);
-        return documentRepository.findByDossierIdAndEstSupprimeFalse(dossierId).stream()
-                .map(d -> toResponse(d, null))
-                .toList();
+        return PageResponse.of(documentRepository.findByDossierIdAndEstSupprimeFalse(dossierId, pageable),
+                d -> toResponse(d, null));
     }
 
     /**
@@ -167,7 +142,7 @@ public class GedService {
                 .build());
 
         historiqueActionService.enregistrerPour(utilisateur, document.getDossier().getId(),
-                "Demande de suppression d'un document", Map.of("documentId", documentId, "demandeId", demande.getId()));
+                TypeActionHistorique.DOCUMENT_SUPPRESSION_DEMANDEE, Map.of("documentId", documentId, "demandeId", demande.getId()));
 
         signalerDemandeSuppression(document, "Une demande de suppression a été soumise pour le document « "
                 + document.getNomFichier() + "» (dossier " + document.getDossier().getReference() + ").");
@@ -180,8 +155,18 @@ public class GedService {
         documentRepository.save(document);
         minioStorageService.supprimer(document.getCheminStockage());
 
+        // Q-79 : la demande en attente sur ce document est close avec lui. Laissée ouverte, elle
+        // restait dans la file, indécidable (document supprimé → 404) et relancée toutes les 72 h.
+        demandeSuppressionRepository.findByDocumentIdAndStatut(document.getId(), StatutSuppression.EN_ATTENTE)
+                .ifPresent(demande -> {
+                    demande.setStatut(StatutSuppression.APPROUVEE);
+                    demande.setValidePar(validePar);
+                    demande.setDateDecision(LocalDateTime.now());
+                    demandeSuppressionRepository.save(demande);
+                });
+
         historiqueActionService.enregistrerPour(validePar, document.getDossier().getId(),
-                "Suppression directe d'un document (DJ/DJA)", Map.of("documentId", document.getId()));
+                TypeActionHistorique.DOCUMENT_SUPPRIME_DIRECTEMENT, Map.of("documentId", document.getId()));
 
         alerteService.declencher(TypeAlerte.SUPPRESSION_DOCUMENT, document.getDossier().getId(), document.getAuteurChargement(),
                 "Votre document « " + document.getNomFichier() + " » a été supprimé directement par "
@@ -195,11 +180,11 @@ public class GedService {
      * Sans filtre, retourne l'historique complet (plus récentes d'abord).
      */
     @Transactional(readOnly = true)
-    public List<DemandeSuppressionResponse> listerDemandesSuppression(StatutSuppression statut) {
+    public PageResponse<DemandeSuppressionResponse> listerDemandesSuppression(StatutSuppression statut, Pageable pageable) {
         var demandes = statut == null
-                ? demandeSuppressionRepository.findByOrderByDateDemandeDesc()
-                : demandeSuppressionRepository.findByStatutOrderByDateDemandeAsc(statut);
-        return demandes.stream().map(demandeSuppressionMapper::toResponse).toList();
+                ? demandeSuppressionRepository.findByOrderByDateDemandeDesc(pageable)
+                : demandeSuppressionRepository.findByStatutOrderByDateDemandeAsc(statut, pageable);
+        return PageResponse.of(demandes, demandeSuppressionMapper::toResponse);
     }
 
     @Transactional
@@ -233,7 +218,7 @@ public class GedService {
         demande = demandeSuppressionRepository.save(demande);
 
         historiqueActionService.enregistrerPour(validateur, document.getDossier().getId(),
-                "Décision sur une demande de suppression de document",
+                TypeActionHistorique.DOCUMENT_SUPPRESSION_ARBITREE,
                 Map.of("documentId", documentId, "decision", request.decision().name()));
 
         return demandeSuppressionMapper.toResponse(demande);

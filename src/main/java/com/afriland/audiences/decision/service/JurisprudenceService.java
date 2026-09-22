@@ -1,5 +1,6 @@
 package com.afriland.audiences.decision.service;
 
+import com.afriland.audiences.common.audit.TypeActionHistorique;
 import com.afriland.audiences.common.audit.HistoriqueActionService;
 import com.afriland.audiences.common.error.ApiException;
 import com.afriland.audiences.common.error.ErrorCodes;
@@ -20,6 +21,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -74,17 +76,38 @@ public class JurisprudenceService {
                 .cheminStockage(cle)
                 .build());
 
-        historiqueActionService.enregistrer(dossierId, "Indexation d'une jurisprudence",
+        historiqueActionService.enregistrer(dossierId, TypeActionHistorique.JURISPRUDENCE_INDEXEE,
                 Map.of("jurisprudenceId", jurisprudence.getId(), "typeArchive", typeArchive.name()));
 
         return toResponse(jurisprudence);
     }
 
-    /** UC-DEF-03 : recherche par mots-clés/nature/juridiction, chaque filtre optionnel. */
+    /**
+     * UC-DEF-03 : recherche par mots-clés/nature/juridiction, chaque filtre optionnel. Depuis Q-89 :
+     * partielle et insensible à la casse (« saisie » retrouve « Saisie immobilière »), et filtrable
+     * par dossier — la fiche liste les décisions qu'on y a archivées.
+     */
     @Transactional(readOnly = true)
-    public PageResponse<JurisprudenceResponse> rechercher(String motCle, String natureDecision, String juridiction, Pageable pageable) {
-        Page<Jurisprudence> page = jurisprudenceRepository.rechercher(motCle, natureDecision, juridiction, pageable);
+    public PageResponse<JurisprudenceResponse> rechercher(String motCle, String natureDecision, String juridiction,
+                                                          Long dossierId, Pageable pageable) {
+        Page<Jurisprudence> page = jurisprudenceRepository.rechercher(
+                motif(motCle), motif(natureDecision), motif(juridiction), dossierId, pageable);
         return PageResponse.of(page, this::toResponse);
+    }
+
+    /**
+     * Motif {@code LIKE} « contient », en minuscules ; {@code null} pour un filtre vide. Les jokers
+     * saisis par l'utilisateur ({@code %}, {@code _}) sont échappés : ils se cherchent tels quels.
+     */
+    static String motif(String terme) {
+        if (terme == null || terme.isBlank()) {
+            return null;
+        }
+        String echappe = terme.trim().toLowerCase(Locale.ROOT)
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
+        return "%" + echappe + "%";
     }
 
     private JurisprudenceResponse toResponse(Jurisprudence jurisprudence) {

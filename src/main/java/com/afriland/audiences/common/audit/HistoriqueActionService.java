@@ -24,15 +24,21 @@ public class HistoriqueActionService {
     /**
      * Historise une action pour l'utilisateur actuellement authentifié.
      *
+     * <p><b>Le libellé n'est plus transmis</b> depuis Q-111 : il est porté par
+     * {@link TypeActionHistorique} et dérivé ici. Deux arguments côte à côte — un code et une phrase
+     * censée le décrire — auraient fini par diverger ; l'écart est désormais impossible.
+     *
+     * @param code      nature typée de l'action, sur laquelle porteront les filtres d'audit
      * @param dossierId identifiant du dossier concerné (peut être {@code null} pour une action
      *                  hors dossier — ex. modification d'une configuration système)
-     * @param action    description courte de l'action (ex. "Création du dossier")
-     * @param details   détails structurés (anciennes/nouvelles valeurs) ; peut être {@code null}
+     * @param details   détails structurés, y compris ce qui figurait autrefois dans la phrase
+     *                  (nom de l'étape, sens d'une décision, clé de configuration) ; peut être
+     *                  {@code null}
      */
     @Transactional
-    public HistoriqueAction enregistrer(Long dossierId, String action, Map<String, Object> details) {
+    public HistoriqueAction enregistrer(Long dossierId, TypeActionHistorique code, Map<String, Object> details) {
         Utilisateur utilisateur = currentUserService.getCurrentUser();
-        return enregistrerPour(utilisateur, dossierId, action, details);
+        return enregistrerPour(utilisateur, dossierId, code, details);
     }
 
     /**
@@ -40,12 +46,13 @@ public class HistoriqueActionService {
      * traitement planifié agissant pour le compte d'un utilisateur donné).
      */
     @Transactional
-    public HistoriqueAction enregistrerPour(Utilisateur utilisateur, Long dossierId, String action,
+    public HistoriqueAction enregistrerPour(Utilisateur utilisateur, Long dossierId, TypeActionHistorique code,
                                              Map<String, Object> details) {
         HistoriqueAction entry = HistoriqueAction.builder()
                 .dossierId(dossierId)
                 .utilisateur(utilisateur)
-                .action(action)
+                .code(code)
+                .action(code.libelle())
                 .details(details)
                 .build();
         return historiqueActionRepository.save(entry);

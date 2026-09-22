@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -15,6 +16,12 @@ import java.util.Optional;
 public interface EtapeProcedureRepository extends JpaRepository<EtapeProcedure, Long> {
 
     List<EtapeProcedure> findByDossierIdOrderByTypeAsc(Long dossierId);
+
+    /**
+     * Étapes de plusieurs dossiers en une requête (QF-41). Sans elle, construire la réponse d'une
+     * liste de dossiers interrogeait la base une fois par dossier.
+     */
+    List<EtapeProcedure> findByDossierIdInOrderByDossierIdAscTypeAsc(Collection<Long> dossierIds);
 
     Optional<EtapeProcedure> findByDossierIdAndType(Long dossierId, TypeEtape type);
 

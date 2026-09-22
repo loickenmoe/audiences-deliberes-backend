@@ -56,7 +56,7 @@ Authentification/RBAC via Keycloak.
 |---|---|---|---|
 | Juriste | `JURISTE` | Interne | Crée/suit les dossiers, planifie audiences, enregistre délibérés, alarmes, GED, sollicite constitutions |
 | Directeur Juridique | `DJ` | Interne | Tous droits juriste + **administration** (seuils, taxonomie), validation conjointe frais, suppression directe documents, tableau de bord |
-| Directeur Juridique Adjoint | `DJA` | Interne | Tous droits juriste + **contrôle d'opportunité** des frais, validation conjointe, suppression directe |
+| Directeur Juridique Adjoint | `DJA` | Interne | Tous droits juriste + **contrôle d'opportunité** des frais, validation conjointe, suppression directe, **administration (seuils, taxonomie) depuis Q-108** |
 | Assistante de Direction | `ASSISTANTE` | Interne | Tous droits juriste + **contrôle de conformité** des frais, validation des CR d'avocats, statut de paiement |
 | Supérieur Hiérarchique (Chef de département) | `SH` | Interne | **Seconde signature** des lettres de constitution |
 | Avocat partenaire | `AVOCAT` | **Externe** | Dépose demandes de frais, dépose CR d'audience et publications, reçoit lettres de constitution |
@@ -123,7 +123,35 @@ sauf besoin de vérification ponctuelle.**
 | NF-SEC-02 | Chiffrement | TLS 1.2+ ; pas de credentials en base applicative |
 | NF-SCAL-01 | Utilisateurs simultanés | > 50 |
 | NF-ALR-01/03 | Alertes | délivrance > 99 %, délai < 1 min |
-| NF-CONF-01 | RGPD / conservation | à définir avec la DRH |
+| NF-CONF-01 | RGPD / conservation | **Tranché le 2026-09-17 — conservation illimitée de l'historique, sans purge.** Révision : **2029-09-17** (voir ci-dessous) |
+
+### NF-CONF-01 — conservation de l'historique (tranché le 2026-09-17)
+
+**Décision du porteur du projet : aucune purge.** L'historique est conservé sans limite de durée.
+
+**Pourquoi.** Trois motifs, dans l'ordre de leur poids :
+
+1. **La trace doit survivre au litige.** Un contentieux se rouvre en recours des années après son
+   ouverture. Une purge fondée sur la seule date aurait supprimé la création, les affectations et les
+   dérogations d'un dossier **encore plaidé** — précisément quand la trace sert.
+2. **Une purge est du code qui échoue en silence.** La règle composite envisagée — âge de la ligne,
+   statut du dossier, archive produite et vérifiée — appartient à la catégorie de défauts dont on
+   découvre l'erreur le jour où la donnée manque. Ne pas purger supprime cette classe entière.
+3. **Le volume ne l'impose pas.** Mesuré : **748 octets par ligne**. Même à 500 000 lignes par an,
+   370 Mo annuels — sans effet sur les requêtes, et sur les sauvegardes seulement à très long terme.
+
+**Ce que la décision engage.** Conserver sans limite des données nominatives est un choix qui doit
+rester motivé et daté, non une absence de choix. Il est donc **revu le 2029-09-17**, et la question à
+reposer alors est celle du **pseudonymat de l'auteur** au-delà d'un certain âge : `utilisateur_id`
+est à la fois ce qui rend l'audit probant et ce qui le rend sensible au regard du RGPD.
+
+**Ce qui est construit malgré l'absence de purge** : l'export daté avec empreinte (SHA-256 consignée
+en base), et un **rapport d'éligibilité** — « voici ce qui serait purgeable » — qui n'efface rien. Le
+jour où une durée est fixée, il ne restera qu'à brancher l'action.
+
+**Habilitation** (tranché le même jour) : la lecture de l'audit est réservée au **DJ et à la DJA**,
+le **filtre par personne est autorisé**, et la consultation de l'audit sera elle-même historisée —
+protection de ceux qui consultent autant que de ceux qui sont consultés.
 
 ## 8. Conventions de développement
 

@@ -1,6 +1,7 @@
 package com.afriland.audiences.dossier.service;
 
 import com.afriland.audiences.dossier.domain.Dossier;
+import com.afriland.audiences.dossier.domain.StatutValidation;
 import com.afriland.audiences.referentiel.domain.CategorieDossier;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
@@ -54,7 +55,7 @@ class DossierSpecificationsTest {
 
     @Test
     void sansAucunFiltre_laConjonctionResteNeutre() {
-        Predicate predicate = DossierSpecifications.withFilters(null, null, null, null, null, null).toPredicate(root, query, cb);
+        Predicate predicate = DossierSpecifications.withFilters(null, null, null, null, null, null, null, null).toPredicate(root, query, cb);
 
         assertThat(predicate).isSameAs(conjonction);
         verify(cb, never()).and(any(Predicate.class), any(Predicate.class));
@@ -62,14 +63,14 @@ class DossierSpecificationsTest {
 
     @Test
     void filtreNatureVide_estIgnore() {
-        DossierSpecifications.withFilters("   ", null, null, null, null, null).toPredicate(root, query, cb);
+        DossierSpecifications.withFilters("   ", null, null, null, null, null, null, null).toPredicate(root, query, cb);
 
         verify(cb, never()).and(any(Predicate.class), any(Predicate.class));
     }
 
     @Test
     void filtreNature_ajouteUneEgaliteInsensibleALaCasse() {
-        DossierSpecifications.withFilters("Assignation", null, null, null, null, null).toPredicate(root, query, cb);
+        DossierSpecifications.withFilters("Assignation", null, null, null, null, null, null, null).toPredicate(root, query, cb);
 
         verify(cb).lower(any());
         verify(cb).equal(any(Expression.class), any(Object.class));
@@ -78,14 +79,14 @@ class DossierSpecificationsTest {
 
     @Test
     void filtreCategorie_ajouteUneEgaliteStricte() {
-        DossierSpecifications.withFilters(null, CategorieDossier.RECOUVREMENT, null, null, null, null).toPredicate(root, query, cb);
+        DossierSpecifications.withFilters(null, CategorieDossier.RECOUVREMENT, null, null, null, null, null, null).toPredicate(root, query, cb);
 
         verify(cb, times(1)).and(any(Predicate.class), any(Predicate.class));
     }
 
     @Test
     void filtreJuridiction_ajouteUnLike() {
-        DossierSpecifications.withFilters(null, null, "Douala", null, null, null).toPredicate(root, query, cb);
+        DossierSpecifications.withFilters(null, null, "Douala", null, null, null, null, null).toPredicate(root, query, cb);
 
         verify(cb).like(any(Expression.class), anyString());
         verify(cb, times(1)).and(any(Predicate.class), any(Predicate.class));
@@ -93,7 +94,7 @@ class DossierSpecificationsTest {
 
     @Test
     void troisFiltresCombines_ajoutentTroisPredicats() {
-        DossierSpecifications.withFilters("Assignation", CategorieDossier.EXPLOITATION_LITIGES, "Douala", null, null, null)
+        DossierSpecifications.withFilters("Assignation", CategorieDossier.EXPLOITATION_LITIGES, "Douala", null, null, null, null, null)
                 .toPredicate(root, query, cb);
 
         verify(cb, times(3)).and(any(Predicate.class), any(Predicate.class));
@@ -101,7 +102,7 @@ class DossierSpecificationsTest {
 
     @Test
     void laReferenceEstRechercheeEnPartiel() {
-        DossierSpecifications.withFilters(null, null, null, "DOS-2026", null, null)
+        DossierSpecifications.withFilters(null, null, null, "DOS-2026", null, null, null, null)
                 .toPredicate(root, query, cb);
 
         // Une référence se retient rarement en entier : `like` et non `equal`.
@@ -112,15 +113,53 @@ class DossierSpecificationsTest {
     void leClientEstFiltreSurSonIdentifiant() {
         when(chemin.get(anyString())).thenReturn(chemin);
 
-        DossierSpecifications.withFilters(null, null, null, null, 42L, null)
+        DossierSpecifications.withFilters(null, null, null, null, 42L, null, null, null)
                 .toPredicate(root, query, cb);
 
         verify(cb).equal(any(Expression.class), eq(42L));
     }
 
+    /**
+     * Q-101 — le filtre demandé par le porteur du projet. `estSensible` est un booléen : le tester
+     * vérifie surtout qu'il n'est **pas** confondu avec « non renseigné », faute de quoi filtrer sur
+     * les dossiers non sensibles renverrait tout.
+     */
+    @Test
+    void laSensibiliteEstFiltreeSurSaValeurBooleenne() {
+        DossierSpecifications.withFilters(null, null, null, null, null, null, Boolean.TRUE, null)
+                .toPredicate(root, query, cb);
+
+        verify(cb).equal(any(Expression.class), eq(Boolean.TRUE));
+    }
+
+    @Test
+    void unFiltreSensibiliteFauxNEstPasConfonduAvecAbsent() {
+        DossierSpecifications.withFilters(null, null, null, null, null, null, Boolean.FALSE, null)
+                .toPredicate(root, query, cb);
+
+        verify(cb).equal(any(Expression.class), eq(Boolean.FALSE));
+    }
+
+    /** `EN_ATTENTE` est la file des sensibilités à valider du DJ et de la DJA (moitié de QF-08). */
+    @Test
+    void leStatutDeSensibiliteEstFiltre() {
+        DossierSpecifications.withFilters(null, null, null, null, null, null, null, StatutValidation.EN_ATTENTE)
+                .toPredicate(root, query, cb);
+
+        verify(cb).equal(any(Expression.class), eq(StatutValidation.EN_ATTENTE));
+    }
+
+    @Test
+    void aucunFiltreDeSensibiliteNAjouteRien() {
+        DossierSpecifications.withFilters(null, null, null, null, null, null, null, null)
+                .toPredicate(root, query, cb);
+
+        verify(cb, never()).equal(any(Expression.class), any(Boolean.class));
+    }
+
     @Test
     void unFiltreReferenceVideNAjouteRien() {
-        DossierSpecifications.withFilters(null, null, null, "  ", null, null)
+        DossierSpecifications.withFilters(null, null, null, "  ", null, null, null, null)
                 .toPredicate(root, query, cb);
 
         verify(cb, never()).like(any(Expression.class), anyString());

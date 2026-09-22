@@ -7,6 +7,8 @@ import com.afriland.audiences.intervenant.web.dto.AvocatRepertoireResponse;
 import com.afriland.audiences.referentiel.domain.Avocat;
 import com.afriland.audiences.referentiel.repository.AvocatRepository;
 import lombok.RequiredArgsConstructor;
+import com.afriland.audiences.common.web.PageResponse;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -27,8 +29,18 @@ public class RepertoireAvocatsService {
     private final DossierAvocatRepository dossierAvocatRepository;
     private final DelibereRepository delibereRepository;
 
+    /**
+     * Paginé depuis Q-100, mais **la découpe reste en mémoire**, et il faut le dire.
+     *
+     * <p>US 5.8 classe le répertoire par charge croissante. Or la charge n'est pas une colonne : elle
+     * vient d'un comptage agrégé, joint en Java. Aucun {@code ORDER BY} SQL ne peut donc produire cet
+     * ordre, et la base ne peut pas découper ce qu'elle ne sait pas trier. La pagination réduit ici ce
+     * qui **voyage** jusqu'au navigateur, pas ce que la base lit. C'est un gain réel — dix lignes au
+     * lieu de tout le répertoire — mais partiel, et le jour où le répertoire deviendrait volumineux,
+     * la vraie réponse serait de calculer la charge en SQL pour trier et paginer côté base.
+     */
     @Transactional(readOnly = true)
-    public List<AvocatRepertoireResponse> lister(String nom) {
+    public PageResponse<AvocatRepertoireResponse> lister(String nom, Pageable pageable) {
         List<Avocat> avocats = StringUtils.hasText(nom)
                 ? avocatRepository.findByNomContainingIgnoreCase(nom)
                 : avocatRepository.findAll();
@@ -39,10 +51,18 @@ public class RepertoireAvocatsService {
         Map<Long, DelibereRepository.PerformanceAvocat> performances = delibereRepository.calculerPerformanceParAvocat().stream()
                 .collect(java.util.stream.Collectors.toMap(DelibereRepository.PerformanceAvocat::getAvocatId, Function.identity()));
 
-        return avocats.stream()
+        List<AvocatRepertoireResponse> classes = avocats.stream()
                 .map(avocat -> toResponse(avocat, charges, performances))
                 .sorted(Comparator.comparingLong(AvocatRepertoireResponse::indicateurCharge))
                 .toList();
+
+        if (pageable.isUnpaged()) {
+            return new PageResponse<>(classes, 1, classes.size());
+        }
+        int debut = (int) Math.min(pageable.getOffset(), classes.size());
+        int fin = Math.min(debut + pageable.getPageSize(), classes.size());
+        int totalPages = (int) Math.ceil((double) classes.size() / pageable.getPageSize());
+        return new PageResponse<>(classes.subList(debut, fin), totalPages, classes.size());
     }
 
     private AvocatRepertoireResponse toResponse(Avocat avocat, Map<Long, Long> charges,

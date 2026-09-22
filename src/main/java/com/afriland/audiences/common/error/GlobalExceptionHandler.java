@@ -2,6 +2,7 @@ package com.afriland.audiences.common.error;
 
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -19,6 +20,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
+import java.sql.SQLException;
 import java.util.stream.Collectors;
 
 /**
@@ -54,6 +56,32 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ErrorResponse(ErrorCodes.DROITS_INSUFFISANTS, "Droits insuffisants", null));
+    }
+
+    /**
+     * Q-85 : deux créations concurrentes franchissent le même contrôle d'unicité du service, et la
+     * contrainte de la base tranche la seconde. Une violation d'unicité (SQLState {@code 23505}) est
+     * donc un conflit — le même 409 que le contrôle aurait rendu —, pas une erreur interne. Toute
+     * autre violation d'intégrité reste une erreur interne.
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
+        if (!estViolationUnicite(ex)) {
+            return handleUnexpected(ex);
+        }
+        log.warn("Violation d'unicité rendue en 409 : {}", ex.getMostSpecificCause().getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ErrorResponse(ErrorCodes.CONFLIT,
+                        "Cette valeur est déjà utilisée : une autre requête vient de l'enregistrer", null));
+    }
+
+    static boolean estViolationUnicite(Throwable ex) {
+        for (Throwable cause = ex; cause != null && cause.getCause() != cause; cause = cause.getCause()) {
+            if (cause instanceof SQLException sql && "23505".equals(sql.getSQLState())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @ExceptionHandler(Exception.class)

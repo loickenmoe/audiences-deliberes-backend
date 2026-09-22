@@ -431,7 +431,7 @@ class DossierServiceTest {
         public com.afriland.audiences.dossier.web.dto.HistoriqueActionResponse toResponse(HistoriqueAction action) {
             return new com.afriland.audiences.dossier.web.dto.HistoriqueActionResponse(
                     action.getId(), action.getUtilisateur() != null ? action.getUtilisateur().getId() : null,
-                    action.getAction(), action.getDetails(), action.getDateAction());
+                    action.getCode(), action.getAction(), action.getDetails(), action.getDateAction());
         }
     }
 }

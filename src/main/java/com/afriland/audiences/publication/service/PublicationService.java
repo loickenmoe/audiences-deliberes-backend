@@ -1,5 +1,6 @@
 package com.afriland.audiences.publication.service;
 
+import com.afriland.audiences.common.audit.TypeActionHistorique;
 import com.afriland.audiences.alerte.domain.TypeAlerte;
 import com.afriland.audiences.alerte.service.AlerteService;
 import com.afriland.audiences.audience.domain.Audience;
@@ -9,8 +10,11 @@ import com.afriland.audiences.common.error.ApiException;
 import com.afriland.audiences.common.error.ErrorCodes;
 import com.afriland.audiences.common.security.CurrentUserService;
 import com.afriland.audiences.dossier.domain.Dossier;
+import com.afriland.audiences.dossier.domain.DossierJuriste;
+import com.afriland.audiences.dossier.repository.DossierJuristeRepository;
 import com.afriland.audiences.dossier.repository.DossierRepository;
 import com.afriland.audiences.ged.service.MinioStorageService;
+import com.afriland.audiences.ged.service.ValidationFichierService;
 import com.afriland.audiences.publication.domain.AutrePublication;
 import com.afriland.audiences.publication.domain.CommentairePublication;
 import com.afriland.audiences.publication.domain.CompteRenduAudience;
@@ -31,8 +35,8 @@ import com.afriland.audiences.publication.web.dto.PublicationResponse;
 import com.afriland.audiences.publication.web.dto.ValiderPublicationRequest;
 import com.afriland.audiences.referentiel.domain.Avocat;
 import com.afriland.audiences.referentiel.domain.Utilisateur;
-import com.afriland.audiences.referentiel.repository.AvocatRepository;
 import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
+import com.afriland.audiences.referentiel.service.CompteAvocatService;
 import com.afriland.audiences.common.web.PageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -44,6 +48,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Épic 5, volet publications (FR-INT-09, RG-INT-06/07/09/10) — cf. FUNCTIONAL_MAP.md §5,
@@ -60,17 +65,27 @@ public class PublicationService {
     private final CorrespondanceAvocatRepository correspondanceAvocatRepository;
     private final DossierRepository dossierRepository;
     private final AudienceRepository audienceRepository;
-    private final AvocatRepository avocatRepository;
+    private final CompteAvocatService compteAvocatService;
     private final UtilisateurRepository utilisateurRepository;
     private final CurrentUserService currentUserService;
     private final HistoriqueActionService historiqueActionService;
     private final AlerteService alerteService;
     private final MinioStorageService minioStorageService;
+    // Q-98 : mêmes règles de format et de poids que la GED pour la pièce jointe d'un compte rendu.
+    private final ValidationFichierService validationFichierService;
     private final PublicationMapper publicationMapper;
+    private final DossierJuristeRepository dossierJuristeRepository;
+
+    /**
+     * Q-86 : profils qui instruisent une publication — l'Assistante la valide (RG-INT-10), le DJ et
+     * la DJA centralisent les échanges avec l'avocat (RG-INT-07). La restriction d'accès, qui désigne
+     * un juriste lecteur (RG-INT-06), ne s'oppose pas à eux.
+     */
+    private static final Set<String> PROFILS_INSTRUCTEURS = Set.of("ASSISTANTE", "DJ", "DJA");
 
     /** FR-INT-09/US 5.1 : l'audience doit être rattachée au dossier indiqué (404 sinon). */
     @Transactional
-    public PublicationResponse deposerCompteRendu(DeposerCompteRenduRequest request) {
+    public PublicationResponse deposerCompteRendu(DeposerCompteRenduRequest request, MultipartFile file) {
         Dossier dossier = getDossierOrThrow(request.dossierId());
         Audience audience = audienceRepository.findById(request.audienceId())
                 .filter(a -> a.getDossier().getId().equals(dossier.getId()))
@@ -78,18 +93,31 @@ public class PublicationService {
                         "Audience introuvable pour ce dossier : " + request.audienceId()));
         Avocat avocat = getAvocatCourantOrThrow();
 
+        /*
+         * Pièce jointe **facultative** (Q-98) : le récit reste obligatoire, le document l'étaye. Les
+         * contrôles de format et de poids sont ceux de la GED — le fichier atterrit dans le même
+         * stockage, et le DJ pilote les deux par `FORMATS_GED` et `TAILLE_MAX_GED`.
+         */
+        String cle = null;
+        if (file != null && !file.isEmpty()) {
+            validationFichierService.valider(file);
+            cle = minioStorageService.deposer(dossier.getId(), file);
+        }
+
         CompteRenduAudience publication = CompteRenduAudience.builder()
                 .dossier(dossier)
                 .avocat(avocat)
                 .audience(audience)
                 .contenu(request.contenu())
+                .cheminStockage(cle)
                 .statutValidation(StatutPublication.DEPOSE)
                 .restrictionAcces(resoudreRestrictionAcces(request.restrictionAcces()))
                 .build();
         publication = publicationRepository.save(publication);
 
-        historiqueActionService.enregistrer(dossier.getId(), "Dépôt d'un compte rendu d'audience",
-                Map.of("publicationId", publication.getId(), "audienceId", audience.getId()));
+        historiqueActionService.enregistrer(dossier.getId(), TypeActionHistorique.PUBLICATION_CR_DEPOSE,
+                Map.of("publicationId", publication.getId(), "audienceId", audience.getId(),
+                        "pieceJointe", cle != null));
         notifierProfil("ASSISTANTE", dossier.getId(), "Nouveau compte rendu d'audience déposé sur le dossier "
                 + dossier.getReference() + " (RG-INT-09), en attente de validation.");
 
@@ -116,7 +144,7 @@ public class PublicationService {
                 .build();
         publication = publicationRepository.save(publication);
 
-        historiqueActionService.enregistrer(dossier.getId(), "Dépôt d'une autre publication",
+        historiqueActionService.enregistrer(dossier.getId(), TypeActionHistorique.PUBLICATION_AUTRE_DEPOSEE,
                 Map.of("publicationId", publication.getId(), "typeDocument", typeDocument.name()));
         notifierProfil("ASSISTANTE", dossier.getId(), "Nouvelle publication (" + typeDocument
                 + ") déposée sur le dossier " + dossier.getReference() + " (RG-INT-06), en attente de validation.");
@@ -140,13 +168,14 @@ public class PublicationService {
 
         if (request.statut() == StatutPublication.VALIDE) {
             publication.setStatutValidation(StatutPublication.VALIDE);
+            notifierLecteurs(publication);
         } else if (request.statut() == StatutPublication.REJETE) {
             if (!StringUtils.hasText(request.motifRejet())) {
                 throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE, "Le motif de rejet est obligatoire");
             }
             publication.setStatutValidation(StatutPublication.REJETE);
             publication.setMotifRejet(request.motifRejet());
-            utilisateurRepository.findByKeycloakId(publication.getAvocat().getCompteKeycloak())
+            compteAvocatService.utilisateurDe(publication.getAvocat())
                     .ifPresent(u -> alerteService.declencher(TypeAlerte.NOUVELLE_PUBLICATION, publication.getDossier().getId(), u,
                             "Votre publication " + id + " sur le dossier " + publication.getDossier().getReference()
                                     + " a été rejetée : " + request.motifRejet()));
@@ -155,28 +184,56 @@ public class PublicationService {
         }
         publicationRepository.save(publication);
 
-        historiqueActionService.enregistrer(publication.getDossier().getId(), "Décision sur une publication",
+        historiqueActionService.enregistrer(publication.getDossier().getId(), TypeActionHistorique.PUBLICATION_ARBITREE,
                 Map.of("publicationId", id, "statut", request.statut().name()));
 
         return publicationMapper.toResponse(publication);
     }
 
-    /** US 5.4 : seule une publication VALIDE est consultable ; restriction d'accès individuelle possible. */
+    /**
+     * US 5.4 : seule une publication VALIDE est consultable ; restriction d'accès individuelle possible.
+     * <p>
+     * Q-86 : l'Assistante lit aussi une publication DEPOSE ou REJETE — elle doit voir ce qu'elle valide
+     * (UC-INT-10 étape 3) ; la restriction d'accès ne s'oppose pas aux profils instructeurs. Le détail
+     * porte l'URL pré-signée du fichier d'une autre publication, les commentaires des juristes et la
+     * correspondance transmise.
+     */
     @Transactional(readOnly = true)
     public PublicationResponse obtenir(Long id) {
         Publication publication = getPublicationOrThrow(id);
-        if (publication.getStatutValidation() != StatutPublication.VALIDE) {
-            throw ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE, "Publication introuvable ou non consultable : " + id);
-        }
+        boolean valide = publication.getStatutValidation() == StatutPublication.VALIDE;
         Utilisateur restriction = publication.getRestrictionAcces();
-        if (restriction != null) {
+        if (!valide || restriction != null) {
             Utilisateur utilisateur = currentUserService.getCurrentUser();
-            if (!restriction.getId().equals(utilisateur.getId())) {
+            String profil = utilisateur != null && utilisateur.getProfil() != null ? utilisateur.getProfil().getCode() : null;
+            if (!valide && !"ASSISTANTE".equals(profil)) {
+                throw ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE, "Publication introuvable ou non consultable : " + id);
+            }
+            // Set.of(...).contains(null) lève une exception : un profil inconnu n'instruit pas.
+            boolean instructeur = profil != null && PROFILS_INSTRUCTEURS.contains(profil);
+            if (restriction != null && !instructeur
+                    && (utilisateur == null || !restriction.getId().equals(utilisateur.getId()))) {
                 throw ApiException.forbidden(ErrorCodes.ACCES_RESTREINT_PUBLICATION,
                         "Cette publication est restreinte à un autre destinataire");
             }
         }
-        return publicationMapper.toResponse(publication);
+
+        // Q-98 : les deux sous-types peuvent désormais porter un fichier — le compte rendu
+        // facultativement, l'autre publication par nature. L'Assistante doit l'ouvrir pour valider.
+        String cheminStockage = switch (publication) {
+            case AutrePublication autre -> autre.getCheminStockage();
+            case CompteRenduAudience cr -> cr.getCheminStockage();
+            default -> null;
+        };
+        String url = cheminStockage != null ? minioStorageService.urlTelechargement(cheminStockage) : null;
+        List<CommentaireResponse> commentaires = commentairePublicationRepository.findByPublicationIdOrderByCreatedAtAsc(id)
+                .stream()
+                .map(commentaire -> versReponse(id, commentaire))
+                .toList();
+        CorrespondanceResponse correspondance = correspondanceAvocatRepository.findByPublicationId(id)
+                .map(c -> versReponse(id, c))
+                .orElse(null);
+        return publicationMapper.toResponse(publication, url, commentaires, correspondance);
     }
 
     /** US 5.5/RG-INT-07 : le juriste ne commente jamais directement l'avocat — le commentaire est transmis au DJ/DJA. */
@@ -191,14 +248,14 @@ public class PublicationService {
                 .contenu(request.contenu())
                 .build());
 
-        historiqueActionService.enregistrer(publication.getDossier().getId(), "Commentaire sur une publication",
+        historiqueActionService.enregistrer(publication.getDossier().getId(), TypeActionHistorique.PUBLICATION_COMMENTEE,
                 Map.of("publicationId", id, "commentaireId", commentaire.getId()));
         notifierProfil("DJ", publication.getDossier().getId(), "Nouveau commentaire du juriste sur la publication "
                 + id + " du dossier " + publication.getDossier().getReference() + " (RG-INT-07).");
         notifierProfil("DJA", publication.getDossier().getId(), "Nouveau commentaire du juriste sur la publication "
                 + id + " du dossier " + publication.getDossier().getReference() + " (RG-INT-07).");
 
-        return new CommentaireResponse(commentaire.getId(), id, juriste.getId(), commentaire.getContenu(), commentaire.getCreatedAt());
+        return versReponse(id, commentaire);
     }
 
     /** US 5.5/RG-INT-07 : correspondance unique par publication (409 si déjà transmise). */
@@ -216,13 +273,13 @@ public class PublicationService {
                 .contenu(request.contenu())
                 .build());
 
-        historiqueActionService.enregistrer(publication.getDossier().getId(), "Correspondance transmise à l'avocat",
+        historiqueActionService.enregistrer(publication.getDossier().getId(), TypeActionHistorique.PUBLICATION_CORRESPONDANCE_TRANSMISE,
                 Map.of("publicationId", id, "correspondanceId", correspondance.getId()));
-        utilisateurRepository.findByKeycloakId(publication.getAvocat().getCompteKeycloak())
+        compteAvocatService.utilisateurDe(publication.getAvocat())
                 .ifPresent(u -> alerteService.declencher(TypeAlerte.NOUVELLE_PUBLICATION, publication.getDossier().getId(), u,
                         "Une correspondance a été transmise concernant votre publication " + id + " (RG-INT-07)."));
 
-        return new CorrespondanceResponse(correspondance.getId(), id, auteur.getId(), correspondance.getContenu(), correspondance.getCreatedAt());
+        return versReponse(id, correspondance);
     }
 
     /**
@@ -248,6 +305,34 @@ public class PublicationService {
         return PageResponse.of(page, publicationMapper::toResponse);
     }
 
+    /**
+     * Q-86 (UC-INT-08 étape 1, alt. 3-a) : une publication validée est signalée aux juristes du
+     * dossier — au seul destinataire désigné si l'avocat en a restreint l'accès.
+     */
+    private void notifierLecteurs(Publication publication) {
+        Dossier dossier = publication.getDossier();
+        List<Utilisateur> lecteurs = publication.getRestrictionAcces() != null
+                ? List.of(publication.getRestrictionAcces())
+                : dossierJuristeRepository.findByDossierId(dossier.getId()).stream()
+                        .map(DossierJuriste::getUtilisateur)
+                        .toList();
+        String declencheur = "Nouvelle publication de l'avocat consultable sur le dossier "
+                + dossier.getReference() + " (RG-INT-06).";
+        lecteurs.forEach(lecteur -> alerteService.declencher(TypeAlerte.NOUVELLE_PUBLICATION, dossier.getId(), lecteur, declencheur));
+    }
+
+    private static CommentaireResponse versReponse(Long publicationId, CommentairePublication commentaire) {
+        Utilisateur auteur = commentaire.getAuteur();
+        return new CommentaireResponse(commentaire.getId(), publicationId, auteur != null ? auteur.getId() : null,
+                PublicationMapper.nomComplet(auteur), commentaire.getContenu(), commentaire.getCreatedAt());
+    }
+
+    private static CorrespondanceResponse versReponse(Long publicationId, CorrespondanceAvocat correspondance) {
+        Utilisateur auteur = correspondance.getAuteur();
+        return new CorrespondanceResponse(correspondance.getId(), publicationId, auteur != null ? auteur.getId() : null,
+                PublicationMapper.nomComplet(auteur), correspondance.getContenu(), correspondance.getCreatedAt());
+    }
+
     private Utilisateur resoudreRestrictionAcces(Long utilisateurId) {
         if (utilisateurId == null) {
             return null;
@@ -263,8 +348,9 @@ public class PublicationService {
 
     private Avocat getAvocatCourantOrThrow() {
         Utilisateur utilisateur = currentUserService.getCurrentUser();
-        return avocatRepository.findByCompteKeycloak(utilisateur.getKeycloakId())
-                .orElseThrow(() -> ApiException.forbidden(ErrorCodes.DROITS_INSUFFISANTS, "Aucun avocat associé à cet utilisateur"));
+        return compteAvocatService.avocatDe(utilisateur)
+                .orElseThrow(() -> ApiException.forbidden(ErrorCodes.AVOCAT_NON_RATTACHE,
+                        "Aucun avocat du référentiel n'est rattaché à ce compte"));
     }
 
     private Publication getPublicationOrThrow(Long id) {

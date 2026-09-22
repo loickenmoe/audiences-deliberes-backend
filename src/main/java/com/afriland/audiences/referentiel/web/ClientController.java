@@ -5,16 +5,19 @@ import com.afriland.audiences.dossier.service.DossierService;
 import com.afriland.audiences.referentiel.service.ClientService;
 import com.afriland.audiences.referentiel.web.dto.ClientResponse;
 import com.afriland.audiences.referentiel.web.dto.CreerClientRequest;
+import com.afriland.audiences.referentiel.web.dto.ModifierClientRequest;
 import com.afriland.audiences.referentiel.web.dto.VueClientDossiersResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -33,6 +36,12 @@ public class ClientController {
     private final ClientService clientService;
     private final DossierService dossierService;
 
+    /**
+     * Plus récent d'abord (Q-93). Sans tri explicite, la requête paginée n'avait aucun
+     * {@code ORDER BY} : au-delà de vingt clients, celui qu'on venait de créer se retrouvait en
+     * page 2 — invisible pour son auteur — et une même ligne pouvait apparaître deux fois, ou
+     * disparaître, d'une page à l'autre.
+     */
     @GetMapping
     @PreAuthorize("hasRole('CONSULTATION')")
     public PageResponse<ClientResponse> rechercherClients(
@@ -40,7 +49,8 @@ public class ClientController {
             @RequestParam(required = false) String reference,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return clientService.rechercherClients(nom, reference, PageRequest.of(page, size));
+        return clientService.rechercherClients(nom, reference,
+                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt", "id")));
     }
 
     @GetMapping("/{id}")
@@ -53,6 +63,17 @@ public class ClientController {
     @PreAuthorize("hasRole('SAISIE')")
     public ResponseEntity<ClientResponse> creerClient(@Valid @RequestBody CreerClientRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(clientService.creerClient(request));
+    }
+
+    /**
+     * 🆕 Modifie le nom et les coordonnées d'un client. La référence reste figée — cf.
+     * {@link ModifierClientRequest}. Même garde que la création : qui peut créer un client peut en
+     * corriger une coquille.
+     */
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('SAISIE')")
+    public ClientResponse modifierClient(@PathVariable Long id, @Valid @RequestBody ModifierClientRequest request) {
+        return clientService.modifierClient(id, request);
     }
 
     @GetMapping("/{clientId}/dossiers")

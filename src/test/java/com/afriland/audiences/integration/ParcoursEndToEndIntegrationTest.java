@@ -150,7 +150,8 @@ class ParcoursEndToEndIntegrationTest {
 
         mockMvc.perform(get(api("/dossiers/" + dossierId + "/documents")).with(role("kc-juriste", "ROLE_CONSULTATION")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1));
+                // Q-100 : l'onglet Documents est paginé — le total vit désormais dans l'enveloppe.
+                .andExpect(jsonPath("$.totalElements").value(1));
     }
 
     // ---------------------------------------------------------------- P2
@@ -186,14 +187,39 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statut").value("TENUE"));
 
-        // Compte rendu publié par l'avocat (Épic 5), validé par l'Assistante
-        long publicationId = extraireId(mockMvc.perform(post(api("/publications/cr-audience"))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("dossierId", dossierId, "audienceId", audienceId,
-                                "contenu", "Plaidoirie effectuée, renvoi au délibéré")))
+        // Compte rendu publié par l'avocat (Épic 5), validé par l'Assistante. Q-98 : le récit porte
+        // ici sa pièce, déposée dans le même mouvement — le dépôt est multipart depuis.
+        MockMultipartFile plumitif =
+                new MockMultipartFile("file", "plumitif.pdf", "application/pdf", new byte[]{4, 5, 6});
+        long publicationId = extraireId(mockMvc.perform(multipart(api("/publications/cr-audience"))
+                        .file(plumitif)
+                        .param("dossierId", String.valueOf(dossierId))
+                        .param("audienceId", String.valueOf(audienceId))
+                        .param("contenu", "Plaidoirie effectuée, renvoi au délibéré")
                         .with(role("kc-avocat", "ROLE_AVOCAT")))
                 .andExpect(status().isCreated())
                 .andReturn());
+
+        // Le récit reste obligatoire : le passage en multipart n'a pas fait perdre la contrainte,
+        // qui doit être refusée à l'entrée (400) et non au flush (500).
+        mockMvc.perform(multipart(api("/publications/cr-audience"))
+                        .param("dossierId", String.valueOf(dossierId))
+                        .param("audienceId", String.valueOf(audienceId))
+                        .param("contenu", "   ")
+                        .with(role("kc-avocat", "ROLE_AVOCAT")))
+                .andExpect(status().isBadRequest());
+
+        // Q-86 : l'Assistante lit la publication à valider, nommée ; un juriste, pas encore
+        mockMvc.perform(get(api("/publications/" + publicationId)).with(role("kc-assistante", "ROLE_CONSULTATION")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statutValidation").value("DEPOSE"))
+                .andExpect(jsonPath("$.referenceDossier").isNotEmpty())
+                .andExpect(jsonPath("$.avocatNom").isNotEmpty())
+                .andExpect(jsonPath("$.audienceDate").isNotEmpty())
+                // Q-98 : la pièce du compte rendu se lit comme celle d'une autre publication.
+                .andExpect(jsonPath("$.nomFichier").value("plumitif.pdf"));
+        mockMvc.perform(get(api("/publications/" + publicationId)).with(role("kc-juriste", "ROLE_CONSULTATION")))
+                .andExpect(status().isNotFound());
 
         mockMvc.perform(put(api("/publications/" + publicationId + "/validation"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -202,9 +228,15 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statutValidation").value("VALIDE"));
 
-        // Une fois validée, la publication devient consultable
+        // Une fois validée, la publication devient consultable, avec ses échanges (Q-86)
         mockMvc.perform(get(api("/publications/" + publicationId)).with(role("kc-juriste", "ROLE_CONSULTATION")))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.commentaires").isArray());
+
+        // … et le juriste du dossier en est prévenu (Q-86, UC-INT-08 étape 1)
+        mockMvc.perform(get(api("/alertes/mes-notifications")).with(role("kc-juriste", "ROLE_JURISTE")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.type == 'NOUVELLE_PUBLICATION')]").isNotEmpty());
     }
 
     // ---------------------------------------------------------------- P3
@@ -421,6 +453,22 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statutPaiement").value("PAYEE"));
 
+        // Détail (Q-82) : dossier et avocat nommés, décisions du circuit dans l'ordre
+        mockMvc.perform(get(api("/frais/demandes/" + demandeId)).with(role("kc-assistante", "ROLE_ASSISTANTE")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.referenceDossier").isNotEmpty())
+                .andExpect(jsonPath("$.avocatNom").isNotEmpty())
+                .andExpect(jsonPath("$.validationConjointeRequise").value(false))
+                .andExpect(jsonPath("$.validations.length()").value(2))
+                .andExpect(jsonPath("$.validations[0].etape").value("CONFORMITE"))
+                .andExpect(jsonPath("$.validations[1].etape").value("OPPORTUNITE"));
+
+        // L'avocat lit sa demande, jamais celle d'un confrère
+        mockMvc.perform(get(api("/frais/demandes/" + demandeId)).with(role("kc-avocat", "ROLE_AVOCAT")))
+                .andExpect(status().isOk());
+        mockMvc.perform(get(api("/frais/demandes/" + demandeId)).with(role("kc-avocat-etranger", "ROLE_AVOCAT")))
+                .andExpect(status().isForbidden());
+
         // L'avocat retrouve sa demande dans sa file de travail (Q-24)
         mockMvc.perform(get(api("/frais/demandes")).with(role("kc-avocat", "ROLE_AVOCAT")))
                 .andExpect(status().isOk())
@@ -449,12 +497,22 @@ class ParcoursEndToEndIntegrationTest {
                         .with(role("kc-sh", "ROLE_SH")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statut").value("VALIDEE"))
-                .andExpect(jsonPath("$.lettreDocumentId").isNotEmpty());
+                .andExpect(jsonPath("$.lettreDocumentId").isNotEmpty())
+                // Q-86 : la demande est nommée ; Q-87 : un avocat chargé à la demande reste un avocat
+                .andExpect(jsonPath("$.referenceDossier").isNotEmpty())
+                .andExpect(jsonPath("$.prestataireNom").value("Me Test"))
+                .andExpect(jsonPath("$.prestataireType").value("AVOCAT"));
+
+        // Q-87 : l'avocat constitué est bien notifié (le proxy du prestataire l'en privait)
+        mockMvc.perform(get(api("/alertes/mes-notifications")).with(role("kc-avocat", "ROLE_AVOCAT")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.type == 'CONSTITUTION_A_SIGNER')]").isNotEmpty());
 
         // La lettre générée est bien un document du dossier (interaction intervenant → ged)
         mockMvc.perform(get(api("/dossiers/" + dossierId + "/documents")).with(role("kc-juriste", "ROLE_CONSULTATION")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1));
+                // Q-100 : l'onglet Documents est paginé — le total vit désormais dans l'enveloppe.
+                .andExpect(jsonPath("$.totalElements").value(1));
     }
 
     // ---------------------------------------------------------------- P8
@@ -530,8 +588,15 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(jsonPath("$.recouvrement.length()").value(1))
                 .andExpect(jsonPath("$.exploitationLitiges.length()").value(0));
 
-        // Le tableau de bord reste interdit aux profils non DJ (RG-REP-03)
+        // La DJA y accède aussi (Q-95) : elle valide conjointement et instruit les mêmes dossiers.
+        mockMvc.perform(get(api("/tableau-de-bord")).with(role("kc-dja", "ROLE_DJA")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nbDossiersActifs").isNumber());
+
+        // Il reste interdit aux autres profils (RG-REP-03).
         mockMvc.perform(get(api("/tableau-de-bord")).with(role("kc-juriste", "ROLE_JURISTE")))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get(api("/tableau-de-bord")).with(role("kc-assistante", "ROLE_ASSISTANTE")))
                 .andExpect(status().isForbidden());
     }
 

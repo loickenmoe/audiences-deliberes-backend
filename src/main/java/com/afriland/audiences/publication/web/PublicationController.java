@@ -1,5 +1,6 @@
 package com.afriland.audiences.publication.web;
 
+import com.afriland.audiences.publication.domain.StatutPublication;
 import com.afriland.audiences.publication.domain.TypeAutrePublication;
 import com.afriland.audiences.publication.service.PublicationService;
 import com.afriland.audiences.publication.web.dto.CommentaireRequest;
@@ -10,7 +11,11 @@ import com.afriland.audiences.publication.web.dto.DeposerCompteRenduRequest;
 import com.afriland.audiences.publication.web.dto.PublicationResponse;
 import com.afriland.audiences.publication.web.dto.ValiderPublicationRequest;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -41,10 +46,29 @@ public class PublicationController {
 
     private final PublicationService publicationService;
 
+    /**
+     * US 5.1, étendu par Q-98 d'une **pièce jointe facultative**.
+     *
+     * <p>Le corps passe en multipart pour l'accueillir, comme {@code /publications/autres} l'est
+     * déjà : les métadonnées en paramètres, le seul fichier en partie. Le contrat d'API décrivait un
+     * corps JSON — l'écart est assumé et consigné (Q-98), le récit restant obligatoire et le fichier
+     * facultatif. Un compte rendu déposé sans pièce se comporte exactement comme avant.
+     *
+     * <p>Les contraintes du DTO sont reportées sur les paramètres : sans elles, un {@code contenu}
+     * vide ne serait plus refusé à l'entrée mais au flush, en 500 au lieu de 400.
+     */
     @PostMapping("/cr-audience")
     @PreAuthorize("hasRole('AVOCAT')")
-    public ResponseEntity<PublicationResponse> deposerCompteRendu(@Valid @RequestBody DeposerCompteRenduRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(publicationService.deposerCompteRendu(request));
+    public ResponseEntity<PublicationResponse> deposerCompteRendu(
+            @RequestParam @NotNull Long dossierId,
+            @RequestParam @NotNull Long audienceId,
+            @RequestParam @NotBlank String contenu,
+            @RequestParam(required = false) Long restrictionAcces,
+            @RequestPart(value = "file", required = false) MultipartFile file) {
+        DeposerCompteRenduRequest request =
+                new DeposerCompteRenduRequest(dossierId, audienceId, contenu, restrictionAcces);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(publicationService.deposerCompteRendu(request, file));
     }
 
     @PostMapping("/autres")
@@ -80,7 +104,9 @@ public class PublicationController {
             @RequestParam(required = false) com.afriland.audiences.publication.domain.StatutPublication statut,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return publicationService.lister(dossierId, statut, org.springframework.data.domain.PageRequest.of(page, size));
+        // Q-86 : la file à valider se traite dans l'ordre d'arrivée ; ailleurs, la plus récente d'abord.
+        Sort.Direction sens = statut == StatutPublication.DEPOSE ? Sort.Direction.ASC : Sort.Direction.DESC;
+        return publicationService.lister(dossierId, statut, PageRequest.of(page, size, Sort.by(sens, "dateDepot", "id")));
     }
 
     @PostMapping("/{id}/commentaires")

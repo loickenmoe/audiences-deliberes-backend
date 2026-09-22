@@ -1,5 +1,6 @@
 package com.afriland.audiences.delibere.service;
 
+import com.afriland.audiences.common.audit.TypeActionHistorique;
 import com.afriland.audiences.alerte.domain.TypeAlerte;
 import com.afriland.audiences.alerte.service.AlerteService;
 import com.afriland.audiences.common.audit.HistoriqueActionService;
@@ -147,7 +148,7 @@ class DelibereServiceTest {
         assertThat(result.statutExpedition()).as("pas d'expédition avant la décision").isNull();
         assertThat(etapeEnDelibere.getStatutCycleVie()).isEqualTo(StatutCycleVie.EN_DELIBERE);
         verify(etapeProcedureRepository, never()).save(any());
-        verify(historiqueActionService).enregistrer(eq(1L), eq("Mise en délibéré"), any());
+        verify(historiqueActionService).enregistrer(eq(1L), eq(TypeActionHistorique.DELIBERE_MISE_EN_DELIBERE), any());
     }
 
     @Test

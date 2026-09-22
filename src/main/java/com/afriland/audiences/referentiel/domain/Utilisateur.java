@@ -47,6 +47,14 @@ public class Utilisateur {
     @Column(name = "keycloak_id", nullable = false, unique = true)
     private String keycloakId;
 
+    /**
+     * Q-84 : identifiant de connexion ({@code preferred_username}) — celui que le DJ saisit comme
+     * compte d'un avocat. Nul pour un utilisateur provisionné avant Q-84 jusqu'à sa requête suivante.
+     */
+    @Size(max = 255)
+    @Column(unique = true)
+    private String identifiant;
+
     @NotBlank
     @Size(max = 100)
     @Column(nullable = false, length = 100)

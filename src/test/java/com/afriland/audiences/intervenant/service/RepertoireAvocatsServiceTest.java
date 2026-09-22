@@ -7,6 +7,7 @@ import com.afriland.audiences.referentiel.domain.Avocat;
 import com.afriland.audiences.referentiel.repository.AvocatRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.PageRequest;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -38,7 +39,7 @@ class RepertoireAvocatsServiceTest {
         when(dossierAvocatRepository.compterDossiersActifsParAvocat(any())).thenReturn(List.of());
         when(delibereRepository.calculerPerformanceParAvocat()).thenReturn(List.of());
 
-        List<AvocatRepertoireResponse> result = service.lister(null);
+        List<AvocatRepertoireResponse> result = service.lister(null, PageRequest.of(0, 10)).content();
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).indicateurCharge()).isZero();
@@ -52,7 +53,7 @@ class RepertoireAvocatsServiceTest {
         when(dossierAvocatRepository.compterDossiersActifsParAvocat(any())).thenReturn(List.of(charge(1L, 3L)));
         when(delibereRepository.calculerPerformanceParAvocat()).thenReturn(List.of(performance(1L, 3L, 4L)));
 
-        List<AvocatRepertoireResponse> result = service.lister(null);
+        List<AvocatRepertoireResponse> result = service.lister(null, PageRequest.of(0, 10)).content();
 
         assertThat(result.get(0).indicateurCharge()).isEqualTo(3L);
         assertThat(result.get(0).indicateurPerformance()).isEqualTo(0.75d);
@@ -66,7 +67,7 @@ class RepertoireAvocatsServiceTest {
         when(dossierAvocatRepository.compterDossiersActifsParAvocat(any())).thenReturn(List.of(charge(1L, 10L), charge(2L, 1L)));
         when(delibereRepository.calculerPerformanceParAvocat()).thenReturn(List.of());
 
-        List<AvocatRepertoireResponse> result = service.lister(null);
+        List<AvocatRepertoireResponse> result = service.lister(null, PageRequest.of(0, 10)).content();
 
         assertThat(result).extracting(AvocatRepertoireResponse::id).containsExactly(2L, 1L);
     }
@@ -77,7 +78,7 @@ class RepertoireAvocatsServiceTest {
         when(dossierAvocatRepository.compterDossiersActifsParAvocat(any())).thenReturn(List.of());
         when(delibereRepository.calculerPerformanceParAvocat()).thenReturn(List.of());
 
-        List<AvocatRepertoireResponse> result = service.lister("Fotso");
+        List<AvocatRepertoireResponse> result = service.lister("Fotso", PageRequest.of(0, 10)).content();
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).nom()).isEqualTo("Me Fotso");

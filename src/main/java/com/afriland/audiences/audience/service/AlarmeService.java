@@ -1,5 +1,6 @@
 package com.afriland.audiences.audience.service;
 
+import com.afriland.audiences.common.audit.TypeActionHistorique;
 import com.afriland.audiences.audience.domain.Alarme;
 import com.afriland.audiences.audience.domain.StatutAlarme;
 import com.afriland.audiences.audience.mapper.AlarmeMapper;
@@ -17,6 +18,8 @@ import com.afriland.audiences.dossier.repository.DossierRepository;
 import com.afriland.audiences.dossier.repository.EtapeProcedureRepository;
 import com.afriland.audiences.referentiel.domain.Utilisateur;
 import lombok.RequiredArgsConstructor;
+import com.afriland.audiences.common.web.PageResponse;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -58,7 +61,7 @@ public class AlarmeService {
                 .createdBy(auteur)
                 .build());
 
-        historiqueActionService.enregistrerPour(auteur, dossierId, "Création d'une alarme",
+        historiqueActionService.enregistrerPour(auteur, dossierId, TypeActionHistorique.ALARME_CREEE,
                 Map.of("alarmeId", alarme.getId(), "objet", request.objet()));
 
         return alarmeMapper.toResponse(alarme);
@@ -91,7 +94,7 @@ public class AlarmeService {
                 .createdBy(auteur)
                 .build());
 
-        historiqueActionService.enregistrerPour(auteur, ancienne.getDossier().getId(), "Reprogrammation d'une alarme",
+        historiqueActionService.enregistrerPour(auteur, ancienne.getDossier().getId(), TypeActionHistorique.ALARME_REPROGRAMMEE,
                 Map.of("ancienneAlarmeId", alarmeId, "nouvelleAlarmeId", nouvelle.getId()));
 
         return alarmeMapper.toResponse(nouvelle);
@@ -114,7 +117,7 @@ public class AlarmeService {
         alarme.setDateTraitement(LocalDateTime.now());
         alarme = alarmeRepository.save(alarme);
 
-        historiqueActionService.enregistrerPour(auteur, alarme.getDossier().getId(), "Traitement d'une alarme",
+        historiqueActionService.enregistrerPour(auteur, alarme.getDossier().getId(), TypeActionHistorique.ALARME_TRAITEE,
                 Map.of("alarmeId", alarmeId, "objet", alarme.getObjet()));
 
         return alarmeMapper.toResponse(alarme);
@@ -122,12 +125,11 @@ public class AlarmeService {
 
     /** M15 (Q-68) : alarmes d'un dossier — 404 si le dossier n'existe pas. */
     @Transactional(readOnly = true)
-    public java.util.List<AlarmeResponse> listerParDossier(Long dossierId) {
+    public PageResponse<AlarmeResponse> listerParDossier(Long dossierId, Pageable pageable) {
         if (!dossierRepository.existsById(dossierId)) {
             throw ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE, "Dossier introuvable : " + dossierId);
         }
-        return alarmeRepository.findByDossierIdOrderByDateEcheanceAsc(dossierId).stream()
-                .map(alarmeMapper::toResponse)
-                .toList();
+        return PageResponse.of(alarmeRepository.findByDossierIdOrderByDateEcheanceAsc(dossierId, pageable),
+                alarmeMapper::toResponse);
     }
 }

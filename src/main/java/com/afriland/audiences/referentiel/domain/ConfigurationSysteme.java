@@ -55,4 +55,15 @@ public class ConfigurationSysteme {
     @UpdateTimestamp
     @Column(name = "date_modification")
     private LocalDateTime dateModification;
+
+    /**
+     * Auteur de la dernière modification (Q-112).
+     *
+     * <p>Une référence libre plutôt qu'un {@code @ManyToOne} : ce champ sert un rappel d'affichage,
+     * pas une relation métier, et {@code historique_action} conserve de toute façon la trace
+     * complète du changement. Nul tant que le paramètre n'a jamais été modifié, ou si le compte
+     * de l'auteur a été supprimé depuis.
+     */
+    @Column(name = "dernier_auteur_id")
+    private Long dernierAuteurId;
 }

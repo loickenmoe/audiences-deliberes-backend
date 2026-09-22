@@ -14,7 +14,7 @@ import com.afriland.audiences.frais.domain.DemandeFrais;
 import com.afriland.audiences.frais.domain.EtapeValidationFrais;
 import com.afriland.audiences.frais.domain.StatutCircuitFrais;
 import com.afriland.audiences.frais.domain.StatutPaiementFrais;
-import com.afriland.audiences.frais.mapper.DemandeFraisMapper;
+import com.afriland.audiences.frais.domain.ValidationFrais;
 import com.afriland.audiences.frais.repository.DemandeFraisRepository;
 import com.afriland.audiences.frais.repository.ValidationFraisRepository;
 import com.afriland.audiences.frais.web.dto.ControleConformiteRequest;
@@ -28,6 +28,8 @@ import com.afriland.audiences.referentiel.domain.Utilisateur;
 import com.afriland.audiences.referentiel.repository.AvocatRepository;
 import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
 import com.afriland.audiences.referentiel.domain.ConfigurationSysteme;
+import com.afriland.audiences.referentiel.service.CompteAvocatService;
+import com.afriland.audiences.ged.service.MinioStorageService;
 import com.afriland.audiences.referentiel.service.ConfigurationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -60,12 +62,8 @@ class FraisServiceTest {
     @Mock private HistoriqueActionService historiqueActionService;
     @Mock private AlerteService alerteService;
     @Mock private ConfigurationService configurationService;
-
-    private final DemandeFraisMapper mapper = demande -> new DemandeFraisResponse(
-            demande.getId(), demande.getDossier() != null ? demande.getDossier().getId() : null,
-            demande.getAvocat() != null ? demande.getAvocat().getId() : null, demande.getMontant(),
-            demande.getPiecesJustificatives(), demande.getStatutCircuit(), demande.getMotifRejet(),
-            demande.getStatutPaiement(), demande.getReferenceFacture(), demande.getCreatedAt(), demande.getUpdatedAt());
+    // Q-97 : URL pré-signées des pièces justificatives, sur le détail seulement.
+    @Mock private MinioStorageService minioStorageService;
 
     private FraisService service;
     private Dossier dossier;
@@ -78,8 +76,12 @@ class FraisServiceTest {
     @BeforeEach
     void setUp() {
         service = new FraisService(demandeFraisRepository, validationFraisRepository, dossierRepository,
-                dossierAvocatRepository, avocatRepository, utilisateurRepository, currentUserService,
-                historiqueActionService, alerteService, configurationService, mapper);
+                dossierAvocatRepository, new CompteAvocatService(avocatRepository, utilisateurRepository),
+                utilisateurRepository, currentUserService,
+                historiqueActionService, alerteService, configurationService, minioStorageService);
+        // Toute réponse porte le seuil applicable (Q-82).
+        lenient().when(configurationService.getOrThrow("SEUIL_MONTANT_DEFAUT"))
+                .thenReturn(ConfigurationSysteme.builder().cle("SEUIL_MONTANT_DEFAUT").valeur("50000000").build());
 
         dossier = Dossier.builder().id(1L).reference("DOS-2026-001").estSensible(false)
                 .seuilOrigine(SeuilOrigine.GLOBAL).build();
@@ -347,5 +349,59 @@ class FraisServiceTest {
         verify(alerteService).declencher(eq(TypeAlerte.PAIEMENT_EFFECTUE), eq(1L), eq(utilisateurAvocat), any());
         verify(alerteService).declencher(eq(TypeAlerte.PAIEMENT_EFFECTUE), eq(1L), eq(dj), any());
         verify(alerteService).declencher(eq(TypeAlerte.PAIEMENT_EFFECTUE), eq(1L), eq(dja), any());
+    }
+
+    // --- Consultation (Q-82) ---
+
+    @Test
+    void consulter_avocatCannotReadAnotherAvocatsDemande() {
+        DemandeFrais demande = DemandeFrais.builder().id(100L).dossier(dossier).avocat(avocat)
+                .statutCircuit(StatutCircuitFrais.DEPOSEE).montant(1_000_000d).build();
+        when(demandeFraisRepository.findById(100L)).thenReturn(Optional.of(demande));
+        when(currentUserService.getCurrentUser()).thenReturn(Utilisateur.builder().id(51L).keycloakId("kc-autre")
+                .profil(Profil.builder().code("AVOCAT").build()).build());
+
+        assertThatThrownBy(() -> service.consulter(100L)).isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    void consulter_exposesDecisionsAndJointValidationRule() {
+        Dossier sensible = Dossier.builder().id(1L).reference("DOS-2026-002").estSensible(true)
+                .seuilOrigine(SeuilOrigine.GLOBAL).build();
+        DemandeFrais demande = DemandeFrais.builder().id(100L).dossier(sensible).avocat(avocat).montant(1_000_000d)
+                .statutCircuit(StatutCircuitFrais.OPPORTUNITE).build();
+        Utilisateur djaNommee = Utilisateur.builder().id(30L).prenom("Awa").nom("Mbarga")
+                .profil(Profil.builder().code("DJA").build()).build();
+        when(demandeFraisRepository.findById(100L)).thenReturn(Optional.of(demande));
+        when(currentUserService.getCurrentUser()).thenReturn(dj);
+        when(validationFraisRepository.findByDemandeFraisIdOrderByDateValidationAscIdAsc(100L)).thenReturn(List.of(
+                ValidationFrais.builder().etape(EtapeValidationFrais.OPPORTUNITE)
+                        .decision(DecisionValidationFrais.ACCORD).utilisateur(djaNommee).build()));
+
+        DemandeFraisResponse result = service.consulter(100L);
+
+        assertThat(result.referenceDossier()).isEqualTo("DOS-2026-002");
+        assertThat(result.avocatNom()).isEqualTo("Me Fotso");
+        assertThat(result.seuilApplicable()).isEqualTo(50_000_000d);
+        assertThat(result.validationConjointeRequise()).isTrue();
+        assertThat(result.validations()).singleElement().satisfies(v -> {
+            assertThat(v.etape()).isEqualTo(EtapeValidationFrais.OPPORTUNITE);
+            assertThat(v.utilisateurNom()).isEqualTo("Awa Mbarga");
+        });
+    }
+
+    @Test
+    void consulter_appliesDerogationThreshold() {
+        Dossier derogation = Dossier.builder().id(1L).reference("DOS-2026-003").estSensible(false)
+                .seuilOrigine(SeuilOrigine.DEROGATION).seuilMontant(500_000d).build();
+        DemandeFrais demande = DemandeFrais.builder().id(100L).dossier(derogation).avocat(avocat).montant(1_000_000d)
+                .statutCircuit(StatutCircuitFrais.CONFORMITE).build();
+        when(demandeFraisRepository.findById(100L)).thenReturn(Optional.of(demande));
+        when(currentUserService.getCurrentUser()).thenReturn(dja);
+
+        DemandeFraisResponse result = service.consulter(100L);
+
+        assertThat(result.seuilApplicable()).isEqualTo(500_000d);
+        assertThat(result.validationConjointeRequise()).isTrue();
     }
 }

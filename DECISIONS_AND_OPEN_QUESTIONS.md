@@ -2,7 +2,12 @@
 
 > Contradictions documentaires, ambiguïtés et lacunes nécessitant un **arbitrage explicite**.
 > Aucune de ces questions n'a été tranchée silencieusement.
-> Dernière mise à jour : 2026-09-07 (après jalon M15 — voir statuts R-01 à R-08, Q-01 à Q-69 ;
+> Dernière mise à jour : 2026-09-15 (jalon M22 — Q-100 à Q-106 : pagination généralisée, filtres, recherche au fil de la frappe).
+> Précédente : 2026-09-15 (jalon M21 — Q-99, index adossés aux tris des listes paginées).
+> Précédente : 2026-09-14 (jalon M20 — Q-98, pièce jointe facultative au compte rendu
+> d'audience). Q-70 à Q-98 ont toutes été ouvertes par la consommation réelle de l'API par le
+> frontend, jalons M16 à M20 : ce sont les défauts qu'aucun test backend ne pouvait voir.
+> Précédente : 2026-09-07 (après jalon M15 — voir statuts R-01 à R-08, Q-01 à Q-69 ;
 > **R-06 corrigé**, **Q-24 close**, et **Q-59/Q-60/Q-67 arbitrées** à ce jalon).
 
 **Convention de lecture de chaque fiche :**
@@ -597,7 +602,8 @@ saisies manuellement** ». Sans création, aucun dossier n'est créable. **C** :
 formel) dans `ClientController`/`API_IMPLEMENTATION_STATUS.md`, `ROLE_SAISIE` requis, vérifié en
 conditions réelles. `PUT /clients/{id}` **non implémenté** — aucune US ni cas d'usage M4 ne
 l'exigeait explicitement (seule la création bloquait `POST /dossiers`) ; à réévaluer si un besoin
-de modification client émerge dans un module ultérieur.
+de modification client émerge dans un module ultérieur. **Soldé en Q-116 (2026-09-22)** : le besoin a
+émergé, `PUT /clients/{id}` est implémenté, référence figée.
 
 ### Q-24 ✅ Files de travail (listes) non spécifiées — close (M15)
 UC-INT-02/03/04, UC-GED-03, UC-INT-06/10 supposent tous des **listes d'éléments en attente**
@@ -1533,6 +1539,1248 @@ repris : les trois indicateurs de succès (tableau de bord, rapport, performance
 compteur de délibérés du rapport ignorent désormais les délibérés en attente ou rabattus — sans
 quoi ils compteraient comme des échecs ; l'expédition est refusée avant la décision. Le
 planificateur du délai de recours ne voit que des délibérés vidés : inchangé.
+
+### Q-79 ✅ Une suppression directe laissait la demande de suppression orpheline — tranché (M16)
+
+Remonté par l'audit du jalon F10 du frontend (QF-34), décidé par le porteur du projet le 2026-09-11.
+
+**A — Le constat, vérifié dans le code.** Un juriste demande la suppression d'une pièce (202), puis
+le DJ ou la DJA la supprime directement (200, US 6.5). `supprimerDirectement` ne touchait pas à la
+demande : elle restait `EN_ATTENTE` dans la file, **indécidable** (`approuverOuRejeter` cherche un
+document actif → 404) et **relancée toutes les 72 h sans fin** par `SuppressionRelanceScheduler`.
+Le parcours e2e « le juriste demande, le DJ supprime » du frontend en créait une à chaque exécution.
+S'y ajoutait un manque : `DemandeSuppressionResponse` ne portait que `documentId` — la file du DJ ne
+disait pas **quoi** supprimer, et l'historique d'une demande approuvée restait anonyme (document
+supprimé → 404 à la consultation).
+
+**B — Tranché.** La suppression directe ferme la demande en attente sur le même document :
+`APPROUVEE`, validée par l'auteur de la suppression, datée. La réponse porte `documentNom`,
+`typeDocument`, `dossierId`, `referenceDossier`. Migration `V10__demandes_suppression_orphelines.sql` :
+ferme les demandes déjà orphelines (validateur inconnu après coup, laissé nul).
+
+**Vérifié** : un test unitaire par volet, un test d'intégration de bout en bout sur PostgreSQL ;
+en base locale, V10 a fermé une orpheline et n'en laisse aucune.
+
+### Q-80 ✅ Le rapport journalier GED n'était servi qu'au rôle juriste — tranché (M16)
+
+Remonté par l'audit F10 (QF-35), décidé par le porteur du projet le 2026-09-11. FR-GED-04 : « tout
+juriste » ; les user stories donnent au DJ et à la DJA « tous les droits d'un juriste » ; le document
+d'analyse attribue le rapport à l'Assistante. Or aucun de ces trois profils ne porte `ROLE_JURISTE`
+dans le realm (cf. Q-81). **Tranché** : `GET /ged/rapport-journalier` sous
+`hasAnyRole('JURISTE', 'DJ', 'DJA', 'ASSISTANTE')`. **Vérifié** : test d'intégration — 200 pour les
+quatre profils, 403 pour le SH.
+
+### Q-81 ✅ Le DJ et la DJA ne portaient pas `ROLE_JURISTE` — tranché (M16)
+
+Constaté pendant l'audit F10 (QF-36). Les user stories et le document d'analyse donnent au DJ et à
+la DJA « tous les droits d'un juriste » (en plus des leurs). Dans `audiences-realm.json`, leurs rôles
+composites n'incluent que `ROLE_SAISIE` : **toute** action réservée à `ROLE_JURISTE` leur est
+refusée — planifier une audience, gérer les étapes, les délibérés, les alarmes, les décisions
+définitives… Deux voies : ajouter `ROLE_JURISTE` aux composites de `ROLE_DJ`/`ROLE_DJA` (une ligne
+par rôle, effet sur tous les endpoints), ou élargir endpoint par endpoint comme Q-80.
+
+**Tranché par le porteur du projet (2026-09-11)** : `ROLE_JURISTE` ajouté aux composites de
+`ROLE_DJ` et `ROLE_DJA`, dans `audiences-realm.json` (futurs imports) **et** dans le Keycloak en
+service (`kcadm add-roles` : l'import au démarrage ignore un realm existant). Une seule règle, au
+même endroit, fidèle aux sources ; un nouvel endpoint réservé au juriste leur est ouvert d'office.
+
+**Précaution indispensable, appliquée avec** : le provisionnement déduisait le profil du **premier**
+rôle métier du jeton (`findFirst()`). Un jeton de DJ portant désormais `ROLE_DJ` et `ROLE_JURISTE`,
+dans un ordre que Keycloak ne garantit pas, un nouveau DJ aurait pu être enregistré comme juriste —
+perdant la suppression directe, les alertes réservées au DJ, etc. `UtilisateurProvisioningService`
+choisit désormais par **priorité** (DJ, DJA, SH, ASSISTANTE, JURISTE, AVOCAT), le même ordre que
+`profilPrincipal` côté frontend. Les comptes déjà provisionnés gardent leur profil (il est en base).
+Effet à connaître : un jeton émis avant le changement ne porte pas le nouveau rôle — se reconnecter.
+Q-80 (rapport journalier ouvert nommément au DJ et à la DJA) devient redondant pour eux, sans effet.
+
+### Q-82 ✅ Une demande de frais ne se lisait ni seule, ni avec ses décisions — tranché (M16)
+
+Remonté par l'audit du jalon F11 du frontend, décidé par le porteur du projet le 2026-09-11.
+
+**A — Le constat, vérifié dans le code.** Aucun `GET /frais/demandes/{id}` : le détail d'une demande
+ne pouvait être retrouvé qu'en fouillant la file paginée. Les décisions du circuit, pourtant tracées
+dans `validation_frais` (Q-05), n'étaient exposées nulle part : le DJ ne pouvait pas voir que la DJA
+avait déjà donné son accord (US 4.5), ni personne savoir s'il avait déjà voté — l'interface aurait
+proposé un vote que le backend refuse (409). UC-INT-02 étape 3 veut pourtant « la demande, ses pièces
+justificatives et le résultat du contrôle de conformité ». La réponse ne portait que des
+identifiants (dossier, avocat), rien de ce qui explique la validation conjointe, et la file n'avait
+aucun ordre stable (`PageRequest` sans tri).
+
+**B — Tranché.** `GET /frais/demandes/{id}` (mêmes rôles que la file ; l'avocat ne lit que les
+siennes, 403 sinon). `DemandeFraisResponse` gagne `referenceDossier`, `avocatNom`,
+`dossierSensible`, `seuilApplicable` (Q-26), `validationConjointeRequise` (RG-INT-03, même fonction
+que la décision d'opportunité) et `validations` (étape, décision, motif, auteur nommé, date), sur
+toutes les réponses du module. File triée par date de dépôt décroissante. La réponse étant désormais
+calculée, `DemandeFraisMapper` (MapStruct) est remplacé par une construction dans le service, comme
+`DelibereMapper` en Q-78. Les décisions d'une page de la file sont chargées en une requête.
+
+**Vérifié** : 3 tests unitaires (avocat étranger refusé, décisions nommées et règle conjointe,
+seuil de dérogation) ; parcours d'intégration `p6` étendu (détail nommé, décisions dans l'ordre,
+lecture par l'avocat propriétaire, 403 pour un confrère).
+
+### Q-83 ✅ La relance de validation conjointe (CONF04) n'existait pas — tranché (M16)
+
+Constaté au même audit. CONF04 : « délai maximal (en jours) pour que le DJ et le DJA valident
+conjointement une demande sensible avant qu'une alerte de rappel soit déclenchée » — 5 jours,
+modifiable par le DJ. La clé `DELAI_VALIDATION_CONJOINTE` existait (V2), aucun code ne la lisait.
+
+**Tranché** : `FraisRelanceScheduler` (module `frais`, même principe que
+`SuppressionRelanceScheduler`, Q-02), horaire. Une demande `OPPORTUNITE` est relancée quand le délai
+est écoulé depuis l'accord d'opportunité, puis depuis la dernière relance
+(`demande_frais.date_derniere_relance`, migration `V11__frais_relance_validation_conjointe.sql`).
+Seul celui qui n'a pas encore voté est relancé (alerte `VALIDATION_CONJOINTE_REQUISE`). Une valeur
+non numérique du paramètre est journalisée et la relance sautée, sans faire échouer la tâche.
+
+**Vérifié** : 4 tests unitaires (relance du seul non-votant, délai non écoulé, délai compté depuis
+la dernière relance, rien à relancer) ; V11 appliquée à la base locale.
+
+### Q-84 ✅ Un avocat n'était reconnu que par son `sub` Keycloak — tranché (M16)
+
+Constaté en préparant les parcours e2e du jalon F11 du frontend (QF-38), décidé par le porteur du
+projet le 2026-09-11.
+
+**A — Le constat, vérifié en base et dans le code.** `FraisService` et `PublicationService`
+reconnaissaient l'avocat connecté en comparant `avocat.compte_keycloak` au `sub` du jeton, un UUID.
+Or le DJ saisit, dans le formulaire des intervenants, l'**identifiant de connexion** de l'avocat
+(`avocat.dupont`) : tous les avocats de la base locale en portaient un, aucun n'était reconnu —
+aucun dépôt de frais ni de publication possible, et les alertes destinées à l'avocat (rejet,
+paiement, correspondance, constitution) ne partaient pas, `utilisateurRepository.findByKeycloakId`
+étant appelé avec cet identifiant.
+
+**B — Tranché.** `utilisateur.identifiant` (claim `preferred_username`, migration
+`V12__utilisateur_identifiant.sql`, unique) : renseigné au provisionnement, et pour un utilisateur
+déjà provisionné à sa requête suivante (`CurrentUserService`, écriture dans une transaction à part
+comme en R-06). `CompteAvocatService` fait le lien dans les deux sens — identifiant de connexion
+d'abord, `sub` en second pour les comptes déjà rattachés ainsi — et remplace les quatre recherches
+de `FraisService`, `PublicationService` et `ConstitutionService`.
+
+**Vérifié** : 5 tests unitaires (`CompteAvocatServiceTest`), 2 (`CurrentUserServiceTest` :
+identifiant enregistré, identifiant à jour laissé tel quel), 1 test d'intégration sur PostgreSQL réel
+(avocat reconnu par son identifiant de connexion, identifiant conservé sur l'utilisateur, compte sans
+avocat refusé).
+
+### Q-85 ✅ Deux créations concurrentes rendaient 500 au lieu de 409 — tranché (M16)
+
+Constaté au même moment : deux parcours parallèles créant le même avocat franchissaient tous deux le
+contrôle d'unicité de `IntervenantService` ; la contrainte `avocat_compte_keycloak_key` rejetait la
+seconde insertion, remontée en `DataIntegrityViolationException` puis en **500**. Le même cas
+existe pour toute création soumise à une contrainte d'unicité (facture, référence de dossier…).
+
+**Tranché** : `GlobalExceptionHandler` rend **409 `ERR-CONFLICT`** pour une violation d'unicité
+(SQLState `23505`), avec un message générique qui ne divulgue rien de la base ; toute autre violation
+d'intégrité reste une erreur interne. **Vérifié** : 2 tests unitaires (23505 → 409, 23503 → 500).
+
+### Q-86 ✅ Publications et constitutions : illisibles pour qui devait les instruire — tranché (M16)
+
+Remonté par l'audit du jalon F12 du frontend, décidé par le porteur du projet le 2026-09-11.
+
+**A — Les constats, vérifiés dans le code et les sources.**
+1. Le fichier d'une autre publication (pièce, décision, conclusion) n'était exposé nulle part :
+   `cheminStockage` enregistré, aucune URL de téléchargement — l'Assistante validait un fichier
+   qu'elle ne pouvait pas lire, les juristes ne le liraient jamais.
+2. `GET /publications/{id}` rendait 404 tant que la publication n'était pas `VALIDE` — y compris à
+   l'Assistante, qui doit la voir pour la valider (UC-INT-10 étape 3).
+3. Les commentaires des juristes n'étaient lisibles par personne : le DJ et la DJA étaient notifiés,
+   sans pouvoir lire ce qu'ils devaient centraliser (RG-INT-07) ; la correspondance transmise n'était
+   visible que par le 409 d'un second envoi.
+4. Publications et demandes de constitution ne portaient que des identifiants (dossier, avocat,
+   audience, prestataire, demandeur, signataire) ; la liste des publications n'avait pas d'ordre
+   stable.
+5. Aucune notification n'annonçait aux juristes une publication validée (UC-INT-08 étape 1, avec
+   restriction au seul destinataire désigné, alt. 3-a).
+
+**B — Tranché.**
+- `PublicationResponse` porte `referenceDossier`, `avocatNom`, `audienceDate`,
+  `restrictionAccesNom`, `nomFichier` ; sur le **détail** seulement, `urlTelechargement`
+  (pré-signée, 10 minutes), `commentaires` (auteur nommé) et `correspondance`.
+- L'Assistante lit une publication `DEPOSE` ou `REJETE`. La restriction d'accès, qui désigne un
+  juriste lecteur (RG-INT-06), ne s'oppose pas aux profils qui instruisent la publication :
+  l'Assistante (validation) et le DJ/DJA (centralisation, RG-INT-07).
+- File des publications : `statut=DEPOSE` en ordre d'arrivée, sinon la plus récente d'abord.
+- `DemandeConstitutionResponse` porte `referenceDossier`, `prestataireNom`, `prestataireType`,
+  `demandeurNom`, `valideParNom`.
+- À la validation, les juristes affectés au dossier sont notifiés (`NOUVELLE_PUBLICATION`) — ou le
+  seul destinataire désigné si l'accès est restreint.
+- Hors périmètre, reporté au portail avocat (F16) : l'observation du DJ/DJA de sa propre initiative,
+  sans publication (UC-INT-08 étapes 8 à 12), et la lecture de ses correspondances par l'avocat.
+
+**Vérifié** : 5 tests unitaires (`PublicationServiceTest` : Assistante et fichier d'une pièce
+déposée, DJ sur une publication restreinte, commentaires et correspondance nommés, notification des
+juristes du dossier, du seul destinataire désigné) ; parcours d'intégration `p2` et `p7` étendus sur
+PostgreSQL réel (détail lu par l'Assistante avant validation et refusé au juriste, juriste notifié
+après validation, constitution nommée).
+
+### Q-87 ✅ Un avocat constitué n'était jamais notifié — corrigé (M16)
+
+Constaté en lisant le code pendant l'audit F12. `DemandeConstitution.prestataire` est une
+association `LAZY` vers la classe abstraite `Intervenant` (héritage `JOINED`) : chargée à la
+demande, elle est un **proxy d'`Intervenant`**, jamais une instance d'`Avocat`. Or
+`ConstitutionService.notifierPrestataire` testait `prestataire instanceof Avocat` sur une demande
+relue par `findById` — test toujours faux : la signature du SH ne prévenait jamais l'avocat
+(FR-INT-07 critère 3). **Corrigé** : `Hibernate.unproxy` avant le test, dans le service et dans le
+calcul de `prestataireType`. **Vérifié** : parcours d'intégration `p7` sur PostgreSQL réel — après
+la signature, l'avocat a bien une alerte `CONSTITUTION_A_SIGNER`, et la demande se dit `AVOCAT`.
+Le défaut a été établi à la lecture du code ; le parcours n'a pas été rejoué sur le code d'avant le
+correctif.
+
+### Q-88 ✅ Les décisions définitives ne se relisaient pas — tranché (M16)
+
+Remonté dès l'audit frontend (QF-03), décidé par le porteur du projet à l'ouverture du jalon F13 le
+2026-09-11. `POST /dossiers/{id}/adjudications`, `POST /dossiers/{id}/condamnations` et
+`PATCH /condamnations/{id}/statut` existaient sans **aucune** lecture : l'onglet « Décisions » d'une
+fiche restait en écriture seule, et la mise à jour du statut d'une condamnation (UC-DEF-02 étape 8)
+devenait inatteignable après un rechargement — son identifiant n'était connu qu'à la création.
+**Tranché** : `GET /dossiers/{id}/decisions` (`ROLE_CONSULTATION`, 404 si le dossier est inconnu),
+symétrique de #56/#57/#58 : `{adjudications, condamnations}`, chaque liste de la plus récente à la
+plus ancienne. **Vérifié** : test d'intégration sur PostgreSQL réel (condamnation créée puis passée
+en recouvrement forcé, relue avec son statut par l'Assistante ; 404 pour un dossier inconnu).
+
+### Q-89 ✅ La recherche jurisprudentielle n'était qu'exacte — tranché (M16)
+
+Constaté au même audit. `GET /jurisprudences` comparait le mot-clé à l'un des mots indexés par
+égalité stricte, casse comprise (`:motCle = ANY(mots_cles)`), et de même la nature et la
+juridiction : « saisie » ne retrouvait pas « Saisie immobilière », « tgi douala » pas « TGI Douala ».
+Or FR-DEF-03 veut une décision « consultable dans la base » et la recherche par mots-clés est la
+voie d'accès. Et la fiche ne pouvait pas relister les décisions qu'on y archivait (UC-DEF-03 les
+« rattache au dossier »). **Tranché** : chaque filtre textuel est un motif « contient », insensible à
+la casse (jokers saisis échappés) ; un paramètre `dossierId` restreint la recherche au dossier.
+**Vérifié** : 3 tests unitaires (motif, filtres vides ignorés, échappement), 1 test d'intégration
+sur PostgreSQL réel (fragment de mot-clé en minuscules, juridiction en minuscules restreinte au
+dossier, autre dossier sans résultat). Limite : les accents comptent (« hypotheque » ne retrouve
+pas « hypothèque ») — l'extension `unaccent` n'est pas installée.
+
+### Q-90 — Suivi d'une adjudication dans le temps, statut initial d'une condamnation — `P2`, ouvert
+
+Constaté au même audit, **laissé ouvert sur décision du porteur du projet** (2026-09-11). RG-DEF-02
+dit que le système « suit » la comptabilisation, la reprise de provision, la restitution de soulte,
+la mutation et le reliquat d'une adjudication, mais aucune source ne décrit leur mise à jour — seule
+la condamnation en a une (UC-DEF-02 étape 8, #53). S'en tenir à la lettre, comme pour Q-59 : aucune
+mise à jour d'adjudication n'est ajoutée. **À confirmer avec la Direction Juridique.** Même famille :
+US 8.2 fait saisir `statutPaiement` à la création d'une condamnation, que `CreerCondamnationRequest`
+ne reçoit pas (toujours `EN_ATTENTE`, QF-40 du frontend) — un champ facultatif suffirait.
+
+### Q-91 ✅ Une valeur de configuration erronée cassait d'autres modules — tranché (M17)
+
+Constaté à l'audit d'ouverture du jalon F14 du frontend (écran 41, « Configurations et seuils »).
+`PUT /configurations/{cle}` n'exigeait que `@NotBlank` sur la valeur, alors que cinq points de code
+la reconvertissent : `FraisService.seuilGlobal` (`Double.parseDouble`, appelé sur **chaque** réponse
+de frais depuis Q-82), `DelibereService` (`Integer.parseInt` de `SEUIL_PROROGATIONS`), `GedService`
+(`Long.parseLong` de `TAILLE_MAX_GED`, découpage de `FORMATS_GED` par virgules **sans retirer les
+espaces**). Seuls `ChargeMaxAvocatScheduler` et `FraisRelanceScheduler` se protégeaient d'un
+`NumberFormatException`. Conséquence : une saisie « 50 000 000 » ou « pdf, xlsx » par le DJ passait
+en 200, puis ressortait en **erreur 500 dans un module sans rapport avec l'écran de configuration** —
+diagnostic à la charge de l'utilisateur, à distance de la cause.
+
+**Tranché** : chaque clé porte une règle (`RegleConfiguration`), appliquée dans
+`ConfigurationService.modifier` — donc aussi sur `PUT /alertes/seuils`, qui y délègue. Une valeur
+invalide est refusée en **400** et nommée ; une valeur valide est **normalisée** avant enregistrement
+(espaces retirés, liste en majuscules, sans doublon, ordre de l'énumération). La règle est
+**publiée** dans `ConfigurationResponse` (`typeValeur`, `valeurMinimale`, `valeurMaximale`,
+`valeursPossibles`) : le frontend construit son champ de saisie à partir du contrat au lieu d'en
+redéclarer une copie qui divergerait.
+
+**Origine des bornes** — les minima (≥ 1) et les ensembles fermés viennent du code consommateur ou
+des énumérations du domaine (`FormatDocument`, `CanalAlerte`) ; `APPLICATIF` ne peut pas être retiré
+des canaux (RG-ALR-03, « applicatif obligatoire »). Le maximum de `TAILLE_MAX_GED` est la limite
+`spring.servlet.multipart.max-file-size` (10 Mo) — au-delà, Spring rejette le fichier avant le
+contrôle métier, le réglage serait sans effet. Celui de `SEUIL_MONTANT_DEFAUT` (12 chiffres) tient à
+l'exactitude du `double` du calcul de seuil. En revanche les maxima de `SEUIL_PROROGATIONS` (1 000),
+`DELAI_VALIDATION_CONJOINTE` (365) et `CHARGE_MAX_AVOCAT` (1 000) sont des **garde-fous que je
+propose**, aucune source ne fixant de plafond : sans eux, un délai de 2 000 000 000 jours ferait
+déborder le calcul de date du planificateur de relance. Ils sont regroupés en un point unique, à
+ajuster si la Direction Juridique les précise. **À confirmer.**
+
+**Vérifié** : 24 tests unitaires sur les règles, 2 sur le service, et en réel contre le backend
+démarré — « 50 000 000 » refusé en 400, `OUTLOOK` seul refusé, `" pdf , png "` enregistré
+`PDF,PNG`.
+
+### Q-92 ✅ Les notifications revenaient sans ordre — tranché (M17)
+
+Constaté en construisant l'écran 03 du frontend. `GET /alertes/mes-notifications` paginait
+(`PageRequest.of(page, size)`) **sans aucun tri** : la requête JPA ne portait pas d'`ORDER BY`, et
+PostgreSQL ne garantit alors aucun ordre entre deux requêtes. Une notification pouvait donc atterrir
+sur n'importe quelle page ; pire, une même alerte pouvait apparaître sur deux pages ou n'apparaître
+sur aucune, selon le plan d'exécution choisi. L'écran « Mes notifications » n'est utilisable qu'à
+partir du moment où la plus récente est en tête.
+
+**Tranché** (arbitrage du porteur du projet, 2026-09-12) : tri `dateDeclenchement DESC, id DESC`,
+comme la file des demandes de frais depuis Q-82. L'`id` départage les alertes déclenchées dans la
+même transaction, qui partagent l'horodatage. **Vérifié** : 1 test d'intégration sur PostgreSQL réel
+(trois alertes créées dans la même seconde, relues dans l'ordre inverse de création).
+
+### Q-93 ✅ Les listes de clients et de dossiers revenaient sans ordre — tranché (M17)
+
+Même défaut que Q-92, constaté juste après, et cette fois **visible en usage** : `GET /clients`
+paginait sans `ORDER BY`. Passé vingt clients — seuil franchi le 2026-09-12, 23 clients en base de
+développement — celui qu'un juriste venait de créer basculait en page 2, donc **invisible pour son
+auteur** au retour sur la liste. Deux parcours de bout en bout du frontend l'ont démontré, en
+exécution parallèle **et** en exécution seule. `GET /dossiers` (Specification + `findAll`) portait le
+même défaut, encore masqué par les filtres de l'écran.
+
+`GET /jurisprudences` a été vérifié à cette occasion : il est **déjà** trié
+(`ORDER BY j.date_decision DESC, j.id DESC`, posé en Q-89). `GET /frais/demandes` l'est depuis Q-82
+et `GET /publications` depuis M16. Il ne restait donc que ces deux-là.
+
+**Tranché** (arbitrage du porteur du projet, 2026-09-12) : tri `createdAt DESC, id DESC` sur les deux,
+comme partout ailleurs. **Vérifié** : 1 test d'intégration sur PostgreSQL réel (le client et le
+dossier créés à l'instant reviennent en tête d'une page d'un seul élément).
+
+### Q-94 ✅ La vue consolidée d'un client interrogeait la base dossier par dossier — tranché (M17)
+
+Mesuré le 2026-09-12 sur la base de développement, en marge du jalon F14 du frontend (signalé
+QF-41 côté frontend). `GET /clients/{id}/dossiers` mettait **11 à 19 secondes**, jusqu'à 70 s sous
+charge, pour un client portant 310 dossiers : l'écran 13 restait en chargement, et l'appel occupait
+assez longtemps une connexion pour faire expirer des requêtes voisines dans la suite de bout en bout.
+
+**Cause.** `construireReponseLegere` allait chercher étapes, juristes et avocats **par dossier** —
+trois requêtes chacun, soit 930 pour 310 dossiers. Un N+1 classique, invisible tant que les clients
+de test portaient trois dossiers.
+
+**Ce qu'il ne fallait pas faire.** La première piste — alléger la réponse — était fausse : le contrat
+d'API inclut `etapes` dans le schéma `Dossier`, et l'écran 13 s'en sert pour afficher l'étape
+courante. Paginer ne convenait pas davantage : le contrat décrit la vue consolidée comme « toutes les
+procédures d'un client, par catégorie », sans pagination. C'était donc le **nombre de requêtes** qu'il
+fallait réduire, pas la réponse qu'il fallait amputer.
+
+**Tranché.** `construireReponses(List<Dossier>)` charge les trois collections en **trois requêtes pour
+la liste entière** (`findByDossierIdIn`), puis les apparie en mémoire par identifiant. Les
+identifiants composites `DossierJuristeId`/`DossierAvocatId` portent déjà `dossierId` : les lire
+n'initialise aucun proxy. `GET /dossiers` emprunte le même chemin et passe de soixante requêtes par
+page à trois.
+
+**Mesuré après correction**, même base, client entre-temps passé à **355 dossiers** :
+**0,12 s** (0,17 s et 1,05 s au premier appel, JIT compris) pour 306 Ko — contre 11 à 19 s avant.
+**Vérifié** : 1 test d'intégration sur PostgreSQL réel qui garantit l'appariement — deux dossiers du
+même client affectés à des avocats différents gardent chacun le sien, seul vrai risque de la bascule.
+
+### Q-95 ✅ Le tableau de bord exécutif s'ouvre à la DJA — tranché (M18)
+
+Soulevé à l'ouverture du jalon F15 du frontend (écran 39), en reprenant QF-04.
+
+**A — Ce que la documentation exige.** Deux passages en tension. US 8.5, critère d'acceptation :
+« *Given que je suis le DJ (**ROLE_DJ**), When j'appelle GET /tableau-de-bord…* » — d'où le
+`hasRole('DJ')` d'origine. Mais les spécifications fonctionnelles, table des parties prenantes
+(STK-06, Direction Générale), attendent de « *disposer d'un tableau de bord consolidé du risque
+crédit contentieux **à travers le DJ/DJA*** ». La première nomme un rôle technique, la seconde
+désigne les deux responsables au niveau des objectifs.
+
+**B — Ce que le code implémentait.** `@PreAuthorize("hasRole('DJ')")`, sans `ROLE_DJA`. La DJA
+recevait 403 sur le seul écran qui lui aurait donné une vue d'ensemble, alors qu'elle contrôle
+l'opportunité de toutes les demandes de frais et valide conjointement les demandes sensibles.
+
+**C — Tranché** (arbitrage du porteur du projet, 2026-09-14) : `hasAnyRole('DJ', 'DJA')`. Les autres
+profils restent exclus — RG-REP-03 en fait un tableau de pilotage, pas un écran d'équipe.
+
+**Vérifié** : `ParcoursEndToEndIntegrationTest.p9_pilotage` étendu (DJA en 200, juriste et Assistante
+en 403) sur PostgreSQL réel, et en réel contre le backend démarré — `dja.test` → 200,
+`assistante.test` → 403.
+
+**À noter, découvert au passage** : `ROLE_DJ` et `ROLE_DJA` étant composites depuis Q-81, la
+direction atteint déjà tout ce qui est ouvert au juriste — `GET /rapports`, `GET /audiences/calendrier`,
+`GET /repertoire/avocats`. C'est ce qui a clos l'essentiel de QF-04 sans modification, et c'est un
+effet de bord de Q-81 qui n'avait pas été consigné.
+
+### Q-96 ✅ L'avocat ne pouvait pas désigner son dossier — tranché (M19)
+
+Ouverture du jalon F16 du frontend (portail Avocat), sur la lacune QF-01 relevée dès l'audit initial.
+
+**A — Ce que la documentation exige.** US 4.1 : « je soumets **dossierId**, montant,
+referenceFacture, piecesJustificatives via POST /frais/demandes ». US 5.1 : « je veux déposer un
+compte rendu d'audience **en choisissant le dossier et l'audience** ». Les deux stories supposent
+donc que l'avocat connaisse ses dossiers, et leurs audiences.
+
+**B — Ce que le code implémentait.** L'avocat ne porte pas {@code ROLE_CONSULTATION} : il recevait
+403 sur {@code GET /dossiers} comme sur {@code GET /dossiers/{id}/audiences}. Il devait fournir des
+identifiants qu'aucun endpoint ne lui permettait de découvrir — l'exigence était **inapplicable**.
+
+**C — Tranché** (arbitrage du porteur du projet, 2026-09-14) : un module {@code portail}, quatre
+lectures sous {@code /avocat}, toutes {@code hasRole('AVOCAT')} :
+
+| Endpoint | Objet | Exigé par |
+|---|---|---|
+| `GET /avocat/mes-dossiers` | Ses dossiers, **identification seule** | US 4.1, US 5.1 |
+| `GET /avocat/mes-dossiers/{id}/audiences` | Les audiences d'un de ses dossiers | US 5.1 |
+| `GET /avocat/mes-publications` | Ses dépôts, statut et motif de rejet | — *(périmètre ajouté)* |
+| `GET /avocat/mes-constitutions` | Les lettres le désignant | — *(périmètre ajouté)* |
+
+**Deux partis pris, et leurs raisons.**
+
+1. **Une surface distincte, plutôt que l'élargissement des endpoints internes.** Ouvrir
+   {@code GET /dossiers} à {@code ROLE_AVOCAT} aurait fait reposer la confidentialité sur un filtre
+   à l'intérieur d'un service partagé — un oubli, et le portefeuille entier passait à un tiers. Ici
+   la restriction est **dans la requête** ({@code SELECT da.dossier FROM DossierAvocat da WHERE
+   da.avocat.id = :avocatId}), et le périmètre est impossible à confondre avec celui du personnel.
+2. **Un dossier réduit à son identification** — référence, nature, juridiction. Ni client, ni risque
+   encouru, ni sensibilité, ni juristes affectés : un prestataire externe n'a pas à connaître le
+   portefeuille de la banque, et l'exposer le rendrait extractible en masse.
+
+**Périmètre à confirmer.** Les deux dernières lectures ne répondent à aucune exigence écrite — US 5.4
+vise le juriste. Elles sont livrées au motif qu'un avocat notifié du rejet d'une publication ne
+pouvait pas relire ce qui avait été rejeté, ni le motif à corriger. **À confirmer avec la Direction
+Juridique.**
+
+**Vérifié** : 3 tests d'intégration sur PostgreSQL réel — un dossier auquel il n'est pas affecté
+n'apparaît ni dans sa liste ni par son identifiant (403), la réponse ne porte aucun champ du
+portefeuille, le portail est fermé aux profils internes — et en réel contre le backend démarré.
+
+### Q-97 ✅ Les pièces justificatives d'une demande de frais n'étaient jamais téléversées — tranché (M19)
+
+Signalé par le porteur du projet le 2026-09-14, en fin de jalon F16 du frontend, sur une lecture trop
+étroite de ma part (QF-26 côté frontend, que j'avais close à tort comme « conforme »).
+
+**A — Ce que la documentation exige.** UC-INT-01 étape 4 : « L'avocat **charge** les pièces
+justificatives. » UC-INT-02 étape 3 : « Le système affiche la demande, **ses pièces justificatives**
+et le résultat du contrôle de conformité. » Et le dictionnaire des données décrit
+`pieces_justificatives TEXT[]` comme « **Chemins ou références** des pièces (tableau) ».
+
+**B — Ce que le code implémentait.** `DeposerFraisRequest.piecesJustificatives` acceptait n'importe
+quelle liste de chaînes non vide, et aucun endpoint ne permettait de téléverser quoi que ce soit. Le
+tableau contenait donc des libellés arbitraires, sur lesquels l'Assistante était censée exercer un
+contrôle de conformité — ce qui n'a pas de sens.
+
+**C — Tranché** (arbitrage du porteur du projet) : **téléversement en deux temps**.
+
+1. `POST /avocat/pieces-justificatives` (multipart, `ROLE_AVOCAT`) range le fichier sous le préfixe
+   `frais/` et renvoie sa **clé**. Mêmes contrôles de format et de poids que la GED — le service de
+   validation est extrait de `GedService` en `ValidationFichierService` pour que `FORMATS_GED` et
+   `TAILLE_MAX_GED` restent la **seule** source de vérité des deux.
+2. L'avocat reporte ces clés dans `piecesJustificatives`. **Le contrat de `POST /frais/demandes` ne
+   change pas** : le document d'API le décrit en JSON avec un tableau de chaînes, et un envoi qui
+   échoue ne fait pas reperdre les pièces déjà transmises.
+3. Le **détail** d'une demande (`GET /frais/demandes/{id}`) expose `piecesTelechargeables`, avec une
+   URL pré-signée par pièce — UC-INT-02 étape 3. Vide sur la liste : les URL ne vivent que dix
+   minutes et coûteraient un aller-retour MinIO par pièce, pour un écran qui ne les affiche pas.
+
+**Compatibilité.** Seules les entrées préfixées `frais/` sont signées : le tableau peut contenir des
+libellés antérieurs, qui ne désignent aucun objet stocké et pour lesquels une URL échouerait.
+
+**Vérifié** : 2 tests d'intégration sur PostgreSQL réel — téléversement, dépôt, relecture par
+l'Assistante ; format non autorisé refusé en 400. Le client MinIO étant mocké en test, l'URL
+pré-signée y est nulle : le test vérifie la présence du champ, pas une valeur que le mock ne produit
+pas.
+
+### Q-98 ✅ Un compte rendu d'audience ne pouvait pas porter sa pièce — tranché (M20)
+
+Question du porteur du projet le 2026-09-14, après le jalon F17 du frontend : l'avocat qui dépose un
+compte rendu d'audience dispose souvent du **plumitif** ou d'une note d'audience, et n'avait aucun
+moyen de la joindre — il devait la déposer séparément en « autre publication », où elle perdait son
+rattachement à l'audience.
+
+**A — Ce que le modèle permettait.** `CompteRenduAudience` ne portait que `contenu` (texte) et
+`audience_id` ; seule `AutrePublication` avait un `chemin_stockage`. La hiérarchie `JOINED` rendait
+pourtant l'ajout trivial : une colonne sur la table du sous-type, rien à déplacer.
+
+**B — Tranché** (« Applique ta recommandation ») : **pièce facultative sur le compte rendu**.
+
+1. `V13__compte_rendu_piece_jointe.sql` ajoute `chemin_stockage VARCHAR(255)` à
+   `compte_rendu_audience`, **nullable** — les comptes rendus existants restent valides tels quels.
+2. `POST /publications/cr-audience` passe en **multipart** : métadonnées en paramètres, fichier en
+   partie `file` facultative. Le contrat d'API décrivait un corps JSON ; **l'écart est assumé**, au
+   même titre que `/publications/autres` qui était déjà multipart. Un dépôt sans pièce se comporte
+   exactement comme avant, et le récit reste **obligatoire** : la pièce étaye, elle ne remplace pas.
+3. La pièce passe par `ValidationFichierService` (Q-97) : mêmes `FORMATS_GED` et `TAILLE_MAX_GED` que
+   la GED, une seule source de vérité pour les trois points d'entrée de fichier.
+4. `GET /publications/{id}` renvoie `nomFichier` et `urlTelechargement` pour **les deux** sous-types
+   — la lecture ne distingue plus un compte rendu d'une autre publication.
+
+**Pourquoi pas une publication unique.** Fusionner les deux sous-types aurait fait porter à un seul
+objet trois combinaisons que le métier n'accepte pas (fichier seul rattaché à une audience, texte
+seul sans audience, audience avec un `type_document`), et effacé la distinction métier — **relater**
+une audience contre **transmettre** un document du dossier — au profit d'une règle devinée.
+
+**Vérifié** : 2 tests unitaires (dépôt avec pièce nommée, refus d'un format hors `FORMATS_GED`), le
+parcours d'intégration P2 basculé en multipart avec pièce et relecture du `nomFichier` sur
+PostgreSQL réel, le refus d'un récit vide en **400** (et non en 500 au flush), et le test sans pièce
+conservé (`verifyNoInteractions(minioStorageService)`).
+
+**Vérifié en réel** contre l'instance locale (2026-09-14), ce que le client MinIO mocké ne pouvait
+pas montrer : dépôt avec pièce **201**, `nomFichier` restitué à l'avocat comme à l'Assistante, URL
+pré-signée sur `dossiers/795/{uuid}-plumitif-….pdf` **effectivement téléchargeable** (HTTP 200) ;
+dépôt sans pièce **201** avec `nomFichier: null` ; `.exe` refusé en **400** ; récit vide **400**.
+
+### Q-99 ✅ Six listes paginées triaient sans index — tranché (M21)
+
+Relevé le 2026-09-15 lors du recensement d'améliorations demandé par le porteur du projet, et
+**appliqué sur sa décision**.
+
+**A — Le constat.** M17 (Q-92, Q-93) puis M19 ont donné un ordre stable aux listes paginées. Six
+d'entre elles trient sur une colonne qu'**aucun index ne portait** : `dossier` et `client` par
+`created_at DESC, id DESC`, `demande_frais` de même, `alerte` par `date_declenchement DESC, id DESC`,
+et `publication` par `date_depot` dans les deux sens (file interne #59 et portail avocat). Les
+13 migrations comptaient 37 index, **aucun sur une colonne de tri** — vérifiable par
+`grep "CREATE INDEX" | grep -c created_at` → `0`.
+
+PostgreSQL devait donc trier l'intégralité du jeu filtré à **chaque page** pour n'en rendre que
+vingt lignes.
+
+**B — Pourquoi le corriger alors que rien ne se voyait.** C'est la forme exacte du défaut Q-94 : la
+vue consolidée d'un client tenait parfaitement jusqu'à ce qu'un client atteigne 310 dossiers, et elle
+est alors passée à **19 secondes**. Le remède est ici gratuit — des index, aucune ligne de code
+applicatif, aucun changement de contrat.
+
+**C — Mesuré**, sur une table jetable de **200 000 lignes** reproduisant la forme et le tri de
+`dossier` (table supprimée après mesure) :
+
+| | Plan | Temps |
+|---|---|---|
+| Sans index | `Parallel Seq Scan` + `top-N heapsort`, 200 000 lignes lues | **62,5 ms** |
+| Avec index | `Index Scan`, 20 lignes touchées | **0,094 ms** |
+
+Soit un facteur **665** sur la première page. Sur une page profonde (`OFFSET 5000`), l'index évite
+toujours le tri complet : **5,4 ms**.
+
+**Appliqué** : `V14__index_tris_pagination.sql`, neuf index reproduisant **exactement** l'ORDER BY de
+chaque requête, colonne de filtre en tête quand il y en a une — un index dont l'ordre diverge du tri
+demandé ne serait pas retenu par le planificateur. Deux index sur `alerte` et sur `demande_frais` :
+la forme filtrée (par statut, par destinataire) et la forme complète ne peuvent pas être servies par
+le même. `publication` reçoit un index ascendant, que PostgreSQL parcourt à l'envers pour le tri
+descendant.
+
+**Vérifié** : 358 tests au vert, `BUILD SUCCESS`. Aucun contrat modifié, aucun impact frontend.
+
+**Vérifié en réel** (2026-09-15) : Flyway a appliqué la version 14 au démarrage
+(`flyway_schema_history` → `14 | index tris pagination | t`) et les **neuf** index sont présents dans
+`pg_indexes`. Le smoke et la suite de bout en bout passent sur la base migrée.
+
+**Une précision qui évite un contresens.** Sur la base de développement — quelques dizaines de lignes
+— le planificateur **ignorera ces index**, et il aura raison : un balayage séquentiel y est plus
+rapide qu'un parcours d'index. Ce n'est pas un échec de la migration. Le gain se mesure au volume,
+et c'est pourquoi la mesure ci-dessus a été faite sur 200 000 lignes.
+
+### Q-106 ✅ Un index B-tree ne peut rien pour une recherche « contient » — tranché (M22)
+
+Trouvé en écrivant les index des filtres de M22, et c'est un défaut **antérieur** qui passait
+inaperçu depuis M16.
+
+**A — Le constat.** Trois recherches de l'application cherchent un fragment **au milieu** d'un
+texte : la référence d'un dossier (`LIKE '%…%'`, Q-72), celle d'une facture (Q-103) et le nom d'un
+intervenant (Q-105). Or un index B-tree ordonne les chaînes **par leur début** : il sert
+`LIKE 'DOS%'` et ne peut **rien** pour `LIKE '%DOS%'`.
+
+`idx_dossier_reference` existait donc depuis V1 et semblait couvrir le filtre de référence — il ne
+l'a jamais servi. Personne ne pouvait s'en apercevoir : la requête est correcte, elle est seulement
+exécutée par balayage complet.
+
+**B — Tranché** : extension `pg_trgm` et index **GIN trigramme** sur les trois colonnes. Les
+trigrammes découpent le texte en triplets de caractères et les indexent ; la recherche d'un fragment
+interne devient alors une recherche indexée.
+
+**C — Prérequis d'exploitation, à porter à la DSI.** `CREATE EXTENSION` demande des droits élevés.
+L'utilisateur applicatif les a sur le poste de développement ; **en production, l'extension devra
+être créée par la DSI avant le premier démarrage**, sans quoi la migration échouera. L'échec est
+franc et visible au démarrage — jamais silencieux, contrairement au défaut qu'il corrige.
+
+### Q-100 à Q-105 ✅ Pagination généralisée, filtres et recherche au fil de la frappe — tranché (M22)
+
+Demandé par le porteur du projet le 2026-09-15 : **dix lignes par tableau au maximum**, et des
+filtres partout où ils manquent. Objectifs énoncés : « ni perte de données, ni lenteur », pour une
+application « amenée à recevoir beaucoup de données ».
+
+**Q-100 — pagination.** Huit endpoints renvoyaient une liste entière : `/repertoire/avocats`,
+`/constitutions/prestataires`, `/intervenants`, `/ged/demandes-suppression`, et les onglets
+Documents, Audiences et Alarmes d'un dossier. Tous passent en `PageResponse`. S'y ajoute
+`GET /dossiers/{id}/historique`, créé : RG-DOS-06 historise toute action, et la fiche transportait
+l'historique **entier** à chaque ouverture. La fiche n'en embarque plus que les **dix entrées les
+plus récentes** — le champ du contrat garde sa forme, l'onglet pagine pour le reste, aucune entrée
+n'est perdue.
+
+**Deux limites assumées, écrites dans le code.** Le **répertoire des avocats** n'est paginé qu'à
+moitié : US 5.8 le classe par charge croissante, or la charge vient d'un comptage agrégé joint en
+Java et non d'une colonne. Aucun `ORDER BY` SQL ne peut produire cet ordre, donc la base ne peut pas
+découper ce qu'elle ne sait pas trier — la pagination réduit ce qui **voyage**, pas ce que la base
+lit. Et **trois listes restent entières** parce qu'elles sont structurellement bornées : étapes (trois
+au maximum), délibérés et décisions d'un dossier. Y ajouter une pagination serveur aurait été du
+contrat à maintenir pour toujours en échange de rien.
+
+**Q-101 — filtrer les dossiers sensibles**, sur rappel explicite du porteur du projet. `estSensible`
+et `sensibiliteStatut` s'ajoutent à `GET /dossiers`. Le second ne relève pas du confort :
+`EN_ATTENTE` donne au DJ et à la DJA la **file des sensibilités à valider**, que rien n'exposait.
+C'est la moitié de **QF-08**, que j'avais close à tort en concluant que la notification suffisait —
+une notification prévient d'un événement, elle ne dit pas ce qui reste en attente.
+
+**Q-102 — notifications** : `type` et `dossierId`. Avec dix-sept types d'alerte et des rappels à
+J-7, J-3 et J-1, la liste se remplit vite et rien ne permettait d'y chercher.
+
+**Q-103 — circuit des frais** : `dossierId`, `avocatId`, `referenceFacture`, `dateDebut`, `dateFin`.
+
+**Q-104 — portail** : l'avocat filtre ses dépôts par `statut`.
+
+**Q-105 — recherche au fil de la frappe** : `nom` sur `/intervenants`. C'est la réponse **durable**
+au problème des sélecteurs, autorisée par le porteur du projet hors du périmètre initial. Une liste
+déroulante qui demandait « une grande page » cassait silencieusement dès que l'annuaire la dépassait ;
+elle interroge désormais le serveur pendant la frappe et n'a plus besoin de tout détenir. La taille
+par défaut de `/intervenants` est donc **redescendue de 200 à 20** : ce qu'affiche une liste
+déroulante, non ce qu'elle contient.
+
+**Deux verrous de sécurité, posés parce que ces filtres touchent des données restreintes.** Le
+**destinataire** d'une notification n'est pas filtrable : il reste résolu sur le jeton. Et pour un
+avocat, `avocatId` est **imposé** à son propre identifiant, jamais lu depuis l'URL — sans quoi le
+filtre destiné à l'instruction serait devenu un moyen de lire les demandes d'un confrère en changeant
+un chiffre.
+
+**Trois pièges de sélecteur, dont deux signalés par le compilateur.** `GET /intervenants` alimente
+trois listes déroulantes et un seul tableau ; `PortailAvocatService` réutilise la requête des
+audiences pour le sélecteur du formulaire de dépôt. Paginer sans regarder aurait amputé ces listes en
+silence — exactement la « perte de données » que le porteur du projet demandait d'écarter, et
+invisible en recette. Le sélecteur d'audiences passe donc explicitement `Pageable.unpaged()`.
+
+### Q-107 ✅ Un avocat non inscrit au répertoire recevait un refus de droits — tranché (M22)
+
+Signalé par le porteur du projet le 2026-09-15, après une réinitialisation de la base de
+développement : connecté en avocat, il voyait « Le chargement a échoué — Aucun avocat du référentiel
+n'est rattaché à ce compte » sur *Mon espace* et sur *Frais d'avocats*.
+
+**A — Ce n'était pas un défaut de comportement.** Deux choses différentes portent le mot « avocat ».
+Le **compte de connexion** vit dans Keycloak, et le backend crée à la volée la ligne `utilisateur`
+correspondante. L'**avocat du référentiel** est une fiche métier, créée par le DJ ou la DJA
+(UC-INT-01) et portant son identifiant de connexion (`compteKeycloak`, RG-INT-01). Le portail ne
+travaille que sur la seconde. Sur une base vierge, la table est vide : le refus est donc conforme aux
+sources — un avocat existe pour le métier parce qu'un juriste l'a inscrit, jamais parce qu'il possède
+un compte.
+
+**B — Le défaut était dans ce que l'application en disait.** Elle présentait un **état d'inscription**
+comme une **panne**. L'avocat lisait un message technique, ne pouvait rien y faire, et ne savait pas
+à qui s'adresser. Or ce cas n'est pas rare : il se produit à chaque mise en service, et pour chaque
+nouvel avocat, tant que la Direction Juridique ne l'a pas inscrit.
+
+**C — Tranché** : un code d'erreur **dédié**, `ERR-AVOCAT-NON-RATTACHE`, lève les quatre points
+concernés (portail, frais ×2, publications), et l'interface l'affiche comme un état, avec ce qui
+manque et à qui s'adresser.
+
+**Pourquoi un code et non une lecture du message.** `ERR-FORBIDDEN` couvre aussi les **vrais** refus
+de droits : s'en servir aurait fait dire « votre compte n'est pas rattaché » à un avocat qui force
+une URL interdite — un mensonge. Et comparer des phrases se briserait à la première reformulation ou
+traduction. C'est le parti déjà retenu pour `ERR-009` (accès restreint à une publication), qui isole
+un état légitime d'un refus.
+
+**Au passage**, les quatre points levaient **deux formulations** pour une cause unique (« Aucun avocat
+associé à cet utilisateur » et « Aucun avocat du référentiel n'est rattaché à ce compte »). Elles
+sont unifiées.
+
+**Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
+inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
+
+### Q-117 ✅ Un intervenant se corrige, son type et son identifiant Keycloak restent figés — tranché (2026-09-22)
+
+**Même besoin que Q-116, pour le référentiel des intervenants.** Aucun endpoint ne permettait de
+corriger un avocat ou un autre prestataire après sa création. `PUT /intervenants/{id}` s'ouvre sur le
+modèle de `PUT /clients/{id}` : même garde que la création (`ROLE_DJ`, `ROLE_DJA`), mêmes règles
+RG-INT-01/02, modification tracée (`INTERVENANT_MODIFIE`, hors dossier, V26).
+
+**Le type est figé — décision technique, nommée.** Avocat et autre prestataire vivent dans deux tables
+distinctes (héritage `JOINED`), et les dossiers, frais, publications et constitutions pointent vers
+l'identifiant de l'avocat. Changer de type reviendrait à supprimer puis recréer l'intervenant. Le type
+n'est donc pas dans le corps ; un type envoyé quand même est ignoré, ce que le test d'intégration
+vérifie.
+
+**L'identifiant Keycloak d'un avocat est figé — décision du porteur du projet.** Une première version
+le laissait modifiable, pour permettre de corriger une faute de frappe à la création. Le porteur du
+projet l'a refusé, à raison : les comptes sont créés et authentifiés par Keycloak, et l'application ne
+fait que s'y rattacher (`CompteAvocatService`). Laisser ce rattachement modifiable ici ouvrait un second
+chemin, hors de Keycloak, pour décider qui se connecte en tant que quel avocat — donc qui voit ses
+dossiers, ses frais et ses publications. Même logique que la référence client (Q-116). Le coût est
+connu : une faute de frappe dans l'identifiant, à la création, se règle en recréant l'avocat. Une mise
+en garde à la création le réduirait à la source ; elle n'est pas implémentée.
+
+**Traçabilité.** `details` porte `prestataireId` et le nom courant (`intervenant`), puis les paires
+d'avant et d'après des seuls champs changés. Six clés existaient déjà depuis Q-116 (nom, courriel,
+téléphone) ; s'ajoutent `intervenant` et `ancienneNotification` / `nouvelleNotification`. Une requête
+qui ne change rien n'écrit rien.
+
+**Vérifié** : 5 tests unitaires (coordonnées corrigées et tracées, compte inchangé ; notification refusée
+sur un avocat ; notification d'un prestataire ; rien sans changement ; 404) et un parcours d'intégration
+sur PostgreSQL neuf — 403 pour le juriste, type et compte envoyés ignorés, trace lue dans l'audit.
+
+### Q-116 ✅ Un client se corrige, sa référence reste figée — tranché (2026-09-22)
+
+**Le besoin que Q-23 attendait.** Q-23 avait recommandé `PUT /clients/{id}` dès le 2026-09-04, puis
+l'avait différé : « à réévaluer si un besoin de modification client émerge ». Il a émergé en recette :
+un client créé avec une coquille, ou dont le courriel change, ne pouvait plus être corrigé. Ce n'était
+donc pas un refus qu'on défait, mais un report qu'on solde.
+
+**La référence est figée — décision du porteur du projet.** Elle est l'identifiant du client : c'est
+elle qu'on recherche, et elle doit rester la clé d'un futur référentiel externe (INT-05). La modifier
+ferait changer un identifiant sous les yeux de ceux qui le connaissaient. Elle n'est donc **pas dans
+le corps** de la requête : un client qui en enverrait une la verrait ignorée, ce que le test
+d'intégration vérifie. Le revers est assumé : une coquille dans la référence reste définitive.
+
+**La modification est tracée — décision du porteur du projet.** `CLIENT_MODIFIE`, hors dossier, donc
+visible dans l'audit par le filtre `HORS_DOSSIER` sans extension de périmètre. Les `details` portent la
+référence et, pour chaque champ **réellement changé**, sa valeur d'avant et d'après (`ancienNom` /
+`nouveauNom`, `ancienEmail` / `nouvelEmail`, `ancienTelephone` / `nouveauTelephone`) : une ligne par
+modification, lisible sans jeton technique. Une requête qui ne change rien n'écrit rien — ni la base,
+ni le journal, qui sinon mentirait sur ce qui s'est passé. V25 ajoute le code à
+`chk_historique_code`, pour la raison déjà vécue en V24.
+
+**Même garde que la création**, `ROLE_SAISIE` : qui peut créer un client peut en corriger une coquille.
+Un champ facultatif vidé est enregistré comme absent (`null`), et non comme une chaîne vide.
+
+**Vérifié** : 5 tests unitaires (seuls les champs changés sont historisés ; rien n'est écrit sans
+changement ; un champ vidé devient absent ; 404) et un parcours d'intégration sur PostgreSQL neuf —
+403 pour l'avocat, référence ignorée, 400 pour un nom vide, trace lue dans l'audit. 459 tests.
+
+### Q-115 · B2 ✅ Le juriste rédige la lettre, le SH la consulte — tranché (2026-09-18)
+
+**La répartition des rôles est tout le jalon.** Le juriste rédige — c'est lui qui tient le dossier,
+connaît le débiteur, le montant et le tiers saisi. Le supérieur hiérarchique **consulte** avant de
+signer, sans pouvoir récrire. Lui refuser la lecture reviendrait à lui demander de signer sans voir ;
+lui donner la plume viderait la seconde signature de son sens. Aucun rôle nouveau, aucune habilitation
+nouvelle : `solliciterConstitution` ouvre la rédaction, `signerConstitution` la lecture.
+
+**Le brouillon naît avec la demande, sans numéro.** V23 lève le `NOT NULL` posé en B1 — où la lettre
+naissait à la validation et avait donc toujours son numéro. Réserver dès la rédaction en **brûlerait**
+un à chaque demande sans suite, et le compteur ne repart jamais à un : les trous resteraient
+définitivement dans une série de courrier officiel, où l'absence de la lettre n° 35 se remarque et se
+justifie mal. PostgreSQL n'ajoutant pas les valeurs nulles à un index unique, plusieurs brouillons
+coexistent sans se gêner.
+
+**Ce qui est obligatoire, et ce qui ne l'est pas.** Seuls le suffixe du numéro, l'objet et le
+signataire le sont — sans eux, le document n'est plus une lettre de la banque. Le débiteur, le
+montant, le tiers saisi restent facultatifs : le gabarit est fait pour être complété, à la main le
+cas échéant, et l'exiger à la saisie interdirait une pratique existante. Ce qui manque rend des
+pointillés.
+
+**Le gel n'est pas un message, c'est une action qui n'est plus offerte.** Une fois signée, la lettre
+est partie chez un huissier et figure dans la GED : le bouton de rédaction disparaît, et le serveur
+refuse par un **409** si l'on passe outre l'écran. Une correction donne une nouvelle demande, donc
+une nouvelle lettre et un nouveau numéro — la première reste consultable.
+
+**Le numéro reste modifiable**, comme la direction juridique l'a demandé, mais un numéro déjà employé
+est refusé : dans une série de courrier officiel, un numéro servi deux fois ne désigne plus rien.
+
+**Les segments s'éditent séparément**, l'écran découpant sur « / » ce que le serveur stocke d'un
+bloc. Leur nombre varie d'un service à l'autre — quatre sur le papier de la DRH, six sur celui du
+recouvrement — et le figer en colonnes aurait exigé une migration à chaque convention nouvelle.
+
+**Deux garde-fous ont fait leur travail, dans les deux dépôts.** Le premier, côté backend : la
+contrainte `chk_historique_code` énumère les codes **en dur** depuis V18, et un code ajouté à
+l'énumération Java sans migration compile sans bruit puis **échoue à l'écriture, en production**, sur
+l'action qu'on venait d'instrumenter. D'où V24. Le second, côté écran : le test qui compte les
+natures d'action traduites a rappelé d'ajouter la traduction — sans quoi l'audit aurait affiché la
+phrase du backend au lieu du libellé, exactement le défaut de QF-24.
+
+**Chaîne vérifiée sur la pile réelle** : demande → brouillon sans numéro → rédaction du juriste (200)
+→ lecture du SH (200) → tentative de réécriture par le SH (**403**) → signature (200) → numéro
+attribué et `modifiable: false` → tentative de réécriture par le juriste (**409**). Le PDF produit
+porte bien la rédaction du juriste, et l'audit en garde trace.
+
+### Q-115 · B1 ✅ La lettre de constitution prend le papier à en-tête de la banque — tranché (2026-09-18)
+
+**Le jalon change la nature du document.** La lettre était un **calcul** : cinq données mises en forme
+au moment de la validation, puis oubliées. À la question « pourquoi cette lettre dit-elle ceci ? », la
+GED ne répondait rien. Elle devient un **document**, avec son contenu enregistré, son numéro et son
+instant de gel — ce qui permettra, au jalon B2, de la laisser rédiger.
+
+**La forme, relevée sur le gabarit réel de la direction juridique** (et non inventée) : ligne de
+numéro à gauche, lieu et date à droite, destinataire en retrait, `Concerne` et `Objet` soulignés,
+corps, signataire centré. S'y ajoute ce que le gabarit papier n'a pas et que la banque met sur sa
+correspondance : le **logo** et la **colonne latérale** des mentions institutionnelles.
+
+**Les pointillés sont conservés.** Le gabarit est fait pour être complété à la main — c'est la
+pratique actuelle. Un champ vide rend donc `..........................`, jamais du vide ni « null ».
+Les supprimer aurait retiré une possibilité que la direction juridique emploie.
+
+**Le numéro.** `N° 4 /First Bank/DAJR/DR/CM/ABN/18`. Le compteur est la valeur qui **suit** `N°`
+(confirmé par la direction juridique) et **ne repart pas à 1 chaque année** : il court. Il vient d'une
+séquence dédiée — même raison qu'en Q-114 : le numéro figure *dans* le fichier, il doit donc exister
+*avant* de le produire, alors que l'identifiant de la ligne n'existe qu'après l'insertion.
+
+La séquence **propose** ; le numéro reste modifiable, et c'est la contrainte d'unicité en base qui
+interdit d'en servir deux fois le même. Il est **réservé à la génération**, pas à l'ouverture d'un
+brouillon : un brouillon abandonné brûlerait un numéro dans une série qui ne se remet jamais à zéro.
+
+**Le suffixe est stocké d'un bloc** (`First Bank/DAJR/DR/CM/ABN/18`) et découpé sur « / » par l'écran.
+Le papier de la DRH en compte quatre segments, celui du recouvrement six : figer leur nombre en
+colonnes aurait exigé une migration à chaque convention nouvelle.
+
+**Le motif disparaît de la lettre.** C'est une justification interne, adressée au supérieur
+hiérarchique et absente du gabarit officiel : un huissier n'a pas à lire pourquoi la banque a décidé
+en interne de le constituer. La traçabilité du validateur demeure — propriétés du fichier et GED.
+
+**Le gel.** `date_generation` marque la production du PDF. Passé ce point, la lettre ne se réécrit
+pas : une correction donne une **nouvelle** lettre, un **nouveau** numéro, et la première reste dans
+la GED. Une pièce qu'on peut retoucher en silence ne prouve rien — même raisonnement qu'en Q-113.
+
+**Deux défauts trouvés par les tests avant qu'une lettre ne sorte.**
+`TextePdf.replier` transforme les caractères de contrôle en espaces, sauts de ligne compris — PDFBox
+les refuse. Le repli s'appliquant **avant** le découpage, les trois paragraphes du gabarit se
+fondaient en un pavé continu. On découpe désormais d'abord, on replie ensuite.
+Le second était une assertion de test qui enjambait un retour à la ligne automatique : elle vérifiait
+la mise en page en croyant vérifier le contenu.
+
+**⚠ À faire avant la mise en production** : initialiser la séquence sur le compteur réel du service
+(`SELECT setval('lettre_constitution_numero_seq', <dernier numéro émis>)`). Sans cela, la première
+lettre porterait `N° 1` alors que le service en est à `N° 33`.
+
+**Ce que B1 ne fait pas, volontairement** : le contenu n'est pas encore éditable. Le flux est
+identique à aujourd'hui — le juriste sollicite, le SH valide, la lettre se produit. L'édition par le
+juriste et la consultation par le SH sont le jalon **B2**.
+
+### Q-115 · A3 ✅ L'archive d'audit reprend la charte, et ses colonnes s'alignent — tranché (2026-09-18)
+
+**Troisième jalon, et dernier avant la lettre.** L'archive d'audit était le document le plus abouti
+du système — en-tête répété, colophon, repli de caractères — et pourtant celui dont le défaut de mise
+en page était le plus visible.
+
+**Les colonnes ondulaient.** Elles étaient calées par du remplissage d'espaces
+(`String.format("%-17s %-22s %-10s %-42s %s")`) dans une police **proportionnelle**. Sur mille cinq
+cents lignes, aucune colonne ne tombait droit. Le calendrier, lui, positionnait ses colonnes à une
+abscisse fixe depuis toujours : la bonne méthode existait dans le dépôt, à deux fichiers de là. La
+charte la generalise et coupe désormais à la **largeur mesurée**.
+
+**Ce que l'archive gagne** : le logo et la dénomination, un pied qui numérote (« Page 96 sur 96 ») et
+attribue. Ce qu'elle **garde** : sa référence `AUD-2026-0044` en titre, et son **colophon en dernière
+page** — qui n'est pas décoratif, puisqu'il explique pourquoi l'empreinte ne peut pas figurer dans le
+fichier qu'elle scelle, et donne à qui reçoit la pièce le moyen de la vérifier.
+
+**La langue reste le français, et c'est une décision, pas un oubli.** Une archive d'audit est une
+**pièce**, remise à un contrôleur : elle garde la langue de la procédure, là où le calendrier et le
+rapport suivent leur lecteur. C'est aussi ce qui évite de porter côté serveur la table des
+quarante-six codes d'action, dont la traduction vit côté client depuis QF-24 — duplication qui
+aurait dérivé.
+
+**Le scellement est intact, et cela a été mesuré, pas supposé.** Sur la pile réelle :
+
+| Vérification | Résultat |
+|---|---|
+| Empreinte annoncée en en-tête = empreinte du fichier reçu | identiques |
+| Le vérificateur de Q-114 reconnaît l'extraction fraîche | `AUD-2026-0044` |
+| Les trois plus anciennes archives, produites avant A1 | **intactes**, empreintes inchangées |
+
+Ce dernier point est l'essentiel : refondre la mise en page ne pouvait pas invalider les pièces déjà
+remises. Leurs octets dorment dans MinIO et n'ont pas été touchés ; seules les extractions à venir
+prennent la nouvelle allure.
+
+**Trois méthodes privées disparaissent** (`ecrire`, `ligneTexte`, `tronquer`) : la charte les rend
+inutiles. Le rendu d'audit passe de 252 à 204 lignes tout en faisant davantage.
+
+### Q-115 · A2 ✅ Une charte commune, portée par le calendrier et le rapport — tranché (2026-09-18)
+
+**Deuxième jalon.** A1 avait rendu les documents robustes sans rien changer à leur allure ; A2 leur
+donne une allure, et une seule.
+
+**Ce que les deux documents n'avaient pas.** Le calendrier ne portait **ni titre, ni date, ni numéro
+de page** — une feuille détachée de la liasse ne disait plus ce qu'elle était. Le rapport tenait sur
+une page écrite à la main, sans garde de pagination : six indicateurs passaient, trente auraient
+débordé hors de la feuille sans la moindre erreur. Ni l'un ni l'autre ne portait la marque.
+
+**La charte** (`common/pdf/DocumentPdf`) tient en trois choses, et chacune corrige un manque mesuré :
+
+- **L'en-tête** : logo, dénomination, « Direction Juridique », titre, portée, filet rouge. Pas les
+  mentions légales — capital, RC, agrément, SWIFT appartiennent au **papier à en-tête** de la
+  correspondance. Les porter sur un export de calendrier ferait passer un tableau de travail pour
+  une communication officielle de la banque.
+- **Le pied** : titre, « Page n sur N », et l'**attribution** — « Édité par Marie Directrice ». Un
+  fait, pas une signature en attente : un trait à signer qui reste vide dévalorise le document qu'il
+  prétend solenniser. Le bloc de signature est réservé à la lettre (B), seul acte adressé à un tiers.
+  Le pied ne peut s'écrire **qu'à la fin** : « Page 2 sur 7 » suppose de connaître 7, qu'on ignore
+  tant que la dernière ligne n'est pas posée. Les pages sont donc reprises une seconde fois, en ajout.
+- **Le tableau franchit les pages** : les en-têtes de colonnes sont **redessinés à chaque page**, et
+  les cellules coupées à la **largeur mesurée** de la police. L'ancienne troncature à dix-huit
+  caractères ignorait qu'Helvetica est proportionnelle : « IIIIIIII » et « WWWWWWWW » n'occupent pas
+  la même place, et compter les signes revenait à empiéter sur la colonne voisine ou à tronquer trop tôt.
+
+**La `Locale` est là dès A2, alors qu'on ne sert que le français.** Le pied et les en-têtes sont du
+texte ; les écrire en dur aurait obligé à rouvrir les générateurs au jalon C. Les libellés vivent
+dans `resources/pdf/libelles.properties` ; C n'aura qu'à poser `libelles_en.properties` à côté et à
+brancher `Accept-Language`. Le français reste le défaut, et ce n'est pas un repli technique : c'est
+la langue de la procédure.
+
+**Le titre du fichier n'est pas celui de la page.** Sur la page, la période est juste sous le titre ;
+dans un explorateur ou une messagerie, « Rapport MENSUEL » ne distinguerait pas deux mois. Le fichier
+porte donc « Rapport MENSUEL - Du 2026-09-01 au 2026-09-30 ».
+
+**Deux défauts trouvés par les tests avant qu'un document ne sorte.** Le premier était de moi : je
+« rétablissais » l'encodage des `.properties`, alors que `PropertyResourceBundle` les lit en UTF-8
+depuis Java 9 — les pieds de page affichaient « ?dit? par », et seuls les libellés sans accent en
+réchappaient. Le second est la perte du titre de fichier, signalée plus haut.
+
+**Une leçon d'outillage, notée parce qu'elle a failli produire un faux diagnostic.** Trois inspections
+successives ont conclu à tort que « Référence », « Étape » et l'attribution manquaient du document
+réel. PDFBox écrit en **chaînes hexadécimales** (`<52E966E972656E6365>`) dès qu'un octet dépasse 0x7F,
+et mon extracteur ne lisait que les chaînes littérales. Le document était juste ; l'instrument ne
+l'était pas. `PDFTextStripper`, lui, disait vrai depuis le début.
+
+**Ce qui ne change pas** : l'Excel et le CSV du rapport gardent leurs libellés français et leur
+structure — ils alimentent des retraitements existants, où renommer une colonne casserait ce qui les
+consomme.
+
+### Q-115 · A1 ✅ Les PDF cessent d'échouer sur ce qu'on y écrit — tranché (2026-09-18)
+
+**Premier jalon du chantier de mise en forme des documents.** Il ne touche **à aucune mise en page** :
+c'est le socle sur lequel les jalons visuels deviennent vérifiables. Une seule chose change à l'œil,
+et elle est assumée plus bas : la typographie se replie désormais partout, non plus sur le seul audit.
+
+**Le défaut trouvé, et pourquoi il dépassait la mise en forme.** Les quatre documents du système sont
+écrits en Helvetica, encodée en `WinAnsiEncoding`. PDFBox **lève** — il ne remplace pas
+silencieusement — dès qu'on lui demande un caractère absent de cet encodage. Seul le rendu d'audit
+(Q-113) s'en protégeait ; les trois autres appelaient `showText` en direct. Sur la lettre de
+constitution, quatre saisies parfaitement ordinaires faisaient échouer la génération, prouvées par un
+test écrit avant le correctif — **4 échecs sur 4** :
+
+| Point de code | Origine |
+|---|---|
+| `U+000A` | la touche Entrée : le motif est saisi dans un `<Textarea>` |
+| `U+0009` | une tabulation, invisible à l'écran |
+| `U+202F` | l'espace fine insécable, que tout collage depuis un traitement de texte apporte |
+| `U+1EC5` | la lettre « ễ » d'un nom vietnamien |
+
+La lettre est produite **dans la transaction de validation** (`ConstitutionService#valider`) :
+l'exception annulait la validation elle-même. La demande restait `EN_ATTENTE`, le SH recevait une
+erreur technique, le prestataire n'était pas notifié — et comme le motif est enregistré, chaque
+nouvelle tentative échouait à l'identique. **Un processus métier bloqué par une saisie légitime**, et
+non un export raté.
+
+**Le repli partagé** (`common/pdf/TextePdf`) applique trois gestes, dans cet ordre : les caractères de
+contrôle deviennent une espace — une ligne de PDF ne se coupe pas toute seule ; la typographie est
+repliée sur l'ASCII, ce qui sert au passage QF-48 ; ce qui reste hors encodage est **décomposé**,
+« Nguyễn » s'écrivant « Nguyen » plutôt qu'un point d'interrogation qui effacerait l'information. Un
+idéogramme, lui, n'a pas de lettre de base : il devient `?`, seul cas de perte, et toujours préférable
+à une exception.
+
+La copie privée qui vivait dans `AuditExportRenderer` est supprimée : elle ne protégeait qu'un
+générateur sur quatre. Elle retenait « inférieur à 256 », intervalle qui **laisse passer** `U+007F` à
+`U+009F` — des caractères de contrôle que la police refuse tout autant.
+
+**Les métadonnées** (`common/pdf/MetadonneesPdf`). Aucun des quatre documents n'en portait : dans un
+explorateur de fichiers, une messagerie ou un moteur documentaire, ils étaient anonymes. Chacun porte
+désormais un titre, un producteur et sa date. L'auteur de la lettre est le **validateur**, jamais le
+juriste demandeur : c'est la seconde signature qui engage la banque (RG-INT-08).
+
+**Les tests montent d'un cran, et c'est la moitié du jalon.** Les trois générateurs historiques
+n'étaient éprouvés que par « non vide, commence par `%PDF-` » : un document ayant perdu toutes ses
+données passait au vert. Ils lisent désormais le contenu avec `PDFTextStripper`, comme
+`AuditExportRendererTest` le faisait déjà. Vérification faite en cassant volontairement le calendrier :
+le test tombe. Sans cela, « ne rien casser » serait resté une affirmation au lieu d'être une mesure.
+
+**Une micro-conséquence assumée** : le repli de la typographie s'applique maintenant aux quatre
+documents, donc `…` devient `.` et `’` devient `'` hors de l'audit aussi. C'est le comportement que
+l'audit a depuis Q-113, et la cohérence valait mieux que deux typographies selon le document.
+
+### Q-114 ✅ L'empreinte devient utilisable — tranché (2026-09-17)
+
+**Le constat de recette.** Q-113 scellait correctement les archives, mais l'écran affichait
+`empreinte 59bde5c1748ce074555d0329ec96fbfb0cf270815292619023866c8fd04b807e` — soixante-quatre
+caractères d'un seul tenant, que personne ne compare et que personne ne dicte. Une empreinte que nul
+ne vérifie n'est pas une preuve : c'est une décoration. Trois manques, trois réponses.
+
+**1. Vérifier depuis l'application.** `GET /api/historique/exports/verification?empreinte=` répond
+`{reconnue, archive}`. **Seule l'empreinte circule** : elle est calculée par le navigateur
+(`crypto.subtle.digest`), et un document d'audit n'a aucune raison de traverser le réseau pour être
+comparé à lui-même. Un fichier inconnu **n'est pas une erreur, c'est une réponse** — `reconnue:false`
+et non un 404 : « je ne reconnais pas ce document » et « la vérification a échoué » n'engagent pas
+les mêmes suites. Le 400 reste réservé à ce qui n'est pas une empreinte du tout.
+
+**2. Une référence lisible à côté de l'empreinte.** `AUD-2026-0042` s'écrit, se prononce, se
+retrouve. **L'empreinte prouve, la référence désigne** : ce sont deux métiers, et les confondre est
+ce qui rendait l'empreinte pénible à l'usage.
+
+*Pourquoi une séquence dédiée et non l'identifiant de la ligne.* La référence doit figurer **dans le
+PDF**, donc être connue **avant** de produire le fichier — alors que l'identifiant n'existe qu'après
+l'insertion, laquelle exige l'empreinte, laquelle exige le fichier. Une séquence indépendante rompt
+ce cercle. C'est la même raison qui interdit de dériver la référence de l'empreinte : rien de ce qui
+décrit le contenu d'un fichier ne peut être écrit dedans sans le changer. Pas de compteur remis à
+zéro chaque année — il exigerait un verrou pour un gain nul ; l'année dit quand, le numéro dit lequel.
+
+**3. Un colophon dans le PDF.** Dernière page : période, nombre de lignes, auteur, instant de
+génération, et l'explication de ce que l'empreinte est et pourquoi elle ne peut pas figurer dans le
+fichier qu'elle scelle. Sans cette page, celui qui reçoit la pièce ignore qu'une empreinte existe.
+
+**Le nom du fichier porte la référence** (`aud-2026-0042-2026-09-01-2026-09-17.pdf`) : c'est ce nom
+qu'on cite dans un courrier de transmission.
+
+**Défaut trouvé en chemin, et corrigé (CORS).** `Content-Disposition` et `X-Empreinte-SHA256`
+n'étaient **pas exposés** : CORS ne laisse lire qu'une poignée d'en-têtes, les autres existent sur le
+fil mais restent invisibles au code appelant. Conséquence, depuis Q-113 : le bandeau de succès
+affichait « empreinte … » vide, et le front reconstruisait un nom de fichier plausible mais
+différent de celui sous lequel l'archive est consignée. `setExposedHeaders` le corrige. Le parcours
+e2e de Q-113 ne l'avait pas vu parce qu'il se contentait de la phrase d'accompagnement sans regarder
+la valeur — assertion resserrée depuis. **Une assertion qui ne regarde pas la valeur ne garde rien.**
+
+**Le classeur porte désormais sa provenance, comme le PDF.** Une feuille *Provenance*, en seconde
+position pour ne pas s'interposer entre celui qui ouvre le classeur et les lignes qu'il vient
+chercher : référence, période, nombre de lignes, auteur, instant. L'asymétrie précédente — colophon
+dans le PDF, rien dans l'Excel — laissait la matière qu'on trie sans provenance dès qu'on la
+renommait, alors qu'elle en a autant besoin que la pièce qu'on remet.
+
+**Ce que la vérification ne prouve pas, et l'écran le dit.** « Reconnue » démontre que le fichier n'a
+pas changé depuis son scellement. Elle n'établit pas son antériorité face à un tiers : l'application
+détient à la fois le fichier et la ligne qui l'atteste. L'horodatage opposable relèverait d'un tiers
+de confiance — hors périmètre, et énoncé plutôt que tu.
+
+### Q-113 ✅ L'export de l'audit, scellé — tranché (2026-09-17)
+
+**Jalon 3, et dernier du chantier d'audit.** Un inspecteur ne consulte pas un écran : il emporte une
+pièce. Mais une pièce qu'on peut rééditer en trois minutes ne prouve rien — c'était l'objection
+retenue contre l'archivage tel qu'il avait d'abord été envisagé.
+
+**La chaîne complète fait la valeur du jalon** : produire, calculer une **empreinte SHA-256**,
+déposer dans MinIO, consigner l'empreinte en base avec la période, l'auteur et l'instant. Le fichier
+remis et le fichier scellé sont alors démontrablement le même, des années plus tard. L'empreinte
+voyage aussi dans un en-tête de réponse : le destinataire peut la comparer sans interroger
+l'application.
+
+**Les deux formats, jamais l'un ou l'autre.** Le PDF produit une pièce figée qu'on remet ; l'Excel
+une matière qu'on trie et recoupe. Retenir un seul format aurait obligé l'un des deux usages à se
+contenter d'un outil qui ne lui convient pas.
+
+**Les six raccourcis de période sont calculés par l'écran, pas par l'API.** Ce sont des commodités de
+saisie : les exposer au serveur aurait figé six calendriers et interdit la **période libre**, celle
+que réclame la première inspection qui demande « du 12 mars au 4 juin ». Chaque raccourci couvre
+l'unité calendaire **écoulée** et s'arrête aujourd'hui — une archive ne doit pas prétendre couvrir
+des jours à venir.
+
+**La période est obligatoire à l'export, facultative à la consultation.** Une archive sans période ne
+dit pas ce qu'elle contient : son empreinte ne prouverait que son intégrité, jamais son exhaustivité.
+
+**Le plafond refuse plutôt que de tronquer.** Au-delà de 20 000 lignes, l'extraction est refusée avec
+la conduite à tenir — restreindre la période. Tronquer silencieusement aurait produit une archive qui
+ment sur ce qu'elle couvre, et dont l'empreinte aurait scellé ce mensonge.
+
+**Deux actions de plus sont historisées.** `AUDIT_EXPORTE` — exporter fait sortir le contenu de
+l'application, acte plus lourd que consulter. `ARCHIVE_TELECHARGEE` — sans elle, l'archive serait un
+trou plus large que la table qu'elle double, puisqu'on pourrait y puiser sans que rien ne le dise.
+La clé de stockage n'est jamais exposée : elle ne servirait qu'à contourner l'endpoint tracé.
+
+**Deux défauts rencontrés, et ce qu'ils ont appris.** La colonne d'empreinte était déclarée
+`CHAR(64)` en SQL face à un `@Column` ordinaire : PostgreSQL la rend en `bpchar` et la validation de
+schéma Hibernate l'a refusée — **62 erreurs d'un coup, sur un détail de type**. Corriger la migration
+après qu'elle eut été appliquée en base locale a ensuite fait échouer la validation Flyway : dérive
+locale sans effet sur une base neuve, nettoyée en retirant la ligne d'historique et la table.
+
+**Statut (2026-09-17)** : appliqué — V20, `GET /historique/export`, `GET /historique/exports`,
+`GET /historique/exports/{id}/telechargement`, bloc d'extraction sur l'écran 43.
+
+### Q-112 ✅ L'écran d'audit — tranché (2026-09-17)
+
+**Jalon 2 du chantier d'audit**, rendu possible par Q-111 : sans code d'action typé, les filtres
+auraient été approximatifs, et un écran approximatif ne se retire plus une fois entre les mains du
+métier.
+
+**Ce qu'il ouvre, et que Q-110 ne pouvait pas.** Le journal répondait à une question de
+*couverture* — des lignes existaient sans point de lecture. Restait une question de *point
+d'entrée* : « qu'a fait X le mois dernier ? », « toutes les suppressions du trimestre ? », « que
+s'est-il passé entre le 1er et le 15 ? ». Aucune ne part d'un dossier ; aucune n'était possible.
+
+**`GET /historique`** remplace `GET /historique/systeme`, supprimé. Le périmètre — tout /
+hors dossier / un dossier — devient un **critère** parmi les autres, et la vue « hors dossier » une
+valeur de filtre. Deux endroits où chercher la même trace étaient exactement la fragmentation qu'on
+voulait supprimer ; le journal était un palliatif assumé, il n'en était plus qu'un sous-ensemble.
+
+**Le périmètre cesse d'être structurel, et c'est assumé.** En Q-110, l'exclusivité de `Perimetre`
+protégeait l'interim : ouvrir la vue transversale devait être une décision, pas l'effet d'un
+paramètre oublié. La décision est prise (NF-CONF-01, filtre par personne autorisé). Ce qui protège
+désormais est explicite : la garde de rôle, et la trace de chaque consultation.
+
+**La consultation de l'audit s'audite elle-même** (`AUDIT_CONSULTE`, V19), avec ses critères.
+Ce n'est pas une contrainte imposée au DJ et à la DJA : c'est ce qui leur permet de **démontrer**
+qu'ils n'ont regardé que ce qu'ils devaient. Deux décisions de granularité : historisé **avant** la
+lecture, pour que la trace existe même si la requête échoue ; et **sur la première page seulement**,
+feuilleter un résultat n'étant pas une nouvelle consultation — compter chaque page produirait un
+bruit qui noierait ce qu'on cherche à voir. Le critère « personne » est consigné sous
+`auteurRecherche` et non `utilisateurId`, ce dernier désignant déjà celui qui a consulté.
+
+**Un défaut trouvé par les tests, et la propriété qu'il révèle.** La première version du test
+d'intégration lisait `content[0]` pour retrouver la trace : or **lire l'audit crée une ligne
+d'audit**, qui prend aussitôt la tête du classement. Le défaut était dans le test ; la propriété
+méritait d'être affirmée plutôt que contournée, et elle l'est désormais.
+
+**Le journal déménage, mais sa moitié utile reste.** La question qui naît *en regardant un réglage* —
+« pourquoi vaut-il 14, et qui l'a mis là ? » — mérite une réponse sur place. L'écran des paramètres
+affiche donc « modifié le … par … » sur chaque ligne (`configuration_systeme.dernier_auteur_id`,
+V19), et le tableau paginé à filtres s'en va. Administrer et enquêter sont deux tâches ; un outil
+d'enquête n'avait pas sa place sur un écran d'administration.
+
+**Habilitation** : capacité dédiée `consulterAudit`, **distincte** d'`administrerConfigurations` et
+de `superviserAlertes` bien qu'elle porte les mêmes rôles — lire l'activité nommée d'un collègue
+n'est ni écrire un seuil ni lire un taux global, et un assouplissement futur de l'une ne doit pas
+déplacer l'autre.
+
+**Ce qui reste, et l'écran le dit lui-même** : seules les **modifications** sont historisées. Aucune
+consultation ne l'est, hormis celle de cet écran. L'absence de ligne ne prouve pas l'absence
+d'action.
+
+**Statut (2026-09-17)** : appliqué — V19, `GET /historique`, écran 43, rappel contextuel sur
+l'écran 41.
+
+### Q-111 ✅ La nature des actions historisées est typée — tranché (2026-09-17)
+
+**Jalon 1 du chantier d'audit.** `historique_action.action` était une phrase française libre,
+parfois concaténée — « Modification de la configuration SEUIL_PROROGATIONS ». Filtrer sur une telle
+colonne suppose un `LIKE '%…%'`, qui paraît commode et **ment par omission** dès qu'un libellé change
+d'un mot : la ligne cesse d'être trouvée sans que rien ne le signale. C'est le préalable à toute vue
+d'audit, et la raison pour laquelle ce jalon **précède** l'écran au lieu de le suivre — un écran
+livré d'abord serait un outil dont les filtres sont approximatifs, et qu'on ne retire plus une fois
+entre les mains du métier.
+
+**Mesuré avant d'agir** : 42 points d'écriture, **un seul chemin** (`HistoriqueActionService` —
+aucune insertion directe, aucune ligne semée par migration), dont **36 libellés littéraux** et
+**6 construits**.
+
+**Le libellé est porté par l'énumération, pas transmis à l'appel.** Décision prise en cours de
+route, meilleure que ce qui avait été annoncé : les 42 sites ne passent plus qu'un code, et le
+service en dérive la phrase. Deux arguments côte à côte — un code et le texte censé le décrire —
+auraient fini par diverger ; l'écart est désormais impossible. La signature garde son arité.
+
+**Les six parties variables descendent dans `details`**, où elles deviennent interrogeables :
+
+| Avant | Code | `details` reçoit |
+|---|---|---|
+| « Changement de statut de l'étape INSTANCE » | `ETAPE_STATUT_MODIFIE` | `etape`, `ancienStatut`, `nouveauStatut` |
+| « Ouverture automatique de l'étape … » | `ETAPE_OUVERTE_AUTOMATIQUEMENT` | `etape`, `etapeId` |
+| « Positionnement direct à l'étape … » | `ETAPE_POSITIONNEE_DIRECTEMENT` | `etape`, `etapeId` |
+| « Décision sur la dérogation de seuil : … » | `DEROGATION_SEUIL_ARBITREE` | `decision`, `auditId`, `motif` |
+| « Décision sur la sensibilité du dossier : … » | `SENSIBILITE_ARBITREE` | `decision`, `motifRejet` |
+| « Modification de la configuration SEUIL_X » | `CONFIGURATION_MODIFIEE` | `cle`, `ancienneValeur`, `nouvelleValeur` |
+
+**Quatre décisions de conception.** La colonne est **obligatoire**, avec `NON_CLASSEE` pour ce que la
+reprise ne saurait rattacher — « on ne sait pas » doit se filtrer et se compter, là où un nul se
+glisserait hors de chaque requête. **La phrase reste en base** à côté du code : l'affichage existant
+ne change pas, et traduire un jour ce libellé (QF-24) sera un travail purement frontend, sans
+repasser sur les 42 sites. **Un code par action métier distincte**, soit 43 valeurs — regrouper pour
+faire court aurait rendu les filtres approximatifs. **Contrainte `CHECK`** en base, sur le modèle de
+`chk_alerte_type` : toute action auditée nouvelle demandera une migration, et un test rappelle ce
+lien, qu'une compilation réussie ne signale pas.
+
+**Reprise mesurée en réel** : 193 lignes existantes, **zéro `NON_CLASSEE`**. Les 41 libellés
+distincts se réduisent à 40 codes — la concaténation des clés de configuration est absorbée, et le
+filtre du journal ne propose plus une entrée par paramètre.
+
+**Statut (2026-09-17)** : appliqué — V18, énumération, 42 sites, filtre du journal basculé sur les
+codes. Backend 388/388, frontend 299/299.
+
+### Q-110 ✅ Les actions historisées hors dossier deviennent lisibles — tranché (2026-09-17)
+
+**Point de départ** : une analyse de l'auditabilité demandée par le porteur du projet. RG-DOS-06
+historise chaque modification — **42 points d'écriture, 11 services, 45 libellés distincts, 100 %
+des lignes portant des `details`** — mais l'unique point de lecture, `GET /dossiers/{id}/historique`,
+part d'un dossier. Les actions qui n'en ont pas étaient donc **écrites et jamais relues** :
+modifications de paramètres système, et indexations de jurisprudence sans dossier. Mesuré sur la base
+de recette : **26 lignes sur 657, soit 4 %**.
+
+**Ce que la mesure a corrigé dans l'analyse.** Une lecture statique du code n'avait trouvé qu'une
+famille d'actions concernée (`ConfigurationService`). La base en a révélé une seconde —
+`JurisprudenceService` passe un `dossierId` qui peut être nul, ce qu'aucun `grep` ne voit.
+
+**Pourquoi c'était devenu pressant.** Q-108 a ouvert l'administration des paramètres à la DJA. Il
+avait alors été argumenté que « la traçabilité n'y perd rien, chaque écriture étant historisée avec
+son auteur » : exact en base, mais le nombre de détenteurs de ce pouvoir doublait sans qu'aucun écran
+ne permette d'en relire l'exercice. « Qui a abaissé le seuil de validation conjointe ? » exigeait une
+requête SQL.
+
+**Livré** : `GET /historique/systeme`, réservé au **DJ et à la DJA**, filtrable par auteur, libellé
+et période, et un bloc sur l'écran 41, sous les paramètres — l'adjacence est la bonne, vingt-deux des
+vingt-six lignes étant des modifications de réglages.
+
+**Quatre décisions de conception.**
+
+1. **Le périmètre est structurel, pas conventionnel.** `HistoriqueActionSpecifications.Perimetre`
+   est une énumération à trois valeurs exclusives ; l'endpoint fige `HORS_DOSSIER`. Ouvrir un jour la
+   vue transversale serait une décision, pas l'effet d'un paramètre oublié.
+2. **Le filtre par libellé est une liste fermée**, construite à partir des libellés réellement
+   présents en base, et **indépendante des filtres en cours** — sinon choisir un libellé ferait
+   disparaître les autres choix. `action` étant une phrase française libre (QF-24), un `LIKE '%…%'`
+   aurait paru commode et menti par omission dès qu'un libellé change d'un mot.
+3. **DJ et DJA, pas `ROLE_CONSULTATION`**, alors que l'historique d'un dossier est ouvert à tout
+   profil interne. Sur une fiche, on regarde un dossier ; ici la lecture est agrégée et filtrable par
+   auteur — même contenu, autre nature. La restreindre est le minimum tant que **NF-CONF-01**
+   (RGPD, conservation) reste « à définir avec la DRH » dans les sources.
+4. **« Journal », jamais « Audit ».** Seules les modifications sont historisées ; **aucune
+   consultation ne l'est**. Ouvrir un dossier sensible ou télécharger une pièce ne laisse aucune
+   trace. L'écran le dit lui-même, plutôt que de laisser le défaut se découvrir au moment où l'on en
+   aurait besoin.
+
+**Ce que cela ne règle pas, et qui reste ouvert.** Le manque comblé était une question de
+*couverture* ; il reste une question de *point d'entrée*. Trois questions demeurent sans réponse :
+« qu'a fait X le mois dernier ? », « toutes les suppressions du trimestre ? », « que s'est-il passé
+entre le 1er et le 15 ? ». Y répondre suppose deux préalables — un **code d'action typé** (QF-24), et
+**NF-CONF-01** tranché. La décision d'ouvrir ou non cette vue est laissée au porteur du projet.
+
+**Statut (2026-09-17)** : appliqué — V17 (deux index partiels), spécification, endpoint, écran,
+tests. Backend 385/385, frontend 299/299, bout en bout vérifié contre la pile réelle.
+
+### Q-109 ✅ Le taux de délivrance des alertes devient mesurable — tranché (2026-09-16)
+
+**Point de départ** : un recensement de l'observabilité de l'application, demandé par le porteur du
+projet. NF-ALR-02 fait du canal applicatif le canal **obligatoire**, avec une délivrance supérieure
+à 99 %. Ce taux n'était mesuré **nulle part** : un échec de diffusion produisait une ligne de journal,
+que personne ne lit. C'était la seule exigence non fonctionnelle dont la rupture était **silencieuse
+pour tout le monde**, y compris pour la personne qu'elle pénalise — un juriste qui découvre après
+coup l'audience qu'on ne lui a pas rappelée.
+
+**Le piège, et la raison d'être de la conception retenue.**
+`SimpMessagingTemplate.convertAndSendToUser` **ne lève aucune exception** lorsque le destinataire
+est déconnecté : elle route vers une file sans abonné et retourne normalement. La mesure évidente —
+« pas d'exception, donc délivré » — aurait donc affiché **100 % en permanence, panne comprise**.
+Une mesure qui ment est pire que pas de mesure. Il faut interroger
+{@code SimpUserRegistry} **avant** de pousser, pour distinguer l'absence de destinataire, qui est
+normale, de la rupture du canal, qui est le défaut.
+
+**Trois issues, enregistrées sur l'alerte** (`statut_diffusion`, migration V16) :
+
+| Issue | Sens | Délivrée ? |
+|---|---|---|
+| `DIFFUSEE` | session WebSocket vivante, poussée aboutie | oui |
+| `DIFFEREE` | aucune session ; l'alerte attend dans `GET /alertes/mes-notifications` | **oui** |
+| `ECHEC` | courtier indisponible ou transport rompu | **non** |
+
+**Deux taux, et les confondre serait la première erreur.** Le **taux de délivrance**
+(`1 − ECHEC/observées`) répond à NF-ALR-02 : le canal a-t-il fait son travail ? Le **taux de
+diffusion temps réel** (`DIFFUSEE/observées`) répond à tout autre chose : à quel point les gens
+sont-ils connectés quand on les alerte. Un second taux bas n'est pas un défaut du système — c'est
+une information sur les usages, et souvent la raison de brancher enfin un second canal. Aucun seuil
+ne lui est opposé, et l'écran le dit explicitement.
+
+**Ce qui est délibérément exclu du calcul.** Les alertes antérieures à V16 n'ont pas d'issue
+observée : les compter comme réussies gonflerait le taux d'une valeur inventée, les compter comme
+échouées l'effondrerait autant. Elles sont hors dénominateur — le taux ne porte que sur ce qui a été
+réellement mesuré. De même, une **fenêtre sans aucune alerte** est déclarée conforme : il n'y a rien
+à respecter ni à enfreindre, et afficher « 0 % » ferait sonner une alarme sur du vide.
+
+**`nonTraitees` ne participe à aucun taux**, et c'est voulu : une alerte techniquement délivrée que
+personne n'a ouverte relève d'un autre problème que la délivrance. Les mélanger brouillerait les
+deux signaux.
+
+**Statut (2026-09-16)** : appliqué — V16, `GET /alertes/statistiques-diffusion` (DJ/DJA), bloc de
+supervision sur l'écran 41. Backend 378/378, frontend 294/294.
+
+### Q-108 ✅ L'administration des paramètres est ouverte à la DJA — tranché (2026-09-16)
+
+**Point de départ** : le porteur du projet demande un relevé complet des habilitations du DJ et de
+la DJA, partant de l'hypothèse que « la DJA peut tout ce que fait le DJ ».
+
+**Ce que le relevé a montré — et l'hypothèse était presque juste.** `ROLE_DJ` et `ROLE_DJA` sont
+**tous deux** composites de `ROLE_JURISTE` + `ROLE_SAISIE` : vérifié sur les jetons réels, les deux
+profils portent exactement les mêmes rôles à un près. Sur les 80 `@PreAuthorize` du backend, **65
+leur sont communs**. Il ne restait que **deux écarts, symétriques** :
+
+| Capacité | Endpoints | DJ | DJA |
+|---|---|---|---|
+| Écriture des paramètres | `PUT /configurations/{cle}`, `PUT /alertes/seuils` | ✅ | ❌ |
+| Contrôle d'opportunité | `PUT /frais/demandes/{id}/opportunite` | ❌ | ✅ |
+
+**Décision du porteur du projet** : ouvrir l'écriture des paramètres à la DJA. Le motif est la
+**continuité de service** — le DJ absent, plus personne ne pouvait relever un seuil de prorogation
+ou la taille maximale d'un document, alors qu'un Adjoint existe précisément pour suppléer. La
+traçabilité ne s'y perd pas : `ConfigurationService.modifier` historise déjà chaque écriture avec
+son auteur.
+
+**Pourquoi les deux endpoints et pas un seul.** Une ouverture limitée à `PUT /alertes/seuils` avait
+été envisagée puis écartée : `CHARGE_MAX_AVOCAT` est une clé de `configuration_systeme` comme les
+autres et s'affiche sur le **même écran**. La DJA aurait pu enregistrer un champ et pas ses voisins,
+ce qui aurait imposé d'inventer une permission par clé.
+
+**L'ouverture est à sens unique, et c'est délibéré.** Le contrôle d'opportunité **reste réservé à la
+DJA** : le donner aussi au DJ effondrerait sur un même profil les deux étapes que RG-INT-03 sépare —
+préparer l'avis d'opportunité, puis voter la validation conjointe. Un test dédié verrouille ce refus,
+pour qu'on ne « harmonise » pas les deux rôles par symétrie.
+
+**Défaut de couverture révélé au passage** : ces deux endpoints n'avaient **aucun** test
+d'habilitation. La restriction ne tenait qu'à une annotation, sur une règle pourtant écrite deux fois
+dans les sources. Trois tests d'intégration comblent le manque.
+
+**Statut (2026-09-16)** : appliqué — `hasAnyRole('DJ', 'DJA')` sur les deux endpoints,
+`PROJECT_CONTEXT.md` §4 et `FUNCTIONAL_MAP.md` (FR-ALR-01, UC-ALR-01) mis à jour.
 
 ### Q-27 ✅ `dossier.parties` défini deux fois — tranché (M2)
 Le dictionnaire REF-06 §2.1.2 déclare `parties JSONB` **deux fois**, avec deux structures

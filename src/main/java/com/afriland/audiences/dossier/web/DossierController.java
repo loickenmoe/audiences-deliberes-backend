@@ -7,6 +7,7 @@ import com.afriland.audiences.dossier.web.dto.CreerDossierRequest;
 import com.afriland.audiences.dossier.web.dto.CreerEtapeRequest;
 import com.afriland.audiences.dossier.web.dto.DemandeDerogationSeuilRequest;
 import com.afriland.audiences.dossier.web.dto.DossierResponse;
+import com.afriland.audiences.dossier.web.dto.HistoriqueActionResponse;
 import com.afriland.audiences.dossier.web.dto.EtapeProcedureResponse;
 import com.afriland.audiences.dossier.web.dto.ModifierAffectationRequest;
 import com.afriland.audiences.dossier.web.dto.ModifierStatutEtapeRequest;
@@ -18,6 +19,7 @@ import com.afriland.audiences.dossier.domain.StatutValidation;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -54,6 +56,9 @@ public class DossierController {
      * sans eux, un juriste ne pouvait retrouver un dossier qu'en parcourant les pages.
      * {@code mesDossiers} se résout sur l'utilisateur authentifié — il n'y a donc pas d'identifiant
      * de juriste à passer, et pas de moyen de consulter le portefeuille d'un autre par ce biais.
+     * <p>
+     * {@code estSensible} et {@code sensibiliteStatut} sont arrivés en M22 (Q-101). Le second ouvre
+     * au DJ et à la DJA la file des sensibilités **en attente de validation**, que rien n'exposait.
      */
     @GetMapping
     @PreAuthorize("hasRole('CONSULTATION')")
@@ -64,16 +69,29 @@ public class DossierController {
             @RequestParam(required = false) String reference,
             @RequestParam(required = false) Long clientId,
             @RequestParam(defaultValue = "false") boolean mesDossiers,
+            @RequestParam(required = false) Boolean estSensible,
+            @RequestParam(required = false) StatutValidation sensibiliteStatut,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "10") int size) {
+        // Plus récent d'abord (Q-93) : sans tri, l'ordre des lignes était laissé à PostgreSQL.
         return dossierService.listerDossiers(nature, categorie, juridiction, reference, clientId,
-                mesDossiers, PageRequest.of(page, size));
+                mesDossiers, estSensible, sensibiliteStatut,
+                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt", "id")));
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('CONSULTATION')")
     public DossierResponse consulterDossier(@PathVariable Long id) {
         return dossierService.consulterDossier(id);
+    }
+
+    /** Q-100 — l'onglet Historique : la fiche n'embarque que la première page. */
+    @GetMapping("/{id}/historique")
+    @PreAuthorize("hasRole('CONSULTATION')")
+    public PageResponse<HistoriqueActionResponse> historique(@PathVariable Long id,
+                                                               @RequestParam(defaultValue = "0") int page,
+                                                               @RequestParam(defaultValue = "10") int size) {
+        return dossierService.historique(id, PageRequest.of(page, size));
     }
 
     @PutMapping("/{id}/affectation")

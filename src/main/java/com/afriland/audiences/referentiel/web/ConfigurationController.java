@@ -29,8 +29,21 @@ public class ConfigurationController {
         return configurationService.lister();
     }
 
+    /**
+     * Écriture des paramètres système — <strong>DJ et DJA</strong> (Q-108).
+     *
+     * <p>Ouverte à la DJA sur décision du porteur du projet. Le motif est la <strong>continuité de
+     * service</strong> : le DJ absent, plus personne ne pouvait relever un seuil de prorogation ou la
+     * taille maximale d'un document, alors qu'un Adjoint existe précisément pour suppléer. La
+     * traçabilité n'y perd rien — {@link ConfigurationService#modifier} historise chaque écriture
+     * avec son auteur.
+     *
+     * <p><strong>L'ouverture reste à sens unique</strong> : le contrôle d'opportunité des frais
+     * demeure réservé à la DJA ({@code hasRole('DJA')}), sans quoi RG-INT-03 perdrait la séparation
+     * de ses deux étapes.
+     */
     @PutMapping("/{cle}")
-    @PreAuthorize("hasRole('DJ')")
+    @PreAuthorize("hasAnyRole('DJ', 'DJA')")
     public ConfigurationResponse modifier(@PathVariable String cle,
                                            @Valid @RequestBody ModifierConfigurationRequest request) {
         return configurationService.modifier(cle, request.valeur());

@@ -1,5 +1,6 @@
 package com.afriland.audiences.dossier.service;
 
+import com.afriland.audiences.common.audit.TypeActionHistorique;
 import com.afriland.audiences.alerte.domain.TypeAlerte;
 import com.afriland.audiences.alerte.service.AlerteService;
 import com.afriland.audiences.common.audit.HistoriqueAction;
@@ -34,6 +35,7 @@ import com.afriland.audiences.dossier.web.dto.CreerDossierRequest;
 import com.afriland.audiences.dossier.web.dto.CreerEtapeRequest;
 import com.afriland.audiences.dossier.web.dto.DemandeDerogationSeuilRequest;
 import com.afriland.audiences.dossier.web.dto.DossierResponse;
+import com.afriland.audiences.dossier.web.dto.HistoriqueActionResponse;
 import com.afriland.audiences.dossier.web.dto.EtapeProcedureResponse;
 import com.afriland.audiences.dossier.web.dto.ModifierAffectationRequest;
 import com.afriland.audiences.dossier.web.dto.ModifierStatutEtapeRequest;
@@ -51,6 +53,7 @@ import com.afriland.audiences.referentiel.repository.TypeClientSensibleRepositor
 import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
 import com.afriland.audiences.referentiel.web.dto.VueClientDossiersResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -60,6 +63,7 @@ import org.springframework.util.StringUtils;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -70,6 +74,9 @@ public class DossierService {
     private final DossierJuristeRepository dossierJuristeRepository;
     private final DossierAvocatRepository dossierAvocatRepository;
     private final AuditSeuilDossierRepository auditSeuilDossierRepository;
+    /** Entrées d'historique embarquées dans la fiche ; au-delà, l'onglet pagine (Q-100). */
+    private static final int TAILLE_HISTORIQUE_FICHE = 10;
+
     private final HistoriqueActionRepository historiqueActionRepository;
     private final ClientRepository clientRepository;
     private final UtilisateurRepository utilisateurRepository;
@@ -144,7 +151,7 @@ public class DossierService {
         }
 
         Utilisateur auteur = currentUserService.getCurrentUser();
-        historiqueActionService.enregistrerPour(auteur, dossier.getId(), "Création du dossier",
+        historiqueActionService.enregistrerPour(auteur, dossier.getId(), TypeActionHistorique.DOSSIER_CREE,
                 Map.of("reference", dossier.getReference(), "categorie", categorie.name()));
 
         return construireReponse(dossier, List.of(instance), juristesAffectes, avocatsAffectes, List.of());
@@ -234,20 +241,17 @@ public class DossierService {
     public PageResponse<DossierResponse> listerDossiers(String nature, CategorieDossier categorie,
                                                           String juridiction, String reference,
                                                           Long clientId, boolean mesDossiers,
+                                                          Boolean estSensible, StatutValidation sensibiliteStatut,
                                                           Pageable pageable) {
         // « Mes dossiers » se lit sur l'utilisateur authentifié, jamais sur un identifiant reçu :
         // le filtre ne peut donc pas servir à consulter le portefeuille d'un collègue.
         Long juristeId = mesDossiers ? currentUserService.getCurrentUser().getId() : null;
         var page = dossierRepository.findAll(
-                DossierSpecifications.withFilters(nature, categorie, juridiction, reference, clientId, juristeId),
+                DossierSpecifications.withFilters(nature, categorie, juridiction, reference, clientId, juristeId,
+                        estSensible, sensibiliteStatut),
                 pageable);
-        return PageResponse.of(page, dossier -> construireReponse(dossier,
-                etapeProcedureRepository.findByDossierIdOrderByTypeAsc(dossier.getId()),
-                dossierJuristeRepository.findByDossierId(dossier.getId()).stream()
-                        .map(dj -> dj.getUtilisateur().getId()).toList(),
-                dossierAvocatRepository.findByDossierId(dossier.getId()).stream()
-                        .map(da -> da.getAvocat().getId()).toList(),
-                List.of()));
+        // Trois requêtes pour la page entière, et non trois par ligne (QF-41).
+        return new PageResponse<>(construireReponses(page.getContent()), page.getTotalPages(), page.getTotalElements());
     }
 
     @Transactional(readOnly = true)
@@ -258,9 +262,27 @@ public class DossierService {
                 .map(dj -> dj.getUtilisateur().getId()).toList();
         List<Long> avocatsAffectes = dossierAvocatRepository.findByDossierId(id).stream()
                 .map(da -> da.getAvocat().getId()).toList();
+        /*
+         * Q-100 : la fiche ne transporte plus que la **première page** de l'historique. RG-DOS-06
+         * historise toute action : sur un dossier suivi plusieurs années, `unpaged()` faisait voyager
+         * des centaines d'entrées à chaque ouverture, pour un onglet que l'on n'ouvre pas toujours.
+         * Le champ `historique` du contrat reste présent et garde sa forme ; il en porte désormais
+         * l'entrée la plus récente, et l'onglet pagine par `GET /dossiers/{id}/historique`.
+         */
         List<HistoriqueAction> historique = historiqueActionRepository
-                .findByDossierIdOrderByDateActionDesc(id, Pageable.unpaged()).getContent();
+                .findByDossierIdOrderByDateActionDesc(id, PageRequest.of(0, TAILLE_HISTORIQUE_FICHE)).getContent();
         return construireReponse(dossier, etapes, juristesAffectes, avocatsAffectes, historique);
+    }
+
+    /**
+     * Historique complet d'un dossier, paginé (Q-100). La fiche n'en embarque que la première page :
+     * cet endpoint sert l'onglet, qui seul a besoin de remonter le temps.
+     */
+    @Transactional(readOnly = true)
+    public PageResponse<HistoriqueActionResponse> historique(Long id, Pageable pageable) {
+        getDossierOrThrow(id);
+        return PageResponse.of(historiqueActionRepository.findByDossierIdOrderByDateActionDesc(id, pageable),
+                historiqueActionMapper::toResponse);
     }
 
     private Dossier getDossierOrThrow(Long id) {
@@ -285,24 +307,48 @@ public class DossierService {
         Client client = clientRepository.findById(clientId)
                 .orElseThrow(() -> ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE, "Client introuvable : " + clientId));
         List<Dossier> dossiers = dossierRepository.findByClientId(clientId);
-        List<DossierResponse> recouvrement = dossiers.stream()
-                .filter(d -> d.getCategorie() == CategorieDossier.RECOUVREMENT)
-                .map(this::construireReponseLegere)
-                .toList();
-        List<DossierResponse> exploitationLitiges = dossiers.stream()
-                .filter(d -> d.getCategorie() == CategorieDossier.EXPLOITATION_LITIGES)
-                .map(this::construireReponseLegere)
-                .toList();
+        List<DossierResponse> recouvrement = construireReponses(dossiers.stream()
+                .filter(d -> d.getCategorie() == CategorieDossier.RECOUVREMENT).toList());
+        List<DossierResponse> exploitationLitiges = construireReponses(dossiers.stream()
+                .filter(d -> d.getCategorie() == CategorieDossier.EXPLOITATION_LITIGES).toList());
         return new VueClientDossiersResponse(clientId, client.getNom(), recouvrement, exploitationLitiges);
     }
 
-    private DossierResponse construireReponseLegere(Dossier dossier) {
-        List<EtapeProcedure> etapes = etapeProcedureRepository.findByDossierIdOrderByTypeAsc(dossier.getId());
-        List<Long> juristesAffectes = dossierJuristeRepository.findByDossierId(dossier.getId()).stream()
-                .map(dj -> dj.getUtilisateur().getId()).toList();
-        List<Long> avocatsAffectes = dossierAvocatRepository.findByDossierId(dossier.getId()).stream()
-                .map(da -> da.getAvocat().getId()).toList();
-        return construireReponse(dossier, etapes, juristesAffectes, avocatsAffectes, List.of());
+    /**
+     * Construit la réponse d'une <b>liste</b> de dossiers en trois requêtes, quel qu'en soit le
+     * nombre (QF-41).
+     * <p>
+     * La version précédente allait chercher étapes, juristes et avocats <b>dossier par dossier</b> :
+     * sur la vue consolidée d'un client portant 310 dossiers, cela faisait 930 requêtes et 11 à 19
+     * secondes de réponse — assez pour que l'écran reste en chargement et que l'appel monopolise une
+     * connexion au détriment des requêtes voisines. Le contrat impose la liste complète, sans
+     * pagination, et l'écran 13 lit bien l'étape courante de chaque dossier : c'est donc le nombre de
+     * requêtes qu'il fallait réduire, pas la réponse qu'il fallait amputer.
+     */
+    private List<DossierResponse> construireReponses(List<Dossier> dossiers) {
+        if (dossiers.isEmpty()) {
+            return List.of();
+        }
+        List<Long> ids = dossiers.stream().map(Dossier::getId).toList();
+
+        Map<Long, List<EtapeProcedure>> etapesParDossier =
+                etapeProcedureRepository.findByDossierIdInOrderByDossierIdAscTypeAsc(ids).stream()
+                        .collect(Collectors.groupingBy(etape -> etape.getDossier().getId()));
+        // L'identifiant composite porte déjà `dossierId` : le lire n'initialise aucun proxy.
+        Map<Long, List<Long>> juristesParDossier = dossierJuristeRepository.findByDossierIdIn(ids).stream()
+                .collect(Collectors.groupingBy(dj -> dj.getId().getDossierId(),
+                        Collectors.mapping(dj -> dj.getId().getUtilisateurId(), Collectors.toList())));
+        Map<Long, List<Long>> avocatsParDossier = dossierAvocatRepository.findByDossierIdIn(ids).stream()
+                .collect(Collectors.groupingBy(da -> da.getId().getDossierId(),
+                        Collectors.mapping(da -> da.getId().getAvocatId(), Collectors.toList())));
+
+        return dossiers.stream()
+                .map(dossier -> construireReponse(dossier,
+                        etapesParDossier.getOrDefault(dossier.getId(), List.of()),
+                        juristesParDossier.getOrDefault(dossier.getId(), List.of()),
+                        avocatsParDossier.getOrDefault(dossier.getId(), List.of()),
+                        List.of()))
+                .toList();
     }
 
     // ------------------------------------------------------------------ Affectation
@@ -337,7 +383,7 @@ public class DossierService {
         List<Long> juristesAffectes = affecterJuristes(dossier, juristesDemandes);
         List<Long> avocatsAffectes = affecterAvocats(dossier, avocatsDemandes);
 
-        historiqueActionService.enregistrer(dossierId, "Modification de l'affectation",
+        historiqueActionService.enregistrer(dossierId, TypeActionHistorique.DOSSIER_AFFECTATION_MODIFIEE,
                 Map.of("juristesAffectes", juristesAffectes, "avocatsAffectes", avocatsAffectes));
 
         List<EtapeProcedure> etapes = etapeProcedureRepository.findByDossierIdOrderByTypeAsc(dossierId);
@@ -373,8 +419,10 @@ public class DossierService {
         etape.setStatutCycleVie(nouveau);
         etape = etapeProcedureRepository.save(etape);
 
-        historiqueActionService.enregistrer(dossierId, "Changement de statut de l'étape " + etape.getType(),
-                Map.of("ancienStatut", ancien.name(), "nouveauStatut", nouveau.name()));
+        // Q-111 : l'étape descend dans `details`. Noyée dans la phrase, elle n'était pas
+        // interrogeable ; ici, « tous les passages en EN_DELIBERE du trimestre » devient une requête.
+        historiqueActionService.enregistrer(dossierId, TypeActionHistorique.ETAPE_STATUT_MODIFIE,
+                Map.of("etape", etape.getType().name(), "ancienStatut", ancien.name(), "nouveauStatut", nouveau.name()));
 
         if (transitionValidator.estExerciceDeRecours(ancien, nouveau)) {
             ouvrirEtapeSuivante(dossier, etape);
@@ -395,9 +443,8 @@ public class DossierService {
             return;
         }
         EtapeProcedure nouvelle = creerEtapeInterne(dossier, suivante, StatutCycleVie.OUVERTURE);
-        historiqueActionService.enregistrer(dossier.getId(),
-                "Ouverture automatique de l'étape " + suivante + " (exercice d'un recours)",
-                Map.of("etapeId", nouvelle.getId()));
+        historiqueActionService.enregistrer(dossier.getId(), TypeActionHistorique.ETAPE_OUVERTE_AUTOMATIQUEMENT,
+                Map.of("etape", suivante.name(), "etapeId", nouvelle.getId()));
     }
 
     @Transactional
@@ -415,9 +462,8 @@ public class DossierService {
             }
         }
         EtapeProcedure etape = creerEtapeInterne(dossier, request.type(), StatutCycleVie.OUVERTURE);
-        historiqueActionService.enregistrer(dossierId,
-                "Positionnement direct à l'étape " + request.type() + " (antécédents inconnus)",
-                Map.of("etapeId", etape.getId()));
+        historiqueActionService.enregistrer(dossierId, TypeActionHistorique.ETAPE_POSITIONNEE_DIRECTEMENT,
+                Map.of("etape", request.type().name(), "etapeId", etape.getId()));
         return etapeProcedureMapper.toResponse(etape);
     }
 
@@ -462,7 +508,7 @@ public class DossierService {
                 .statut(StatutValidation.EN_ATTENTE)
                 .build();
         audit = auditSeuilDossierRepository.save(audit);
-        historiqueActionService.enregistrerPour(auteur, dossier.getId(), "Demande de dérogation de seuil",
+        historiqueActionService.enregistrerPour(auteur, dossier.getId(), TypeActionHistorique.DEROGATION_SEUIL_DEMANDEE,
                 Map.of("nouveauSeuil", nouveauSeuil, "motif", motif));
         return audit;
     }
@@ -522,9 +568,11 @@ public class DossierService {
             dossierRepository.save(dossier);
         }
 
-        historiqueActionService.enregistrerPour(validateur, dossierId,
-                "Décision sur la dérogation de seuil : " + request.statut(),
-                Map.of("auditId", auditId, "motif", Optional.ofNullable(request.motif()).orElse("")));
+        // Le sens de la décision devient une donnée : « toutes les dérogations rejetées » se
+        // demande, alors qu'il fallait auparavant lire chaque phrase.
+        historiqueActionService.enregistrerPour(validateur, dossierId, TypeActionHistorique.DEROGATION_SEUIL_ARBITREE,
+                Map.of("decision", request.statut().name(), "auditId", auditId,
+                        "motif", Optional.ofNullable(request.motif()).orElse("")));
 
         return auditSeuilMapper.toResponse(audit);
     }
@@ -571,9 +619,9 @@ public class DossierService {
         }
         dossier = dossierRepository.save(dossier);
 
-        historiqueActionService.enregistrerPour(validateur, dossierId,
-                "Décision sur la sensibilité du dossier : " + request.statut(),
-                Map.of("motifRejet", Optional.ofNullable(request.motifRejet()).orElse("")));
+        historiqueActionService.enregistrerPour(validateur, dossierId, TypeActionHistorique.SENSIBILITE_ARBITREE,
+                Map.of("decision", request.statut().name(),
+                        "motifRejet", Optional.ofNullable(request.motifRejet()).orElse("")));
 
         List<EtapeProcedure> etapes = etapeProcedureRepository.findByDossierIdOrderByTypeAsc(dossierId);
         List<Long> juristesAffectes = dossierJuristeRepository.findByDossierId(dossierId).stream()

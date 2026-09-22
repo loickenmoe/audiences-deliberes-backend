@@ -29,6 +29,21 @@ public final class ErrorCodes {
     public static final String REQUETE_INVALIDE = "ERR-VALIDATION";
     public static final String NON_AUTHENTIFIE = "ERR-UNAUTHENTICATED";
     public static final String DROITS_INSUFFISANTS = "ERR-FORBIDDEN";
+    /**
+     * Le compte connecté porte {@code ROLE_AVOCAT} mais **aucun avocat du référentiel** ne lui est
+     * rattaché (Q-107).
+     *
+     * <p>Ce n'est pas un refus de droits : c'est un état d'inscription. Un avocat existe pour le
+     * métier parce qu'un juriste l'a inscrit au répertoire avec son identifiant de connexion
+     * (RG-INT-01, UC-INT-01) — jamais parce qu'il possède un compte. Tant que cette fiche n'existe
+     * pas, le portail n'a rien à lui montrer, et il n'y peut rien lui-même.
+     *
+     * <p>Le distinguer de {@link #DROITS_INSUFFISANTS} permet à l'interface de l'expliquer au lieu
+     * d'afficher « le chargement a échoué » : le premier appelle un message, le second une
+     * correction. Même raison d'être que {@link #ACCES_RESTREINT_PUBLICATION} (ERR-009), qui isole
+     * déjà un état légitime d'un vrai refus.
+     */
+    public static final String AVOCAT_NON_RATTACHE = "ERR-AVOCAT-NON-RATTACHE";
     public static final String RESSOURCE_INTROUVABLE = "ERR-NOT-FOUND";
     /**
      * Conflit générique. Employé par une dizaine de cas sans rapport entre eux — référence client

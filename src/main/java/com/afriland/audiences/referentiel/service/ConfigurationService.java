@@ -1,6 +1,7 @@
 package com.afriland.audiences.referentiel.service;
 
 import com.afriland.audiences.common.audit.HistoriqueActionService;
+import com.afriland.audiences.common.audit.TypeActionHistorique;
 import com.afriland.audiences.common.error.ApiException;
 import com.afriland.audiences.common.error.ErrorCodes;
 import com.afriland.audiences.common.security.CurrentUserService;
@@ -41,17 +42,30 @@ public class ConfigurationService {
                         "Clé de configuration introuvable : " + cle));
     }
 
+    /**
+     * Modifie un paramètre. La valeur est contrôlée puis normalisée selon la règle de la clé
+     * (Q-91) : sans ce garde-fou, une saisie erronée du DJ ne se manifestait qu'ailleurs, en
+     * erreur 500, au moment où un autre module reconvertit la valeur.
+     */
     @Transactional
     public ConfigurationResponse modifier(String cle, String nouvelleValeur) {
         ConfigurationSysteme configuration = getOrThrow(cle);
+        String valeurRetenue = RegleConfiguration.pour(cle)
+                .map(regle -> regle.valider(nouvelleValeur))
+                .orElse(nouvelleValeur);
         String ancienneValeur = configuration.getValeur();
-        configuration.setValeur(nouvelleValeur);
+        configuration.setValeur(valeurRetenue);
+        // Q-112 : l'écran des paramètres répond désormais sur place à « qui l'a mis là ? », question
+        // qui naît en regardant un réglage et n'a pas à faire changer d'écran.
+        configuration.setDernierAuteurId(currentUserService.getCurrentUser().getId());
         configuration = configurationSystemeRepository.save(configuration);
 
         // dossierId=null : action hors dossier (cf. Javadoc HistoriqueActionService#enregistrer).
         Utilisateur auteur = currentUserService.getCurrentUser();
-        historiqueActionService.enregistrerPour(auteur, null, "Modification de la configuration " + cle,
-                Map.of("ancienneValeur", ancienneValeur, "nouvelleValeur", nouvelleValeur));
+        // Q-111 : la clé descend dans `details`. Concaténée dans la phrase, elle produisait un
+        // libellé distinct par paramètre — sept natures d'action là où il n'y en a qu'une.
+        historiqueActionService.enregistrerPour(auteur, null, TypeActionHistorique.CONFIGURATION_MODIFIEE,
+                Map.of("cle", cle, "ancienneValeur", ancienneValeur, "nouvelleValeur", valeurRetenue));
 
         return configurationMapper.toResponse(configuration);
     }

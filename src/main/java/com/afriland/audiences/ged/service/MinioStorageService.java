@@ -32,6 +32,9 @@ public class MinioStorageService {
 
     private final MinioClient minioClient;
 
+    /** Préfixe des pièces justificatives de frais (Q-97). Public : il sert de marqueur à la lecture. */
+    public static final String PREFIXE_PIECES_FRAIS = "frais";
+
     @Value("${minio.bucket-name}")
     private String bucketName;
 
@@ -63,6 +66,32 @@ public class MinioStorageService {
         } catch (IOException e) {
             throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE, "Fichier illisible : " + e.getMessage());
         }
+    }
+
+    /**
+     * Pièce justificative d'une demande de frais (Q-97). Elle n'est pas un document GED : elle
+     * n'est pas rattachée à une étape du dossier, n'est pas soumise au circuit de suppression, et
+     * son cycle de vie est celui de la demande. D'où un préfixe dédié, que
+     * {@code FraisService} reconnaît pour ne signer que ce qu'il a lui-même stocké.
+     */
+    public String deposerPieceFrais(MultipartFile fichier) {
+        try (InputStream flux = fichier.getInputStream()) {
+            return deposer(PREFIXE_PIECES_FRAIS, fichier.getOriginalFilename(), fichier.getContentType(),
+                    flux, fichier.getSize());
+        } catch (IOException e) {
+            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE, "Fichier illisible : " + e.getMessage());
+        }
+    }
+
+    /**
+     * Archive d'audit (Q-113), produite par le système et rattachée à aucun dossier.
+     *
+     * <p>Préfixe dédié : ces fichiers ne sont pas des documents GED — ils ne suivent ni le circuit
+     * de suppression, ni le cycle de vie d'un dossier. Leur seule porte de sortie est l'endpoint de
+     * téléchargement, qui trace chaque récupération.
+     */
+    public String deposerArchiveAudit(String nomFichier, String contentType, byte[] contenu) {
+        return deposer("audit", nomFichier, contentType, new ByteArrayInputStream(contenu), (long) contenu.length);
     }
 
     private String deposer(String prefixe, String nomFichier, String contentType, InputStream flux, long taille) {
