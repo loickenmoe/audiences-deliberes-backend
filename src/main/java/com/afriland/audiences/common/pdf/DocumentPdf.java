@@ -75,6 +75,8 @@ public final class DocumentPdf implements AutoCloseable {
     private static final float ECART_COLONNE = 20f;
     private static final float HAUTEUR_LOGO = 26f;
     private static final float HAUTEUR_LIGNE = 14f;
+    /** Interligne à l'intérieur d'une cellule repliée : le corps de 8 pt, plus une respiration. */
+    private static final float INTERLIGNE_CELLULE = 10f;
     private static final float PIED = 34f;
 
     private static final DateTimeFormatter JOUR = DateTimeFormatter.ofPattern("dd/MM/yyyy");
@@ -302,23 +304,88 @@ public final class DocumentPdf implements AutoCloseable {
      * @param lignes   les données, déjà mises en texte par l'appelant
      */
     public void tableau(List<String> entetes, float[] largeurs, List<List<String>> lignes) {
+        tableau(entetes, largeurs, lignes, false);
+    }
+
+    /**
+     * Variante où une cellule trop longue <b>passe à la ligne</b>, la rangée s'agrandissant d'autant,
+     * au lieu d'être coupée par « ... ».
+     *
+     * <p>Réservée aux documents où rien ne doit se perdre : l'archive d'audit, pièce remise à un
+     * contrôleur, dont la colonne « Détails » était tronquée. Le calendrier et le rapport gardent une
+     * rangée par ligne : ce sont des vues de travail, et leur allure ne change pas.
+     *
+     * <p>Une rangée qui tient sur une ligne est dessinée <b>exactement</b> comme sans repli. Une rangée
+     * repliée ne se coupe pas entre deux pages : le saut se décide sur sa hauteur réelle.
+     */
+    public void tableau(List<String> entetes, float[] largeurs, List<List<String>> lignes, boolean replier) {
         if (entetes.size() != largeurs.length) {
             throw new IllegalArgumentException("Autant de largeurs que de colonnes");
         }
         dessinerEnTeteTableau(entetes, largeurs);
         for (List<String> ligne : lignes) {
-            if (y < MARGE + PIED + HAUTEUR_LIGNE) {
+            List<List<String>> cellules = new ArrayList<>();
+            int hauteur = 1;
+            for (int i = 0; i < largeurs.length; i++) {
+                String cellule = i < ligne.size() ? ligne.get(i) : "";
+                List<String> morceaux = replier
+                        ? replierCellule(cellule, largeurs[i] - 6)
+                        : List.of(couper(cellule, largeurs[i] - 6, normale, 8f));
+                cellules.add(morceaux);
+                hauteur = Math.max(hauteur, morceaux.size());
+            }
+            float besoin = HAUTEUR_LIGNE + (hauteur - 1) * INTERLIGNE_CELLULE;
+            // Pour une rangée d'une ligne, c'est la condition d'origine : y < MARGE + PIED + HAUTEUR_LIGNE.
+            if (y - besoin < MARGE + PIED) {
                 nouvellePage();
                 dessinerEnTeteTableau(entetes, largeurs);
             }
             float x = margeGauche();
             for (int i = 0; i < largeurs.length; i++) {
-                String cellule = i < ligne.size() ? ligne.get(i) : "";
-                ecrire(couper(cellule, largeurs[i] - 6, normale, 8f), x + 3, y, normale, 8f, ANTHRACITE);
+                List<String> morceaux = cellules.get(i);
+                for (int k = 0; k < morceaux.size(); k++) {
+                    ecrire(morceaux.get(k), x + 3, y - k * INTERLIGNE_CELLULE, normale, 8f, ANTHRACITE);
+                }
                 x += largeurs[i];
             }
-            y -= HAUTEUR_LIGNE;
+            y -= besoin;
         }
+    }
+
+    /**
+     * Découpe une cellule en lignes qui tiennent dans {@code largeurMax}, mot à mot. Un mot plus large
+     * que la colonne entière — une empreinte, une adresse — est coupé au caractère : il passe sur
+     * plusieurs lignes, mais n'est jamais perdu.
+     */
+    private List<String> replierCellule(String texte, float largeurMax) {
+        String replie = TextePdf.replier(texte);
+        if (largeurDe(replie, normale, 8f) <= largeurMax) {
+            return List.of(replie);
+        }
+        List<String> lignes = new ArrayList<>();
+        StringBuilder courante = new StringBuilder();
+        for (String mot : replie.split(" ")) {
+            String essai = courante.isEmpty() ? mot : courante + " " + mot;
+            if (largeurDe(essai, normale, 8f) <= largeurMax) {
+                courante = new StringBuilder(essai);
+                continue;
+            }
+            if (!courante.isEmpty()) {
+                lignes.add(courante.toString());
+                courante = new StringBuilder();
+            }
+            for (char caractere : mot.toCharArray()) {
+                if (!courante.isEmpty() && largeurDe(courante.toString() + caractere, normale, 8f) > largeurMax) {
+                    lignes.add(courante.toString());
+                    courante = new StringBuilder();
+                }
+                courante.append(caractere);
+            }
+        }
+        if (!courante.isEmpty()) {
+            lignes.add(courante.toString());
+        }
+        return lignes;
     }
 
     /** Referme les flux, écrit les pieds de page puis les propriétés, et rend les octets. */

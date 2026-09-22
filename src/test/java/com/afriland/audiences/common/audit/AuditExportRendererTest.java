@@ -152,6 +152,31 @@ class AuditExportRendererTest {
         }
     }
 
+    /**
+     * La colonne « Détails » coupait ce qui dépassait sa largeur, remplacé par « ... ». Un détail
+     * long doit désormais figurer en entier, replié sur plusieurs lignes — y compris un mot plus
+     * large que la colonne, comme une empreinte.
+     */
+    @Test
+    @DisplayName("un détail plus long que sa colonne est écrit en entier, sans « ... »")
+    void detailLongEcritEnEntier() throws Exception {
+        String empreinte = "59bde5c17a2f4e0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b";
+        String details = "perimetre = TOUT; dateDebut = 2026-09-01; dateFin = 2026-09-17; format = PDF; "
+                + "lignes = 1532; empreinte = " + empreinte + "; reference = AUD-2026-0042; FIN-DU-DETAIL";
+        byte[] contenu = renderer.pdf(List.of(
+                new LigneExport("01/09/2026 08:30", "Paule Directrice", "-", "Extraction de l'audit", details)),
+                DEBUT, FIN, TITRE, "Paule Directrice");
+
+        String texte;
+        try (PDDocument document = Loader.loadPDF(contenu)) {
+            texte = new PDFTextStripper().getText(document);
+        }
+        assertThat(texte).contains("FIN-DU-DETAIL").contains("lignes = 1532").doesNotContain("...");
+        // L'empreinte est plus large que la colonne : coupée au caractère, elle doit se retrouver
+        // entière une fois les retours à la ligne ôtés.
+        assertThat(texte.replaceAll("\\s", "")).contains(empreinte);
+    }
+
     /** Aucune ligne ne doit se perdre en franchissant une page. */
     @Test
     @DisplayName("aucune ligne n'est perdue entre les pages")

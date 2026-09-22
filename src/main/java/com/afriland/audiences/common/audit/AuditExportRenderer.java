@@ -56,7 +56,9 @@ public class AuditExportRenderer {
      * <p><b>Ce que cette version corrige.</b> Les colonnes étaient calées par des espaces
      * ({@code String.format("%-17s %-22s …")}) dans une police <b>proportionnelle</b> : sur mille
      * cinq cents lignes, elles ondulaient. La charte positionne chaque colonne à son abscisse et
-     * coupe à la largeur mesurée.
+     * <b>replie</b> à la largeur mesurée : une cellule trop longue passe à la ligne au lieu d'être
+     * coupée — la colonne « Détails » perdait ce qui dépassait, et une pièce d'audit n'a rien à
+     * cacher à qui la lit.
      *
      * <p><b>Les archives déjà produites ne bougent pas.</b> Leurs octets dorment dans MinIO et leur
      * empreinte reste vérifiable : seules les extractions à venir prennent cette allure.
@@ -86,7 +88,7 @@ public class AuditExportRenderer {
                 document.ligne("Aucune action sur la periode du " + dateDebut + " au " + dateFin + ".", false, 10f);
             } else {
                 document.tableau(List.of(EN_TETES), LARGEURS,
-                        lignes.stream().map(AuditExportRenderer::cellules).toList());
+                        lignes.stream().map(AuditExportRenderer::cellules).toList(), true);
             }
             colophon(document, dateDebut, dateFin, lignes.size(), auteur);
             return document.finaliser();
