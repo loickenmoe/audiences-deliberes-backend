@@ -177,7 +177,25 @@ class AudienceServiceTest {
 
         assertThat(result.statut()).isEqualTo(StatutAudience.TENUE);
         assertThat(result.compteRendu()).isEqualTo("Compte rendu");
-        assertThat(result.dateTenue()).isEqualTo(LocalDate.now());
+        assertThat(result.dateTenue()).isEqualTo(audience.getDatePlanifiee());
+    }
+
+    /**
+     * QF-32 : une audience appartient au mois où elle s'est tenue, pas à celui où le juriste a
+     * trouvé le temps d'en écrire le compte rendu. C'est cette date que compte le rapport d'activité.
+     */
+    @Test
+    void un_compte_rendu_saisi_en_retard_ne_deplace_pas_l_audience() {
+        LocalDate ilYaDeuxMois = LocalDate.now().minusMonths(2);
+        Audience audience = Audience.builder().id(5L).dossier(dossier).datePlanifiee(ilYaDeuxMois)
+                .statut(StatutAudience.PLANIFIEE).build();
+        when(audienceRepository.findById(5L)).thenReturn(Optional.of(audience));
+        when(audienceRepository.save(any(Audience.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        AudienceResponse result = service.enregistrerCompteRendu(5L, new EnregistrerCompteRenduRequest("Tardif"));
+
+        assertThat(result.dateTenue()).isEqualTo(ilYaDeuxMois);
+        assertThat(result.dateTenue()).isNotEqualTo(LocalDate.now());
     }
 
     /** M15 (Q-68) : onglet « audiences » d'un dossier. */

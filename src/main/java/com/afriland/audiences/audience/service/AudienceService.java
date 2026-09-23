@@ -115,7 +115,11 @@ public class AudienceService {
                     "Le compte rendu ne peut être saisi qu'après la tenue de l'audience (RG-AUD-01)");
         }
         audience.setCompteRendu(request.compteRendu());
-        audience.setDateTenue(LocalDate.now());
+        // QF-32 : l'audience s'est tenue le jour prévu, pas le jour où l'on saisit son compte rendu.
+        // Un renvoi s'enregistre comme une annulation motivée suivie d'une replanification (Q-76) :
+        // la date planifiée d'une audience non annulée est donc bien celle à laquelle elle s'est tenue.
+        // Le rapport d'activité compte par cette date : la saisir tardivement ne déplace plus l'audience.
+        audience.setDateTenue(audience.getDatePlanifiee());
         audience.setStatut(StatutAudience.TENUE);
         audience = audienceRepository.save(audience);
 
