@@ -2160,6 +2160,52 @@ sont unifiées.
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
 
+### Q-120 ✅ Savoir ce qu'une notification est devenue, alors que le moteur ne renvoie pas notre référence — tranché (2026-09-23)
+
+**La contradiction, relevée dans le Guide V1.** Le moteur publie deux topics de suivi
+(`notification-sent`, `notification-failed`), présentés comme la façon de suivre la délivrance. Mais
+leurs messages portent `notificationId`, identifiant **interne au moteur**, jamais transmis à
+l'appelant — et **pas** l'`eventId` que nous avons fourni. Tels quels, ces topics disent *combien* de
+messages sont partis et sur quel canal, jamais *lequel des nôtres*. Le Guide présente pourtant
+l'`eventId` comme la clé de déduplication : il le connaît, il ne le restitue pas.
+
+**Trois couches retenues, du plus exact au plus large.**
+
+1. **`callbackUrl` — le rattachement exact.** Le Guide (§7.9) prévoit que le moteur rappelle une URL
+   après traitement. Nous y plaçons notre référence :
+   `/notifications/accuses/rappel/{eventId}?signature=…`. Le rappel identifie alors sans ambiguïté la
+   ligne de la file, qui passe en ENVOYEE ou en ECHEC.
+   *Sécurité* : le Guide ne décrit **aucune authentification** de ce rappel. L'URL porte donc une
+   signature HMAC-SHA256 de la référence, calculée avec le secret du compte de service et comparée en
+   temps constant. Sans elle, n'importe qui pourrait déclarer une notification délivrée. Une signature
+   invalide reçoit 404, pour ne pas confirmer l'existence de la référence.
+   *Condition* : le moteur doit pouvoir joindre l'application. Depuis un poste de travail, il ne le
+   peut pas : sans `NOTIFICATION_CALLBACK_BASE_URL`, aucun `callbackUrl` n'est annoncé.
+2. **`metadata.correlationId` — le pari sans coût.** Notre référence y est aussi placée. Si le moteur
+   la restitue un jour dans ses accusés, le rattachement se fera tout seul : le code le prévoit déjà.
+3. **Les topics — la mesure d'ensemble.** Ils sont consommés et enregistrés dans `notification_accuse`
+   (V30), filtrés sur `serviceId` (ils portent les accusés de toute la banque) et rendus idempotents
+   par (notificationId, type), puisque la livraison est « au moins une fois ». Ils donnent le taux de
+   délivrance par canal et par fournisseur, même sans rattachement ligne à ligne.
+
+**Le silence devient un état, et non un succès.** Un message au jeton invalide est rejeté « sans aucun
+retour » : ni accusé de succès, ni accusé d'échec. Une notification publiée depuis plus de
+`notification.engine.delai-accuse` (15 min) passe donc en **SANS_RETOUR** plutôt que de rester
+indéfiniment « publiée ». C'est ce qui rendra visible, à l'étape suivante, un secret mal encodé.
+
+**Deux voies de réception, selon le transport.** Sidecar Dapr : l'application annonce ses abonnements
+sur `GET /dapr/subscribe` et reçoit les messages sur ses routes. Kafka direct : deux `@KafkaListener`,
+montés seulement dans ce mode. Ces routes sont ouvertes sans authentification — le sidecar n'a pas de
+jeton à présenter — et n'exposent aucune donnée de l'application.
+
+**Reste ouvert, à poser à l'administrateur** : le moteur peut-il ajouter l'`eventId` (ou restituer
+`correlationId`) dans ses accusés ? Cela rendrait les topics aussi précis que le rappel, sans dépendre
+d'une application joignable.
+
+**Vérifié** : 15 tests unitaires, et contre la pile réelle — les abonnements sont annoncés, un accusé
+d'un autre service est ignoré, le nôtre est enregistré, un doublon ne crée pas de seconde ligne, et un
+rappel sans signature reçoit 404.
+
 ### Q-119 ✅ Les prestataires sont notifiés hors de l'application, avec leur consentement — tranché (2026-09-22)
 
 **Ce que cela solde.** Q-52 constatait qu'un prestataire n'était notifié que s'il avait un compte

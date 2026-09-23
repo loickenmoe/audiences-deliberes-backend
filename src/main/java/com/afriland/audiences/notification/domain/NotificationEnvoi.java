@@ -158,6 +158,29 @@ public class NotificationEnvoi {
     }
 
     /**
+     * Le moteur signale un échec définitif sur cette notification : plus rien ne partira, et la ligne
+     * devient visible en supervision. Nos propres tentatives ne s'appliquent pas — c'est le moteur qui
+     * a épuisé les siennes (Guide V1 §8).
+     */
+    public void marquerEchecDuMoteur(String erreur, LocalDateTime dateAccuse) {
+        this.statut = StatutEnvoi.ECHEC;
+        this.statutEngine = "FAILED";
+        this.derniereErreur = tronquer(erreur);
+        this.dateAccuse = dateAccuse;
+        this.prochaineTentative = null;
+    }
+
+    /**
+     * Aucun accusé n'est arrivé dans le délai attendu. L'envoi n'est ni confirmé ni échoué : il est
+     * sans retour. C'est l'état d'un message rejeté en silence par le moteur — un jeton invalide, par
+     * exemple —, et le compter comme délivré masquerait précisément ce défaut.
+     */
+    public void marquerSansRetour() {
+        this.statut = StatutEnvoi.SANS_RETOUR;
+        this.prochaineTentative = null;
+    }
+
+    /**
      * Notification trop ancienne pour être encore utile : elle n'est pas envoyée. Un rappel
      * d'audience remis trois jours après l'audience désinformerait son destinataire, et une file
      * accumulée pendant une coupure partirait d'un bloc.

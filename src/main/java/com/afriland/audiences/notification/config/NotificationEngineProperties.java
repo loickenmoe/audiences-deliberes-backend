@@ -15,7 +15,9 @@ import java.util.List;
  * @param jwtSecret      secret de signature HS256 des jetons ; au moins 32 caractères (Guide V1 §4 bis)
  * @param tentativesMax  nombre de remises tentées avant l'échec définitif (D13)
  * @param ageMax         au-delà, une notification en attente est périmée plutôt qu'envoyée (voir § 8)
- * @param redirection    bac à sable des environnements de travail (D10)
+ * @param redirection     bac à sable des environnements de travail (D10)
+ * @param callbackBaseUrl adresse publique de l'application, telle que le moteur peut la joindre. Vide
+ *                        depuis un poste de travail : les rappels sont alors désactivés (Q-120)
  */
 @ConfigurationProperties(prefix = "notification.engine")
 public record NotificationEngineProperties(
@@ -25,7 +27,8 @@ public record NotificationEngineProperties(
         @DefaultValue("5") int tentativesMax,
         @DefaultValue("2h") Duration ageMax,
         @DefaultValue Redirection redirection,
-        @DefaultValue Transport transport) {
+        @DefaultValue Transport transport,
+        String callbackBaseUrl) {
 
     /** Longueur minimale du secret exigée par le moteur pour la signature HS256 (256 bits). */
     public static final int LONGUEUR_MIN_SECRET = 32;

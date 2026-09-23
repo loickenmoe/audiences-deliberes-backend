@@ -36,6 +36,7 @@ public class RemiseNotification {
     private final PasserelleNotificationEngine passerelle;
     private final JetonEngine jetonEngine;
     private final RedirectionDestinataires redirection;
+    private final RappelsNotification rappels;
     private final NotificationEngineProperties proprietes;
 
     @Transactional
@@ -58,7 +59,8 @@ public class RemiseNotification {
             // besoin, et l'exiger empêcherait de vider la file tant que le secret n'est pas renseigné.
             String jeton = proprietes.actif() ? jetonEngine.signer() : null;
             MessageEngine message = MessageEngine.de(jeton, envoi.getCanal(), destinataire,
-                    envoi.getSujet(), envoi.getCorps(), envoi.getEventId());
+                    envoi.getSujet(), envoi.getCorps(), envoi.getEventId(),
+                    rappels.urlPour(envoi.getEventId()).orElse(null));
             String transport = passerelle.publier(message);
             envoi.marquerPubliee(transport, destinataire);
         } catch (RuntimeException e) {

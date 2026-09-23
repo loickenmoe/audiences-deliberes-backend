@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PasserelleJournalTest {
 
     private static final MessageEngine MESSAGE = MessageEngine.de("jeton", CanalEngine.SMS, "237600000000",
-            null, "Audience dans 7 jours.", "alerte-5:SMS");
+            null, "Audience dans 7 jours.", "alerte-5:SMS", null);
 
     @Test
     void publier_n_envoie_rien_et_nomme_son_transport() {

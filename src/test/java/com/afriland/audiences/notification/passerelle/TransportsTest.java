@@ -30,7 +30,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 class TransportsTest {
 
     private static final MessageEngine MESSAGE = MessageEngine.de("jeton", CanalEngine.SMS, "237600000000",
-            null, "Audience dans 7 jours.", "alerte-5:SMS");
+            null, "Audience dans 7 jours.", "alerte-5:SMS", null);
 
     // ── Sidecar Dapr ──
 

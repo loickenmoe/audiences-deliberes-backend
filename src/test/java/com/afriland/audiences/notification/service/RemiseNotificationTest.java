@@ -46,12 +46,12 @@ class RemiseNotificationTest {
     private static NotificationEngineProperties proprietes(boolean redirection) {
         return new NotificationEngineProperties(redirection, "audience-deliberer", SECRET, 5, Duration.ofHours(2),
                 new Redirection(redirection, "juriste.test@afrilandfirstbank.com", "prestataire.test@example.cm", "237600000000"),
-                new NotificationEngineProperties.Transport(NotificationEngineProperties.TypeTransport.JOURNAL, "t", "p", "u", 10));
+                new NotificationEngineProperties.Transport(NotificationEngineProperties.TypeTransport.JOURNAL, "t", "p", "u", 10), null);
     }
 
     private RemiseNotification service(NotificationEngineProperties proprietes) {
         return new RemiseNotification(repository, passerelle, new JetonEngine(proprietes),
-                new RedirectionDestinataires(proprietes), proprietes);
+                new RedirectionDestinataires(proprietes), new RappelsNotification(proprietes), proprietes);
     }
 
     private static NotificationEnvoi envoi(CanalEngine canal, TypeDestinataire type, String destinataire) {
@@ -152,7 +152,7 @@ class RemiseNotificationTest {
     @Test
     void une_redirection_sans_cible_refuse_d_envoyer() throws Exception {
         NotificationEngineProperties incomplete = new NotificationEngineProperties(true, "audience-deliberer", SECRET,
-                5, Duration.ofHours(2), new Redirection(true, "a@b.cm", "c@d.cm", null), new NotificationEngineProperties.Transport(NotificationEngineProperties.TypeTransport.JOURNAL, "t", "p", "u", 10));
+                5, Duration.ofHours(2), new Redirection(true, "a@b.cm", "c@d.cm", null), new NotificationEngineProperties.Transport(NotificationEngineProperties.TypeTransport.JOURNAL, "t", "p", "u", 10), null);
         NotificationEnvoi envoi = avecDateCreation(envoi(CanalEngine.SMS, TypeDestinataire.AVOCAT, "237699887766"),
                 LocalDateTime.now());
         when(repository.findById(1L)).thenReturn(Optional.of(envoi));
@@ -204,7 +204,7 @@ class RemiseNotificationTest {
     @Test
     void moteur_coupe_la_file_se_vide_sans_redirection() throws Exception {
         NotificationEngineProperties coupe = new NotificationEngineProperties(false, "audience-deliberer", SECRET, 5,
-                Duration.ofHours(2), new Redirection(true, null, null, null), new NotificationEngineProperties.Transport(NotificationEngineProperties.TypeTransport.JOURNAL, "t", "p", "u", 10));
+                Duration.ofHours(2), new Redirection(true, null, null, null), new NotificationEngineProperties.Transport(NotificationEngineProperties.TypeTransport.JOURNAL, "t", "p", "u", 10), null);
         NotificationEnvoi envoi = avecDateCreation(envoi(CanalEngine.EMAIL, TypeDestinataire.UTILISATEUR,
                 "juriste@afrilandfirstbank.com"), LocalDateTime.now());
         when(repository.findById(1L)).thenReturn(Optional.of(envoi));
@@ -250,7 +250,7 @@ class RemiseNotificationTest {
     @Test
     void sans_secret_le_jeton_est_refuse_plutot_que_produit_invalide() {
         NotificationEngineProperties sansSecret = new NotificationEngineProperties(false, "audience-deliberer", "court",
-                5, Duration.ofHours(2), new Redirection(false, null, null, null), new NotificationEngineProperties.Transport(NotificationEngineProperties.TypeTransport.JOURNAL, "t", "p", "u", 10));
+                5, Duration.ofHours(2), new Redirection(false, null, null, null), new NotificationEngineProperties.Transport(NotificationEngineProperties.TypeTransport.JOURNAL, "t", "p", "u", 10), null);
 
         assertThatThrownBy(() -> new JetonEngine(sansSecret).signer())
                 .isInstanceOf(IllegalStateException.class)

@@ -31,4 +31,12 @@ public interface NotificationEnvoiRepository extends JpaRepository<NotificationE
     @Query("SELECT n.id FROM NotificationEnvoi n WHERE n.statut = com.afriland.audiences.notification.domain.StatutEnvoi.EN_ATTENTE "
             + "AND n.prochaineTentative <= :maintenant ORDER BY n.prochaineTentative ASC")
     List<Long> trouverARemettre(@Param("maintenant") LocalDateTime maintenant, Pageable page);
+
+    /**
+     * Notifications remises au moteur avant {@code limite} et toujours sans accusé (Q-120). Un
+     * message rejeté en silence n'a ni accusé de succès ni accusé d'échec : seul le temps le révèle.
+     */
+    @Query("SELECT n FROM NotificationEnvoi n WHERE n.statut = com.afriland.audiences.notification.domain.StatutEnvoi.PUBLIEE "
+            + "AND n.datePublication <= :limite ORDER BY n.datePublication ASC")
+    List<NotificationEnvoi> trouverPublieesSansAccuse(@Param("limite") LocalDateTime limite, Pageable page);
 }

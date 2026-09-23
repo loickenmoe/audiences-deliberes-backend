@@ -361,11 +361,32 @@ explicite du porteur du projet** : c'est lui qui fera partir un vrai SMS et un v
 - vérifier l'encodage du secret : un jeton invalide est rejeté **sans retour**, seule l'absence
   d'accusé (étape 9) le révélerait.
 
-### ⬜ Étape 9 : suivi de la délivrance
+### ✅ Étape 9 : suivi de la délivrance
 
-- Consommation de `notification-sent` et `notification-failed`, avec un filtre sur `serviceId` et
-  un traitement idempotent (même accusé reçu deux fois).
-- Correspondance entre les statuts de l'Engine et le statut local.
+Livrée, en attente du commit de l'utilisateur. Décision consignée : **Q-120**.
+
+**Contradiction relevée dans le Guide** : les topics de suivi ne renvoient **pas** notre `eventId`,
+seulement le `notificationId` interne au moteur. Ils disent combien de messages partent, jamais
+lequel des nôtres. Trois couches répondent à cela :
+1. **`callbackUrl`** porte notre référence (`/notifications/accuses/rappel/{eventId}?signature=…`) :
+   rattachement exact, ligne marquée ENVOYEE ou ECHEC. L'URL est signée en HMAC-SHA256 avec le secret
+   du compte de service, car le Guide ne décrit aucune authentification du rappel ; signature
+   invalide → 404. Désactivé tant que `NOTIFICATION_CALLBACK_BASE_URL` est vide (un poste de travail
+   n'est pas joignable depuis le cluster).
+2. **`metadata.correlationId`** porte aussi la référence : si le moteur la restitue un jour, le
+   rattachement se fera sans rien changer.
+3. **Les topics** alimentent `notification_accuse` (V30), filtrés sur `serviceId` et idempotents par
+   (notificationId, type) — la livraison est « au moins une fois ». Ils donnent la mesure par canal
+   et par fournisseur.
+- **Nouveau statut SANS_RETOUR** : une notification publiée depuis plus de
+  `notification.engine.delai-accuse` (15 min) sans accusé n'est plus comptée comme partie.
+  `VeilleAccusesNotification` s'en charge. C'est ce qui rendra visible un secret mal encodé.
+- Deux voies de réception : `AccusesDaprController` (abonnements annoncés sur `/dapr/subscribe`) et
+  `AccusesKafkaListener` (monté seulement en transport KAFKA). Routes ouvertes sans authentification
+  dans `SecurityConfig` : le sidecar n'a pas de jeton, et elles n'exposent aucune donnée.
+- Tests : 15 unitaires. Suite complète : 626 tests verts.
+- **Contre la vraie pile** : abonnements annoncés, accusé d'un autre service ignoré, le nôtre
+  enregistré, doublon sans effet, rappel sans signature refusé en 404. Lignes de recette supprimées.
 
 ### ⬜ Étape 10 : supervision sur l'écran 41 (D17)
 
@@ -408,6 +429,12 @@ explicite du porteur du projet** : c'est lui qui fera partir un vrai SMS et un v
 - **Pièces jointes** : quel bucket et quelle instance MinIO le claim-check doit-il utiliser ?
 - **WhatsApp** : faut-il des modèles de message préapprouvés, ce qui est la règle habituelle de
   WhatsApp Business ? Le canal reste éteint par défaut (V28) jusqu'à la réponse de l'administrateur.
+- **Accusés et référence (Q-120)** : le moteur peut-il ajouter l'`eventId`, ou restituer
+  `metadata.correlationId`, dans `notification-sent` et `notification-failed` ? Cela rendrait les
+  topics aussi précis que le rappel, sans dépendre d'une application joignable depuis le cluster.
+- **Rappel `callbackUrl`** : le Guide n'en décrit ni le corps exact ni l'authentification. Nous
+  signons l'URL ; à confirmer avec l'administrateur que le moteur la rappelle telle quelle, avec ses
+  paramètres.
 - **Référence du dossier** : elle est saisie librement. Peut-elle contenir un nom de client ? Si oui,
   il faut la retirer des courriels personnels (elle n'est déjà jamais dans les SMS et WhatsApp).
 - **Limites non documentées dans le Guide** : longueur maximale d'un SMS, gabarits WhatsApp requis ou

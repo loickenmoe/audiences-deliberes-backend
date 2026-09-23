@@ -96,10 +96,10 @@ class NotificationEngineConfigTest {
     void le_secret_n_apparait_jamais_dans_la_representation_texte() {
         NotificationEngineProperties proprietes = new NotificationEngineProperties(true, "audience-deliberer",
                 SECRET_32, 5, java.time.Duration.ofHours(2), new Redirection(false, null, null, null),
-                new NotificationEngineProperties.Transport(NotificationEngineProperties.TypeTransport.JOURNAL, "t", "p", "u", 10));
+                new NotificationEngineProperties.Transport(NotificationEngineProperties.TypeTransport.JOURNAL, "t", "p", "u", 10), null);
 
         assertThat(proprietes.toString()).doesNotContain(SECRET_32).contains("jwtSecret=***");
         assertThat(new NotificationEngineProperties(false, null, null, 5, java.time.Duration.ofHours(2),
-                new Redirection(false, null, null, null), new NotificationEngineProperties.Transport(NotificationEngineProperties.TypeTransport.JOURNAL, "t", "p", "u", 10)).toString()).contains("jwtSecret=(absent)");
+                new Redirection(false, null, null, null), new NotificationEngineProperties.Transport(NotificationEngineProperties.TypeTransport.JOURNAL, "t", "p", "u", 10), null).toString()).contains("jwtSecret=(absent)");
     }
 }
