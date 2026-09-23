@@ -45,7 +45,8 @@ class RemiseNotificationTest {
     /** Le moteur est déclaré actif dès que la redirection est en jeu : elle ne s'applique pas sinon. */
     private static NotificationEngineProperties proprietes(boolean redirection) {
         return new NotificationEngineProperties(redirection, "audience-deliberer", SECRET, 5, Duration.ofHours(2),
-                new Redirection(redirection, "paul_fokam@afrilandfirstbank.com", "loicluc25@gmail.com", "237654476789"));
+                new Redirection(redirection, "juriste.test@afrilandfirstbank.com", "prestataire.test@example.cm", "237600000000"),
+                new NotificationEngineProperties.Transport(NotificationEngineProperties.TypeTransport.JOURNAL, "t", "p", "u", 10));
     }
 
     private RemiseNotification service(NotificationEngineProperties proprietes) {
@@ -124,8 +125,8 @@ class RemiseNotificationTest {
 
         service(proprietes(true)).remettre(1L);
 
-        assertThat(publie().channelRecipients()).containsEntry("SMS", "237654476789");
-        assertThat(envoi.getDestinataire()).isEqualTo("237654476789");
+        assertThat(publie().channelRecipients()).containsEntry("SMS", "237600000000");
+        assertThat(envoi.getDestinataire()).isEqualTo("237600000000");
         assertThat(envoi.getDestinataireOrigine()).isEqualTo("237699887766");
     }
 
@@ -144,14 +145,14 @@ class RemiseNotificationTest {
 
         ArgumentCaptor<MessageEngine> captor = ArgumentCaptor.forClass(MessageEngine.class);
         verify(passerelle, org.mockito.Mockito.times(2)).publier(captor.capture());
-        assertThat(captor.getAllValues().get(0).channelRecipients()).containsEntry("EMAIL", "paul_fokam@afrilandfirstbank.com");
-        assertThat(captor.getAllValues().get(1).channelRecipients()).containsEntry("EMAIL", "loicluc25@gmail.com");
+        assertThat(captor.getAllValues().get(0).channelRecipients()).containsEntry("EMAIL", "juriste.test@afrilandfirstbank.com");
+        assertThat(captor.getAllValues().get(1).channelRecipients()).containsEntry("EMAIL", "prestataire.test@example.cm");
     }
 
     @Test
     void une_redirection_sans_cible_refuse_d_envoyer() throws Exception {
         NotificationEngineProperties incomplete = new NotificationEngineProperties(true, "audience-deliberer", SECRET,
-                5, Duration.ofHours(2), new Redirection(true, "a@b.cm", "c@d.cm", null));
+                5, Duration.ofHours(2), new Redirection(true, "a@b.cm", "c@d.cm", null), new NotificationEngineProperties.Transport(NotificationEngineProperties.TypeTransport.JOURNAL, "t", "p", "u", 10));
         NotificationEnvoi envoi = avecDateCreation(envoi(CanalEngine.SMS, TypeDestinataire.AVOCAT, "237699887766"),
                 LocalDateTime.now());
         when(repository.findById(1L)).thenReturn(Optional.of(envoi));
@@ -203,7 +204,7 @@ class RemiseNotificationTest {
     @Test
     void moteur_coupe_la_file_se_vide_sans_redirection() throws Exception {
         NotificationEngineProperties coupe = new NotificationEngineProperties(false, "audience-deliberer", SECRET, 5,
-                Duration.ofHours(2), new Redirection(true, null, null, null));
+                Duration.ofHours(2), new Redirection(true, null, null, null), new NotificationEngineProperties.Transport(NotificationEngineProperties.TypeTransport.JOURNAL, "t", "p", "u", 10));
         NotificationEnvoi envoi = avecDateCreation(envoi(CanalEngine.EMAIL, TypeDestinataire.UTILISATEUR,
                 "juriste@afrilandfirstbank.com"), LocalDateTime.now());
         when(repository.findById(1L)).thenReturn(Optional.of(envoi));
@@ -220,7 +221,7 @@ class RemiseNotificationTest {
 
     @Test
     void une_notification_trop_ancienne_est_abandonnee_sans_etre_envoyee() throws Exception {
-        NotificationEnvoi envoi = avecDateCreation(envoi(CanalEngine.SMS, TypeDestinataire.AVOCAT, "237654476789"),
+        NotificationEnvoi envoi = avecDateCreation(envoi(CanalEngine.SMS, TypeDestinataire.AVOCAT, "237600000000"),
                 LocalDateTime.now().minusHours(3));
         when(repository.findById(1L)).thenReturn(Optional.of(envoi));
 
@@ -249,7 +250,7 @@ class RemiseNotificationTest {
     @Test
     void sans_secret_le_jeton_est_refuse_plutot_que_produit_invalide() {
         NotificationEngineProperties sansSecret = new NotificationEngineProperties(false, "audience-deliberer", "court",
-                5, Duration.ofHours(2), new Redirection(false, null, null, null));
+                5, Duration.ofHours(2), new Redirection(false, null, null, null), new NotificationEngineProperties.Transport(NotificationEngineProperties.TypeTransport.JOURNAL, "t", "p", "u", 10));
 
         assertThatThrownBy(() -> new JetonEngine(sansSecret).signer())
                 .isInstanceOf(IllegalStateException.class)

@@ -8,7 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class PasserelleJournalTest {
 
-    private static final MessageEngine MESSAGE = MessageEngine.de("jeton", CanalEngine.SMS, "237654476789",
+    private static final MessageEngine MESSAGE = MessageEngine.de("jeton", CanalEngine.SMS, "237600000000",
             null, "Audience dans 7 jours.", "alerte-5:SMS");
 
     @Test
@@ -18,8 +18,9 @@ class PasserelleJournalTest {
 
     @Test
     void masquer_cache_les_coordonnees_personnelles() {
-        assertThat(PasserelleJournal.masquer("paul_fokam@afrilandfirstbank.com")).isEqualTo("pa***@afrilandfirstbank.com");
-        assertThat(PasserelleJournal.masquer("237654476789")).isEqualTo("23***");
+        assertThat(PasserelleJournal.masquer("juriste.test@afrilandfirstbank.com"))
+                .isEqualTo("ju***@afrilandfirstbank.com");
+        assertThat(PasserelleJournal.masquer("237600000000")).isEqualTo("23***");
         assertThat(PasserelleJournal.masquer("ab")).isEqualTo("***");
         assertThat(PasserelleJournal.masquer(" ")).isEqualTo("(vide)");
     }
@@ -27,11 +28,11 @@ class PasserelleJournalTest {
     @Test
     void masquer_liste_les_canaux_dans_un_ordre_stable() {
         String masque = PasserelleJournal.masquer(Map.of(
-                "TEAMS", "paul_fokam@afrilandfirstbank.com",
-                "SMS", "237654476789"));
+                "TEAMS", "juriste.test@afrilandfirstbank.com",
+                "SMS", "237600000000"));
 
-        assertThat(masque).isEqualTo("{SMS=23***, TEAMS=pa***@afrilandfirstbank.com}");
-        assertThat(masque).doesNotContain("654476789", "paul_fokam");
+        assertThat(masque).isEqualTo("{SMS=23***, TEAMS=ju***@afrilandfirstbank.com}");
+        assertThat(masque).doesNotContain("600000000", "juriste.test");
     }
 
     /** Le jeton porte la signature du service : il ne doit jamais être journalisé. */
@@ -46,7 +47,7 @@ class PasserelleJournalTest {
     @Test
     void le_message_porte_un_destinataire_par_canal() {
         assertThat(MESSAGE.channels()).containsExactly("SMS");
-        assertThat(MESSAGE.channelRecipients()).containsExactly(Map.entry("SMS", "237654476789"));
+        assertThat(MESSAGE.channelRecipients()).containsExactly(Map.entry("SMS", "237600000000"));
         assertThat(MESSAGE.directSubject()).isNull();
     }
 }

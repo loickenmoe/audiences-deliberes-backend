@@ -62,10 +62,10 @@ class RoutageNotificationTest {
         regler(reglagesInitiaux());
 
         List<Route> routes = routage.pourUtilisateur(TypeAlerte.RAPPEL_AUDIENCE,
-                utilisateur("JURISTE", "paul_fokam@afrilandfirstbank.com"));
+                utilisateur("JURISTE", "juriste.test@afrilandfirstbank.com"));
 
         assertThat(routes).containsExactly(
-                new Route("OUTLOOK", CanalEngine.EMAIL, "paul_fokam@afrilandfirstbank.com", null));
+                new Route("OUTLOOK", CanalEngine.EMAIL, "juriste.test@afrilandfirstbank.com", null));
     }
 
     @Test
@@ -115,11 +115,11 @@ class RoutageNotificationTest {
         regler(reglagesInitiaux());
 
         List<Route> routes = routage.pourPrestataire(EvenementPrestataire.AFFECTATION_DOSSIER,
-                new CoordonneesPrestataire("loicluc25@gmail.com", "654 47 67 89", true));
+                new CoordonneesPrestataire("prestataire.test@example.cm", "600 00 00 00", true));
 
         assertThat(routes).containsExactly(
-                new Route("COURRIEL_PERSONNEL", CanalEngine.EMAIL, "loicluc25@gmail.com", null),
-                new Route("SMS", CanalEngine.SMS, "237654476789", null));
+                new Route("COURRIEL_PERSONNEL", CanalEngine.EMAIL, "prestataire.test@example.cm", null),
+                new Route("SMS", CanalEngine.SMS, "237600000000", null));
     }
 
     @Test
@@ -129,8 +129,8 @@ class RoutageNotificationTest {
         regler(valeurs);
 
         assertThat(routage.pourPrestataire(EvenementPrestataire.RAPPEL_AUDIENCE,
-                new CoordonneesPrestataire(null, "+237654476789", true)))
-                .containsExactly(new Route("WHATSAPP", CanalEngine.WHATSAPP, "+237654476789", null));
+                new CoordonneesPrestataire(null, "+237600000000", true)))
+                .containsExactly(new Route("WHATSAPP", CanalEngine.WHATSAPP, "+237600000000", null));
     }
 
     /** D14 : le canal sans coordonnée est signalé, les autres partent. */
@@ -150,7 +150,7 @@ class RoutageNotificationTest {
         regler(reglagesInitiaux());
 
         assertThat(routage.pourPrestataire(EvenementPrestataire.PAIEMENT_EFFECTUE,
-                new CoordonneesPrestataire(null, "0654476789", true)))
+                new CoordonneesPrestataire(null, "0600000000", true)))
                 .containsExactly(
                         new Route("COURRIEL_PERSONNEL", CanalEngine.EMAIL, null, MotifNonJoignable.COORDONNEE_ABSENTE),
                         new Route("SMS", CanalEngine.SMS, null, MotifNonJoignable.COORDONNEE_INVALIDE));
@@ -160,7 +160,7 @@ class RoutageNotificationTest {
     @Test
     void prestataire_sans_consentement_n_est_pas_notifie() {
         assertThat(routage.pourPrestataire(EvenementPrestataire.CONSTITUTION_VALIDEE,
-                new CoordonneesPrestataire("loicluc25@gmail.com", "654476789", false))).isEmpty();
+                new CoordonneesPrestataire("prestataire.test@example.cm", "600000000", false))).isEmpty();
         verifyNoInteractions(reglagesNotificationService);
     }
 
@@ -171,7 +171,7 @@ class RoutageNotificationTest {
         regler(valeurs);
 
         assertThat(routage.pourPrestataire(EvenementPrestataire.CONSTITUTION_VALIDEE,
-                new CoordonneesPrestataire("loicluc25@gmail.com", "654476789", true))).isEmpty();
+                new CoordonneesPrestataire("prestataire.test@example.cm", "600000000", true))).isEmpty();
     }
 
     // ── Lecture des réglages ──

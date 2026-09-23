@@ -334,18 +334,31 @@ aucun message**, tout est prêt pour que 8b ne soit plus qu'un branchement de tr
   (destinataire masqué dans le journal, rien envoyé) ; une ligne vieille de 5 h est passée en ÉCHEC
   avec le motif `PERIMEE`. Lignes de recette supprimées ensuite.
 
-### ⬜ Étape 8b : transport réel (le premier envoi part vraiment)
+### 🔄 Étape 8b : transport réel — code livré, **premier envoi non fait**
 
-**À ne lancer qu'avec l'accord explicite du porteur du projet** : c'est l'étape où de vrais SMS et
-courriels partent vers les destinataires de test.
-- **Activer dans le `.env`** : `NOTIFICATION_ENGINE_ACTIF`, `_CODE_SERVICE`, `_JWT_SECRET` (copiés
-  depuis le bloc commenté) et les trois `NOTIFICATION_REDIRECTION_*`.
-- Composant Dapr `notification-pubsub-standard` et sidecar dans `docker-compose.yml` ; adaptateur
-  Kafka direct en repli, choisi par `notification.engine.transport`.
-- Retirer le garde-fou « aucun transport réel » de l'étape 1.
-- **Vider la file avant le premier envoi** (ou laisser jouer la péremption) : sans cela, tout le
-  stock partirait d'un bloc vers les destinataires de test.
-- Vérifier l'encodage du secret : un jeton invalide est rejeté **sans retour**, seule l'absence
+Le code est prêt et testé ; l'interrupteur reste à `false`. **Le premier envoi réel demande l'accord
+explicite du porteur du projet** : c'est lui qui fera partir un vrai SMS et un vrai courriel.
+- `PasserelleDapr` : `POST {daprUrl}/v1.0/publish/{pubsub}/{topic}`, sans bibliothèque Dapr — le
+  sidecar expose une API HTTP locale. Voie documentée par le Guide, donc enveloppe CloudEvents
+  conforme.
+- `PasserelleKafka` : dépôt direct sur le topic, clé = `eventId`, **envoi attendu** (sans cela un
+  courtier injoignable passerait pour un succès). Repli, choisi explicitement.
+- `notification.engine.transport` : `type` (DAPR par défaut, KAFKA, JOURNAL), `topic`, `pubsub`,
+  `dapr-url`, `attente-secondes`. Nouvelle dépendance : `spring-kafka`.
+- Le garde-fou « aucun transport réel » de l'étape 1 est retiré ; à sa place, le démarrage échoue si
+  le transport KAFKA est demandé sans courtier.
+- `docker/dapr/notification-pubsub-standard.yaml` (écrit sur le modèle du composant CRITICAL du
+  Guide) et sidecar `daprd` dans `docker-compose.yml`, **sous le profil `notifications`** : la pile
+  habituelle démarre sans lui.
+- Le numéro de redirection passe par la même mise en forme que celui d'une fiche.
+- `.env` complété : interrupteur (à `false`), code de service, secret, clé d'API et les trois
+  destinataires de test. Le bloc commenté de l'administrateur reste la référence.
+- Tests : 4 sur les transports, 10 sur la configuration. Suite complète : 613 tests verts.
+
+**Reste à faire, avec accord** :
+- vider la file (ou laisser jouer la péremption) juste avant le premier envoi ;
+- basculer `NOTIFICATION_ENGINE_ACTIF=true`, choisir le transport et lancer un envoi de contrôle ;
+- vérifier l'encodage du secret : un jeton invalide est rejeté **sans retour**, seule l'absence
   d'accusé (étape 9) le révélerait.
 
 ### ⬜ Étape 9 : suivi de la délivrance

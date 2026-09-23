@@ -17,7 +17,7 @@ class NotificationEnvoiTest {
     @Test
     void aRemettre_est_en_attente_et_immediatement_eligible() {
         NotificationEnvoi envoi = NotificationEnvoi.aRemettre(ORIGINE, CanalEngine.TEAMS,
-                "paul_fokam@afrilandfirstbank.com", "Rappel", "Audience dans 7 jours.");
+                "juriste.test@afrilandfirstbank.com", "Rappel", "Audience dans 7 jours.");
 
         assertThat(envoi.getStatut()).isEqualTo(StatutEnvoi.EN_ATTENTE);
         assertThat(envoi.getTentatives()).isZero();
@@ -40,7 +40,7 @@ class NotificationEnvoiTest {
     void aRemettre_refuse_un_destinataire_ou_un_corps_absent() {
         assertThatThrownBy(() -> NotificationEnvoi.aRemettre(ORIGINE, CanalEngine.SMS, " ", null, "x"))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("nonJoignable");
-        assertThatThrownBy(() -> NotificationEnvoi.aRemettre(ORIGINE, CanalEngine.SMS, "237654476789", null, ""))
+        assertThatThrownBy(() -> NotificationEnvoi.aRemettre(ORIGINE, CanalEngine.SMS, "237600000000", null, ""))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -57,7 +57,7 @@ class NotificationEnvoiTest {
     @Test
     void marquerEnvoyee_efface_le_texte_des_sms_et_whatsapp() {
         for (CanalEngine canal : new CanalEngine[] {CanalEngine.SMS, CanalEngine.WHATSAPP}) {
-            NotificationEnvoi envoi = NotificationEnvoi.aRemettre(ORIGINE, canal, "237654476789", null, "Texte");
+            NotificationEnvoi envoi = NotificationEnvoi.aRemettre(ORIGINE, canal, "237600000000", null, "Texte");
             LocalDateTime accuse = LocalDateTime.now();
 
             envoi.marquerEnvoyee("DELIVERED", accuse);

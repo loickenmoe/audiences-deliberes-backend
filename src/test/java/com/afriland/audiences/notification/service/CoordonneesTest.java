@@ -12,13 +12,13 @@ class CoordonneesTest {
     /** Les trois formes du Guide V1, avec les séparateurs de saisie courants. */
     @ParameterizedTest
     @CsvSource({
-            "'654476789', 237654476789",
-            "'654 47 67 89', 237654476789",
-            "'654-47-67-89', 237654476789",
-            "'237654476789', 237654476789",
-            "'237 654 476 789', 237654476789",
-            "'+237654476789', +237654476789",
-            "'+237 (654) 47.67.89', +237654476789",
+            "'600000000', 237600000000",
+            "'600 00 00 00', 237600000000",
+            "'600-00-00-00', 237600000000",
+            "'237600000000', 237600000000",
+            "'237 600 000 000', 237600000000",
+            "'+237600000000', +237600000000",
+            "'+237 (600) 00.00.00', +237600000000",
             "'+33612345678', +33612345678"
     })
     void telephone_accepteLesFormesDuGuide(String saisie, String attendu) {
@@ -27,7 +27,7 @@ class CoordonneesTest {
 
     /** Rien n'est deviné : un numéro hors des trois formes ne part pas. */
     @ParameterizedTest
-    @ValueSource(strings = {"54476789", "754476789", "0654476789", "23765447678", "+0237654476789", "abc", "654476789x"})
+    @ValueSource(strings = {"54476789", "754476789", "0600000000", "23765447678", "+0237600000000", "abc", "600000000x"})
     void telephone_refuseCeQueLeGuideNAccepteLePas(String saisie) {
         assertThat(Coordonnees.telephone(saisie)).isEmpty();
     }
@@ -40,7 +40,7 @@ class CoordonneesTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"' loicluc25@gmail.com ', loicluc25@gmail.com", "paul_fokam@afrilandfirstbank.com, paul_fokam@afrilandfirstbank.com"})
+    @CsvSource({"' prestataire.test@example.cm ', prestataire.test@example.cm", "juriste.test@afrilandfirstbank.com, juriste.test@afrilandfirstbank.com"})
     void courriel_accepteUneAdresseBienFormee(String saisie, String attendu) {
         assertThat(Coordonnees.courriel(saisie)).contains(attendu);
     }

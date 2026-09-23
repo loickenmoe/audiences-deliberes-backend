@@ -24,7 +24,8 @@ public record NotificationEngineProperties(
         String jwtSecret,
         @DefaultValue("5") int tentativesMax,
         @DefaultValue("2h") Duration ageMax,
-        @DefaultValue Redirection redirection) {
+        @DefaultValue Redirection redirection,
+        @DefaultValue Transport transport) {
 
     /** Longueur minimale du secret exigée par le moteur pour la signature HS256 (256 bits). */
     public static final int LONGUEUR_MIN_SECRET = 32;
@@ -36,6 +37,29 @@ public record NotificationEngineProperties(
     public static final List<Duration> DELAIS_TENTATIVES = List.of(
             Duration.ofMinutes(1), Duration.ofMinutes(5), Duration.ofMinutes(15),
             Duration.ofHours(1), Duration.ofHours(6));
+
+    /**
+     * Transport du message jusqu'au moteur.
+     *
+     * @param type            DAPR (voie documentée par le Guide), KAFKA (repli direct) ou JOURNAL (rien
+     *                        n'est envoyé, utile pour éprouver une configuration active sans émettre)
+     * @param topic           topic STANDARD : ses messages sont rattrapés après une panne, contrairement
+     *                        au topic CRITICAL, qui les jette (D8)
+     * @param pubsub          nom du composant Dapr qui porte ce topic
+     * @param daprUrl         adresse locale du sidecar
+     * @param attenteSecondes délai d'attente de l'accusé du courtier, en transport Kafka direct
+     */
+    public record Transport(
+            @DefaultValue("DAPR") TypeTransport type,
+            @DefaultValue("notification-send-standard") String topic,
+            @DefaultValue("notification-pubsub-standard") String pubsub,
+            @DefaultValue("http://localhost:3500") String daprUrl,
+            @DefaultValue("10") long attenteSecondes) {
+    }
+
+    public enum TypeTransport {
+        DAPR, KAFKA, JOURNAL
+    }
 
     /** Masque le secret : ce record peut finir dans un journal ou un message d'erreur. */
     @Override

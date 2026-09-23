@@ -86,7 +86,7 @@ class NotificationAlerteIntegrationTest {
 
     @Test
     void une_alerte_a_un_juriste_met_Outlook_en_file_avec_la_reference_du_dossier() {
-        Utilisateur juriste = utilisateur("kc-notif-juriste", "JURISTE", "paul_fokam@afrilandfirstbank.com");
+        Utilisateur juriste = utilisateur("kc-notif-juriste", "JURISTE", "juriste.test@afrilandfirstbank.com");
         Long dossierId = dossier("DOS-NOTIF-1");
 
         Alerte alerte = alerteService.declencher(TypeAlerte.RAPPEL_AUDIENCE, dossierId, juriste,
@@ -98,7 +98,7 @@ class NotificationAlerteIntegrationTest {
         assertThat(outlook.getEventId()).isEqualTo("alerte-" + alerte.getId() + ":EMAIL");
         assertThat(outlook.getCanal()).isEqualTo(CanalEngine.EMAIL);
         assertThat(outlook.getStatut()).isEqualTo(StatutEnvoi.EN_ATTENTE);
-        assertThat(outlook.getDestinataire()).isEqualTo("paul_fokam@afrilandfirstbank.com");
+        assertThat(outlook.getDestinataire()).isEqualTo("juriste.test@afrilandfirstbank.com");
         assertThat(outlook.getSujet()).isEqualTo("[Audiences et délibérés] Rappel d'audience - DOS-NOTIF-1");
         // Le texte de l'alerte applicative ne sort pas : ni marqueur, ni code, ni motif.
         assertThat(outlook.getCorps()).doesNotContain("audienceId", "RG-AUD", "motif interne")

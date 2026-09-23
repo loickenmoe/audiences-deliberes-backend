@@ -1,6 +1,7 @@
 package com.afriland.audiences.notification.config;
 
 import com.afriland.audiences.notification.config.NotificationEngineProperties.Redirection;
+import com.afriland.audiences.notification.passerelle.PasserelleDapr;
 import com.afriland.audiences.notification.passerelle.PasserelleJournal;
 import com.afriland.audiences.notification.passerelle.PasserelleNotificationEngine;
 import org.junit.jupiter.api.Test;
@@ -43,11 +44,34 @@ class NotificationEngineConfigTest {
                 .run(ctx -> assertThat(ctx).getFailure().rootCause().hasMessageContaining("au moins 32 caractères"));
     }
 
+    /** Moteur actif : c'est la voie documentée par le Guide qui est montée par défaut. */
     @Test
-    void actif_avec_un_compte_complet_le_demarrage_echoue_tant_qu_aucun_transport_n_existe() {
+    void actif_avec_un_compte_complet_monte_le_sidecar_Dapr() {
         contexte.withPropertyValues("notification.engine.actif=true", "notification.engine.code-service=audience-deliberer",
                         "notification.engine.jwt-secret=" + SECRET_32, "notification.engine.redirection.actif=false")
-                .run(ctx -> assertThat(ctx).getFailure().rootCause().hasMessageContaining("aucun transport réel"));
+                .run(ctx -> {
+                    assertThat(ctx).hasNotFailed();
+                    assertThat(ctx.getBean(PasserelleNotificationEngine.class)).isInstanceOf(PasserelleDapr.class);
+                });
+    }
+
+    /** Le repli Kafka ne se monte pas sans courtier : mieux vaut refuser que publier dans le vide. */
+    @Test
+    void actif_en_transport_Kafka_sans_courtier_le_demarrage_echoue() {
+        contexte.withPropertyValues("notification.engine.actif=true", "notification.engine.code-service=audience-deliberer",
+                        "notification.engine.jwt-secret=" + SECRET_32, "notification.engine.redirection.actif=false",
+                        "notification.engine.transport.type=KAFKA")
+                .run(ctx -> assertThat(ctx).getFailure().rootCause().hasMessageContaining("aucun courtier configuré"));
+    }
+
+    @Test
+    void le_transport_par_defaut_vise_le_topic_standard() {
+        contexte.run(ctx -> {
+            NotificationEngineProperties.Transport transport = ctx.getBean(NotificationEngineProperties.class).transport();
+            assertThat(transport.type()).isEqualTo(NotificationEngineProperties.TypeTransport.DAPR);
+            assertThat(transport.topic()).isEqualTo("notification-send-standard");
+            assertThat(transport.pubsub()).isEqualTo("notification-pubsub-standard");
+        });
     }
 
     /**
@@ -58,7 +82,7 @@ class NotificationEngineConfigTest {
     void actif_avec_une_redirection_incomplete_le_demarrage_echoue() {
         contexte.withPropertyValues("notification.engine.actif=true", "notification.engine.code-service=audience-deliberer",
                         "notification.engine.jwt-secret=" + SECRET_32,
-                        "notification.engine.redirection.courriel-interne=paul_fokam@afrilandfirstbank.com")
+                        "notification.engine.redirection.courriel-interne=juriste.test@afrilandfirstbank.com")
                 .run(ctx -> assertThat(ctx).getFailure().rootCause()
                         .hasMessageContaining("Redirection active mais incomplète"));
     }
@@ -71,10 +95,11 @@ class NotificationEngineConfigTest {
     @Test
     void le_secret_n_apparait_jamais_dans_la_representation_texte() {
         NotificationEngineProperties proprietes = new NotificationEngineProperties(true, "audience-deliberer",
-                SECRET_32, 5, java.time.Duration.ofHours(2), new Redirection(false, null, null, null));
+                SECRET_32, 5, java.time.Duration.ofHours(2), new Redirection(false, null, null, null),
+                new NotificationEngineProperties.Transport(NotificationEngineProperties.TypeTransport.JOURNAL, "t", "p", "u", 10));
 
         assertThat(proprietes.toString()).doesNotContain(SECRET_32).contains("jwtSecret=***");
         assertThat(new NotificationEngineProperties(false, null, null, 5, java.time.Duration.ofHours(2),
-                new Redirection(false, null, null, null)).toString()).contains("jwtSecret=(absent)");
+                new Redirection(false, null, null, null), new NotificationEngineProperties.Transport(NotificationEngineProperties.TypeTransport.JOURNAL, "t", "p", "u", 10)).toString()).contains("jwtSecret=(absent)");
     }
 }

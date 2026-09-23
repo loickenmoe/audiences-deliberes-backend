@@ -42,7 +42,8 @@ public class RedirectionDestinataires {
         }
         NotificationEngineProperties.Redirection redirection = proprietes.redirection();
         String cible = switch (envoi.getCanal()) {
-            case SMS, WHATSAPP -> redirection.telephone();
+            // Le numéro de test est saisi comme celui d'une fiche : il passe par la même mise en forme.
+            case SMS, WHATSAPP -> Coordonnees.telephone(redirection.telephone()).orElse(null);
             case TEAMS -> redirection.courrielInterne();
             case EMAIL -> envoi.getDestinataireType() == TypeDestinataire.UTILISATEUR
                     ? redirection.courrielInterne()

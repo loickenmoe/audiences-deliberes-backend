@@ -35,7 +35,7 @@ class NotificationAlerteListenerTest {
 
     private NotificationAlerteListener listener;
 
-    private final Utilisateur juriste = Utilisateur.builder().id(7L).email("paul_fokam@afrilandfirstbank.com").build();
+    private final Utilisateur juriste = Utilisateur.builder().id(7L).email("juriste.test@afrilandfirstbank.com").build();
 
     @BeforeEach
     void preparer() {
@@ -53,8 +53,8 @@ class NotificationAlerteListenerTest {
     @Test
     void une_alerte_routee_vers_Outlook_et_Teams_donne_une_ligne_par_canal() {
         when(routage.pourUtilisateur(TypeAlerte.RAPPEL_AUDIENCE, juriste)).thenReturn(List.of(
-                new Route("OUTLOOK", CanalEngine.EMAIL, "paul_fokam@afrilandfirstbank.com", null),
-                new Route("TEAMS", CanalEngine.TEAMS, "paul_fokam@afrilandfirstbank.com", null)));
+                new Route("OUTLOOK", CanalEngine.EMAIL, "juriste.test@afrilandfirstbank.com", null),
+                new Route("TEAMS", CanalEngine.TEAMS, "juriste.test@afrilandfirstbank.com", null)));
         when(referencesDossier.reference(5L)).thenReturn(Optional.of("DOS-2026-014"));
 
         listener.surAlerteDeclenchee(new AlerteDeclenchee(42L, TypeAlerte.RAPPEL_AUDIENCE, 5L, juriste));

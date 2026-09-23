@@ -33,11 +33,11 @@ class RedacteurNotificationTest {
     private static final String REFERENCE = "DOS-2026-014";
     private static final String LIEN = "http://localhost:3000/dossiers/5";
 
-    private static final Route OUTLOOK = new Route("OUTLOOK", CanalEngine.EMAIL, "paul_fokam@afrilandfirstbank.com", null);
-    private static final Route TEAMS = new Route("TEAMS", CanalEngine.TEAMS, "paul_fokam@afrilandfirstbank.com", null);
-    private static final Route COURRIEL = new Route("COURRIEL_PERSONNEL", CanalEngine.EMAIL, "loicluc25@gmail.com", null);
-    private static final Route SMS = new Route("SMS", CanalEngine.SMS, "237654476789", null);
-    private static final Route WHATSAPP = new Route("WHATSAPP", CanalEngine.WHATSAPP, "237654476789", null);
+    private static final Route OUTLOOK = new Route("OUTLOOK", CanalEngine.EMAIL, "juriste.test@afrilandfirstbank.com", null);
+    private static final Route TEAMS = new Route("TEAMS", CanalEngine.TEAMS, "juriste.test@afrilandfirstbank.com", null);
+    private static final Route COURRIEL = new Route("COURRIEL_PERSONNEL", CanalEngine.EMAIL, "prestataire.test@example.cm", null);
+    private static final Route SMS = new Route("SMS", CanalEngine.SMS, "237600000000", null);
+    private static final Route WHATSAPP = new Route("WHATSAPP", CanalEngine.WHATSAPP, "237600000000", null);
 
     /** Marqueurs, codes de règle ou de décision, montants : rien de tout cela ne doit sortir. */
     private static final List<Pattern> INTERDITS = List.of(
