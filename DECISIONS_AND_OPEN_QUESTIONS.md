@@ -2160,6 +2160,27 @@ sont unifiées.
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
 
+### Q-122 ✅ WhatsApp ne délivrait pas faute de facturation, et la priorité reste STANDARD — tranché (2026-09-23)
+
+**WhatsApp : ni gabarit, ni numéro, ni configuration applicative.** Les journaux du moteur, consultés
+par l'administrateur, donnent la cause : **les frais d'envoi du canal ne sont pas payés** par
+l'entreprise. Le canal devrait fonctionner une fois la facturation régularisée.
+
+**Ce que cela clôt.** L'hypothèse des modèles de message préapprouvés — la règle habituelle de
+WhatsApp Business, et notre première piste — ne joue aucun rôle ici. Rien à changer dans le code :
+le message WhatsApp part exactement comme le SMS, qui arrive.
+
+**Ce que cela laisse.** Le canal reste éteint dans les réglages (V28 : `CANAUX_NOTIFICATION_PRESTATAIRES`
+ne contient pas WHATSAPP). Le rallumer est un geste du DJ à l'écran 41, le jour où la facturation
+est en règle — et il faudra alors refaire un envoi de contrôle, puisque le canal n'a jamais délivré.
+
+**Priorité : STANDARD, pas CRITICAL.** L'administrateur demande que nos messages portent la priorité
+du compte de service. C'est déjà le cas et cela n'a jamais changé : `notification.engine.priorite`
+vaut `STANDARD` par défaut, la clé n'est pas surchargée dans le `.env`, et quatre tests figent la
+valeur (`FormatMessageTest`, `TransportsTest`, `RemiseNotificationTest`,
+`ChaineNotificationIntegrationTest`). Le `CRITICAL` vu par l'administrateur vient de l'exemple
+d'une autre application, dont nous n'avons repris que la **forme** — jamais les valeurs (Q-121).
+
 ### Q-121 ✅ Le contrat du moteur s'écrit d'après un message accepté, pas d'après le Guide — tranché (2026-09-23)
 
 **Le premier envoi réel n'est pas arrivé.** Message publié, aucune erreur, aucun accusé, rien dans la

@@ -499,10 +499,55 @@ de configuration, pas une panne générale.
   notification (`pending/controle-pj-1-EMAIL/lettre-constitution-25.pdf`), avec les traces attendues
   dans le journal. Interrupteur remis à `false`, file vidée.
 
-### ⬜ Étape 13 : de bout en bout
+### ✅ Étape 13 : de bout en bout
 
-- Tests Playwright pour la supervision et la configuration.
-- Recette réelle en DEV sur les trois destinataires de test, un par canal.
+Chaque maillon avait ses tests ; aucun ne disait qu'ils s'enchaînent. L'étape 13 couvre les
+raccords, **moteur coupé** : rien n'a été envoyé pour l'écrire.
+
+**Côté backend — `ChaineNotificationIntegrationTest`** (PostgreSQL réel, 6 parcours). Le transport
+est une passerelle d'essai qui retient les messages au lieu de les remettre : le test observe donc
+*exactement ce qui serait parti*.
+
+- D'une action métier au message prêt à partir : l'alerte est déclenchée avec son texte interne
+  (marqueurs, codes de règle), la notification est en file dans la même transaction, le dispatcher
+  la remet, et le message porte le contrat du moteur, la redirection appliquée et **aucune donnée
+  interne**. Le destinataire réel reste enregistré à côté.
+- Un canal coupé par le DJ arrête la chaîne dès la mise en file : aucune ligne, aucun message.
+- La grille filtre événement par événement : le type retiré ne part pas, les autres continuent.
+- Une coordonnée manquante n'arrête que son canal : la ligne SMS reste `NON_JOIGNABLE` et visible en
+  supervision pendant que le courriel suit son cours.
+- L'alerte applicative survit à une panne des notifications externes (NF-ALR-02).
+- Une notification périmée n'est jamais envoyée, même si le dispatcher la reprend.
+
+**Côté écran — parcours Playwright** (`alertes.spec.ts`, backend réel) : le DJ décoche un événement
+de la colonne Outlook — la base ne le contient plus, l'écran le relit ainsi —, le recoche, puis une
+demande de frais est déposée : la supervision en rend compte. Le tableau des envois à examiner et
+son bouton de relance sont vérifiés au passage, ainsi que le refus de la relance à un juriste (403)
+et sur un envoi inexistant (404).
+
+**Où se prouve quoi.** Le premier jet mesurait à l'écran « l'événement retiré, rien ne part de
+plus », en comparant deux dépôts. Isolé, le parcours passait ; dans la suite complète, il tombait :
+les compteurs de supervision sont partagés, et une quinzaine de parcours mettent des notifications
+en file au même moment. La mesure exacte revient donc au backend, sur base isolée
+(`ChaineNotificationIntegrationTest`), et le parcours à l'écran vérifie ce que lui seul peut
+montrer : l'aller-retour du réglage écran ↔ base, et une croissance des compteurs — vraie quoi que
+fassent les parcours voisins, qui ne font qu'ajouter.
+
+**Deux constats du chantier**, notés parce qu'ils ont d'abord ressemblé à des anomalies :
+- l'adresse d'un utilisateur interne est obligatoire et validée par l'entité : un juriste sans
+  adresse utilisable **ne peut pas exister**. Le cas « destinataire injoignable » ne se pose donc
+  que pour un prestataire, dont le téléphone est facultatif ;
+- une mise à jour SQL directe dans un test JPA reste invisible tant que le cache de session n'est
+  pas vidé : le test de péremption relit la ligne après `clear()`, sans quoi il vérifiait l'entité
+  en mémoire et non la base.
+
+**Suites complètes après l'étape** : backend 678 verts, Vitest 366 verts, Playwright 173 parcours —
+169 verts et 4 aléas connus de parallélisme (serveur Next qui hoquette sur `/login`, pagination des
+clients), tous verts en relance ciblée.
+
+*Reste à faire, hors périmètre de l'étape* : la recette réelle en DEV sur les destinataires de test,
+un par canal — elle suppose l'interrupteur à `true` et dépend des questions en attente chez
+l'administrateur (WhatsApp muet, topics de suivi vides).
 
 ---
 
@@ -520,8 +565,11 @@ de configuration, pas une panne générale.
 
 ### À poser à l'administrateur (priorité haute, issues du premier envoi réel)
 
-1. **WhatsApp ne délivre pas** là où le SMS passe, sur le même numéro. Modèle de message préapprouvé
-   exigé ? Fenêtre de conversation à ouvrir ? Canal non actif pour notre compte ?
+1. ~~**WhatsApp ne délivre pas** là où le SMS passe, sur le même numéro.~~ **Répondu (2026-09-23,
+   Q-122)** : les journaux du moteur montrent que **les frais d'envoi du canal ne sont pas payés**.
+   Ni gabarit, ni numéro, ni configuration applicative en cause. Rien à corriger chez nous ; le canal
+   reste éteint dans les réglages, à rallumer par le DJ une fois la facturation régularisée, avec un
+   envoi de contrôle puisqu'il n'a encore jamais délivré.
 2. **Les topics `notification-sent` et `notification-failed` sont vides**, tous services confondus.
    Sont-ils alimentés quelque part ? Sinon, comment suivre la délivrance ?
 3. **Le rappel `callbackUrl`** est-il réellement appelé, et avec quel corps ? C'est notre seul moyen
@@ -529,15 +577,19 @@ de configuration, pas une panne générale.
 4. **Le Guide V1 est à corriger** : topic, composant pubsub, `serviceKey`, `priority`, `recipient`,
    absence de `locale` et `metadata` (Q-121).
 
-- **Secret JWT** : est-il utilisé tel quel ou après décodage base64 ? À trancher à l'étape 8 par un
-  envoi réel.
-- **Enveloppe du message** : l'Engine accepte-t-il un message Kafka publié directement, sans
-  l'enveloppe standard ajoutée par Dapr ? Cela conditionne le repli Kafka.
+- ~~**Secret JWT** : tel quel ou décodé en base64 ?~~ Tranché par l'envoi réel du 2026-09-23 : **tel
+  quel**, en octets UTF-8. Les messages arrivent ; un secret mal interprété serait rejeté.
+- ~~**Enveloppe du message** : l'Engine accepte-t-il un message Kafka publié directement ?~~ Oui,
+  **à condition de reproduire l'enveloppe CloudEvents** que Dapr ajoute ; c'est ce que fait
+  `EnveloppeCloudEvents`. Courriel, SMS, Outlook et Teams sont arrivés par cette voie.
 - ~~**Pièces jointes** : quel bucket et quelle instance MinIO ?~~ Résolu par la sonde : le moteur rend
   lui-même une adresse de dépôt à usage unique, sur son propre stockage
   (`172.21.88.31:31784/notification-attachments/...`), joignable depuis les postes. Rien à configurer.
-- **WhatsApp** : faut-il des modèles de message préapprouvés, ce qui est la règle habituelle de
-  WhatsApp Business ? Le canal reste éteint par défaut (V28) jusqu'à la réponse de l'administrateur.
+- ~~**WhatsApp** : faut-il des modèles de message préapprouvés ?~~ Non : la cause était la
+  facturation du canal (Q-122). Le canal reste éteint par défaut (V28) jusqu'à régularisation.
+- **Priorité des messages** : confirmée `STANDARD` par l'administrateur (2026-09-23), celle du compte
+  de service. C'est la valeur par défaut du code, figée par quatre tests ; le `CRITICAL` de l'exemple
+  d'une autre application n'a jamais été repris.
 - **Accusés et référence (Q-120)** : le moteur peut-il ajouter l'`eventId`, ou restituer
   `metadata.correlationId`, dans `notification-sent` et `notification-failed` ? Cela rendrait les
   topics aussi précis que le rappel, sans dépendre d'une application joignable depuis le cluster.
@@ -652,3 +704,11 @@ de configuration, pas une panne générale.
   - quelle est la limite de longueur d'un SMS côté Engine ? Les textes accentués passent en UCS-2,
     soit 70 caractères par segment : nos SMS de 160 caractères au plus peuvent donc faire 2 ou 3
     segments.
+- Étape 13, deux enseignements de tests (à garder pour les prochains) :
+  - **un test JPA ne voit pas une mise à jour SQL directe** tant que le cache de session n'est pas
+    vidé. Le test de péremption vieillit la ligne en SQL, puis `EntityManager.clear()` : sans cela,
+    il vérifiait l'entité en mémoire et non ce que le dispatcher relirait ;
+  - **un juriste sans adresse utilisable ne peut pas exister** : `Utilisateur.email` est obligatoire
+    et validé par l'entité. Le cas « destinataire injoignable » ne se teste donc que sur un
+    prestataire, dont le téléphone est facultatif — ce que le code faisait déjà, sans que ce soit
+    écrit nulle part.
