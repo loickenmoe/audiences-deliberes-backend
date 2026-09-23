@@ -19,7 +19,10 @@ class RegleConfigurationTest {
             "SEUIL_PROROGATIONS, '12', 12",
             "TAILLE_MAX_GED, '5242880', 5242880",
             "FORMATS_GED, ' pdf , xlsx , pdf ', 'PDF,XLSX'",
-            "CANAUX_NOTIFICATION_DEFAUT, 'applicatif,outlook', 'APPLICATIF,OUTLOOK'"
+            "CANAUX_NOTIFICATION_DEFAUT, 'applicatif,outlook', 'APPLICATIF,OUTLOOK'",
+            "CANAUX_NOTIFICATION_PRESTATAIRES, ' sms , courriel_personnel ', 'SMS,COURRIEL_PERSONNEL'",
+            "GRILLE_NOTIFICATION_TEAMS, 'rappel_audience,delai_recours', 'RAPPEL_AUDIENCE,DELAI_RECOURS'",
+            "GRILLE_NOTIFICATION_SMS, 'affectation_dossier', 'AFFECTATION_DOSSIER'"
     })
     void valider_normalizesAcceptedValues(String cle, String saisie, String attendu) {
         assertThat(RegleConfiguration.valueOf(cle).valider(saisie)).isEqualTo(attendu);
@@ -36,12 +39,38 @@ class RegleConfigurationTest {
             "TAILLE_MAX_GED, '104857600'",
             "FORMATS_GED, 'PDF,DOCX'",
             "FORMATS_GED, 'PDF,,PNG'",
-            "CANAUX_NOTIFICATION_DEFAUT, 'OUTLOOK'"
+            "CANAUX_NOTIFICATION_DEFAUT, 'OUTLOOK'",
+            "CANAUX_NOTIFICATION_DEFAUT, ''",
+            "CANAUX_NOTIFICATION_PRESTATAIRES, 'TEAMS'",
+            "GRILLE_NOTIFICATION_OUTLOOK, 'AFFECTATION_DOSSIER'",
+            "GRILLE_NOTIFICATION_SMS, 'DOUBLON_AUDIENCE'",
+            "GRILLE_NOTIFICATION_WHATSAPP, 'SMS,,RAPPEL_AUDIENCE'"
     })
     void valider_rejectsValuesThatWouldBreakAConsumer(String cle, String saisie) {
         assertThatThrownBy(() -> RegleConfiguration.valueOf(cle).valider(saisie))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining(cle);
+    }
+
+    /**
+     * Q-118 : couper tous les canaux prestataires, ou ne rien envoyer sur un canal, est un réglage
+     * légitime. Ces listes-là acceptent le vide ; les autres le refusent toujours.
+     */
+    @ParameterizedTest
+    @EnumSource(value = RegleConfiguration.class, names = {"CANAUX_NOTIFICATION_PRESTATAIRES",
+            "GRILLE_NOTIFICATION_OUTLOOK", "GRILLE_NOTIFICATION_TEAMS", "GRILLE_NOTIFICATION_COURRIEL_PERSONNEL",
+            "GRILLE_NOTIFICATION_SMS", "GRILLE_NOTIFICATION_WHATSAPP"})
+    void valider_acceptsEmptyNotificationLists(RegleConfiguration regle) {
+        assertThat(regle.videAutorise()).isTrue();
+        assertThat(regle.valider("  ")).isEmpty();
+        assertThat(regle.valider(null)).isEmpty();
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = RegleConfiguration.class, names = {"FORMATS_GED", "CANAUX_NOTIFICATION_DEFAUT", "SEUIL_PROROGATIONS"})
+    void valider_stillRejectsEmptyValueElsewhere(RegleConfiguration regle) {
+        assertThat(regle.videAutorise()).isFalse();
+        assertThatThrownBy(() -> regle.valider("")).isInstanceOf(ApiException.class);
     }
 
     @Test

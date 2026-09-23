@@ -65,7 +65,8 @@ class IntervenantServiceTest {
         assertThat(result.id()).isEqualTo(1L);
         assertThat(result.type()).isEqualTo(TypeIntervenant.AVOCAT);
         assertThat(result.compteKeycloak()).isEqualTo("kc-1");
-        assertThat(result.notification()).isNull();
+        // Q-119 : l'avocat consent par défaut aux canaux externes.
+        assertThat(result.notification()).isTrue();
     }
 
     @Test
@@ -92,11 +93,15 @@ class IntervenantServiceTest {
     }
 
     @Test
-    void creerAvocat_avecNotification_estRefuse() {
-        assertThatThrownBy(() -> service.creer(new CreerIntervenantRequest(
-                TypeIntervenant.AVOCAT, "Me Fotso", null, null, "kc-2", true)))
-                .isInstanceOf(ApiException.class)
-                .hasMessageContaining("notification");
+    void creerAvocat_sansConsentement_estAccepte() {
+        when(avocatRepository.findByCompteKeycloak("kc-2")).thenReturn(Optional.empty());
+        when(avocatRepository.save(any(Avocat.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // Q-119 : le consentement de l'avocat se refuse à la création comme il se retire ensuite.
+        IntervenantResponse result = service.creer(new CreerIntervenantRequest(
+                TypeIntervenant.AVOCAT, "Me Fotso", null, null, "kc-2", false));
+
+        assertThat(result.notification()).isFalse();
     }
 
     @Test
@@ -164,6 +169,71 @@ class IntervenantServiceTest {
 
     // ------------------------------------------------------------ Modification (PUT /intervenants)
 
+    // ── Étape 11 : coordonnées contrôlées et mises en forme à la saisie ──
+
+    /** Le moteur n'accepte que trois écritures : la fiche porte donc un numéro directement utilisable. */
+    @Test
+    void creerAvocat_metEnFormeLeTelephone() {
+        when(avocatRepository.findByCompteKeycloak("kc-tel")).thenReturn(Optional.empty());
+        when(avocatRepository.save(any(Avocat.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        IntervenantResponse result = service.creer(new CreerIntervenantRequest(
+                TypeIntervenant.AVOCAT, "Me Fotso", " me@cab.cm ", "699 88 77 66", "kc-tel", null));
+
+        assertThat(result.telephone()).isEqualTo("+237699887766");
+        assertThat(result.email()).isEqualTo("me@cab.cm");
+    }
+
+    /**
+     * Refus immédiat, sur le champ : sans lui, la saisie fautive ne se voyait qu'à l'envoi, sous la
+     * forme d'une ligne « non joignable » en supervision — trop tard, et loin de qui peut corriger.
+     */
+    @Test
+    void creerAvocat_auTelephoneHorsFormat_estRefuse() {
+        assertThatThrownBy(() -> service.creer(new CreerIntervenantRequest(
+                TypeIntervenant.AVOCAT, "Me Fotso", null, "0699887766", "kc-tel2", null)))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("Numéro de téléphone invalide");
+        verify(avocatRepository, never()).save(any());
+    }
+
+    @Test
+    void creerAutrePrestataire_auCourrielSansDomaine_estRefuse() {
+        assertThatThrownBy(() -> service.creer(new CreerIntervenantRequest(
+                TypeIntervenant.AUTRE_PRESTATAIRE, "Notaire Kamga", "notaire@etude", null, null, true)))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("courriel invalide");
+        verify(intervenantRepository, never()).save(any());
+    }
+
+    @Test
+    void modifierIntervenant_metEnFormeEtRefuseUnNumeroInvalide() {
+        when(intervenantRepository.findById(7L)).thenReturn(Optional.of(avocat()));
+        when(intervenantRepository.save(any(Intervenant.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        IntervenantResponse corrige = service.modifier(7L,
+                new ModifierIntervenantRequest("Me Fotso", "me@cab.cm", "+237 699 88 77 66", true));
+        assertThat(corrige.telephone()).isEqualTo("+237699887766");
+
+        assertThatThrownBy(() -> service.modifier(7L,
+                new ModifierIntervenantRequest("Me Fotso", "me@cab.cm", "12345", true)))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("Numéro de téléphone invalide");
+    }
+
+    /** Une fiche sans coordonnée reste permise : tout prestataire n'a pas de numéro. */
+    @Test
+    void lesCoordonneesRestentFacultatives() {
+        when(avocatRepository.findByCompteKeycloak("kc-sans")).thenReturn(Optional.empty());
+        when(avocatRepository.save(any(Avocat.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        IntervenantResponse result = service.creer(new CreerIntervenantRequest(
+                TypeIntervenant.AVOCAT, "Me Sans Contact", "  ", "", "kc-sans", null));
+
+        assertThat(result.email()).isNull();
+        assertThat(result.telephone()).isNull();
+    }
+
     private Avocat avocat() {
         return Avocat.builder().id(7L).nom("Me Fotso").email("me@cab.cm").compteKeycloak("kc-1").build();
     }
@@ -198,17 +268,21 @@ class IntervenantServiceTest {
                 .containsEntry("ancienEmail", "me@cab.cm")
                 .containsEntry("nouvelEmail", "fotso@cab.cm")
                 .containsEntry("ancienTelephone", null)
-                .containsEntry("nouveauTelephone", "690000000");
+                // Étape 11 : le numéro est mis en forme avant d'être enregistré et historisé.
+                .containsEntry("nouveauTelephone", "+237690000000");
     }
 
     @Test
-    void modifierAvocat_avecUneNotification_estRefuse() {
+    void modifierAvocat_retireSonConsentement() {
         when(intervenantRepository.findById(7L)).thenReturn(Optional.of(avocat()));
+        when(intervenantRepository.save(any(Intervenant.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        assertThatThrownBy(() -> service.modifier(7L, new ModifierIntervenantRequest("Me Fotso", null, null, true)))
-                .isInstanceOf(ApiException.class)
-                .hasMessageContaining("notification");
-        verify(intervenantRepository, never()).save(any());
+        // Q-119 : coché par défaut, il se retire ; le changement est historisé comme les autres.
+        IntervenantResponse result = service.modifier(7L, new ModifierIntervenantRequest("Me Fotso", null, null, false));
+
+        assertThat(result.notification()).isFalse();
+        assertThat(detailsHistorises()).containsEntry("ancienneNotification", true)
+                .containsEntry("nouvelleNotification", false);
     }
 
     @Test

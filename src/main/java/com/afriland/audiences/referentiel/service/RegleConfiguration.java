@@ -3,7 +3,10 @@ package com.afriland.audiences.referentiel.service;
 import com.afriland.audiences.alerte.domain.CanalAlerte;
 import com.afriland.audiences.common.error.ApiException;
 import com.afriland.audiences.common.error.ErrorCodes;
+import com.afriland.audiences.alerte.domain.TypeAlerte;
 import com.afriland.audiences.ged.domain.FormatDocument;
+import com.afriland.audiences.notification.domain.CanalPrestataire;
+import com.afriland.audiences.notification.domain.EvenementPrestataire;
 import com.afriland.audiences.referentiel.domain.TypeValeurConfiguration;
 
 import java.util.Arrays;
@@ -43,6 +46,16 @@ import java.util.stream.Stream;
  * Une valeur absurde mais inoffensive (999 999 prorogations) est donc <b>acceptée</b> : refuser ce
  * que la documentation autorise serait inventer une règle métier. Cette validation ne refuse que ce
  * qui casserait réellement l'application.
+ * <p>
+ * <b>Notifications externes (NOTIFICATION_ENGINE_PLAN.md, D1, D2 et D4).</b> Le DJ règle deux choses :
+ * <ul>
+ *   <li>les canaux actifs : {@code CANAUX_NOTIFICATION_DEFAUT} pour les utilisateurs internes
+ *       (applicatif obligatoire, Outlook et Teams), {@code CANAUX_NOTIFICATION_PRESTATAIRES} pour les
+ *       prestataires (courriel personnel, SMS, WhatsApp) ;</li>
+ *   <li>la grille : pour chaque canal, les événements qui y sont envoyés ({@code GRILLE_NOTIFICATION_*}).</li>
+ * </ul>
+ * Ces listes-là peuvent être <b>vides</b> : couper tous les canaux prestataires, ou ne rien envoyer
+ * par SMS, est un réglage légitime, et non une saisie manquante.
  */
 public enum RegleConfiguration {
 
@@ -52,7 +65,13 @@ public enum RegleConfiguration {
     CHARGE_MAX_AVOCAT(entier(1L, Integer.MAX_VALUE)),
     TAILLE_MAX_GED(entier(1L, 10_485_760L)),
     FORMATS_GED(liste(noms(FormatDocument.values()), null)),
-    CANAUX_NOTIFICATION_DEFAUT(liste(noms(CanalAlerte.values()), CanalAlerte.APPLICATIF.name()));
+    CANAUX_NOTIFICATION_DEFAUT(liste(noms(CanalAlerte.values()), CanalAlerte.APPLICATIF.name())),
+    CANAUX_NOTIFICATION_PRESTATAIRES(listeFacultative(noms(CanalPrestataire.values()))),
+    GRILLE_NOTIFICATION_OUTLOOK(listeFacultative(noms(TypeAlerte.values()))),
+    GRILLE_NOTIFICATION_TEAMS(listeFacultative(noms(TypeAlerte.values()))),
+    GRILLE_NOTIFICATION_COURRIEL_PERSONNEL(listeFacultative(noms(EvenementPrestataire.values()))),
+    GRILLE_NOTIFICATION_SMS(listeFacultative(noms(EvenementPrestataire.values()))),
+    GRILLE_NOTIFICATION_WHATSAPP(listeFacultative(noms(EvenementPrestataire.values())));
 
     private final TypeValeurConfiguration type;
     private final Long minimum;
@@ -60,6 +79,8 @@ public enum RegleConfiguration {
     private final List<String> valeursPossibles;
     /** Valeur qu'une liste doit obligatoirement contenir, {@code null} si aucune ne l'est. */
     private final String valeurObligatoire;
+    /** Une liste vide est un réglage valable (aucun canal, aucun événement), et non une saisie manquante. */
+    private final boolean videAutorise;
 
     RegleConfiguration(RegleConfiguration.Definition definition) {
         this.type = definition.type();
@@ -67,6 +88,7 @@ public enum RegleConfiguration {
         this.maximum = definition.maximum();
         this.valeursPossibles = definition.valeursPossibles();
         this.valeurObligatoire = definition.valeurObligatoire();
+        this.videAutorise = definition.videAutorise();
     }
 
     public TypeValeurConfiguration type() {
@@ -85,6 +107,10 @@ public enum RegleConfiguration {
         return valeursPossibles;
     }
 
+    public boolean videAutorise() {
+        return videAutorise;
+    }
+
     public static Optional<RegleConfiguration> pour(String cle) {
         return Stream.of(values()).filter(regle -> regle.name().equals(cle)).findFirst();
     }
@@ -98,6 +124,9 @@ public enum RegleConfiguration {
     public String valider(String valeur) {
         String saisie = valeur == null ? "" : valeur.trim();
         if (saisie.isEmpty()) {
+            if (videAutorise) {
+                return "";
+            }
             throw invalide("la valeur est obligatoire");
         }
         return type == TypeValeurConfiguration.ENTIER ? validerEntier(saisie) : validerListe(saisie);
@@ -143,11 +172,15 @@ public enum RegleConfiguration {
     }
 
     private static Definition entier(long minimum, long maximum) {
-        return new Definition(TypeValeurConfiguration.ENTIER, minimum, maximum, List.of(), null);
+        return new Definition(TypeValeurConfiguration.ENTIER, minimum, maximum, List.of(), null, false);
     }
 
     private static Definition liste(List<String> valeursPossibles, String valeurObligatoire) {
-        return new Definition(TypeValeurConfiguration.LISTE, null, null, valeursPossibles, valeurObligatoire);
+        return new Definition(TypeValeurConfiguration.LISTE, null, null, valeursPossibles, valeurObligatoire, false);
+    }
+
+    private static Definition listeFacultative(List<String> valeursPossibles) {
+        return new Definition(TypeValeurConfiguration.LISTE, null, null, valeursPossibles, null, true);
     }
 
     private static List<String> noms(Enum<?>[] valeurs) {
@@ -156,6 +189,6 @@ public enum RegleConfiguration {
 
     /** Regroupe les paramètres d'une règle : une énumération Java n'accepte qu'un constructeur. */
     private record Definition(TypeValeurConfiguration type, Long minimum, Long maximum,
-                              List<String> valeursPossibles, String valeurObligatoire) {
+                              List<String> valeursPossibles, String valeurObligatoire, boolean videAutorise) {
     }
 }

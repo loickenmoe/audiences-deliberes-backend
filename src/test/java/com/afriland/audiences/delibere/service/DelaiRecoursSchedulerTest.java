@@ -4,6 +4,8 @@ import com.afriland.audiences.alerte.domain.TypeAlerte;
 import com.afriland.audiences.alerte.service.AlerteService;
 import com.afriland.audiences.delibere.domain.Delibere;
 import com.afriland.audiences.delibere.repository.DelibereRepository;
+import com.afriland.audiences.dossier.repository.DossierAvocatRepository;
+import com.afriland.audiences.notification.service.NotificationPrestataireService;
 import com.afriland.audiences.dossier.domain.Dossier;
 import com.afriland.audiences.dossier.domain.DossierJuriste;
 import com.afriland.audiences.dossier.domain.EtapeProcedure;
@@ -41,9 +43,16 @@ class DelaiRecoursSchedulerTest {
     private EtapeProcedure etapeVide;
     private Delibere delibere;
 
+    @Mock
+    private DossierAvocatRepository dossierAvocatRepository;
+
+    @Mock
+    private NotificationPrestataireService notificationPrestataireService;
+
     @BeforeEach
     void setUp() {
-        scheduler = new DelaiRecoursScheduler(delibereRepository, etapeProcedureRepository, dossierJuristeRepository, alerteService);
+        scheduler = new DelaiRecoursScheduler(delibereRepository, etapeProcedureRepository, dossierJuristeRepository,
+                dossierAvocatRepository, alerteService, notificationPrestataireService);
         dossier = Dossier.builder().id(1L).reference("DOS-2026-001").build();
         etapeVide = EtapeProcedure.builder().id(10L).dossier(dossier).type(TypeEtape.INSTANCE)
                 .statutCycleVie(StatutCycleVie.DELIBERE_VIDE).build();

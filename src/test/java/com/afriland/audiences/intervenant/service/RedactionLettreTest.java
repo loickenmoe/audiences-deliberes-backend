@@ -14,6 +14,7 @@ import com.afriland.audiences.intervenant.domain.LettreConstitution;
 import com.afriland.audiences.intervenant.domain.StatutConstitution;
 import com.afriland.audiences.intervenant.mapper.DemandeConstitutionMapper;
 import com.afriland.audiences.intervenant.repository.DemandeConstitutionRepository;
+import com.afriland.audiences.notification.service.NotificationPrestataireService;
 import com.afriland.audiences.intervenant.repository.LettreConstitutionRepository;
 import com.afriland.audiences.intervenant.web.dto.RedigerLettreRequest;
 import com.afriland.audiences.referentiel.domain.Avocat;
@@ -73,13 +74,16 @@ class RedactionLettreTest {
     private ConstitutionService service;
     private DemandeConstitution demande;
 
+    @Mock
+    private NotificationPrestataireService notificationPrestataireService;
+
     @BeforeEach
     void setUp() {
         service = new ConstitutionService(demandeConstitutionRepository, dossierRepository, intervenantRepository,
                 utilisateurRepository, currentUserService, historiqueActionService, alerteService,
                 new LettreConstitutionService(), lettreConstitutionRepository, minioStorageService,
                 documentRepository, mapper,
-                new CompteAvocatService(avocatRepository, utilisateurRepository));
+                new CompteAvocatService(avocatRepository, utilisateurRepository), notificationPrestataireService);
 
         demande = DemandeConstitution.builder()
                 .id(100L)

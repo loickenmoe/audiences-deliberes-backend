@@ -1,0 +1,29 @@
+# Composant Dapr qui porte le topic STANDARD du Notification Engine (Guide V1 §3).
+#
+# Le Guide ne publie que le composant du topic CRITICAL (`notification-pubsub`). Celui-ci est écrit
+# sur son modèle, en ne changeant que le nom : même courtier, mêmes options. Le topic STANDARD est
+# celui que nous visons (D8), parce qu'il rattrape ses messages après une panne alors que le topic
+# CRITICAL les jette.
+#
+# `brokers` vaut l'adresse de l'environnement visé : DEV est le seul joignable depuis les postes de
+# travail (172.21.88.31:32092). Elle vient du .env, jamais d'ici.
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: notification-pubsub-standard
+spec:
+  type: pubsub.kafka
+  version: v1
+  metadata:
+    - name: brokers
+      value: "{{KAFKA_BOOTSTRAP_SERVERS}}"
+    - name: authType
+      value: "none"
+    - name: disableTls
+      value: "true"
+    - name: maxMessageBytes
+      value: "1048576"
+    # Le service n'est que producteur : il ne consomme pas ce topic. Le groupe reste déclaré parce
+    # que Dapr l'exige, et servira à l'étape 9 pour les topics de suivi.
+    - name: consumerGroup
+      value: "audience-deliberer"

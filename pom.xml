@@ -56,6 +56,12 @@
         	<groupId>org.springframework.boot</groupId>
         	<artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
     	</dependency>
+		<!-- Transport de repli vers le Notification Engine, sans sidecar Dapr (etape 8b). -->
+		<dependency>
+			<groupId>org.springframework.kafka</groupId>
+			<artifactId>spring-kafka</artifactId>
+		</dependency>
+
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-websocket</artifactId>

@@ -18,6 +18,26 @@ services:
     networks:
       - default
 
+  # Sidecar Dapr : voie documentée par le Guide V1 pour publier vers le Notification Engine.
+  # Il ne sert qu'au profil `notifications` : docker compose --profile notifications up -d
+  # Sans lui, l'application démarre normalement, et le transport KAFKA reste disponible en repli.
+  dapr:
+    image: daprio/daprd:1.14.4
+    profiles: ["notifications"]
+    command:
+      - "./daprd"
+      - "--app-id=audience-deliberer"
+      - "--app-port=8080"
+      - "--dapr-http-port=3500"
+      - "--resources-path=/composants"
+      - "--log-level=info"
+    volumes:
+      - ./docker/dapr:/composants:ro
+    # Le sidecar partage la pile réseau de l'application : celle-ci le joint sur localhost:3500,
+    # comme le ferait un sidecar Kubernetes.
+    network_mode: "service:audiences-app"
+    depends_on:
+      - audiences-app
   postgres:
     image: postgres:17
     environment:

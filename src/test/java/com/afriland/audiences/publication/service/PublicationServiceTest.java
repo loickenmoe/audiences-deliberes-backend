@@ -24,6 +24,7 @@ import com.afriland.audiences.publication.mapper.PublicationMapper;
 import com.afriland.audiences.publication.repository.CommentairePublicationRepository;
 import com.afriland.audiences.publication.repository.CorrespondanceAvocatRepository;
 import com.afriland.audiences.publication.repository.PublicationRepository;
+import com.afriland.audiences.notification.service.NotificationPrestataireService;
 import com.afriland.audiences.publication.web.dto.CommentaireRequest;
 import com.afriland.audiences.publication.web.dto.CommentaireResponse;
 import com.afriland.audiences.publication.web.dto.CorrespondanceRequest;
@@ -85,11 +86,14 @@ class PublicationServiceTest {
     private Utilisateur juriste;
     private Utilisateur dj;
 
+    @Mock
+    private NotificationPrestataireService notificationPrestataireService;
+
     @BeforeEach
     void setUp() {
         service = new PublicationService(publicationRepository, commentairePublicationRepository,
                 correspondanceAvocatRepository, dossierRepository, audienceRepository,
-                new CompteAvocatService(avocatRepository, utilisateurRepository),
+                new CompteAvocatService(avocatRepository, utilisateurRepository), notificationPrestataireService,
                 utilisateurRepository, currentUserService, historiqueActionService, alerteService,
                 minioStorageService, new ValidationFichierService(configurationService), mapper,
                 dossierJuristeRepository);

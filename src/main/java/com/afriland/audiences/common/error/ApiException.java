@@ -55,6 +55,10 @@ public class ApiException extends RuntimeException {
      * facture. À préférer à {@link #conflict(String, String)} chaque fois que le champ fautif est
      * connu — le client peut alors surligner ce champ au lieu d'afficher un bandeau générique.
      */
+    public static ApiException badRequestSurChamp(String code, String message, String champ) {
+        return new ApiException(HttpStatus.BAD_REQUEST, code, message, null, champ);
+    }
+
     public static ApiException conflictSurChamp(String code, String message, String champ) {
         return new ApiException(HttpStatus.CONFLICT, code, message, null, champ);
     }
