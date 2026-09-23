@@ -171,6 +171,19 @@ public class NotificationEnvoi {
     }
 
     /**
+     * Remise en file après correction, sur décision du DJ (D17). Le compteur de tentatives repart de
+     * zéro : ce n'est pas la poursuite d'une série perdue, mais un nouvel essai décidé par quelqu'un.
+     */
+    public void relancer() {
+        this.statut = StatutEnvoi.EN_ATTENTE;
+        this.tentatives = 0;
+        this.prochaineTentative = LocalDateTime.now();
+        this.derniereErreur = null;
+        this.statutEngine = null;
+        this.datePublication = null;
+    }
+
+    /**
      * Aucun accusé n'est arrivé dans le délai attendu. L'envoi n'est ni confirmé ni échoué : il est
      * sans retour. C'est l'état d'un message rejeté en silence par le moteur — un jeton invalide, par
      * exemple —, et le compter comme délivré masquerait précisément ce défaut.

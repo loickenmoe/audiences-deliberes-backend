@@ -39,4 +39,21 @@ public interface NotificationEnvoiRepository extends JpaRepository<NotificationE
     @Query("SELECT n FROM NotificationEnvoi n WHERE n.statut = com.afriland.audiences.notification.domain.StatutEnvoi.PUBLIEE "
             + "AND n.datePublication <= :limite ORDER BY n.datePublication ASC")
     List<NotificationEnvoi> trouverPublieesSansAccuse(@Param("limite") LocalDateTime limite, Pageable page);
+
+    /** Supervision (D17) : comptes par canal et par statut sur une fenêtre — un passage, pas un par canal. */
+    @Query("SELECT n.canal, n.statut, COUNT(n) FROM NotificationEnvoi n "
+            + "WHERE n.dateCreation >= :debut AND n.dateCreation < :fin GROUP BY n.canal, n.statut")
+    List<Object[]> compterParCanalEtStatut(@Param("debut") LocalDateTime debut, @Param("fin") LocalDateTime fin);
+
+    /**
+     * Envois à examiner : abandonnés, restés sans accusé, ou dont le destinataire n'était pas
+     * joignable. Les plus récents d'abord — ce sont ceux sur lesquels on peut encore agir.
+     */
+    @Query("SELECT n FROM NotificationEnvoi n WHERE n.dateCreation >= :debut AND n.dateCreation < :fin "
+            + "AND n.statut IN (com.afriland.audiences.notification.domain.StatutEnvoi.ECHEC, "
+            + "com.afriland.audiences.notification.domain.StatutEnvoi.SANS_RETOUR, "
+            + "com.afriland.audiences.notification.domain.StatutEnvoi.NON_JOIGNABLE) "
+            + "ORDER BY n.dateCreation DESC")
+    List<NotificationEnvoi> trouverEnDefaut(@Param("debut") LocalDateTime debut, @Param("fin") LocalDateTime fin,
+                                            Pageable page);
 }

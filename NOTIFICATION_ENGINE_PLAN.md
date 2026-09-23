@@ -388,9 +388,30 @@ lequel des nôtres. Trois couches répondent à cela :
 - **Contre la vraie pile** : abonnements annoncés, accusé d'un autre service ignoré, le nôtre
   enregistré, doublon sans effet, rappel sans signature refusé en 404. Lignes de recette supprimées.
 
-### ⬜ Étape 10 : supervision sur l'écran 41 (D17)
+### ✅ Étape 10 : supervision sur l'écran 41 (D17)
 
-- Tableau par canal, liste des échecs et relance manuelle.
+Livrée, en attente du commit de l'utilisateur.
+- **Backend** : `GET /notifications/supervision?dateDebut&dateFin` et
+  `POST /notifications/{id}/relancer`, réservés au DJ et à la DJA comme la supervision du canal
+  applicatif (Q-109). Comptes en une requête groupée par canal et par statut, plus les 50 derniers
+  envois à examiner (échec, sans retour, non joignable).
+- **Six colonnes plutôt qu'un taux unique** : en file, remises, confirmées, échecs, sans retour, non
+  joignables. « Remise » n'est pas « reçue » (Q-120), et les réunir donnerait un chiffre rassurant
+  et faux. Le taux d'aboutissement **exclut les non joignables** : ils parlent d'une fiche à
+  compléter, pas d'un canal en panne. Un canal sans envoi ne rend aucun taux.
+- **Relance manuelle** : remet en file un envoi abandonné, compteur de tentatives remis à zéro (c'est
+  une décision humaine). Refusée sur ce qui est en attente ou déjà confirmé, et sur un destinataire
+  sans coordonnée — il faut corriger la fiche.
+- **Frontend** : `SupervisionNotifications` sous la supervision des alertes, avec la mention
+  « le moteur est désactivé » tant que l'interrupteur est coupé, et le destinataire réel affiché
+  sous l'adresse de test quand la redirection a joué. Libellés FR et EN.
+- Tests : 8 backend, 10 Vitest, 1 parcours Playwright. Suites complètes : 634 backend, 359 Vitest,
+  Playwright complet relancé sur les fichiers touchés (19 verts).
+- **Contre la vraie pile** : lecture DJ à 200 avec les comptes attendus, juriste refusé en 403,
+  relance d'un échec à 200, relance sans destinataire refusée en 400. Lignes de recette supprimées.
+- Piège rencontré : Playwright compare les noms accessibles **par fragment**. « Notifications
+  externes » correspondait aussi à « Grille des notifications externes » ; les assertions de titre
+  de cet écran utilisent donc `exact: true`.
 
 ### ⬜ Étape 11 : validation des coordonnées dans le référentiel des intervenants
 
