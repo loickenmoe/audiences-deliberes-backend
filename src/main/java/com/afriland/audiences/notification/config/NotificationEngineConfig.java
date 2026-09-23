@@ -26,9 +26,22 @@ public class NotificationEngineConfig {
             return new PasserelleJournal();
         }
         verifierCompteDeService(proprietes);
-        // Le transport réel (sidecar Dapr, Kafka direct en repli) arrive avec le dispatcher.
+        verifierRedirection(proprietes);
+        // Le transport réel (sidecar Dapr, Kafka direct en repli) arrive avec l'étape 8b.
         throw new IllegalStateException("notification.engine.actif=true, mais aucun transport réel n'est encore "
                 + "disponible dans cette version : laisser NOTIFICATION_ENGINE_ACTIF=false");
+    }
+
+    /**
+     * Hors production, la redirection (D10) doit être complète avant tout envoi : une cible manquante
+     * ferait partir le message vers le destinataire réel, ce qu'elle existe précisément pour empêcher.
+     */
+    static void verifierRedirection(NotificationEngineProperties proprietes) {
+        if (proprietes.redirection().actif() && !proprietes.redirection().complete()) {
+            throw new IllegalStateException("Redirection active mais incomplète : renseigner "
+                    + "NOTIFICATION_REDIRECTION_COURRIEL_INTERNE, _COURRIEL_PERSONNEL et _TELEPHONE, "
+                    + "ou désactiver explicitement la redirection");
+        }
     }
 
     static void verifierCompteDeService(NotificationEngineProperties proprietes) {

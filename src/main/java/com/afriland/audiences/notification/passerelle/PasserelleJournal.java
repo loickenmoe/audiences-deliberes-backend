@@ -10,19 +10,23 @@ import java.util.stream.Collectors;
  * garantit que les tests, l'intégration continue et les postes de développement ne déclenchent
  * jamais un vrai SMS, courriel ou message Teams tant que l'Engine n'est pas activé volontairement.
  * <p>
- * Les destinataires sont masqués dans le journal : ce sont des coordonnées personnelles
- * (téléphone, courriel) qui n'ont pas à y figurer en clair.
+ * Le journal ne porte ni le jeton, ni le texte du message, ni les destinataires en clair : ce sont
+ * une signature et des coordonnées personnelles, qui n'ont pas à s'y trouver.
  */
 @Slf4j
 public class PasserelleJournal implements PasserelleNotificationEngine {
 
+    /** Valeur inscrite dans {@code statut_engine} : la ligne a été traitée, mais rien n'est parti. */
+    public static final String NOM = "JOURNAL";
+
     @Override
-    public void publier(DemandeNotification demande) {
-        log.info("Notification Engine désactivé — notification non envoyée : eventId={}, destinataires={}",
-                demande.eventId(), masquer(demande.destinatairesParCanal()));
+    public String publier(MessageEngine message) {
+        log.info("Notification Engine désactivé — message non envoyé : eventId={}, canaux={}, destinataires={}",
+                message.eventId(), message.channels(), masquer(message.channelRecipients()));
+        return NOM;
     }
 
-    static String masquer(Map<CanalEngine, String> destinataires) {
+    static String masquer(Map<String, String> destinataires) {
         return destinataires.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
                 .map(e -> e.getKey() + "=" + masquer(e.getValue()))

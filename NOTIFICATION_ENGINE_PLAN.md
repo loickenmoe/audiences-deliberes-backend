@@ -308,17 +308,45 @@ Livrée, en attente du commit de l'utilisateur. Décision consignée : **Q-119**
   l'affectation a produit un courriel détaillé avec le lien du portail et un SMS minimal. L'état
   initial de la fiche a été remis, et la file de test vidée.
 
-### ⬜ Étape 8 : dispatcher et passerelle réelle
+### ✅ Étape 8a : dispatcher, tentatives, redirection et message (aucun envoi)
 
-- **Activer dans le `.env`** les variables du § 1, en copiant les valeurs depuis le bloc commenté.
-- Dispatcher `@Scheduled` avec les nouvelles tentatives de D13.
-- Jeton JWT HS256. **À vérifier par un envoi réel** : le secret est-il utilisé tel quel (les octets
-  de la chaîne) ou après décodage base64 ? Le Guide parle de « 32 caractères », ce qui suggère
-  « tel quel ».
-- Composant Dapr `notification-pubsub-standard` et sidecar dans `docker-compose.yml`. Adaptateur
-  Kafka direct en repli.
-- Redirection DEV (D10).
-- On retire le garde-fou « aucun transport réel » de l'étape 1.
+Livrée, en attente du commit de l'utilisateur. L'étape 8 est coupée en deux : **8a ne fait partir
+aucun message**, tout est prêt pour que 8b ne soit plus qu'un branchement de transport.
+- `DispatcherNotification` (`@Scheduled`, 60 s par défaut) lit un lot de 50 identifiants ;
+  `RemiseNotification` traite chaque ligne **dans sa propre transaction** — classe distincte, sinon
+  l'appel interne ne passerait pas par le proxy et la transaction ne s'ouvrirait pas.
+- **Péremption** : au-delà de `notification.engine.age-max` (2 h par défaut), la ligne passe en ÉCHEC
+  avec le motif `PERIMEE`, sans partir. C'est la réponse au stock accumulé depuis l'étape 6.
+- **Tentatives (D13)** : 1 min, 5 min, 15 min, 1 h, puis abandon à la 5ᵉ, avec la cause dans
+  `derniere_erreur`.
+- **`MessageEngine`** : contrat du Guide (`token`, `channels`, `channelRecipients`, `directSubject`,
+  `directBody`, `eventId`, `category=TRANSACTIONAL`, `locale=fr_FR`). Toujours `channelRecipients`,
+  jamais `recipient`.
+- **`JetonEngine`** : HS256, `sub` = code du service, 5 minutes, secret pris **tel quel** (octets
+  UTF-8). Signé seulement si le moteur est actif.
+- **`RedirectionDestinataires`** (D10) : cible par canal et par public ; le destinataire réel est
+  conservé dans `destinataire_origine`. Elle ne s'applique que moteur allumé, et une cible manquante
+  fait échouer la remise au lieu de laisser partir le message.
+- Au démarrage, moteur actif et redirection incomplète : le contexte refuse de démarrer.
+- Tests : 11 sur la remise, 5 sur la passerelle et le message, 8 sur la configuration.
+  Suite complète : 607 tests verts.
+- **Contre la vraie pile** : une ligne récente est passée PUBLIEE avec le transport `JOURNAL`
+  (destinataire masqué dans le journal, rien envoyé) ; une ligne vieille de 5 h est passée en ÉCHEC
+  avec le motif `PERIMEE`. Lignes de recette supprimées ensuite.
+
+### ⬜ Étape 8b : transport réel (le premier envoi part vraiment)
+
+**À ne lancer qu'avec l'accord explicite du porteur du projet** : c'est l'étape où de vrais SMS et
+courriels partent vers les destinataires de test.
+- **Activer dans le `.env`** : `NOTIFICATION_ENGINE_ACTIF`, `_CODE_SERVICE`, `_JWT_SECRET` (copiés
+  depuis le bloc commenté) et les trois `NOTIFICATION_REDIRECTION_*`.
+- Composant Dapr `notification-pubsub-standard` et sidecar dans `docker-compose.yml` ; adaptateur
+  Kafka direct en repli, choisi par `notification.engine.transport`.
+- Retirer le garde-fou « aucun transport réel » de l'étape 1.
+- **Vider la file avant le premier envoi** (ou laisser jouer la péremption) : sans cela, tout le
+  stock partirait d'un bloc vers les destinataires de test.
+- Vérifier l'encodage du secret : un jeton invalide est rejeté **sans retour**, seule l'absence
+  d'accusé (étape 9) le révélerait.
 
 ### ⬜ Étape 9 : suivi de la délivrance
 
@@ -462,6 +490,14 @@ Livrée, en attente du commit de l'utilisateur. Décision consignée : **Q-119**
     aux prestataires : la clé de déduplication (audience + échéance, délibéré) suffit.
   - Les tests de sept services construisent ces services à la main : toute nouvelle dépendance
     demande de les mettre à jour.
+- Étape 8a, deux défauts que seul l'essai contre la pile réelle a révélés :
+  - **la redirection bloquait la file moteur coupé** : elle exigeait des destinataires de test alors
+    que rien ne partait. Elle ne s'applique désormais que si le moteur est actif ;
+  - **le jeton était signé même moteur coupé**, donc impossible sans secret. Il n'est signé que si un
+    message part vraiment.
+  Tous deux faisaient rester les lignes en attente avec une erreur, au lieu de vider la file.
+- Rappel pour 8b : `destinataire` porte la cible **réellement visée** après redirection, et
+  `destinataire_origine` le destinataire réel. La supervision (étape 10) doit montrer les deux.
 - Points ouverts ajoutés :
   - la référence du dossier peut-elle contenir un nom de client ?
   - quelle est la limite de longueur d'un SMS côté Engine ? Les textes accentués passent en UCS-2,

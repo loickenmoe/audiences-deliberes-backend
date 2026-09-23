@@ -126,6 +126,56 @@ public class NotificationEnvoi {
     }
 
     /**
+     * Le message a été remis au transport. L'envoi effectif n'est pas encore confirmé : il le sera
+     * par un accusé de l'Engine (étape 9), ou jamais, si le moteur a rejeté le message en silence.
+     *
+     * @param transport nom de la passerelle utilisée, pour le diagnostic
+     */
+    public void marquerPubliee(String transport, String destinataireReel) {
+        this.statut = StatutEnvoi.PUBLIEE;
+        this.statutEngine = transport;
+        this.datePublication = LocalDateTime.now();
+        this.prochaineTentative = null;
+        this.derniereErreur = null;
+        if (destinataireReel != null && !destinataireReel.equals(destinataire)) {
+            // Redirection hors production (D10) : on garde trace de qui aurait été visé.
+            this.destinataireOrigine = destinataire;
+            this.destinataire = destinataireReel;
+        }
+    }
+
+    /**
+     * La remise a échoué. Tant qu'il reste des tentatives, la ligne repart plus tard ; sinon elle
+     * passe en échec et devient visible en supervision (D13).
+     *
+     * @param prochaine échéance de la prochaine tentative, ou {@code null} s'il n'y en a plus
+     */
+    public void echouerTentative(String erreur, LocalDateTime prochaine) {
+        this.tentatives++;
+        this.derniereErreur = tronquer(erreur);
+        this.prochaineTentative = prochaine;
+        this.statut = prochaine == null ? StatutEnvoi.ECHEC : StatutEnvoi.EN_ATTENTE;
+    }
+
+    /**
+     * Notification trop ancienne pour être encore utile : elle n'est pas envoyée. Un rappel
+     * d'audience remis trois jours après l'audience désinformerait son destinataire, et une file
+     * accumulée pendant une coupure partirait d'un bloc.
+     */
+    public void perimer(String motif) {
+        this.statut = StatutEnvoi.ECHEC;
+        this.derniereErreur = tronquer(motif);
+        this.prochaineTentative = null;
+    }
+
+    private static String tronquer(String texte) {
+        if (texte == null) {
+            return null;
+        }
+        return texte.length() <= 1000 ? texte : texte.substring(0, 1000);
+    }
+
+    /**
      * Accusé positif de l'Engine. Le texte des SMS et WhatsApp est alors effacé (D16) : une fois
      * délivré, il n'a plus d'usage, et seul le suivi est conservé.
      */

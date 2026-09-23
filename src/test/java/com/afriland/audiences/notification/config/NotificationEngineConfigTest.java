@@ -1,5 +1,6 @@
 package com.afriland.audiences.notification.config;
 
+import com.afriland.audiences.notification.config.NotificationEngineProperties.Redirection;
 import com.afriland.audiences.notification.passerelle.PasserelleJournal;
 import com.afriland.audiences.notification.passerelle.PasserelleNotificationEngine;
 import org.junit.jupiter.api.Test;
@@ -45,15 +46,35 @@ class NotificationEngineConfigTest {
     @Test
     void actif_avec_un_compte_complet_le_demarrage_echoue_tant_qu_aucun_transport_n_existe() {
         contexte.withPropertyValues("notification.engine.actif=true", "notification.engine.code-service=audience-deliberer",
-                        "notification.engine.jwt-secret=" + SECRET_32)
+                        "notification.engine.jwt-secret=" + SECRET_32, "notification.engine.redirection.actif=false")
                 .run(ctx -> assertThat(ctx).getFailure().rootCause().hasMessageContaining("aucun transport réel"));
+    }
+
+    /**
+     * D10 : hors production, une redirection incomplète laisserait partir un message vers un vrai
+     * avocat. Le démarrage échoue plutôt que d'en prendre le risque.
+     */
+    @Test
+    void actif_avec_une_redirection_incomplete_le_demarrage_echoue() {
+        contexte.withPropertyValues("notification.engine.actif=true", "notification.engine.code-service=audience-deliberer",
+                        "notification.engine.jwt-secret=" + SECRET_32,
+                        "notification.engine.redirection.courriel-interne=paul_fokam@afrilandfirstbank.com")
+                .run(ctx -> assertThat(ctx).getFailure().rootCause()
+                        .hasMessageContaining("Redirection active mais incomplète"));
+    }
+
+    @Test
+    void la_redirection_est_active_par_defaut() {
+        contexte.run(ctx -> assertThat(ctx.getBean(NotificationEngineProperties.class).redirection().actif()).isTrue());
     }
 
     @Test
     void le_secret_n_apparait_jamais_dans_la_representation_texte() {
-        NotificationEngineProperties proprietes = new NotificationEngineProperties(true, "audience-deliberer", SECRET_32);
+        NotificationEngineProperties proprietes = new NotificationEngineProperties(true, "audience-deliberer",
+                SECRET_32, 5, java.time.Duration.ofHours(2), new Redirection(false, null, null, null));
 
         assertThat(proprietes.toString()).doesNotContain(SECRET_32).contains("jwtSecret=***");
-        assertThat(new NotificationEngineProperties(false, null, null).toString()).contains("jwtSecret=(absent)");
+        assertThat(new NotificationEngineProperties(false, null, null, 5, java.time.Duration.ofHours(2),
+                new Redirection(false, null, null, null)).toString()).contains("jwtSecret=(absent)");
     }
 }
