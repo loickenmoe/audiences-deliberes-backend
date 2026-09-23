@@ -95,7 +95,7 @@ class NotificationAlerteIntegrationTest {
         List<NotificationEnvoi> envois = notificationEnvoiRepository.findAll();
         assertThat(envois).hasSize(1);
         NotificationEnvoi outlook = envois.get(0);
-        assertThat(outlook.getEventId()).isEqualTo("alerte-" + alerte.getId() + ":EMAIL");
+        assertThat(outlook.getEventId()).isEqualTo("alerte-" + alerte.getId() + "-EMAIL");
         assertThat(outlook.getCanal()).isEqualTo(CanalEngine.EMAIL);
         assertThat(outlook.getStatut()).isEqualTo(StatutEnvoi.EN_ATTENTE);
         assertThat(outlook.getDestinataire()).isEqualTo("juriste.test@afrilandfirstbank.com");

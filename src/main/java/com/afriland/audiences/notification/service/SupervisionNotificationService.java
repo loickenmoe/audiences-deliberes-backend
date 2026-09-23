@@ -74,7 +74,8 @@ public class SupervisionNotificationService {
                 .map(SupervisionNotificationService::versDefaut)
                 .toList();
 
-        return new SupervisionNotificationsResponse(dateDebut, dateFin, canaux, echecs, proprietes.actif());
+        return new SupervisionNotificationsResponse(dateDebut, dateFin, canaux, echecs, proprietes.actif(),
+                proprietes.suiviAccuses());
     }
 
     /**

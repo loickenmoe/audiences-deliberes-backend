@@ -11,11 +11,13 @@ import java.util.concurrent.TimeUnit;
  * Transport de repli : le message est déposé directement sur le topic Kafka du Notification Engine,
  * sans sidecar.
  * <p>
- * <b>Réserve à lever avant de s'en servir en premier choix.</b> Le moteur consomme ses topics par
- * Dapr, qui attend normalement l'enveloppe CloudEvents. Un message brut peut être accepté — Dapr sait
- * traiter une charge non conforme comme une donnée simple — ou ignoré en silence. Seuls les topics de
- * suivi (étape 9) le diront. Ce transport existe donc pour le cas où le sidecar ne serait pas
- * déployable, et il est choisi explicitement par configuration.
+ * <b>L'enveloppe du sidecar est reproduite</b> ({@link EnveloppeCloudEvents}) : le moteur consomme
+ * ses topics par Dapr, qui déballe cette enveloppe avant de livrer le message. La produire nous-mêmes
+ * donne au moteur exactement ce qu'il attend, sans dépendre d'un sidecar — lequel n'est pas
+ * installable sur les postes, le registre d'images étant filtré par le réseau de la banque.
+ * <p>
+ * L'envoi brut, sans enveloppe, reste possible ({@code cloud-events=false}) pour départager les deux
+ * hypothèses si le moteur restait muet.
  * <p>
  * L'envoi est attendu : sans cela, un courtier injoignable passerait pour un succès, et la
  * notification serait marquée publiée sans être partie.
@@ -29,20 +31,28 @@ public class PasserelleKafka implements PasserelleNotificationEngine {
     private final ObjectMapper objectMapper;
     private final String topic;
     private final long attenteSecondes;
+    private final String pubsub;
+    private final String source;
+    private final boolean cloudEvents;
 
     public PasserelleKafka(KafkaTemplate<String, String> kafkaTemplate, ObjectMapper objectMapper, String topic,
-                           long attenteSecondes) {
+                           long attenteSecondes, String pubsub, String source, boolean cloudEvents) {
         this.kafkaTemplate = kafkaTemplate;
         this.objectMapper = objectMapper;
         this.topic = topic;
         this.attenteSecondes = attenteSecondes;
+        this.pubsub = pubsub;
+        this.source = source;
+        this.cloudEvents = cloudEvents;
     }
 
     @Override
     public String publier(MessageEngine message) {
         String charge;
         try {
-            charge = objectMapper.writeValueAsString(message);
+            charge = objectMapper.writeValueAsString(cloudEvents
+                    ? EnveloppeCloudEvents.autour(message, source, pubsub, topic)
+                    : message);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("Message illisible par le sérialiseur JSON", e);
         }

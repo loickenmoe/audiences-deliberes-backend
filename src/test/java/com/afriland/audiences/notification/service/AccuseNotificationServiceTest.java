@@ -47,7 +47,7 @@ class AccuseNotificationServiceTest {
     private static NotificationEngineProperties proprietes() {
         return new NotificationEngineProperties(true, "audience-deliberer", SECRET, 5, Duration.ofHours(2),
                 new Redirection(false, null, null, null),
-                new Transport(TypeTransport.DAPR, "t", "p", "u", 10), "https://audiences.afriland.cm");
+                new Transport(TypeTransport.DAPR, "t", "p", "u", 10, true), "https://audiences.afriland.cm", "STANDARD", false);
     }
 
     @BeforeEach

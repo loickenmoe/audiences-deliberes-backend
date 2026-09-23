@@ -1,5 +1,6 @@
 package com.afriland.audiences.notification.service;
 
+import com.afriland.audiences.notification.config.NotificationEngineProperties;
 import com.afriland.audiences.notification.domain.NotificationEnvoi;
 import com.afriland.audiences.notification.repository.NotificationEnvoiRepository;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,10 @@ import java.util.List;
  * <p>
  * Ce délai n'est pas une règle métier : c'est le temps que l'on accorde au moteur avant de
  * considérer son silence comme une réponse.
+ * <p>
+ * <b>Encore faut-il que le moteur parle.</b> En DEV, ses topics de suivi sont vides, tous services
+ * confondus (Q-121) : le silence y est la règle, et non le signe d'un défaut. La veille ne fait donc
+ * rien tant que {@code notification.engine.suivi-accuses} reste à faux.
  */
 @Slf4j
 @Service
@@ -34,6 +39,7 @@ public class VeilleAccusesNotification {
     private static final int LOT = 200;
 
     private final NotificationEnvoiRepository notificationEnvoiRepository;
+    private final NotificationEngineProperties proprietes;
 
     @Value("${notification.engine.delai-accuse:15m}")
     private Duration delaiAccuse;
@@ -41,6 +47,11 @@ public class VeilleAccusesNotification {
     @Scheduled(fixedDelayString = "${notification.engine.veille-accuses.interval-ms:300000}")
     @Transactional
     public void marquerLesEnvoisSansRetour() {
+        if (!proprietes.suiviAccuses()) {
+            // Le moteur ne publie pas d'accusés (Q-121) : leur absence ne prouve rien, et tout
+            // basculerait en SANS_RETOUR, y compris ce qui est bien arrivé.
+            return;
+        }
         LocalDateTime limite = LocalDateTime.now().minus(delaiAccuse);
         List<NotificationEnvoi> sansRetour = notificationEnvoiRepository
                 .trouverPublieesSansAccuse(limite, PageRequest.of(0, LOT));

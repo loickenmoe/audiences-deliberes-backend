@@ -75,7 +75,7 @@ class NotificationPrestataireServiceTest {
 
         List<NotificationEnvoi> envois = enregistres();
         assertThat(envois).extracting(NotificationEnvoi::getEventId)
-                .containsExactly("affectation-5-p9:EMAIL", "affectation-5-p9:SMS");
+                .containsExactly("affectation-5-p9-EMAIL", "affectation-5-p9-SMS");
         NotificationEnvoi courriel = envois.get(0);
         assertThat(courriel.getDestinataireType()).isEqualTo(TypeDestinataire.AVOCAT);
         assertThat(courriel.getDestinataireRef()).isEqualTo(9L);
@@ -128,7 +128,7 @@ class NotificationPrestataireServiceTest {
     @Test
     void un_evenement_deja_en_file_est_ignore() {
         router(new Route("SMS", CanalEngine.SMS, "237600000000", null));
-        when(repository.existsByEventId("audience-8-J7-p11:SMS")).thenReturn(true);
+        when(repository.existsByEventId("audience-8-J7-p11-SMS")).thenReturn(true);
 
         service.notifier(EvenementPrestataire.RAPPEL_AUDIENCE, notaire, 5L, "audience-8-J7");
 

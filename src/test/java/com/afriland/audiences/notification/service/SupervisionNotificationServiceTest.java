@@ -46,7 +46,7 @@ class SupervisionNotificationServiceTest {
     void preparer() {
         NotificationEngineProperties proprietes = new NotificationEngineProperties(false, "audience-deliberer",
                 "0123456789abcdef0123456789abcdef", 5, Duration.ofHours(2), new Redirection(false, null, null, null),
-                new Transport(TypeTransport.JOURNAL, "t", "p", "u", 10), null);
+                new Transport(TypeTransport.JOURNAL, "t", "p", "u", 10, true), null, "STANDARD", false);
         service = new SupervisionNotificationService(repository, proprietes);
         lenient().when(repository.trouverEnDefaut(any(), any(), any())).thenReturn(List.of());
     }

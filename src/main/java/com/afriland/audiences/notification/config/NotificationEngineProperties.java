@@ -18,6 +18,12 @@ import java.util.List;
  * @param redirection     bac à sable des environnements de travail (D10)
  * @param callbackBaseUrl adresse publique de l'application, telle que le moteur peut la joindre. Vide
  *                        depuis un poste de travail : les rappels sont alors désactivés (Q-120)
+ * @param priorite        priorité portée par chaque message ; celle du compte de service (STANDARD)
+ * @param suiviAccuses    le moteur publie-t-il vraiment ses accusés ? <b>Faux par défaut</b> : relus
+ *                        depuis leur origine, {@code notification-sent} et {@code notification-failed}
+ *                        se sont révélés vides, tous services confondus (Q-121). Tant qu'il en est
+ *                        ainsi, une notification remise ne peut pas être confirmée, et l'attendre
+ *                        ferait passer en SANS_RETOUR des messages pourtant délivrés
  */
 @ConfigurationProperties(prefix = "notification.engine")
 public record NotificationEngineProperties(
@@ -28,7 +34,9 @@ public record NotificationEngineProperties(
         @DefaultValue("2h") Duration ageMax,
         @DefaultValue Redirection redirection,
         @DefaultValue Transport transport,
-        String callbackBaseUrl) {
+        String callbackBaseUrl,
+        @DefaultValue("STANDARD") String priorite,
+        @DefaultValue("false") boolean suiviAccuses) {
 
     /** Longueur minimale du secret exigée par le moteur pour la signature HS256 (256 bits). */
     public static final int LONGUEUR_MIN_SECRET = 32;
@@ -46,18 +54,23 @@ public record NotificationEngineProperties(
      *
      * @param type            DAPR (voie documentée par le Guide), KAFKA (repli direct) ou JOURNAL (rien
      *                        n'est envoyé, utile pour éprouver une configuration active sans émettre)
-     * @param topic           topic STANDARD : ses messages sont rattrapés après une panne, contrairement
-     *                        au topic CRITICAL, qui les jette (D8)
-     * @param pubsub          nom du composant Dapr qui porte ce topic
+     * @param topic           topic d'entrée du moteur. <b>Un message réellement accepté arrive sur
+     *                        {@code notification-send-request}</b> (Q-121) : c'est le topic consommé, et
+     *                        la priorité voyage dans le message plutôt que par un topic dédié. Le
+     *                        {@code notification-send-standard} du Guide n'est lu par personne.
+     * @param pubsub          nom du composant pubsub, tel qu'il apparaît dans les messages acceptés
      * @param daprUrl         adresse locale du sidecar
      * @param attenteSecondes délai d'attente de l'accusé du courtier, en transport Kafka direct
+     * @param cloudEvents     en transport Kafka direct, reproduire l'enveloppe que le sidecar Dapr
+     *                        aurait posée. Vrai par défaut : c'est ce que le moteur attend
      */
     public record Transport(
             @DefaultValue("DAPR") TypeTransport type,
-            @DefaultValue("notification-send-standard") String topic,
-            @DefaultValue("notification-pubsub-standard") String pubsub,
+            @DefaultValue("notification-send-request") String topic,
+            @DefaultValue("kafka-pubsub") String pubsub,
             @DefaultValue("http://localhost:3500") String daprUrl,
-            @DefaultValue("10") long attenteSecondes) {
+            @DefaultValue("10") long attenteSecondes,
+            @DefaultValue("true") boolean cloudEvents) {
     }
 
     public enum TypeTransport {

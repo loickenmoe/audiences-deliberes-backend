@@ -355,11 +355,40 @@ explicite du porteur du projet** : c'est lui qui fera partir un vrai SMS et un v
   destinataires de test. Le bloc commenté de l'administrateur reste la référence.
 - Tests : 4 sur les transports, 10 sur la configuration. Suite complète : 613 tests verts.
 
-**Reste à faire, avec accord** :
-- vider la file (ou laisser jouer la péremption) juste avant le premier envoi ;
-- basculer `NOTIFICATION_ENGINE_ACTIF=true`, choisir le transport et lancer un envoi de contrôle ;
-- vérifier l'encodage du secret : un jeton invalide est rejeté **sans retour**, seule l'absence
-  d'accusé (étape 9) le révélerait.
+**Le sidecar Dapr n'est pas installable sur les postes.** `docker pull daprio/daprd` échoue : le
+réseau de la banque bloque le CDN du registre d'images (`production.cloudfront.docker.com`). La
+résolution DNS fonctionne pour `docker.io`, mais pas pour le CDN qui sert les couches.
+
+**Conséquence, appliquée** : `PasserelleKafka` reproduit elle-même l'enveloppe CloudEvents que le
+sidecar aurait posée (`EnveloppeCloudEvents` : `specversion` 1.0, `type` `com.dapr.event.sent`,
+`topic`, `pubsubname`, `source`, et le message dans `data`). Le moteur, qui consomme par Dapr, reçoit
+donc ce qu'il attend. L'envoi brut reste possible (`transport.cloud-events=false`) pour départager les
+deux hypothèses si le moteur restait muet.
+
+### ✅ Étape 8c : premier envoi réel — **le courriel et le SMS arrivent** (2026-09-23)
+
+Sept messages de contrôle envoyés vers les destinataires de test, avec l'accord du porteur du projet.
+
+**Les trois premiers n'ont rien donné** : publiés, sans erreur, sans accusé, sans rien dans la boîte.
+L'administrateur a fourni le JSON d'un message **réellement accepté**, qui a révélé sept écarts avec
+le Guide — voir **Q-121**. Le principal : le topic STANDARD n'est lu par personne, tout passe par
+`notification-send-request`. **La décision D8 tombe.**
+
+**Après correction** : courriel reçu (expéditeur `digital-notification@afrilandfirstbank.com`) et SMS
+reçu au numéro de test. **Le secret s'utilise tel quel**, la question ouverte depuis le début est
+tranchée. `FormatMessageTest` fige désormais le format, champ par champ.
+
+**Le suivi de délivrance n'existe pas ici** : les deux topics d'accusés, relus depuis leur origine,
+sont vides pour tous les services. La veille SANS_RETOUR est donc neutralisée par défaut
+(`notification.engine.suivi-accuses=false`) et la supervision l'explique — sans quoi tout serait
+signalé en défaut alors que les messages arrivent.
+
+**Restent à confirmer** : Outlook et Teams (envoyés vers l'adresse professionnelle) et **WhatsApp, qui
+n'a rien délivré** là où le SMS est passé, sur le même numéro.
+
+**Note d'exécution** : la bascule de l'interrupteur dans le `.env` est refusée à l'assistant par le
+garde-fou du harnais (elle déclenche des envois réels) tant que le porteur du projet ne l'autorise pas
+explicitement dans le fil de la conversation.
 
 ### ✅ Étape 9 : suivi de la délivrance
 
@@ -442,6 +471,17 @@ Livrée, en attente du commit de l'utilisateur.
 ---
 
 ## 7. Points ouverts
+
+### À poser à l'administrateur (priorité haute, issues du premier envoi réel)
+
+1. **WhatsApp ne délivre pas** là où le SMS passe, sur le même numéro. Modèle de message préapprouvé
+   exigé ? Fenêtre de conversation à ouvrir ? Canal non actif pour notre compte ?
+2. **Les topics `notification-sent` et `notification-failed` sont vides**, tous services confondus.
+   Sont-ils alimentés quelque part ? Sinon, comment suivre la délivrance ?
+3. **Le rappel `callbackUrl`** est-il réellement appelé, et avec quel corps ? C'est notre seul moyen
+   de rattacher un accusé à un envoi (Q-120).
+4. **Le Guide V1 est à corriger** : topic, composant pubsub, `serviceKey`, `priority`, `recipient`,
+   absence de `locale` et `metadata` (Q-121).
 
 - **Secret JWT** : est-il utilisé tel quel ou après décodage base64 ? À trancher à l'étape 8 par un
   envoi réel.

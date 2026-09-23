@@ -40,7 +40,11 @@ public class AccusesKafkaListener {
 
     private void traiter(String charge, TypeAccuse type) {
         try {
-            accuseNotificationService.enregistrer(objectMapper.readValue(charge, AccuseEngine.class), type);
+            AccuseEngine accuse = objectMapper.readValue(charge, AccuseEngine.class);
+            // En DEBUG, on voit passer les accusés des autres services : c'est ce qui distingue un
+            // topic vide d'un topic actif dont rien ne nous concerne.
+            log.debug("Accusé {} lu sur le topic : service={}, canal={}", type, accuse.serviceId(), accuse.channel());
+            accuseNotificationService.enregistrer(accuse, type);
         } catch (Exception e) {
             log.error("Accusé {} illisible, ignoré : {}", type, e.getMessage());
         }

@@ -32,8 +32,8 @@ class NotificationEnvoiTest {
         NotificationEnvoi teams = NotificationEnvoi.aRemettre(ORIGINE, CanalEngine.TEAMS, "a@b.cm", null, "x");
         NotificationEnvoi courriel = NotificationEnvoi.aRemettre(ORIGINE, CanalEngine.EMAIL, "a@b.cm", "s", "x");
 
-        assertThat(teams.getEventId()).isEqualTo("alerte-42:TEAMS");
-        assertThat(courriel.getEventId()).isEqualTo("alerte-42:EMAIL");
+        assertThat(teams.getEventId()).isEqualTo("alerte-42-TEAMS");
+        assertThat(courriel.getEventId()).isEqualTo("alerte-42-EMAIL");
     }
 
     @Test

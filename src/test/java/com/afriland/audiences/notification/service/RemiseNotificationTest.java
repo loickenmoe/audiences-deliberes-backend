@@ -46,7 +46,7 @@ class RemiseNotificationTest {
     private static NotificationEngineProperties proprietes(boolean redirection) {
         return new NotificationEngineProperties(redirection, "audience-deliberer", SECRET, 5, Duration.ofHours(2),
                 new Redirection(redirection, "juriste.test@afrilandfirstbank.com", "prestataire.test@example.cm", "237600000000"),
-                new NotificationEngineProperties.Transport(NotificationEngineProperties.TypeTransport.JOURNAL, "t", "p", "u", 10), null);
+                new NotificationEngineProperties.Transport(NotificationEngineProperties.TypeTransport.JOURNAL, "t", "p", "u", 10, true), null, "STANDARD", false);
     }
 
     private RemiseNotification service(NotificationEngineProperties proprietes) {
@@ -84,12 +84,13 @@ class RemiseNotificationTest {
 
         MessageEngine message = publie();
         assertThat(message.channels()).containsExactly("EMAIL");
-        assertThat(message.channelRecipients()).containsExactly(java.util.Map.entry("EMAIL", "juriste@afrilandfirstbank.com"));
+        assertThat(message.recipient()).isEqualTo("juriste@afrilandfirstbank.com");
         assertThat(message.directSubject()).isEqualTo("Objet");
         assertThat(message.directBody()).isEqualTo("Texte");
-        assertThat(message.eventId()).isEqualTo("alerte-42:EMAIL");
+        assertThat(message.eventId()).isEqualTo("alerte-42-EMAIL");
         assertThat(message.category()).isEqualTo("TRANSACTIONAL");
-        assertThat(message.locale()).isEqualTo("fr_FR");
+        assertThat(message.serviceKey()).isEqualTo("audience-deliberer");
+        assertThat(message.priority()).isEqualTo("STANDARD");
         assertThat(envoi.getStatut()).isEqualTo(StatutEnvoi.PUBLIEE);
         assertThat(envoi.getStatutEngine()).isEqualTo("DAPR");
         assertThat(envoi.getDatePublication()).isNotNull();
@@ -125,7 +126,7 @@ class RemiseNotificationTest {
 
         service(proprietes(true)).remettre(1L);
 
-        assertThat(publie().channelRecipients()).containsEntry("SMS", "237600000000");
+        assertThat(publie().recipient()).isEqualTo("237600000000");
         assertThat(envoi.getDestinataire()).isEqualTo("237600000000");
         assertThat(envoi.getDestinataireOrigine()).isEqualTo("237699887766");
     }
@@ -145,14 +146,14 @@ class RemiseNotificationTest {
 
         ArgumentCaptor<MessageEngine> captor = ArgumentCaptor.forClass(MessageEngine.class);
         verify(passerelle, org.mockito.Mockito.times(2)).publier(captor.capture());
-        assertThat(captor.getAllValues().get(0).channelRecipients()).containsEntry("EMAIL", "juriste.test@afrilandfirstbank.com");
-        assertThat(captor.getAllValues().get(1).channelRecipients()).containsEntry("EMAIL", "prestataire.test@example.cm");
+        assertThat(captor.getAllValues().get(0).recipient()).isEqualTo("juriste.test@afrilandfirstbank.com");
+        assertThat(captor.getAllValues().get(1).recipient()).isEqualTo("prestataire.test@example.cm");
     }
 
     @Test
     void une_redirection_sans_cible_refuse_d_envoyer() throws Exception {
         NotificationEngineProperties incomplete = new NotificationEngineProperties(true, "audience-deliberer", SECRET,
-                5, Duration.ofHours(2), new Redirection(true, "a@b.cm", "c@d.cm", null), new NotificationEngineProperties.Transport(NotificationEngineProperties.TypeTransport.JOURNAL, "t", "p", "u", 10), null);
+                5, Duration.ofHours(2), new Redirection(true, "a@b.cm", "c@d.cm", null), new NotificationEngineProperties.Transport(NotificationEngineProperties.TypeTransport.JOURNAL, "t", "p", "u", 10, true), null, "STANDARD", false);
         NotificationEnvoi envoi = avecDateCreation(envoi(CanalEngine.SMS, TypeDestinataire.AVOCAT, "237699887766"),
                 LocalDateTime.now());
         when(repository.findById(1L)).thenReturn(Optional.of(envoi));
@@ -204,7 +205,7 @@ class RemiseNotificationTest {
     @Test
     void moteur_coupe_la_file_se_vide_sans_redirection() throws Exception {
         NotificationEngineProperties coupe = new NotificationEngineProperties(false, "audience-deliberer", SECRET, 5,
-                Duration.ofHours(2), new Redirection(true, null, null, null), new NotificationEngineProperties.Transport(NotificationEngineProperties.TypeTransport.JOURNAL, "t", "p", "u", 10), null);
+                Duration.ofHours(2), new Redirection(true, null, null, null), new NotificationEngineProperties.Transport(NotificationEngineProperties.TypeTransport.JOURNAL, "t", "p", "u", 10, true), null, "STANDARD", false);
         NotificationEnvoi envoi = avecDateCreation(envoi(CanalEngine.EMAIL, TypeDestinataire.UTILISATEUR,
                 "juriste@afrilandfirstbank.com"), LocalDateTime.now());
         when(repository.findById(1L)).thenReturn(Optional.of(envoi));
@@ -214,7 +215,7 @@ class RemiseNotificationTest {
 
         assertThat(envoi.getStatut()).isEqualTo(StatutEnvoi.PUBLIEE);
         assertThat(envoi.getStatutEngine()).isEqualTo("JOURNAL");
-        assertThat(publie().channelRecipients()).containsEntry("EMAIL", "juriste@afrilandfirstbank.com");
+        assertThat(publie().recipient()).isEqualTo("juriste@afrilandfirstbank.com");
         // Aucun jeton signé tant que rien ne part : le secret n'est pas nécessaire pour vider la file.
         assertThat(publie().token()).isNull();
     }
@@ -250,7 +251,7 @@ class RemiseNotificationTest {
     @Test
     void sans_secret_le_jeton_est_refuse_plutot_que_produit_invalide() {
         NotificationEngineProperties sansSecret = new NotificationEngineProperties(false, "audience-deliberer", "court",
-                5, Duration.ofHours(2), new Redirection(false, null, null, null), new NotificationEngineProperties.Transport(NotificationEngineProperties.TypeTransport.JOURNAL, "t", "p", "u", 10), null);
+                5, Duration.ofHours(2), new Redirection(false, null, null, null), new NotificationEngineProperties.Transport(NotificationEngineProperties.TypeTransport.JOURNAL, "t", "p", "u", 10, true), null, "STANDARD", false);
 
         assertThatThrownBy(() -> new JetonEngine(sansSecret).signer())
                 .isInstanceOf(IllegalStateException.class)

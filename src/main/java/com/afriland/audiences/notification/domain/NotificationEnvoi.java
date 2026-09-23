@@ -230,8 +230,9 @@ public class NotificationEnvoi {
         Objects.requireNonNull(canal, "canal");
         NotificationEnvoi envoi = new NotificationEnvoi();
         // Un canal par ligne : le canal complète la clé, sans quoi les canaux d'un même événement
-        // se dédoublonneraient entre eux côté Engine.
-        envoi.eventId = origine.eventId() + ":" + canal.name();
+        // se dédoublonneraient entre eux côté Engine. Séparateur « - » et non « : » : aucun message
+        // accepté ne porte de deux-points dans cette référence (Q-121).
+        envoi.eventId = origine.eventId() + "-" + canal.name();
         envoi.typeEvenement = origine.typeEvenement();
         envoi.dossierId = origine.dossierId();
         envoi.alerteId = origine.alerteId();

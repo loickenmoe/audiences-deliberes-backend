@@ -65,12 +65,12 @@ class NotificationEngineConfigTest {
     }
 
     @Test
-    void le_transport_par_defaut_vise_le_topic_standard() {
+    void le_transport_par_defaut_vise_le_topic_reellement_consomme() {
         contexte.run(ctx -> {
             NotificationEngineProperties.Transport transport = ctx.getBean(NotificationEngineProperties.class).transport();
             assertThat(transport.type()).isEqualTo(NotificationEngineProperties.TypeTransport.DAPR);
-            assertThat(transport.topic()).isEqualTo("notification-send-standard");
-            assertThat(transport.pubsub()).isEqualTo("notification-pubsub-standard");
+            assertThat(transport.topic()).isEqualTo("notification-send-request");
+            assertThat(transport.pubsub()).isEqualTo("kafka-pubsub");
         });
     }
 
@@ -96,10 +96,10 @@ class NotificationEngineConfigTest {
     void le_secret_n_apparait_jamais_dans_la_representation_texte() {
         NotificationEngineProperties proprietes = new NotificationEngineProperties(true, "audience-deliberer",
                 SECRET_32, 5, java.time.Duration.ofHours(2), new Redirection(false, null, null, null),
-                new NotificationEngineProperties.Transport(NotificationEngineProperties.TypeTransport.JOURNAL, "t", "p", "u", 10), null);
+                new NotificationEngineProperties.Transport(NotificationEngineProperties.TypeTransport.JOURNAL, "t", "p", "u", 10, true), null, "STANDARD", false);
 
         assertThat(proprietes.toString()).doesNotContain(SECRET_32).contains("jwtSecret=***");
         assertThat(new NotificationEngineProperties(false, null, null, 5, java.time.Duration.ofHours(2),
-                new Redirection(false, null, null, null), new NotificationEngineProperties.Transport(NotificationEngineProperties.TypeTransport.JOURNAL, "t", "p", "u", 10), null).toString()).contains("jwtSecret=(absent)");
+                new Redirection(false, null, null, null), new NotificationEngineProperties.Transport(NotificationEngineProperties.TypeTransport.JOURNAL, "t", "p", "u", 10, true), null, "STANDARD", false).toString()).contains("jwtSecret=(absent)");
     }
 }

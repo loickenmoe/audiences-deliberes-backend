@@ -60,7 +60,7 @@ class NotificationAlerteListenerTest {
         listener.surAlerteDeclenchee(new AlerteDeclenchee(42L, TypeAlerte.RAPPEL_AUDIENCE, 5L, juriste));
 
         List<NotificationEnvoi> envois = enregistres();
-        assertThat(envois).extracting(NotificationEnvoi::getEventId).containsExactly("alerte-42:EMAIL", "alerte-42:TEAMS");
+        assertThat(envois).extracting(NotificationEnvoi::getEventId).containsExactly("alerte-42-EMAIL", "alerte-42-TEAMS");
         NotificationEnvoi outlook = envois.get(0);
         assertThat(outlook.getStatut()).isEqualTo(StatutEnvoi.EN_ATTENTE);
         assertThat(outlook.getTypeEvenement()).isEqualTo("RAPPEL_AUDIENCE");

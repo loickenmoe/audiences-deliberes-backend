@@ -58,8 +58,8 @@ public class RemiseNotification {
             // Le jeton n'est signé que si un message part vraiment : la passerelle journal n'en a pas
             // besoin, et l'exiger empêcherait de vider la file tant que le secret n'est pas renseigné.
             String jeton = proprietes.actif() ? jetonEngine.signer() : null;
-            MessageEngine message = MessageEngine.de(jeton, envoi.getCanal(), destinataire,
-                    envoi.getSujet(), envoi.getCorps(), envoi.getEventId(),
+            MessageEngine message = MessageEngine.de(jeton, proprietes.codeService(), proprietes.priorite(),
+                    envoi.getCanal(), destinataire, envoi.getSujet(), envoi.getCorps(), envoi.getEventId(),
                     rappels.urlPour(envoi.getEventId()).orElse(null));
             String transport = passerelle.publier(message);
             envoi.marquerPubliee(transport, destinataire);

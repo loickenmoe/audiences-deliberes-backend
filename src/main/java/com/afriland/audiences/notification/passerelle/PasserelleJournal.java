@@ -21,8 +21,8 @@ public class PasserelleJournal implements PasserelleNotificationEngine {
 
     @Override
     public String publier(MessageEngine message) {
-        log.info("Notification Engine désactivé — message non envoyé : eventId={}, canaux={}, destinataires={}",
-                message.eventId(), message.channels(), masquer(message.channelRecipients()));
+        log.info("Notification Engine désactivé — message non envoyé : eventId={}, canaux={}, destinataire={}",
+                message.eventId(), message.channels(), masquer(message.recipient()));
         return NOM;
     }
 

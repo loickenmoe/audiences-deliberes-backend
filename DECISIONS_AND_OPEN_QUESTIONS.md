@@ -2160,6 +2160,49 @@ sont unifiées.
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
 
+### Q-121 ✅ Le contrat du moteur s'écrit d'après un message accepté, pas d'après le Guide — tranché (2026-09-23)
+
+**Le premier envoi réel n'est pas arrivé.** Message publié, aucune erreur, aucun accusé, rien dans la
+boîte. L'administrateur, consulté, a fourni **le JSON d'un message réellement accepté** par le moteur.
+La comparaison a révélé que le Guide V1 décrit autre chose que ce qui fonctionne.
+
+**Sept écarts, tous corrigés** (le format vient de l'exemple, les valeurs restent les nôtres) :
+
+| Point | Guide V1 | Réalité observée |
+|---|---|---|
+| Topic | `notification-send-standard` pour la priorité STANDARD | **`notification-send-request`**, seul topic consommé |
+| Composant pubsub | `notification-pubsub` | **`kafka-pubsub`** |
+| Priorité | portée par le compte de service | **champ `priority` du message** |
+| Identification | le seul jeton | jeton **et** champ `serviceKey` |
+| Destinataire | `channelRecipients` prime, `recipient` ignoré | **`recipient`**, sans `channelRecipients` |
+| `locale`, `metadata` | documentés | **absents** des messages acceptés |
+| Horodatage, traçage | non précisés | `time` local à la seconde ; `traceid`, `traceparent`, `tracestate` |
+
+La référence d'événement perd aussi ses deux-points (`alerte-42-EMAIL` et non `alerte-42:EMAIL`) :
+aucun message accepté n'en porte.
+
+**Après correction, le courriel est arrivé** (expéditeur `digital-notification@afrilandfirstbank.com`),
+et le SMS aussi, au numéro de test. **Le secret s'utilise donc tel quel**, en octets UTF-8 : le jeton a
+été accepté. La question ouverte depuis le début du chantier est tranchée.
+
+**La décision D8 tombe.** Le topic STANDARD n'est lu par personne ; il n'existe qu'un topic d'entrée,
+et c'est le champ `priority` qui distingue les messages. Nous y portons STANDARD, la priorité de notre
+compte.
+
+**Le suivi de délivrance n'existe pas sur cet environnement.** Relus depuis leur tout premier message,
+`notification-sent` et `notification-failed` sont **vides, tous services confondus**. Personne n'y
+publie. Conséquence : une notification remise ne peut pas être confirmée, et attendre un accusé ferait
+passer en SANS_RETOUR des messages pourtant délivrés. La veille est donc **neutralisée par défaut**
+(`notification.engine.suivi-accuses=false`) et l'écran de supervision l'explique. Un seul réglage la
+rétablira le jour où ces topics seront alimentés.
+
+**Un test fige le format** (`FormatMessageTest`), champ par champ, d'après l'exemple accepté : un
+message mal formé étant rejeté sans trace, une régression passerait autrement inaperçue.
+
+**Reste ouvert** : WhatsApp n'a rien délivré là où le SMS est passé, sur le même numéro. Sans accusé,
+la cause n'est pas observable — modèle de message préapprouvé exigé, fenêtre de conversation fermée,
+ou canal non ouvert pour notre compte. Question à poser à l'administrateur.
+
 ### Q-120 ✅ Savoir ce qu'une notification est devenue, alors que le moteur ne renvoie pas notre référence — tranché (2026-09-23)
 
 **La contradiction, relevée dans le Guide V1.** Le moteur publie deux topics de suivi

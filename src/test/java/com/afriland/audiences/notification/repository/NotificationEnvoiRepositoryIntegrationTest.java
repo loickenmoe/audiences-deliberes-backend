@@ -57,7 +57,7 @@ class NotificationEnvoiRepositoryIntegrationTest {
         repository.saveAndFlush(NotificationEnvoi.aRemettre(origine("alerte-1"), CanalEngine.SMS,
                 "237600000000", null, "Audience dans 7 jours."));
 
-        NotificationEnvoi relue = repository.findByEventId("alerte-1:SMS").orElseThrow();
+        NotificationEnvoi relue = repository.findByEventId("alerte-1-SMS").orElseThrow();
         assertThat(relue.getId()).isNotNull();
         assertThat(relue.getStatut()).isEqualTo(StatutEnvoi.EN_ATTENTE);
         assertThat(relue.getCanal()).isEqualTo(CanalEngine.SMS);
@@ -69,7 +69,7 @@ class NotificationEnvoiRepositoryIntegrationTest {
     void une_ligne_non_joignable_est_acceptee_sans_destinataire() {
         repository.saveAndFlush(NotificationEnvoi.nonJoignable(origine("alerte-2"), CanalEngine.WHATSAPP, "COORDONNEE_INVALIDE"));
 
-        assertThat(repository.findByEventId("alerte-2:WHATSAPP").orElseThrow().getDestinataire()).isNull();
+        assertThat(repository.findByEventId("alerte-2-WHATSAPP").orElseThrow().getDestinataire()).isNull();
     }
 
     @Test
