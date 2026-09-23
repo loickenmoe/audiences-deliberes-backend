@@ -9,26 +9,77 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class CoordonneesTest {
 
-    /** Les trois formes du Guide V1, avec les séparateurs de saisie courants. */
+    /**
+     * Une seule écriture est enregistrée, le format international, d'où que parte la saisie : trois
+     * façons d'écrire le même numéro donneraient trois valeurs incomparables en base.
+     */
     @ParameterizedTest
     @CsvSource({
-            "'600000000', 237600000000",
-            "'600 00 00 00', 237600000000",
-            "'600-00-00-00', 237600000000",
-            "'237600000000', 237600000000",
-            "'237 600 000 000', 237600000000",
-            "'+237600000000', +237600000000",
-            "'+237 (600) 00.00.00', +237600000000",
-            "'+33612345678', +33612345678"
+            "'650228936', +237650228936",
+            "'650 228 936', +237650228936",
+            "'650-228-936', +237650228936",
+            "'237650228936', +237650228936",
+            "'237 650 228 936', +237650228936",
+            "'+237650228936', +237650228936",
+            "'+237 650 228 936', +237650228936",
+            "'+237 (650) 22.89.36', +237650228936"
     })
-    void telephone_accepteLesFormesDuGuide(String saisie, String attendu) {
+    void telephone_camerounais_toujoursEnFormatInternational(String saisie, String attendu) {
         assertThat(Coordonnees.telephone(saisie)).contains(attendu);
     }
 
-    /** Rien n'est deviné : un numéro hors des trois formes ne part pas. */
+    /** Les mobiles Camtel commencent eux aussi par 6 : « +237 6 20 XX XX XX ». */
     @ParameterizedTest
-    @ValueSource(strings = {"54476789", "754476789", "0600000000", "23765447678", "+0237600000000", "abc", "600000000x"})
-    void telephone_refuseCeQueLeGuideNAccepteLePas(String saisie) {
+    @CsvSource({
+            "'620228936', +237620228936",
+            "'6 20 22 89 36', +237620228936",
+            "'+237 6 20 22 89 36', +237620228936",
+            "'237620228936', +237620228936"
+    })
+    void telephone_mobilesCamtel_sontAcceptes(String saisie, String attendu) {
+        assertThat(Coordonnees.telephone(saisie)).contains(attendu);
+    }
+
+    /** Les lignes fixes, en 2, ne reçoivent ni SMS ni WhatsApp : elles sont écartées. */
+    @ParameterizedTest
+    @ValueSource(strings = {"222228936", "2 22 22 89 36", "+237 2 22 22 89 36", "237222228936"})
+    void telephone_lignesFixes_sontRefusees(String saisie) {
+        assertThat(Coordonnees.telephone(saisie)).isEmpty();
+    }
+
+    /**
+     * Ni plus, ni moins de chiffres. Un numéro camerounais amputé ou allongé est refusé, <b>y compris
+     * écrit avec l'indicatif</b> : sans cette garde, la règle internationale le rattraperait et le
+     * message partirait vers quelqu'un d'autre.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "65022893", "6502289361", "+23765022893", "+2376502289361", "23765022893", "237 650 228 93",
+            "0650228936", "750228936", "350228936", "abc", "650228936x"
+    })
+    void telephone_camerounais_horsFormat_estRefuse(String saisie) {
+        assertThat(Coordonnees.telephone(saisie)).isEmpty();
+    }
+
+    /**
+     * Les prestataires étrangers existent et le moteur délivre au-delà du Cameroun : l'indicatif est
+     * alors obligatoire. Sans lui, il faudrait le deviner — et deviner un numéro, c'est écrire à
+     * quelqu'un d'autre.
+     */
+    @ParameterizedTest
+    @CsvSource({
+            "'+33612345678', +33612345678",
+            "'+33 6 12 34 56 78', +33612345678",
+            "'+241 01 23 45 67', +24101234567",
+            "'+1 202 555 0143', +12025550143"
+    })
+    void telephone_etranger_exigeLIndicatif(String saisie, String attendu) {
+        assertThat(Coordonnees.telephone(saisie)).contains(attendu);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"33612345678", "0033612345678", "+0612345678", "+331", "+3361234567890123456"})
+    void telephone_etranger_sansIndicatifOuMalForme_estRefuse(String saisie) {
         assertThat(Coordonnees.telephone(saisie)).isEmpty();
     }
 

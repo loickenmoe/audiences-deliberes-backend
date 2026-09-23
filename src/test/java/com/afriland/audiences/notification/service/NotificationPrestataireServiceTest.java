@@ -67,7 +67,7 @@ class NotificationPrestataireServiceTest {
     @Test
     void un_avocat_avec_compte_recoit_le_lien_de_son_espace() {
         router(new Route("COURRIEL_PERSONNEL", CanalEngine.EMAIL, "prestataire.test@example.cm", null),
-                new Route("SMS", CanalEngine.SMS, "237600000000", null));
+                new Route("SMS", CanalEngine.SMS, "+237600000000", null));
         when(referencesDossier.reference(5L)).thenReturn(Optional.of("DOS-2026-014"));
         when(compteAvocatService.utilisateurDe(avocat)).thenReturn(Optional.of(Utilisateur.builder().id(3L).build()));
 
@@ -127,7 +127,7 @@ class NotificationPrestataireServiceTest {
     /** Une relance planifiée ou une réaffectation ne doit pas heurter la contrainte d'unicité. */
     @Test
     void un_evenement_deja_en_file_est_ignore() {
-        router(new Route("SMS", CanalEngine.SMS, "237600000000", null));
+        router(new Route("SMS", CanalEngine.SMS, "+237600000000", null));
         when(repository.existsByEventId("audience-8-J7-p11-SMS")).thenReturn(true);
 
         service.notifier(EvenementPrestataire.RAPPEL_AUDIENCE, notaire, 5L, "audience-8-J7");

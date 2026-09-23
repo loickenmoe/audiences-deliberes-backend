@@ -5,6 +5,7 @@ import com.afriland.audiences.common.audit.TypeActionHistorique;
 import com.afriland.audiences.common.error.ApiException;
 import com.afriland.audiences.common.web.PageResponse;
 import com.afriland.audiences.common.error.ErrorCodes;
+import com.afriland.audiences.notification.service.Coordonnees;
 import com.afriland.audiences.intervenant.domain.TypeIntervenant;
 import com.afriland.audiences.intervenant.web.dto.CreerIntervenantRequest;
 import com.afriland.audiences.intervenant.web.dto.IntervenantResponse;
@@ -67,8 +68,8 @@ public class IntervenantService {
 
         Avocat avocat = avocatRepository.save(Avocat.builder()
                 .nom(request.nom())
-                .email(request.email())
-                .telephone(request.telephone())
+                .email(courrielValide(request.email()))
+                .telephone(telephoneValide(request.telephone()))
                 .compteKeycloak(request.compteKeycloak())
                 // Coché par défaut (Q-119) : l'avocat est en relation suivie avec la banque.
                 .notification(request.notification() == null || request.notification())
@@ -84,8 +85,8 @@ public class IntervenantService {
 
         Intervenant prestataire = intervenantRepository.save(AutrePrestataire.builder()
                 .nom(request.nom())
-                .email(request.email())
-                .telephone(request.telephone())
+                .email(courrielValide(request.email()))
+                .telephone(telephoneValide(request.telephone()))
                 .notification(request.notification() != null && request.notification())
                 .build());
         return toResponse(prestataire);
@@ -103,8 +104,8 @@ public class IntervenantService {
         Intervenant intervenant = intervenantRepository.findById(id)
                 .orElseThrow(() -> ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE, "Intervenant introuvable : " + id));
         String nom = request.nom().trim();
-        String email = videEnNull(request.email());
-        String telephone = videEnNull(request.telephone());
+        String email = courrielValide(request.email());
+        String telephone = telephoneValide(request.telephone());
 
         Map<String, Object> details = new LinkedHashMap<>();
         details.put("prestataireId", intervenant.getId());
@@ -144,6 +145,39 @@ public class IntervenantService {
     }
 
     /** Un champ facultatif vidé à l'écran arrive en chaîne vide : il est enregistré comme absent. */
+    /**
+     * Contrôle et met en forme les coordonnées (étape 11 du plan Notification Engine).
+     * <p>
+     * <b>Pourquoi à la saisie.</b> Un numéro mal écrit ne se voyait qu'au moment d'envoyer, sous la
+     * forme d'une ligne « non joignable » en supervision (D14) — c'est-à-dire trop tard, et loin de
+     * la personne qui pouvait le corriger. Le refus est désormais immédiat, sur le champ concerné.
+     * <p>
+     * <b>Et pourquoi mettre en forme.</b> Le moteur n'accepte que trois écritures (Guide V1) ; un
+     * numéro saisi « 654 47 67 96 » est enregistré « 237654476796 », si bien que la fiche porte une
+     * valeur utilisable telle quelle. Rien n'est deviné pour autant : ce qui ne relève d'aucune des
+     * trois formes est refusé, pas corrigé.
+     */
+    private static String telephoneValide(String saisie) {
+        String telephone = videEnNull(saisie);
+        if (telephone == null) {
+            return null;
+        }
+        return Coordonnees.telephone(telephone).orElseThrow(() -> ApiException.badRequestSurChamp(
+                ErrorCodes.REQUETE_INVALIDE,
+                "Numéro de téléphone invalide : attendu 6XXXXXXXX, 237XXXXXXXXX ou +237XXXXXXXXX",
+                "telephone"));
+    }
+
+    /** Même principe pour le courriel : un domaine sans point passerait le contrôle de saisie standard. */
+    private static String courrielValide(String saisie) {
+        String courriel = videEnNull(saisie);
+        if (courriel == null) {
+            return null;
+        }
+        return Coordonnees.courriel(courriel).orElseThrow(() -> ApiException.badRequestSurChamp(
+                ErrorCodes.REQUETE_INVALIDE, "Adresse de courriel invalide", "email"));
+    }
+
     private static String videEnNull(String valeur) {
         return StringUtils.hasText(valeur) ? valeur.trim() : null;
     }

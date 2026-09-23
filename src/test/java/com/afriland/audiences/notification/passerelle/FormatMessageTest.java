@@ -28,7 +28,7 @@ class FormatMessageTest {
 
     private JsonNode publier(String sujet) throws Exception {
         MessageEngine message = MessageEngine.de("eyJhbGciOiJIUzI1NiJ9.jeton", "audience-deliberer", "STANDARD",
-                CanalEngine.SMS, "237600000000", sujet, "Texte du message", "alerte-42-SMS", null);
+                CanalEngine.SMS, "+237600000000", sujet, "Texte du message", "alerte-42-SMS", null);
         return objectMapper.readTree(objectMapper.writeValueAsString(
                 EnveloppeCloudEvents.autour(message, "audience-deliberer", "kafka-pubsub", "notification-send-request")));
     }
@@ -53,7 +53,7 @@ class FormatMessageTest {
         assertThat(data.has("locale")).isFalse();
         assertThat(data.has("metadata")).isFalse();
         assertThat(data.has("channelRecipients")).isFalse();
-        assertThat(data.get("recipient").asText()).isEqualTo("237600000000");
+        assertThat(data.get("recipient").asText()).isEqualTo("+237600000000");
         assertThat(data.get("serviceKey").asText()).isEqualTo("audience-deliberer");
         assertThat(data.get("priority").asText()).isEqualTo("STANDARD");
         assertThat(data.get("channels").get(0).asText()).isEqualTo("SMS");

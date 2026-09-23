@@ -64,8 +64,8 @@ class AccuseNotificationServiceTest {
     private static NotificationEnvoi envoiPublie(String eventId) {
         NotificationEnvoi envoi = NotificationEnvoi.aRemettre(
                 new Origine(eventId, "RAPPEL_AUDIENCE", 5L, 42L, TypeDestinataire.AVOCAT, 9L),
-                CanalEngine.SMS, "237600000000", null, "Texte");
-        envoi.marquerPubliee("DAPR", "237600000000");
+                CanalEngine.SMS, "+237600000000", null, "Texte");
+        envoi.marquerPubliee("DAPR", "+237600000000");
         return envoi;
     }
 

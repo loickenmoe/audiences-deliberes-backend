@@ -45,7 +45,7 @@ class RemiseNotificationTest {
     /** Le moteur est déclaré actif dès que la redirection est en jeu : elle ne s'applique pas sinon. */
     private static NotificationEngineProperties proprietes(boolean redirection) {
         return new NotificationEngineProperties(redirection, "audience-deliberer", SECRET, 5, Duration.ofHours(2),
-                new Redirection(redirection, "juriste.test@afrilandfirstbank.com", "prestataire.test@example.cm", "237600000000"),
+                new Redirection(redirection, "juriste.test@afrilandfirstbank.com", "prestataire.test@example.cm", "+237600000000"),
                 new NotificationEngineProperties.Transport(NotificationEngineProperties.TypeTransport.JOURNAL, "t", "p", "u", 10, true), null, "STANDARD", false);
     }
 
@@ -121,14 +121,14 @@ class RemiseNotificationTest {
     @Test
     void la_redirection_remplace_le_destinataire_et_conserve_le_reel() throws Exception {
         NotificationEnvoi envoi = avecDateCreation(envoi(CanalEngine.SMS, TypeDestinataire.AVOCAT,
-                "237699887766"), LocalDateTime.now());
+                "+237699887766"), LocalDateTime.now());
         when(repository.findById(1L)).thenReturn(Optional.of(envoi));
 
         service(proprietes(true)).remettre(1L);
 
-        assertThat(publie().recipient()).isEqualTo("237600000000");
-        assertThat(envoi.getDestinataire()).isEqualTo("237600000000");
-        assertThat(envoi.getDestinataireOrigine()).isEqualTo("237699887766");
+        assertThat(publie().recipient()).isEqualTo("+237600000000");
+        assertThat(envoi.getDestinataire()).isEqualTo("+237600000000");
+        assertThat(envoi.getDestinataireOrigine()).isEqualTo("+237699887766");
     }
 
     @Test
@@ -154,7 +154,7 @@ class RemiseNotificationTest {
     void une_redirection_sans_cible_refuse_d_envoyer() throws Exception {
         NotificationEngineProperties incomplete = new NotificationEngineProperties(true, "audience-deliberer", SECRET,
                 5, Duration.ofHours(2), new Redirection(true, "a@b.cm", "c@d.cm", null), new NotificationEngineProperties.Transport(NotificationEngineProperties.TypeTransport.JOURNAL, "t", "p", "u", 10, true), null, "STANDARD", false);
-        NotificationEnvoi envoi = avecDateCreation(envoi(CanalEngine.SMS, TypeDestinataire.AVOCAT, "237699887766"),
+        NotificationEnvoi envoi = avecDateCreation(envoi(CanalEngine.SMS, TypeDestinataire.AVOCAT, "+237699887766"),
                 LocalDateTime.now());
         when(repository.findById(1L)).thenReturn(Optional.of(envoi));
 
@@ -222,7 +222,7 @@ class RemiseNotificationTest {
 
     @Test
     void une_notification_trop_ancienne_est_abandonnee_sans_etre_envoyee() throws Exception {
-        NotificationEnvoi envoi = avecDateCreation(envoi(CanalEngine.SMS, TypeDestinataire.AVOCAT, "237600000000"),
+        NotificationEnvoi envoi = avecDateCreation(envoi(CanalEngine.SMS, TypeDestinataire.AVOCAT, "+237600000000"),
                 LocalDateTime.now().minusHours(3));
         when(repository.findById(1L)).thenReturn(Optional.of(envoi));
 

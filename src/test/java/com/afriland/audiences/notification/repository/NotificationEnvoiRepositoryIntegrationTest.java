@@ -55,7 +55,7 @@ class NotificationEnvoiRepositoryIntegrationTest {
     @Test
     void une_ligne_a_remettre_est_enregistree_puis_retrouvee_par_son_eventId() {
         repository.saveAndFlush(NotificationEnvoi.aRemettre(origine("alerte-1"), CanalEngine.SMS,
-                "237600000000", null, "Audience dans 7 jours."));
+                "+237600000000", null, "Audience dans 7 jours."));
 
         NotificationEnvoi relue = repository.findByEventId("alerte-1-SMS").orElseThrow();
         assertThat(relue.getId()).isNotNull();
@@ -75,7 +75,7 @@ class NotificationEnvoiRepositoryIntegrationTest {
     @Test
     void l_accuse_positif_efface_le_texte_du_sms_en_base() {
         NotificationEnvoi envoi = repository.saveAndFlush(NotificationEnvoi.aRemettre(origine("alerte-3"),
-                CanalEngine.SMS, "237600000000", null, "Texte"));
+                CanalEngine.SMS, "+237600000000", null, "Texte"));
 
         envoi.marquerEnvoyee("DELIVERED", LocalDateTime.now());
         repository.saveAndFlush(envoi);

@@ -119,7 +119,7 @@ class RoutageNotificationTest {
 
         assertThat(routes).containsExactly(
                 new Route("COURRIEL_PERSONNEL", CanalEngine.EMAIL, "prestataire.test@example.cm", null),
-                new Route("SMS", CanalEngine.SMS, "237600000000", null));
+                new Route("SMS", CanalEngine.SMS, "+237600000000", null));
     }
 
     @Test

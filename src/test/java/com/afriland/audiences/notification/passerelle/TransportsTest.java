@@ -29,7 +29,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
  */
 class TransportsTest {
 
-    private static final MessageEngine MESSAGE = MessageEngine.de("jeton", "audience-deliberer", "STANDARD", CanalEngine.SMS, "237600000000",
+    private static final MessageEngine MESSAGE = MessageEngine.de("jeton", "audience-deliberer", "STANDARD", CanalEngine.SMS, "+237600000000",
             null, "Audience dans 7 jours.", "alerte-5-SMS", null);
 
     // ── Sidecar Dapr ──
@@ -43,7 +43,7 @@ class TransportsTest {
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.token").value("jeton"))
                 .andExpect(jsonPath("$.channels[0]").value("SMS"))
-                .andExpect(jsonPath("$.recipient").value("237600000000"))
+                .andExpect(jsonPath("$.recipient").value("+237600000000"))
                 .andExpect(jsonPath("$.eventId").value("alerte-5-SMS"))
                 .andExpect(jsonPath("$.category").value("TRANSACTIONAL"))
                 .andExpect(jsonPath("$.serviceKey").value("audience-deliberer"))
@@ -90,7 +90,7 @@ class TransportsTest {
         assertThat(passerelle.publier(MESSAGE)).isEqualTo("KAFKA");
         org.mockito.ArgumentCaptor<String> charge = org.mockito.ArgumentCaptor.forClass(String.class);
         org.mockito.Mockito.verify(template).send(anyString(), anyString(), charge.capture());
-        assertThat(charge.getValue()).contains("\"eventId\":\"alerte-5-SMS\"", "\"recipient\":\"237600000000\"")
+        assertThat(charge.getValue()).contains("\"eventId\":\"alerte-5-SMS\"", "\"recipient\":\"+237600000000\"")
                 .doesNotContain("directSubject", "channelRecipients", "locale", "metadata");
     }
 
@@ -119,7 +119,7 @@ class TransportsTest {
         assertThat(enveloppe.get("id").asText()).isNotBlank();
         // Le message métier est intact dans data : c'est lui que le moteur lira après déballage.
         assertThat(enveloppe.get("data").get("eventId").asText()).isEqualTo("alerte-5-SMS");
-        assertThat(enveloppe.get("data").get("recipient").asText()).isEqualTo("237600000000");
+        assertThat(enveloppe.get("data").get("recipient").asText()).isEqualTo("+237600000000");
     }
 
     /** Sans attente de l'accusé, un courtier injoignable passerait pour un succès. */

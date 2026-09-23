@@ -124,8 +124,8 @@ class SupervisionNotificationServiceTest {
 
     @Test
     void relancer_un_envoi_sans_retour_est_permis() {
-        NotificationEnvoi sansRetour = envoi(CanalEngine.SMS, "237600000000");
-        sansRetour.marquerPubliee("DAPR", "237600000000");
+        NotificationEnvoi sansRetour = envoi(CanalEngine.SMS, "+237600000000");
+        sansRetour.marquerPubliee("DAPR", "+237600000000");
         sansRetour.marquerSansRetour();
         when(repository.findById(2L)).thenReturn(Optional.of(sansRetour));
 

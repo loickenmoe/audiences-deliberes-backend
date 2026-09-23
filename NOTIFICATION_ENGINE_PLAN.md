@@ -442,10 +442,36 @@ Livrée, en attente du commit de l'utilisateur.
   externes » correspondait aussi à « Grille des notifications externes » ; les assertions de titre
   de cet écran utilisent donc `exact: true`.
 
-### ⬜ Étape 11 : validation des coordonnées dans le référentiel des intervenants
+### ✅ Étape 11 : validation des coordonnées dans le référentiel des intervenants
 
-- Format du téléphone (E.164, `237…` ou `6…`) et du courriel, pour les avocats et les autres
-  prestataires.
+Livrée, en attente du commit de l'utilisateur.
+- **Backend** : `IntervenantService` contrôle et **met en forme** les coordonnées à la création comme
+  à la modification, pour les deux types d'intervenant. Le courriel exige un domaine avec point, là
+  où `@Email` acceptait « a@b ». Nouvelle fabrique `ApiException.badRequestSurChamp` : l'erreur se
+  pose sur le champ fautif.
+- **Règle du téléphone, arrêtée avec le porteur du projet** :
+  - **Cameroun** : exactement **neuf chiffres commençant par 6**, que l'indicatif soit écrit
+    (`+237`, `237`) ou non. Tous les mobiles du pays commencent par 6, **Camtel compris**
+    (`620 XX XX XX`). Les lignes fixes, en 2, sont écartées : elles ne reçoivent ni SMS ni WhatsApp.
+  - **Hors Cameroun** : les prestataires étrangers existent et le moteur délivre au-delà du pays ;
+    l'**indicatif devient obligatoire**, car il n'est pas devinable. Forme internationale contrôlée
+    (indicatif puis huit à quinze chiffres), sans vérifier la longueur propre à chaque pays.
+  - **Une seule écriture est enregistrée** : le format international, `+237650228936`. Deux formes
+    pour la même coordonnée seraient incomparables entre elles.
+  - **Pas de bibliothèque de validation** (type libphonenumber) : elle ferait mieux sur les numéros
+    étrangers, mais ajoute une dépendance à maintenir pour un besoin encore marginal. À reconsidérer
+    si la supervision montre des échecs sur ces numéros — une raison chiffrée plutôt qu'une intuition.
+  - **Migration V31** : les numéros déjà saisis passent au format international. Ce qui ne relève
+    d'aucune forme connue — un fixe, par exemple — est **laissé tel quel**, visible et corrigible,
+    jamais réécrit au jugé. Vérifié sur la base réelle : local et étranger convertis, fixe intact.
+- Les coordonnées **restent facultatives** : tout prestataire n'a pas de numéro.
+- **Frontend** : même règle à la saisie (`telephoneValide`), format attendu annoncé sous le champ,
+  messages FR et EN.
+- **Pourquoi à la saisie** : une faute ne se voyait qu'à l'envoi, sous la forme d'une ligne
+  « non joignable » en supervision — trop tard, et loin de qui pouvait corriger la fiche.
+- Conséquence sur l'audit : le numéro historisé est désormais celui, mis en forme, qui sera utilisé.
+- Tests : 5 backend (dont mise en forme et refus), 3 Vitest, 1 parcours Playwright.
+  Suites complètes : backend 646, Vitest 363, référentiels Playwright 12 sur 12.
 
 ### ⬜ Étape 12 : pièce jointe (lettre de constitution)
 
