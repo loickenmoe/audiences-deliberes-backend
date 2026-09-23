@@ -21,7 +21,7 @@ class RappelsNotificationTest {
     private static RappelsNotification rappels(String base) {
         return new RappelsNotification(new NotificationEngineProperties(true, "audience-deliberer", SECRET, 5,
                 Duration.ofHours(2), new Redirection(false, null, null, null),
-                new Transport(TypeTransport.DAPR, "t", "p", "u", 10, true), base, "STANDARD", false));
+                new Transport(TypeTransport.DAPR, "t", "p", "u", 10, true, "attachment-upload-request"), base, "STANDARD", false, java.time.Duration.ofMinutes(5)));
     }
 
     @Test
@@ -55,7 +55,7 @@ class RappelsNotificationTest {
     void un_secret_different_ne_valide_pas_la_signature() {
         String signatureAutre = new RappelsNotification(new NotificationEngineProperties(true, "audience-deliberer",
                 "fedcba9876543210fedcba9876543210", 5, Duration.ofHours(2), new Redirection(false, null, null, null),
-                new Transport(TypeTransport.DAPR, "t", "p", "u", 10, true), "https://x", "STANDARD", false)).signer("alerte-42:SMS");
+                new Transport(TypeTransport.DAPR, "t", "p", "u", 10, true, "attachment-upload-request"), "https://x", "STANDARD", false, java.time.Duration.ofMinutes(5))).signer("alerte-42:SMS");
 
         assertThat(rappels("https://audiences.afriland.cm").signatureValide("alerte-42:SMS", signatureAutre)).isFalse();
     }

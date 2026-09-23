@@ -3,9 +3,11 @@ package com.afriland.audiences.notification.service;
 import com.afriland.audiences.notification.config.NotificationEngineProperties;
 import com.afriland.audiences.notification.domain.NotificationEnvoi;
 import com.afriland.audiences.notification.domain.StatutEnvoi;
+import com.afriland.audiences.notification.passerelle.DemandeDepotPieceJointe;
 import com.afriland.audiences.notification.passerelle.JetonEngine;
 import com.afriland.audiences.notification.passerelle.MessageEngine;
 import com.afriland.audiences.notification.passerelle.PasserelleNotificationEngine;
+import com.afriland.audiences.notification.passerelle.PieceJointeEngine;
 import com.afriland.audiences.notification.repository.NotificationEnvoiRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -54,13 +56,19 @@ public class RemiseNotification {
         try {
             // Dans le try : une redirection incomplète doit faire échouer la remise, jamais laisser
             // partir le message vers le destinataire réel.
-            String destinataire = redirection.cible(envoi).orElseGet(envoi::getDestinataire);
+            if (envoi.attendSaPieceJointe() && demanderLeDepot(envoi)) {
+            return;
+        }
+        String destinataire = redirection.cible(envoi).orElseGet(envoi::getDestinataire);
             // Le jeton n'est signé que si un message part vraiment : la passerelle journal n'en a pas
             // besoin, et l'exiger empêcherait de vider la file tant que le secret n'est pas renseigné.
             String jeton = proprietes.actif() ? jetonEngine.signer() : null;
+            PieceJointeEngine pieceJointe = envoi.getPieceJointeCle() == null ? null
+                    : new PieceJointeEngine(envoi.getPieceJointeNom(), envoi.getPieceJointeMime(),
+                            envoi.getPieceJointeCle());
             MessageEngine message = MessageEngine.de(jeton, proprietes.codeService(), proprietes.priorite(),
                     envoi.getCanal(), destinataire, envoi.getSujet(), envoi.getCorps(), envoi.getEventId(),
-                    rappels.urlPour(envoi.getEventId()).orElse(null));
+                    rappels.urlPour(envoi.getEventId()).orElse(null), pieceJointe);
             String transport = passerelle.publier(message);
             envoi.marquerPubliee(transport, destinataire);
         } catch (RuntimeException e) {
@@ -68,6 +76,34 @@ public class RemiseNotification {
             envoi.echouerTentative(e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage(), prochaine);
             log.warn("Remise en échec pour {} (tentative {} sur {}) : {}", envoi.getEventId(),
                     envoi.getTentatives(), proprietes.tentativesMax(), e.toString());
+        }
+    }
+
+    /**
+     * Demande au moteur une adresse de dépôt pour la pièce jointe (Guide V1 §3 bis). La réponse
+     * arrivera sur un topic : la ligne patiente jusque-là.
+     *
+     * @return {@code true} si la ligne doit attendre ; {@code false} si la notification peut partir
+     *         tout de suite, faute de transport sachant demander un dépôt
+     */
+    private boolean demanderLeDepot(NotificationEnvoi envoi) {
+        try {
+            DemandeDepotPieceJointe demande = new DemandeDepotPieceJointe(envoi.getEventId(),
+                    envoi.getPieceJointeNom(), envoi.getPieceJointeMime(),
+                    proprietes.actif() ? jetonEngine.signer() : null, proprietes.codeService());
+            if (!passerelle.demanderDepot(demande)) {
+                // Passerelle journal : rien ne part de toute façon, la pièce jointe non plus.
+                envoi.pieceJointeAbandonnee("DEPOT_INDISPONIBLE");
+                return false;
+            }
+            envoi.attendreLaPieceJointe(LocalDateTime.now().plus(proprietes.delaiDepot()));
+            log.debug("Dépôt demandé pour {}, la notification attend sa clé", envoi.getEventId());
+            return true;
+        } catch (RuntimeException e) {
+            log.warn("Demande de dépôt impossible pour {} : la notification partira sans sa pièce jointe",
+                    envoi.getEventId(), e);
+            envoi.pieceJointeAbandonnee("DEMANDE_DEPOT_ECHEC:" + e.getMessage());
+            return false;
         }
     }
 

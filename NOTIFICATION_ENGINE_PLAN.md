@@ -473,11 +473,31 @@ Livrée, en attente du commit de l'utilisateur.
 - Tests : 5 backend (dont mise en forme et refus), 3 Vitest, 1 parcours Playwright.
   Suites complètes : backend 646, Vitest 363, référentiels Playwright 12 sur 12.
 
-### ⬜ Étape 12 : pièce jointe (lettre de constitution)
+### ✅ Étape 12 : pièce jointe (lettre de constitution)
 
-- Dépôt préalable dans MinIO puis envoi de la référence (claim-check), sur EMAIL uniquement.
-- La clé de stockage attendue est `pending/<id>/<fichier>`. Le Guide ne précise pas quel bucket
-  utiliser : c'est un point à confirmer (§ 7).
+Livrée, en attente du commit de l'utilisateur.
+
+**Sondé avant d'être écrit.** Les topics de suivi étant muets (Q-121), rien ne disait que celui des
+pièces jointes répondrait. Une sonde manuelle (`SondeAttachmentUpload`, désactivée sauf variable
+d'environnement) a tranché en quelques minutes : demande acceptée, réponse `READY`, dépôt du fichier
+en HTTP 200. **Le moteur publie donc bien sur certains topics** — le silence du suivi est une affaire
+de configuration, pas une panne générale.
+
+- **Le fichier ne passe jamais par Kafka** : demande d'adresse sur `attachment-upload-request`,
+  réponse sur `attachment-upload-response`, dépôt direct par l'URL à usage unique, puis la
+  notification ne cite que la clé de stockage.
+- **Courriel uniquement** (D5), ce que le Guide confirme : WhatsApp et Teams perdent la pièce jointe
+  en silence, le SMS ne la supporte pas. `NotificationEnvoi.joindre` refuse les autres canaux.
+- **V32** : colonnes de pièce jointe et statut `ATTENTE_PIECE_JOINTE`, le temps que la clé arrive.
+- **Une pièce jointe ne retient jamais la notification** : dépôt refusé, échec du transfert, ou
+  absence de réponse au bout de `notification.engine.delai-depot` (5 min) — elle part sans son
+  document, la cause enregistrée. Prévenir sans la pièce vaut mieux que ne pas prévenir.
+- Réception sur les deux voies : route Dapr `/notifications/accuses/depots` et consommateur Kafka.
+- `ConstitutionService` joint la lettre archivée en GED à l'événement CONSTITUTION_VALIDEE.
+- Tests : 5 sur le dépôt (serveur HTTP local), 5 sur les transports. Suite complète : 672 verts.
+- **Contre la vraie pile** : une lettre de constitution réelle a été déposée puis citée dans la
+  notification (`pending/controle-pj-1-EMAIL/lettre-constitution-25.pdf`), avec les traces attendues
+  dans le journal. Interrupteur remis à `false`, file vidée.
 
 ### ⬜ Étape 13 : de bout en bout
 
@@ -513,7 +533,9 @@ Livrée, en attente du commit de l'utilisateur.
   envoi réel.
 - **Enveloppe du message** : l'Engine accepte-t-il un message Kafka publié directement, sans
   l'enveloppe standard ajoutée par Dapr ? Cela conditionne le repli Kafka.
-- **Pièces jointes** : quel bucket et quelle instance MinIO le claim-check doit-il utiliser ?
+- ~~**Pièces jointes** : quel bucket et quelle instance MinIO ?~~ Résolu par la sonde : le moteur rend
+  lui-même une adresse de dépôt à usage unique, sur son propre stockage
+  (`172.21.88.31:31784/notification-attachments/...`), joignable depuis les postes. Rien à configurer.
 - **WhatsApp** : faut-il des modèles de message préapprouvés, ce qui est la règle habituelle de
   WhatsApp Business ? Le canal reste éteint par défaut (V28) jusqu'à la réponse de l'administrateur.
 - **Accusés et référence (Q-120)** : le moteur peut-il ajouter l'`eventId`, ou restituer

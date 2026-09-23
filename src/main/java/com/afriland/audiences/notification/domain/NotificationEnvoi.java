@@ -96,6 +96,24 @@ public class NotificationEnvoi {
     @Column(name = "date_accuse")
     private LocalDateTime dateAccuse;
 
+    /** Document de la GED à joindre (D5) ; référence libre, comme {@code dossierId}. */
+    @Column(name = "piece_jointe_document_id")
+    private Long pieceJointeDocumentId;
+
+    @Column(name = "piece_jointe_nom", length = 255)
+    private String pieceJointeNom;
+
+    @Column(name = "piece_jointe_mime", length = 100)
+    private String pieceJointeMime;
+
+    /** Chemin dans notre propre stockage, d'où le fichier est lu pour être déposé chez le moteur. */
+    @Column(name = "piece_jointe_chemin", length = 500)
+    private String pieceJointeChemin;
+
+    /** Clé rendue par le moteur une fois le fichier déposé ; c'est elle que porte la notification. */
+    @Column(name = "piece_jointe_cle", length = 500)
+    private String pieceJointeCle;
+
     /** Ligne prête à partir : elle sera remise au transport au prochain passage du dispatcher. */
     public static NotificationEnvoi aRemettre(Origine origine, CanalEngine canal, String destinataire,
                                               String sujet, String corps) {
@@ -118,6 +136,50 @@ public class NotificationEnvoi {
      * Canal routé sans coordonnée utilisable : rien ne part, mais l'écart reste visible en supervision
      * (D14), avec son motif (coordonnée absente ou invalide) dans {@code derniereErreur}.
      */
+    /**
+     * Joint un document de la GED à cette notification (D5). Réservé au courriel : le Guide constate
+     * que WhatsApp et Teams perdent la pièce jointe en silence, et que le SMS ne la supporte pas.
+     */
+    public void joindre(Long documentId, String nom, String mime, String chemin) {
+        if (canal != CanalEngine.EMAIL) {
+            return;
+        }
+        this.pieceJointeDocumentId = documentId;
+        this.pieceJointeNom = nom;
+        this.pieceJointeMime = mime;
+        this.pieceJointeChemin = chemin;
+    }
+
+    /** Une pièce jointe est attendue, et sa clé de stockage n'est pas encore connue. */
+    public boolean attendSaPieceJointe() {
+        return pieceJointeChemin != null && pieceJointeCle == null;
+    }
+
+    /** La clé a été demandée au moteur : la ligne patiente jusqu'à la réponse. */
+    public void attendreLaPieceJointe(LocalDateTime relance) {
+        this.statut = StatutEnvoi.ATTENTE_PIECE_JOINTE;
+        this.prochaineTentative = relance;
+    }
+
+    /** Le fichier est déposé : la ligne repart, et citera la clé dans sa notification. */
+    public void pieceJointeDeposee(String cleStockage) {
+        this.pieceJointeCle = cleStockage;
+        this.statut = StatutEnvoi.EN_ATTENTE;
+        this.prochaineTentative = LocalDateTime.now();
+        this.derniereErreur = null;
+    }
+
+    /**
+     * Le dépôt a échoué. La notification part <b>sans</b> sa pièce jointe plutôt que de ne jamais
+     * partir : le destinataire est prévenu, et l'absence du document reste tracée.
+     */
+    public void pieceJointeAbandonnee(String motif) {
+        this.pieceJointeChemin = null;
+        this.statut = StatutEnvoi.EN_ATTENTE;
+        this.prochaineTentative = LocalDateTime.now();
+        this.derniereErreur = tronquer(motif);
+    }
+
     public static NotificationEnvoi nonJoignable(Origine origine, CanalEngine canal, String motif) {
         NotificationEnvoi envoi = nouvelle(origine, canal);
         envoi.statut = StatutEnvoi.NON_JOIGNABLE;

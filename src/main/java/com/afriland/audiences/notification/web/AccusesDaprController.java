@@ -3,7 +3,9 @@ package com.afriland.audiences.notification.web;
 import com.afriland.audiences.notification.config.NotificationEngineProperties;
 import com.afriland.audiences.notification.domain.NotificationAccuse.TypeAccuse;
 import com.afriland.audiences.notification.service.AccuseNotificationService;
+import com.afriland.audiences.notification.service.DepotPieceJointeService;
 import com.afriland.audiences.notification.web.dto.AccuseEngine;
+import com.afriland.audiences.notification.web.dto.ReponseDepotPieceJointe;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -36,8 +38,10 @@ public class AccusesDaprController {
 
     static final String ROUTE_SUCCES = "/notifications/accuses/envoyes";
     static final String ROUTE_ECHEC = "/notifications/accuses/echecs";
+    static final String ROUTE_DEPOT = "/notifications/accuses/depots";
 
     private final AccuseNotificationService accuseNotificationService;
+    private final DepotPieceJointeService depotPieceJointeService;
     private final NotificationEngineProperties proprietes;
 
     /** Abonnements annoncés au sidecar : le topic de suivi des succès et celui des échecs. */
@@ -46,7 +50,8 @@ public class AccusesDaprController {
         String pubsub = proprietes.transport().pubsub();
         return List.of(
                 Map.of("pubsubname", pubsub, "topic", "notification-sent", "route", ROUTE_SUCCES),
-                Map.of("pubsubname", pubsub, "topic", "notification-failed", "route", ROUTE_ECHEC));
+                Map.of("pubsubname", pubsub, "topic", "notification-failed", "route", ROUTE_ECHEC),
+                Map.of("pubsubname", pubsub, "topic", "attachment-upload-response", "route", ROUTE_DEPOT));
     }
 
     @PostMapping(ROUTE_SUCCES)
@@ -58,6 +63,13 @@ public class AccusesDaprController {
     @PostMapping(ROUTE_ECHEC)
     public ResponseEntity<Void> echoue(@RequestBody AccuseEngine accuse) {
         accuseNotificationService.enregistrer(accuse, TypeAccuse.FAILED);
+        return ResponseEntity.ok().build();
+    }
+
+    /** Adresse de dépôt d'une pièce jointe : la notification qui l'attend repart une fois le fichier envoyé. */
+    @PostMapping(ROUTE_DEPOT)
+    public ResponseEntity<Void> depot(@RequestBody ReponseDepotPieceJointe reponse) {
+        depotPieceJointeService.traiterLaReponse(reponse);
         return ResponseEntity.ok().build();
     }
 }

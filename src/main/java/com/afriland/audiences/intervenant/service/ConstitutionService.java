@@ -251,6 +251,16 @@ public class ConstitutionService {
         demande.setLettreDocument(document);
     }
 
+    /** La lettre générée à la validation, si elle a bien été archivée dans la GED. */
+    private NotificationPrestataireService.PieceJointe lettreAJoindre(DemandeConstitution demande) {
+        Document lettre = demande.getLettreDocument();
+        if (lettre == null || lettre.getCheminStockage() == null) {
+            return null;
+        }
+        return new NotificationPrestataireService.PieceJointe(lettre.getId(), lettre.getNomFichier(),
+                "application/pdf", lettre.getCheminStockage());
+    }
+
     /**
      * Notifie le prestataire constitué. L'alerte applicative reste réservée à un {@link Avocat}
      * disposant d'un compte (RG-INT-01) ; les canaux externes (Q-118), eux, visent les coordonnées de
@@ -258,8 +268,9 @@ public class ConstitutionService {
      */
     private void notifierPrestataire(DemandeConstitution demande) {
         Long dossierId = demande.getDossier().getId();
+        // D5 : la lettre part avec la notification, par courriel — le seul canal qui la délivre.
         notificationPrestataireService.notifier(EvenementPrestataire.CONSTITUTION_VALIDEE, demande.getPrestataire(),
-                dossierId, "constitution-" + demande.getId());
+                dossierId, "constitution-" + demande.getId(), lettreAJoindre(demande));
         // Q-87 : le prestataire chargé à la demande est un proxy d'Intervenant, jamais « instanceof Avocat ».
         if (!(Hibernate.unproxy(demande.getPrestataire()) instanceof Avocat avocat)) {
             return;

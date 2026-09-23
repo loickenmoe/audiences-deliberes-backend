@@ -56,7 +56,7 @@ class TransportsTest {
                 .andRespond(withSuccess());
 
         PasserelleDapr passerelle = new PasserelleDapr(constructeur.build(), "kafka-pubsub",
-                "notification-send-request");
+                "notification-send-request", "attachment-upload-request");
 
         assertThat(passerelle.publier(MESSAGE)).isEqualTo("DAPR");
         serveur.verify();
@@ -68,7 +68,7 @@ class TransportsTest {
         MockRestServiceServer serveur = MockRestServiceServer.bindTo(constructeur).build();
         serveur.expect(requestTo(org.hamcrest.Matchers.containsString("/v1.0/publish/"))).andRespond(withServerError());
 
-        PasserelleDapr passerelle = new PasserelleDapr(constructeur.build(), "pubsub", "topic");
+        PasserelleDapr passerelle = new PasserelleDapr(constructeur.build(), "pubsub", "topic", "depot");
 
         assertThatThrownBy(() -> passerelle.publier(MESSAGE))
                 .isInstanceOf(IllegalStateException.class)
@@ -84,7 +84,7 @@ class TransportsTest {
         when(template.send(eq("notification-send-request"), eq("alerte-5-SMS"), anyString()))
                 .thenReturn(CompletableFuture.completedFuture(null));
 
-        PasserelleKafka passerelle = new PasserelleKafka(template, new ObjectMapper(), "notification-send-request", 10,
+        PasserelleKafka passerelle = new PasserelleKafka(template, new ObjectMapper(), "notification-send-request", "attachment-upload-request", 10,
                 "kafka-pubsub", "audience-deliberer", false);
 
         assertThat(passerelle.publier(MESSAGE)).isEqualTo("KAFKA");
@@ -104,7 +104,7 @@ class TransportsTest {
         KafkaTemplate<String, String> template = mock(KafkaTemplate.class);
         when(template.send(anyString(), anyString(), anyString())).thenReturn(CompletableFuture.completedFuture(null));
 
-        new PasserelleKafka(template, new ObjectMapper(), "notification-send-request", 10,
+        new PasserelleKafka(template, new ObjectMapper(), "notification-send-request", "attachment-upload-request", 10,
                 "kafka-pubsub", "audience-deliberer", true).publier(MESSAGE);
 
         org.mockito.ArgumentCaptor<String> charge = org.mockito.ArgumentCaptor.forClass(String.class);
@@ -130,7 +130,7 @@ class TransportsTest {
         when(template.send(anyString(), anyString(), anyString()))
                 .thenReturn(CompletableFuture.failedFuture(new IllegalStateException("courtier injoignable")));
 
-        PasserelleKafka passerelle = new PasserelleKafka(template, new ObjectMapper(), "topic", 1,
+        PasserelleKafka passerelle = new PasserelleKafka(template, new ObjectMapper(), "topic", "depot", 1,
                 "pubsub", "audience-deliberer", true);
 
         assertThatThrownBy(() -> passerelle.publier(MESSAGE))

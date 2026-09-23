@@ -19,6 +19,8 @@ import java.util.List;
  * @param callbackBaseUrl adresse publique de l'application, telle que le moteur peut la joindre. Vide
  *                        depuis un poste de travail : les rappels sont alors désactivés (Q-120)
  * @param priorite        priorité portée par chaque message ; celle du compte de service (STANDARD)
+ * @param delaiDepot      au-delà, une notification qui attend l'adresse de dépôt de sa pièce jointe
+ *                        part sans elle (D5) : prévenir sans la pièce vaut mieux que ne pas prévenir
  * @param suiviAccuses    le moteur publie-t-il vraiment ses accusés ? <b>Faux par défaut</b> : relus
  *                        depuis leur origine, {@code notification-sent} et {@code notification-failed}
  *                        se sont révélés vides, tous services confondus (Q-121). Tant qu'il en est
@@ -36,7 +38,8 @@ public record NotificationEngineProperties(
         @DefaultValue Transport transport,
         String callbackBaseUrl,
         @DefaultValue("STANDARD") String priorite,
-        @DefaultValue("false") boolean suiviAccuses) {
+        @DefaultValue("false") boolean suiviAccuses,
+        @DefaultValue("5m") Duration delaiDepot) {
 
     /** Longueur minimale du secret exigée par le moteur pour la signature HS256 (256 bits). */
     public static final int LONGUEUR_MIN_SECRET = 32;
@@ -70,7 +73,8 @@ public record NotificationEngineProperties(
             @DefaultValue("kafka-pubsub") String pubsub,
             @DefaultValue("http://localhost:3500") String daprUrl,
             @DefaultValue("10") long attenteSecondes,
-            @DefaultValue("true") boolean cloudEvents) {
+            @DefaultValue("true") boolean cloudEvents,
+            @DefaultValue("attachment-upload-request") String topicDepot) {
     }
 
     public enum TypeTransport {

@@ -18,4 +18,15 @@ public interface PasserelleNotificationEngine {
      * @return nom du transport utilisé, consigné dans la file pour le diagnostic
      */
     String publier(MessageEngine message);
+
+    /**
+     * Demande au moteur une URL de dépôt pour une pièce jointe (Guide V1 §3 bis). La réponse arrive
+     * plus tard, sur un topic, et porte le {@code requestId} de la demande.
+     *
+     * @return {@code false} si ce transport ne sait pas demander de dépôt — la notification partira
+     *         alors sans sa pièce jointe, plutôt que de ne jamais partir
+     */
+    default boolean demanderDepot(DemandeDepotPieceJointe demande) {
+        return false;
+    }
 }

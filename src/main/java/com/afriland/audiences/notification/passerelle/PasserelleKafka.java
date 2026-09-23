@@ -30,16 +30,19 @@ public class PasserelleKafka implements PasserelleNotificationEngine {
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
     private final String topic;
+    private final String topicDepot;
     private final long attenteSecondes;
     private final String pubsub;
     private final String source;
     private final boolean cloudEvents;
 
     public PasserelleKafka(KafkaTemplate<String, String> kafkaTemplate, ObjectMapper objectMapper, String topic,
-                           long attenteSecondes, String pubsub, String source, boolean cloudEvents) {
+                           String topicDepot, long attenteSecondes, String pubsub, String source,
+                           boolean cloudEvents) {
         this.kafkaTemplate = kafkaTemplate;
         this.objectMapper = objectMapper;
         this.topic = topic;
+        this.topicDepot = topicDepot;
         this.attenteSecondes = attenteSecondes;
         this.pubsub = pubsub;
         this.source = source;
@@ -47,25 +50,41 @@ public class PasserelleKafka implements PasserelleNotificationEngine {
     }
 
     @Override
+    public boolean demanderDepot(DemandeDepotPieceJointe demande) {
+        envoyer(topicDepot, demande.requestId(), serialiser(demande, topicDepot));
+        log.debug("Dépôt de pièce jointe demandé pour {}", demande.requestId());
+        return true;
+    }
+
+    @Override
     public String publier(MessageEngine message) {
         String charge;
+        charge = serialiser(message, topic);
+        envoyer(topic, message.eventId(), charge);
+        log.debug("Message {} publié sur {} via Kafka", message.eventId(), topic);
+        return NOM;
+    }
+
+    private String serialiser(Object contenu, String topicVise) {
         try {
-            charge = objectMapper.writeValueAsString(cloudEvents
-                    ? EnveloppeCloudEvents.autour(message, source, pubsub, topic)
-                    : message);
+            return objectMapper.writeValueAsString(cloudEvents
+                    ? EnveloppeCloudEvents.autour(contenu, source, pubsub, topicVise)
+                    : contenu);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("Message illisible par le sérialiseur JSON", e);
         }
+    }
+
+    /** L'envoi est attendu : sans cela, un courtier injoignable passerait pour un succès. */
+    private void envoyer(String topicVise, String cle, String charge) {
         try {
             // La clé est l'eventId : les messages d'un même événement gardent leur ordre de partition.
-            kafkaTemplate.send(topic, message.eventId(), charge).get(attenteSecondes, TimeUnit.SECONDS);
+            kafkaTemplate.send(topicVise, cle, charge).get(attenteSecondes, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Publication Kafka interrompue", e);
         } catch (Exception e) {
-            throw new IllegalStateException("Publication Kafka refusée (" + topic + ") : " + e.getMessage(), e);
+            throw new IllegalStateException("Publication Kafka refusée (" + topicVise + ") : " + e.getMessage(), e);
         }
-        log.debug("Message {} publié sur {} via Kafka", message.eventId(), topic);
-        return NOM;
     }
 }

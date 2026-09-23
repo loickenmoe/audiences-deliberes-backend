@@ -1,5 +1,6 @@
 package com.afriland.audiences.notification.service;
 
+import com.afriland.audiences.notification.domain.NotificationEnvoi;
 import com.afriland.audiences.notification.repository.NotificationEnvoiRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +35,7 @@ public class DispatcherNotification {
 
     @Scheduled(fixedDelayString = "${notification.engine.dispatcher.interval-ms:60000}")
     public void remettreLesNotificationsEnAttente() {
+        abandonnerLesPiecesJointesSansReponse();
         for (Long id : aRemettre()) {
             try {
                 remiseNotification.remettre(id);
@@ -47,5 +49,21 @@ public class DispatcherNotification {
     @Transactional(readOnly = true)
     public List<Long> aRemettre() {
         return notificationEnvoiRepository.trouverARemettre(LocalDateTime.now(), PageRequest.of(0, LOT));
+    }
+
+    /**
+     * Une pièce jointe dont le dépôt n'a pas abouti ne doit pas retenir la notification : passé le
+     * délai, elle part sans son document, la cause étant enregistrée. Prévenir sans la pièce vaut
+     * mieux que ne pas prévenir (D5).
+     */
+    @Transactional
+    public void abandonnerLesPiecesJointesSansReponse() {
+        List<NotificationEnvoi> attentes = notificationEnvoiRepository
+                .trouverEnAttenteDePieceJointe(LocalDateTime.now(), PageRequest.of(0, LOT));
+        for (NotificationEnvoi envoi : attentes) {
+            log.warn("Aucune adresse de dépôt reçue pour {} : la notification partira sans sa pièce jointe",
+                    envoi.getEventId());
+            envoi.pieceJointeAbandonnee("DEPOT_SANS_REPONSE");
+        }
     }
 }

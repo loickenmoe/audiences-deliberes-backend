@@ -4,6 +4,11 @@ package com.afriland.audiences.notification.domain;
 public enum StatutEnvoi {
     /** À remettre au transport dès que {@code prochaineTentative} est atteinte. */
     EN_ATTENTE,
+    /**
+     * Une pièce jointe doit être déposée avant l'envoi (D5) : la clé de stockage a été demandée au
+     * moteur, et la ligne attend sa réponse. Elle repart en EN_ATTENTE dès que la clé est connue.
+     */
+    ATTENTE_PIECE_JOINTE,
     /** Remise au transport ; l'accusé de l'Engine n'est pas encore arrivé. */
     PUBLIEE,
     /** Accusé positif reçu sur {@code notification-sent}. */

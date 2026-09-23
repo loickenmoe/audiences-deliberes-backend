@@ -18,6 +18,14 @@ public interface NotificationEnvoiRepository extends JpaRepository<NotificationE
     Optional<NotificationEnvoi> findByEventId(String eventId);
 
     /**
+     * Lignes qui attendent leur pièce jointe depuis trop longtemps : la demande de dépôt est
+     * relancée, ou la notification part sans son document (D5).
+     */
+    @Query("SELECT n FROM NotificationEnvoi n WHERE n.statut = com.afriland.audiences.notification.domain.StatutEnvoi.ATTENTE_PIECE_JOINTE "
+            + "AND n.prochaineTentative <= :maintenant ORDER BY n.prochaineTentative ASC")
+    List<NotificationEnvoi> trouverEnAttenteDePieceJointe(@Param("maintenant") LocalDateTime maintenant, Pageable page);
+
+    /**
      * Garde-fou avant écriture : le même événement peut se représenter (relance planifiée, avocat
      * réaffecté au même dossier). Sans ce contrôle, la contrainte d'unicité ferait échouer l'action
      * métier qui a provoqué la notification.

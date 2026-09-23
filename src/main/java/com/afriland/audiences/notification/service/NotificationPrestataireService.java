@@ -51,9 +51,23 @@ public class NotificationPrestataireService {
      */
     public void notifier(EvenementPrestataire evenement, Intervenant prestataire, Long dossierId,
                          String referenceEvenement) {
+        notifier(evenement, prestataire, dossierId, referenceEvenement, null);
+    }
+
+    /**
+     * @param pieceJointe document de la GED à joindre, ou {@code null}. Il n'est attaché qu'au
+     *                    courriel (D5) : le Guide constate que WhatsApp et Teams la perdent en
+     *                    silence, et que le SMS ne la supporte pas.
+     */
+    public void notifier(EvenementPrestataire evenement, Intervenant prestataire, Long dossierId,
+                         String referenceEvenement, PieceJointe pieceJointe) {
         List<NotificationEnvoi> envois;
         try {
             envois = preparer(evenement, prestataire, dossierId, referenceEvenement);
+            if (pieceJointe != null) {
+                envois.forEach(envoi -> envoi.joindre(pieceJointe.documentId(), pieceJointe.nom(),
+                        pieceJointe.mime(), pieceJointe.chemin()));
+            }
         } catch (RuntimeException e) {
             log.error("Notifications de l'événement {} ({}) non préparées pour le prestataire {}",
                     evenement, referenceEvenement, prestataire == null ? null : prestataire.getId(), e);
@@ -102,5 +116,14 @@ public class NotificationPrestataireService {
             envois.add(envoi);
         }
         return envois;
+    }
+
+    /**
+     * Document de la GED à joindre à une notification (D5).
+     *
+     * @param chemin emplacement dans notre stockage, d'où le fichier sera lu pour être déposé chez
+     *               le moteur
+     */
+    public record PieceJointe(Long documentId, String nom, String mime, String chemin) {
     }
 }

@@ -112,6 +112,23 @@ public class MinioStorageService {
     }
 
     /** URL pré-signée de téléchargement (FR-GED-02), valide {@value #EXPIRATION_URL_MINUTES} minutes. */
+    /**
+     * Contenu d'un objet, pour le redéposer ailleurs — aujourd'hui chez le Notification Engine, qui
+     * exige que le fichier lui soit remis par une URL à usage unique (étape 12).
+     */
+    public byte[] lire(String cheminStockage) {
+        try (var flux = minioClient.getObject(io.minio.GetObjectArgs.builder()
+                .bucket(bucketName)
+                .object(cheminStockage)
+                .build())) {
+            return flux.readAllBytes();
+        } catch (Exception e) {
+            log.error("Lecture impossible de l'objet {}", cheminStockage, e);
+            throw new ApiException(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR,
+                    ErrorCodes.ERREUR_INTERNE, "Échec de lecture du document depuis le stockage");
+        }
+    }
+
     public String urlTelechargement(String cheminStockage) {
         try {
             return minioClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()

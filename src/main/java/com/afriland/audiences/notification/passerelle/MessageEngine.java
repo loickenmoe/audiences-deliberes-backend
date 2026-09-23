@@ -45,20 +45,32 @@ public record MessageEngine(
         String directBody,
         String eventId,
         String category,
-        String callbackUrl) {
+        String callbackUrl,
+        List<PieceJointeEngine> attachments) {
 
     public static final String CATEGORIE = "TRANSACTIONAL";
 
     public static MessageEngine de(String token, String serviceKey, String priority, CanalEngine canal,
                                    String destinataire, String sujet, String corps, String eventId,
                                    String callbackUrl) {
+        return de(token, serviceKey, priority, canal, destinataire, sujet, corps, eventId, callbackUrl, null);
+    }
+
+    /**
+     * @param pieceJointe déjà déposée chez le moteur ; {@code null} quand il n'y en a pas, auquel cas
+     *                    le champ n'est pas sérialisé
+     */
+    public static MessageEngine de(String token, String serviceKey, String priority, CanalEngine canal,
+                                   String destinataire, String sujet, String corps, String eventId,
+                                   String callbackUrl, PieceJointeEngine pieceJointe) {
         return new MessageEngine(token, serviceKey, priority, List.of(canal.name()), destinataire, null,
-                sujet, corps, eventId, CATEGORIE, callbackUrl);
+                sujet, corps, eventId, CATEGORIE, callbackUrl,
+                pieceJointe == null ? null : List.of(pieceJointe));
     }
 
     /** Le jeton porte la signature du service, et l'URL de rappel son jeton : ni l'un ni l'autre au journal. */
     public MessageEngine sansJeton() {
         return new MessageEngine(null, serviceKey, priority, channels, recipient, channelRecipients, directSubject,
-                directBody, eventId, category, callbackUrl == null ? null : "(présente)");
+                directBody, eventId, category, callbackUrl == null ? null : "(présente)", attachments);
     }
 }

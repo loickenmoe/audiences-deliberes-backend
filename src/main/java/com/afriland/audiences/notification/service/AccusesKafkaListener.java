@@ -2,6 +2,7 @@ package com.afriland.audiences.notification.service;
 
 import com.afriland.audiences.notification.domain.NotificationAccuse.TypeAccuse;
 import com.afriland.audiences.notification.web.dto.AccuseEngine;
+import com.afriland.audiences.notification.web.dto.ReponseDepotPieceJointe;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +27,7 @@ import org.springframework.stereotype.Component;
 public class AccusesKafkaListener {
 
     private final AccuseNotificationService accuseNotificationService;
+    private final DepotPieceJointeService depotPieceJointeService;
     private final ObjectMapper objectMapper;
 
     @KafkaListener(topics = "notification-sent", groupId = "${notification.engine.code-service:audience-deliberer}")
@@ -38,9 +40,29 @@ public class AccusesKafkaListener {
         traiter(charge, TypeAccuse.FAILED);
     }
 
+    /** Adresse de dépôt d'une pièce jointe (Guide V1 §3 bis) : la notification attend cette réponse. */
+    @KafkaListener(topics = "attachment-upload-response", groupId = "${notification.engine.code-service:audience-deliberer}")
+    public void surReponseDepot(String charge) {
+        try {
+            depotPieceJointeService.traiterLaReponse(lire(charge, ReponseDepotPieceJointe.class));
+        } catch (Exception e) {
+            log.error("Réponse de dépôt illisible, ignorée : {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Le moteur publie par Dapr : la charge utile est enveloppée dans un CloudEvent, dont seul le
+     * champ {@code data} nous intéresse. Un message publié sans enveloppe reste lisible tel quel.
+     */
+    private <T> T lire(String charge, Class<T> type) throws com.fasterxml.jackson.core.JsonProcessingException {
+        com.fasterxml.jackson.databind.JsonNode racine = objectMapper.readTree(charge);
+        com.fasterxml.jackson.databind.JsonNode donnees = racine.has("data") ? racine.get("data") : racine;
+        return objectMapper.treeToValue(donnees, type);
+    }
+
     private void traiter(String charge, TypeAccuse type) {
         try {
-            AccuseEngine accuse = objectMapper.readValue(charge, AccuseEngine.class);
+            AccuseEngine accuse = lire(charge, AccuseEngine.class);
             // En DEBUG, on voit passer les accusés des autres services : c'est ce qui distingue un
             // topic vide d'un topic actif dont rien ne nous concerne.
             log.debug("Accusé {} lu sur le topic : service={}, canal={}", type, accuse.serviceId(), accuse.channel());

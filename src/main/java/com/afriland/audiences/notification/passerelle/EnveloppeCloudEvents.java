@@ -35,14 +35,14 @@ public record EnveloppeCloudEvents(
         String traceid,
         String traceparent,
         String tracestate,
-        MessageEngine data) {
+        Object data) {
 
     /** Type que Dapr donne aux messages publiés par son API. */
     public static final String TYPE = "com.dapr.event.sent";
     public static final String SPEC_VERSION = "1.0";
     public static final String CONTENT_TYPE = "application/json";
 
-    public static EnveloppeCloudEvents autour(MessageEngine message, String source, String pubsub, String topic) {
+    public static EnveloppeCloudEvents autour(Object message, String source, String pubsub, String topic) {
         // Format d'horodatage repris d'un message accepté : heure locale avec décalage, à la seconde.
         String horodatage = OffsetDateTime.now().truncatedTo(ChronoUnit.SECONDS)
                 .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);

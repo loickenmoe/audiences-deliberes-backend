@@ -44,9 +44,9 @@ public class NotificationEngineConfig {
         return switch (transport.type()) {
             case JOURNAL -> new PasserelleJournal();
             case DAPR -> new PasserelleDapr(RestClient.builder().baseUrl(transport.daprUrl()).build(),
-                    transport.pubsub(), transport.topic());
+                    transport.pubsub(), transport.topic(), transport.topicDepot());
             case KAFKA -> new PasserelleKafka(exigerKafka(kafkaTemplate),
-                    objectMapper.getIfAvailable(ObjectMapper::new), transport.topic(),
+                    objectMapper.getIfAvailable(ObjectMapper::new), transport.topic(), transport.topicDepot(),
                     transport.attenteSecondes(), transport.pubsub(), proprietes.codeService(),
                     transport.cloudEvents());
         };

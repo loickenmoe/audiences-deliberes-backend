@@ -26,27 +26,41 @@ public class PasserelleDapr implements PasserelleNotificationEngine {
     private final RestClient client;
     private final String pubsub;
     private final String topic;
+    private final String topicDepot;
 
-    public PasserelleDapr(RestClient client, String pubsub, String topic) {
+    public PasserelleDapr(RestClient client, String pubsub, String topic, String topicDepot) {
         this.client = client;
         this.pubsub = pubsub;
         this.topic = topic;
+        this.topicDepot = topicDepot;
+    }
+
+    @Override
+    public boolean demanderDepot(DemandeDepotPieceJointe demande) {
+        publierSur(topicDepot, demande);
+        log.debug("Dépôt de pièce jointe demandé pour {}", demande.requestId());
+        return true;
     }
 
     @Override
     public String publier(MessageEngine message) {
+        publierSur(topic, message);
+        log.debug("Message {} publié sur {}/{} via Dapr", message.eventId(), pubsub, topic);
+        return NOM;
+    }
+
+    private void publierSur(String topicVise, Object contenu) {
         try {
             client.post()
-                    .uri("/v1.0/publish/{pubsub}/{topic}", pubsub, topic)
+                    .uri("/v1.0/publish/{pubsub}/{topic}", pubsub, topicVise)
                     .contentType(MediaType.APPLICATION_JSON)
-                    .body(message)
+                    .body(contenu)
                     .retrieve()
                     .toBodilessEntity();
         } catch (RestClientException e) {
             // Remontée telle quelle : le dispatcher la compte comme une tentative et replanifie.
-            throw new IllegalStateException("Publication Dapr refusée (" + pubsub + "/" + topic + ") : " + e.getMessage(), e);
+            throw new IllegalStateException("Publication Dapr refusée (" + pubsub + "/" + topicVise + ") : "
+                    + e.getMessage(), e);
         }
-        log.debug("Message {} publié sur {}/{} via Dapr", message.eventId(), pubsub, topic);
-        return NOM;
     }
 }
