@@ -74,7 +74,9 @@ class AudienceServiceTest {
                 dossierJuristeRepository, dossierAvocatRepository, utilisateurRepository,
                 historiqueActionService, alerteService, audienceMapper);
 
-        dossier = Dossier.builder().id(1L).reference("DOS-2026-001").build();
+        // Ouvert il y a un an : les audiences régularisées s'y rattachent, celles d'avant non.
+        dossier = Dossier.builder().id(1L).reference("DOS-2026-001")
+                .createdAt(LocalDateTime.now().minusYears(1)).build();
         etapeEnCours = EtapeProcedure.builder().id(10L).dossier(dossier).type(TypeEtape.INSTANCE)
                 .statutCycleVie(StatutCycleVie.EN_COURS).build();
     }
@@ -92,15 +94,54 @@ class AudienceServiceTest {
                 .hasMessageContaining("EN_COURS");
     }
 
+/**
+     * RG-AUD-07 amendée (2026-09-23) : l'audience du jour s'enregistre, et son compte rendu est
+     * recevable dans la foulée — c'était le besoin à l'origine de l'arbitrage.
+     */
     @Test
-    void planifierAudience_rejectsPastDate() {
+    void une_audience_peut_etre_enregistree_le_jour_meme() {
+        when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
+        when(etapeProcedureRepository.findById(10L)).thenReturn(Optional.of(etapeEnCours));
+        when(audienceRepository.save(any(Audience.class))).thenAnswer(inv -> {
+            Audience a = inv.getArgument(0);
+            a.setId(7L);
+            return a;
+        });
+
+        AudienceResponse resultat = service.planifierAudience(1L,
+                new PlanifierAudienceRequest(10L, LocalDate.now()), false);
+
+        assertThat(resultat.datePlanifiee()).isEqualTo(LocalDate.now());
+        assertThat(resultat.statut()).isEqualTo(StatutAudience.PLANIFIEE);
+    }
+
+    /** Une audience tenue sans avoir été saisie se régularise : sinon, elle était perdue à jamais. */
+    @Test
+    void une_audience_deja_tenue_peut_etre_regularisee() {
+        when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
+        when(etapeProcedureRepository.findById(10L)).thenReturn(Optional.of(etapeEnCours));
+        when(audienceRepository.save(any(Audience.class))).thenAnswer(inv -> {
+            Audience a = inv.getArgument(0);
+            a.setId(8L);
+            return a;
+        });
+
+        AudienceResponse resultat = service.planifierAudience(1L,
+                new PlanifierAudienceRequest(10L, LocalDate.now().minusDays(10)), false);
+
+        assertThat(resultat.datePlanifiee()).isEqualTo(LocalDate.now().minusDays(10));
+    }
+
+    /** La seule borne : une audience ne peut pas précéder le dossier qui la porte (faute de frappe). */
+    @Test
+    void une_audience_anterieure_a_l_ouverture_du_dossier_est_refusee() {
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
         when(etapeProcedureRepository.findById(10L)).thenReturn(Optional.of(etapeEnCours));
 
         assertThatThrownBy(() -> service.planifierAudience(1L,
-                new PlanifierAudienceRequest(10L, LocalDate.now()), false))
+                new PlanifierAudienceRequest(10L, dossier.getCreatedAt().toLocalDate().minusDays(1)), false))
                 .isInstanceOf(ApiException.class)
-                .hasMessageContaining("future");
+                .hasMessageContaining("ouverture du dossier");
     }
 
     @Test

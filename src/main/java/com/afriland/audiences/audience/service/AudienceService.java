@@ -63,9 +63,19 @@ public class AudienceService {
             throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
                     "Une audience ne peut être planifiée que sur une étape EN_COURS (RG-AUD-01)");
         }
-        if (!request.datePlanifiee().isAfter(LocalDate.now())) {
+        // RG-AUD-07 amendée (arbitrage du 2026-09-23) : une audience s'enregistre aussi le jour même
+        // et après coup. Exiger une date strictement future rendait impossible l'audience apprise le
+        // matin pour le jour même, et — plus grave — interdisait définitivement de régulariser une
+        // audience qui s'était tenue sans avoir été saisie : le lendemain, sa date était passée.
+        //
+        // La borne retenue est l'ouverture du dossier : une audience ne peut pas précéder la
+        // procédure qui la porte. Elle arrête les fautes de frappe (une année erronée) sans imposer
+        // de délai arbitraire, et laisse régulariser un recours dont l'étape a été ouverte tard.
+        LocalDate ouvertureDossier = dossier.getCreatedAt() == null ? null : dossier.getCreatedAt().toLocalDate();
+        if (ouvertureDossier != null && request.datePlanifiee().isBefore(ouvertureDossier)) {
             throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
-                    "La date planifiée doit être future (RG-AUD-07)");
+                    "Une audience ne peut pas précéder l'ouverture du dossier, le " + ouvertureDossier
+                            + " (RG-AUD-07)");
         }
 
         boolean doublon = audienceRepository.existsByEtapeIdAndDatePlanifieeAndStatutNot(
