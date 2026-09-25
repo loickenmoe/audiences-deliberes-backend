@@ -36,6 +36,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
 
@@ -256,4 +257,35 @@ class ConstitutionServiceTest {
         assertThat(service.lister(null, PageRequest.of(0, 10)).content())
                 .extracting(DemandeConstitutionResponse::id).containsExactly(101L, 100L);
     }
+    /**
+     * Le tirage pour papier préimprimé part du <b>document de la GED</b> : c'est de l'onglet
+     * « Documents » d'un dossier que le métier reprend la lettre pour l'imprimer, et cet écran ne
+     * connaît que la pièce, jamais la demande de constitution qui l'a produite.
+     */
+    @Test
+    void lettrePourPapierPreimprime_regenereDepuisLaLettreEnregistree() {
+        Document piece = Document.builder().id(77L).nomFichier("lettre-constitution-4.pdf").build();
+        DemandeConstitution demande = DemandeConstitution.builder().id(100L).lettreDocument(piece).build();
+        LettreConstitution lettre = LettreConstitution.builder().id(9L).numero(4).demande(demande).build();
+        when(demandeConstitutionRepository.findByLettreDocumentId(77L)).thenReturn(Optional.of(demande));
+        when(lettreConstitutionRepository.findByDemandeId(100L)).thenReturn(Optional.of(lettre));
+        when(lettreConstitutionService.generer(lettre, true)).thenReturn("%PDF-preimprime".getBytes(StandardCharsets.UTF_8));
+
+        byte[] pdf = service.lettrePourPapierPreimprime(77L);
+
+        assertThat(new String(pdf, StandardCharsets.UTF_8)).isEqualTo("%PDF-preimprime");
+        // Le tirage se régénère : rien n'est déposé dans la GED, aucun second exemplaire ne naît.
+        verify(minioStorageService, never()).deposer(any(), any(), any(), any());
+    }
+
+    /** La GED porte des pièces de toutes sortes : aucune autre n'est régénérable. */
+    @Test
+    void lettrePourPapierPreimprime_refuseUnDocumentQuiNEstPasUneLettre() {
+        when(demandeConstitutionRepository.findByLettreDocumentId(55L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.lettrePourPapierPreimprime(55L))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("pas une lettre de constitution");
+    }
+
 }

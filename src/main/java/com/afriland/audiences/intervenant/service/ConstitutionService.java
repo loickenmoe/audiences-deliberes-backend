@@ -49,6 +49,14 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class ConstitutionService {
 
+    /**
+     * Le type de pièce porté par une lettre signée dans la GED. {@code typeDocument} est un texte
+     * libre (Q-45) : cette constante est donc le seul point où sa valeur est décidée. L'interface
+     * s'y réfère pour proposer le tirage sur papier préimprimé, et un parcours de bout en bout
+     * vérifie que les deux côtés parlent bien de la même chaîne.
+     */
+    public static final String TYPE_DOCUMENT_LETTRE = "Lettre de constitution";
+
     private final DemandeConstitutionRepository demandeConstitutionRepository;
     private final DossierRepository dossierRepository;
     private final IntervenantRepository intervenantRepository;
@@ -157,6 +165,28 @@ public class ConstitutionService {
     }
 
     /**
+     * Le tirage de la lettre <b>pour le papier préimprimé</b> de la banque, à partir de la pièce
+     * archivée dans la GED (observation métier du 2026-09-25).
+     *
+     * <p><b>Régénéré, jamais stocké.</b> La lettre est enregistrée champ par champ : le PDF se
+     * refabrique donc à l'identique, sans décor. Archiver un second fichier aurait posé la question
+     * de l'exemplaire qui fait foi — et l'aurait posée le jour où l'un des deux aurait divergé.
+     *
+     * <p>Refuse tout document qui n'est pas une lettre signée : la GED contient des pièces de toutes
+     * sortes, dont aucune autre n'est régénérable.
+     */
+    @Transactional(readOnly = true)
+    public byte[] lettrePourPapierPreimprime(Long documentId) {
+        DemandeConstitution demande = demandeConstitutionRepository.findByLettreDocumentId(documentId)
+                .orElseThrow(() -> ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE,
+                        "Ce document n'est pas une lettre de constitution : " + documentId));
+        LettreConstitution lettre = lettreConstitutionRepository.findByDemandeId(demande.getId())
+                .orElseThrow(() -> ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE,
+                        "Lettre introuvable pour la demande " + demande.getId()));
+        return lettreConstitutionService.generer(lettre, true);
+    }
+
+    /**
      * Enregistre la rédaction du juriste (B2).
      *
      * <p><b>Une lettre générée ne se réécrit pas.</b> Elle est partie chez un huissier et figure dans
@@ -240,7 +270,7 @@ public class ConstitutionService {
         Document document = documentRepository.save(Document.builder()
                 .dossier(demande.getDossier())
                 .nomFichier(nomFichier)
-                .typeDocument("Lettre de constitution")
+                .typeDocument(TYPE_DOCUMENT_LETTRE)
                 .format(FormatDocument.PDF)
                 .poids((long) pdf.length)
                 .auteurChargement(sh)

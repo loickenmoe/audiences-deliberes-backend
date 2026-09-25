@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface DemandeConstitutionRepository extends JpaRepository<DemandeConstitution, Long> {
@@ -19,4 +20,11 @@ public interface DemandeConstitutionRepository extends JpaRepository<DemandeCons
 
     /** Portail avocat (Q-96) : les lettres de constitution le désignant comme prestataire. */
     List<DemandeConstitution> findByPrestataireIdOrderByDateDemandeDesc(Long prestataireId);
+
+    /**
+     * La demande dont la lettre signée est ce document de la GED. C'est le chemin qu'emprunte le
+     * tirage sur papier préimprimé : l'onglet « Documents » d'un dossier ne connaît que la pièce,
+     * jamais la demande qui l'a produite.
+     */
+    Optional<DemandeConstitution> findByLettreDocumentId(Long documentId);
 }
