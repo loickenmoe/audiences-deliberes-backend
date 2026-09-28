@@ -25,6 +25,25 @@ public interface AudienceRepository extends JpaRepository<Audience, Long> {
     /** RG-AUD-03 (rappels J-7/J-3/J-1) : audiences encore planifiées à une date donnée. */
     List<Audience> findByStatutAndDatePlanifiee(StatutAudience statut, LocalDate datePlanifiee);
 
+    /**
+     * Les audiences d'un jour donné, annulées exclues : le journal des audiences (écran 44).
+     *
+     * <p>Paginé comme les autres listes du système : une juridiction chargée aligne les audiences,
+     * et rien ne garantit qu'une journée en compte dix plutôt que cent.
+     */
+    Page<Audience> findByDatePlanifieeAndStatutNot(LocalDate datePlanifiee, StatutAudience statut, Pageable pageable);
+
+    /**
+     * Les audiences d'une fenêtre restées au statut demandé.
+     *
+     * <p>Sert à lister les comptes rendus attendus : une audience dont la date est passée et qui est
+     * encore `PLANIFIEE` est, <b>par construction</b>, une audience dont le compte rendu n'a pas été
+     * saisi — c'est la saisie qui la fait passer à `TENUE`. Aucune colonne supplémentaire n'est
+     * nécessaire pour connaître les manquements.
+     */
+    Page<Audience> findByStatutAndDatePlanifieeBetween(
+            StatutAudience statut, LocalDate debut, LocalDate fin, Pageable pageable);
+
     /** FR-REP-02 (tableau de bord, M13) : audiences encore à venir, tous dossiers confondus. */
     long countByStatut(StatutAudience statut);
 
