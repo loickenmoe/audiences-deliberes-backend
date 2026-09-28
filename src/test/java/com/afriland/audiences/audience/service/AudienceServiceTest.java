@@ -27,6 +27,7 @@ import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -61,8 +62,9 @@ class AudienceServiceTest {
             audience.getId(),
             audience.getDossier() != null ? audience.getDossier().getId() : null,
             audience.getEtape() != null ? audience.getEtape().getId() : null,
-            audience.getDatePlanifiee(), audience.getDateTenue(), audience.getCompteRendu(),
-            audience.getStatut(), audience.getCreatedAt(), audience.getMotifAnnulation(), audience.getDateAnnulation());
+            audience.getDatePlanifiee(), audience.getDateTenue(), audience.getJuridiction(),
+            audience.getCompteRendu(), audience.getStatut(), audience.getCreatedAt(),
+            audience.getMotifAnnulation(), audience.getDateAnnulation());
 
     private AudienceService service;
     private Dossier dossier;
@@ -89,7 +91,7 @@ class AudienceServiceTest {
         when(etapeProcedureRepository.findById(10L)).thenReturn(Optional.of(etapeOuverture));
 
         assertThatThrownBy(() -> service.planifierAudience(1L,
-                new PlanifierAudienceRequest(10L, LocalDate.now().plusDays(5)), false))
+                new PlanifierAudienceRequest(10L, LocalDate.now().plusDays(5), null), false))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("EN_COURS");
     }
@@ -109,10 +111,72 @@ class AudienceServiceTest {
         });
 
         AudienceResponse resultat = service.planifierAudience(1L,
-                new PlanifierAudienceRequest(10L, LocalDate.now()), false);
+                new PlanifierAudienceRequest(10L, LocalDate.now(), null), false);
 
         assertThat(resultat.datePlanifiee()).isEqualTo(LocalDate.now());
         assertThat(resultat.statut()).isEqualTo(StatutAudience.PLANIFIEE);
+    }
+
+    /**
+     * V34 : l'audience porte la juridiction où elle se tient. Sans indication, elle reprend celle du
+     * dossier — exacte au premier degré, qui est le cas courant.
+     */
+    @Test
+    @DisplayName("sans indication, l'audience se tient là où le dossier a été saisi")
+    void une_audience_herite_de_la_juridiction_du_dossier() {
+        when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
+        when(etapeProcedureRepository.findById(10L)).thenReturn(Optional.of(etapeEnCours));
+        when(audienceRepository.save(any(Audience.class))).thenAnswer(inv -> {
+            Audience a = inv.getArgument(0);
+            a.setId(20L);
+            return a;
+        });
+
+        AudienceResponse resultat = service.planifierAudience(1L,
+                new PlanifierAudienceRequest(10L, LocalDate.now().plusDays(3), null), false);
+
+        assertThat(resultat.juridiction()).isEqualTo(dossier.getJuridictionSaisie());
+    }
+
+    /**
+     * Le cas qui motive le champ : une audience d'appel ne se tient pas devant le tribunal qui a
+     * jugé. Afficher la juridiction du dossier ne laissait pas l'information manquante — elle la
+     * rendait fausse.
+     */
+    @Test
+    @DisplayName("une audience d'appel se tient devant sa propre juridiction")
+    void une_audience_peut_porter_sa_propre_juridiction() {
+        when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
+        when(etapeProcedureRepository.findById(10L)).thenReturn(Optional.of(etapeEnCours));
+        when(audienceRepository.save(any(Audience.class))).thenAnswer(inv -> {
+            Audience a = inv.getArgument(0);
+            a.setId(21L);
+            return a;
+        });
+
+        AudienceResponse resultat = service.planifierAudience(1L,
+                new PlanifierAudienceRequest(10L, LocalDate.now().plusDays(3), "  Cour d'appel du Littoral  "),
+                false);
+
+        // Les espaces de saisie sont retirés : « Cour d'appel » et « Cour d'appel  » sont le même lieu.
+        assertThat(resultat.juridiction()).isEqualTo("Cour d'appel du Littoral");
+    }
+
+    /** Une saisie vide n'est pas une juridiction : elle vaut absence, donc celle du dossier. */
+    @Test
+    void une_juridiction_vide_vaut_celle_du_dossier() {
+        when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
+        when(etapeProcedureRepository.findById(10L)).thenReturn(Optional.of(etapeEnCours));
+        when(audienceRepository.save(any(Audience.class))).thenAnswer(inv -> {
+            Audience a = inv.getArgument(0);
+            a.setId(22L);
+            return a;
+        });
+
+        AudienceResponse resultat = service.planifierAudience(1L,
+                new PlanifierAudienceRequest(10L, LocalDate.now().plusDays(3), "   "), false);
+
+        assertThat(resultat.juridiction()).isEqualTo(dossier.getJuridictionSaisie());
     }
 
     /** Une audience tenue sans avoir été saisie se régularise : sinon, elle était perdue à jamais. */
@@ -127,7 +191,7 @@ class AudienceServiceTest {
         });
 
         AudienceResponse resultat = service.planifierAudience(1L,
-                new PlanifierAudienceRequest(10L, LocalDate.now().minusDays(10)), false);
+                new PlanifierAudienceRequest(10L, LocalDate.now().minusDays(10), null), false);
 
         assertThat(resultat.datePlanifiee()).isEqualTo(LocalDate.now().minusDays(10));
     }
@@ -139,7 +203,7 @@ class AudienceServiceTest {
         when(etapeProcedureRepository.findById(10L)).thenReturn(Optional.of(etapeEnCours));
 
         assertThatThrownBy(() -> service.planifierAudience(1L,
-                new PlanifierAudienceRequest(10L, dossier.getCreatedAt().toLocalDate().minusDays(1)), false))
+                new PlanifierAudienceRequest(10L, dossier.getCreatedAt().toLocalDate().minusDays(1), null), false))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("ouverture du dossier");
     }
@@ -151,7 +215,7 @@ class AudienceServiceTest {
         when(audienceRepository.existsByEtapeIdAndDatePlanifieeAndStatutNot(10L, LocalDate.now().plusDays(5), StatutAudience.ANNULEE)).thenReturn(true);
 
         assertThatThrownBy(() -> service.planifierAudience(1L,
-                new PlanifierAudienceRequest(10L, LocalDate.now().plusDays(5)), false))
+                new PlanifierAudienceRequest(10L, LocalDate.now().plusDays(5), null), false))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("existe déjà");
         verify(alerteService, never()).declencher(any(), any(), any(), any());
@@ -170,7 +234,7 @@ class AudienceServiceTest {
         });
         when(utilisateurRepository.findByProfilCodeAndActifTrue("DJ")).thenReturn(List.of(dj));
 
-        service.planifierAudience(1L, new PlanifierAudienceRequest(10L, LocalDate.now().plusDays(5)), true);
+        service.planifierAudience(1L, new PlanifierAudienceRequest(10L, LocalDate.now().plusDays(5), null), true);
 
         verify(alerteService).declencher(eq(TypeAlerte.DOUBLON_AUDIENCE), eq(1L), eq(dj), any());
     }
@@ -189,7 +253,7 @@ class AudienceServiceTest {
         });
 
         AudienceResponse result = service.planifierAudience(1L,
-                new PlanifierAudienceRequest(10L, LocalDate.now().plusDays(5)), false);
+                new PlanifierAudienceRequest(10L, LocalDate.now().plusDays(5), null), false);
 
         assertThat(result.statut()).isEqualTo(StatutAudience.PLANIFIEE);
         assertThat(result.dossierId()).isEqualTo(1L);

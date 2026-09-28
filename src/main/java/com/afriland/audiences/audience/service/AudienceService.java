@@ -89,6 +89,10 @@ public class AudienceService {
                 .dossier(dossier)
                 .etape(etape)
                 .datePlanifiee(request.datePlanifiee())
+                // Sans indication, l'audience se tient là où le dossier a été saisi : c'est le cas
+                // du premier degré, et c'est ce que l'écran affichait déjà. Un appel ou un pourvoi
+                // se tenant ailleurs, la juridiction se précise alors à la planification.
+                .juridiction(juridictionOuCelleDuDossier(request.juridiction(), dossier))
                 .statut(StatutAudience.PLANIFIEE)
                 .build());
 
@@ -100,6 +104,10 @@ public class AudienceService {
         }
 
         return audienceMapper.toResponse(audience);
+    }
+
+    private static String juridictionOuCelleDuDossier(String demandee, Dossier dossier) {
+        return demandee == null || demandee.isBlank() ? dossier.getJuridictionSaisie() : demandee.strip();
     }
 
     /** Q-12/Q-36 (dossier), même mécanisme pour le volet audience de RG-AUD-06. */
@@ -201,7 +209,9 @@ public class AudienceService {
         List<Long> avocatsAffectes = dossierAvocatRepository.findByDossierId(dossier.getId()).stream()
                 .map(da -> da.getAvocat().getId()).toList();
         return new CalendrierEntreeResponse(
-                audience.getId(), dossier.getId(), dossier.getReference(), dossier.getJuridictionSaisie(),
+                audience.getId(), dossier.getId(), dossier.getReference(),
+                // Celle de l'audience : un dossier monté en appel ne siège plus là où il a été saisi.
+                audience.getJuridiction() != null ? audience.getJuridiction() : dossier.getJuridictionSaisie(),
                 audience.getEtape() != null ? audience.getEtape().getType().name() : null,
                 juristesAffectes, avocatsAffectes, dossier.getCodeAgenceOrigine(), dossier.getClient().getNom(),
                 dossier.getRisqueEncouru(), audience.getDatePlanifiee());

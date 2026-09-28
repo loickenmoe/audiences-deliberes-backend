@@ -107,7 +107,7 @@ public class PortailAvocatService {
          */
         return audienceRepository.findByDossierIdOrderByDatePlanifieeDesc(dossierId, Pageable.unpaged()).stream()
                 .map(audience -> new AudienceAvocatResponse(audience.getId(), audience.getDatePlanifiee(),
-                        audience.getDateTenue(), audience.getStatut()))
+                        audience.getDateTenue(), audience.getJuridiction(), audience.getStatut()))
                 .toList();
     }
 

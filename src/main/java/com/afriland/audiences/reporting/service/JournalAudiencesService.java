@@ -68,7 +68,7 @@ public class JournalAudiencesService {
                     audience.getId(),
                     dossier.getId(),
                     dossier.getReference(),
-                    dossier.getJuridictionSaisie(),
+                    juridictionDe(audience, dossier),
                     audience.getEtape() == null ? null : audience.getEtape().getType().name(),
                     audience.getStatut(),
                     juristesAffectes(dossier.getId()),
@@ -110,7 +110,7 @@ public class JournalAudiencesService {
                     audience.getId(),
                     dossier.getId(),
                     dossier.getReference(),
-                    dossier.getJuridictionSaisie(),
+                    juridictionDe(audience, dossier),
                     audience.getEtape() == null ? null : audience.getEtape().getType().name(),
                     audience.getDatePlanifiee(),
                     ChronoUnit.DAYS.between(audience.getDatePlanifiee(), aujourdHui),
@@ -151,6 +151,14 @@ public class JournalAudiencesService {
                         compteRendu -> compteRendu.getAudience().getId(),
                         Function.identity(),
                         (ancien, recent) -> recent));
+    }
+
+    /**
+     * La juridiction où l'audience se tient — celle du dossier n'étant que la juridiction de
+     * saisine, exacte au premier degré seulement (V34).
+     */
+    private static String juridictionDe(Audience audience, Dossier dossier) {
+        return audience.getJuridiction() != null ? audience.getJuridiction() : dossier.getJuridictionSaisie();
     }
 
     private List<Long> juristesAffectes(Long dossierId) {
