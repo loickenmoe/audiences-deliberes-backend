@@ -62,6 +62,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -248,13 +249,21 @@ public class DossierService {
                                                           String juridiction, String reference,
                                                           Long clientId, boolean mesDossiers,
                                                           Boolean estSensible, StatutValidation sensibiliteStatut,
+                                                          TypeEtape typeEtape, StatutCycleVie statutEtape,
+                                                          LocalDate dateDebut, LocalDate dateFin,
                                                           Pageable pageable) {
+        // Une fenêtre à l'envers ne renvoie rien du tout : mieux vaut le dire que laisser croire
+        // qu'aucun dossier n'a eu d'audience sur la période.
+        if (dateDebut != null && dateFin != null && dateDebut.isAfter(dateFin)) {
+            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
+                    "La date de début doit précéder la date de fin");
+        }
         // « Mes dossiers » se lit sur l'utilisateur authentifié, jamais sur un identifiant reçu :
         // le filtre ne peut donc pas servir à consulter le portefeuille d'un collègue.
         Long juristeId = mesDossiers ? currentUserService.getCurrentUser().getId() : null;
         var page = dossierRepository.findAll(
                 DossierSpecifications.withFilters(nature, categorie, juridiction, reference, clientId, juristeId,
-                        estSensible, sensibiliteStatut),
+                        estSensible, sensibiliteStatut, typeEtape, statutEtape, dateDebut, dateFin),
                 pageable);
         // Trois requêtes pour la page entière, et non trois par ligne (QF-41).
         return new PageResponse<>(construireReponses(page.getContent()), page.getTotalPages(), page.getTotalElements());
