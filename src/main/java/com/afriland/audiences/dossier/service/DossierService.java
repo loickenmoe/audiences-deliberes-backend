@@ -473,11 +473,19 @@ public class DossierService {
         return etapeProcedureMapper.toResponse(etape);
     }
 
+    /**
+     * Les étapes que le positionnement direct doit créer si elles manquent (UC-DOS-04 alt. 3-b).
+     *
+     * <p>Le pourvoi CCJA a les mêmes antécédents que le pourvoi national — l'instance et l'appel —
+     * et <b>non</b> {@code RECOURS_2} : les deux cassations sont concurrentes. Positionner un
+     * dossier directement en CCJA ne doit pas faire naître une étape Cour Suprême fantôme, qui
+     * laisserait croire à un pourvoi qui n'a jamais été formé.
+     */
     private List<TypeEtape> etapesPrecedentes(TypeEtape type) {
         return switch (type) {
             case INSTANCE -> List.of();
             case RECOURS_1 -> List.of(TypeEtape.INSTANCE);
-            case RECOURS_2 -> List.of(TypeEtape.INSTANCE, TypeEtape.RECOURS_1);
+            case RECOURS_2, RECOURS_2_CCJA -> List.of(TypeEtape.INSTANCE, TypeEtape.RECOURS_1);
         };
     }
 
