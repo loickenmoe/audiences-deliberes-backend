@@ -6,6 +6,7 @@ import com.afriland.audiences.common.error.ErrorCodes;
 import com.afriland.audiences.common.security.CurrentUserService;
 import com.afriland.audiences.common.web.PageResponse;
 import com.afriland.audiences.dossier.repository.DossierAvocatRepository;
+import com.afriland.audiences.dossier.domain.Dossier;
 import com.afriland.audiences.dossier.repository.DossierRepository;
 import com.afriland.audiences.ged.service.MinioStorageService;
 import com.afriland.audiences.ged.service.ValidationFichierService;
@@ -22,6 +23,7 @@ import com.afriland.audiences.publication.web.dto.PublicationResponse;
 import com.afriland.audiences.referentiel.domain.Avocat;
 import com.afriland.audiences.referentiel.service.CompteAvocatService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -66,8 +68,22 @@ public class PortailAvocatService {
     /** US 4.1, US 5.1 : de quoi désigner son dossier. Identification seule. */
     @Transactional(readOnly = true)
     public PageResponse<DossierAvocatResponse> mesDossiers(Pageable pageable) {
+        return mesDossiers(null, pageable);
+    }
+
+    /**
+     * @param reference fragment de référence cherché, ou {@code null} pour la liste entière. La
+     *                  recherche est faite <b>par le serveur</b> : filtrer une page déjà chargée
+     *                  n'aurait cherché que parmi les dossiers les plus récents, et aurait donc
+     *                  répondu « aucun résultat » pour un dossier qui existe bel et bien
+     */
+    @Transactional(readOnly = true)
+    public PageResponse<DossierAvocatResponse> mesDossiers(String reference, Pageable pageable) {
         Avocat avocat = avocatCourant();
-        return PageResponse.of(dossierRepository.findDossiersDeLAvocat(avocat.getId(), pageable),
+        Page<Dossier> dossiers = reference == null || reference.isBlank()
+                ? dossierRepository.findDossiersDeLAvocat(avocat.getId(), pageable)
+                : dossierRepository.rechercherDossiersDeLAvocat(avocat.getId(), reference.strip(), pageable);
+        return PageResponse.of(dossiers,
                 dossier -> new DossierAvocatResponse(dossier.getId(), dossier.getReference(),
                         dossier.getNature(), dossier.getJuridictionSaisie()));
     }
