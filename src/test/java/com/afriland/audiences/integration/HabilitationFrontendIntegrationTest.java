@@ -412,10 +412,11 @@ class HabilitationFrontendIntegrationTest {
     @DisplayName("Q-93 : le client et le dossier qu'on vient de créer sont en tête de la première page")
     void clientsEtDossiers_reviennentDuPlusRecentAuPlusAncien() throws Exception {
         RequestPostProcessor juriste = role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_SAISIE", "ROLE_CONSULTATION");
-        String reference = "CLI-TRI-" + COMPTEUR.incrementAndGet();
-        mockMvc.perform(post(api("/clients")).with(juriste).contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("reference", reference, "nom", "Client " + reference))))
-                .andExpect(status().isCreated());
+        String nom = "Client TRI " + COMPTEUR.incrementAndGet();
+        String reference = extraireReference(mockMvc.perform(post(api("/clients")).with(juriste)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("nom", nom))))
+                .andExpect(status().isCreated()).andReturn());
 
         mockMvc.perform(get(api("/clients")).param("size", "1").with(juriste))
                 .andExpect(status().isOk())
@@ -438,11 +439,12 @@ class HabilitationFrontendIntegrationTest {
     @DisplayName("un client se corrige, sa référence reste figée, et la modification est tracée")
     void client_seModifie_referenceFigee_etTrace() throws Exception {
         RequestPostProcessor juriste = role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_SAISIE", "ROLE_CONSULTATION");
-        String reference = "CLI-MOD-" + COMPTEUR.incrementAndGet();
-        long clientId = extraireId(mockMvc.perform(post(api("/clients")).with(juriste)
+        var creation = mockMvc.perform(post(api("/clients")).with(juriste)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("reference", reference, "nom", "Nom avec coquile"))))
-                .andExpect(status().isCreated()).andReturn());
+                        .content(json(Map.of("nom", "Nom avec coquile"))))
+                .andExpect(status().isCreated()).andReturn();
+        String reference = extraireReference(creation);
+        long clientId = extraireId(creation);
 
         // L'avocat n'a pas ROLE_SAISIE : il ne corrige pas un client de la banque.
         mockMvc.perform(put(api("/clients/" + clientId))
@@ -987,30 +989,37 @@ class HabilitationFrontendIntegrationTest {
         String reference = "CLI-QF21-" + n;
         RequestPostProcessor juriste = role("kc-juriste-qf21", "ROLE_JURISTE", "ROLE_SAISIE");
 
-        mockMvc.perform(post(api("/clients"))
+        String compte = "kc-avocat-qf21-" + n;
+        mockMvc.perform(post(api("/intervenants"))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("nom", "Client QF21 " + n, "reference", reference)))
-                        .with(juriste))
+                        .content(json(Map.of("type", "AVOCAT", "nom", "Me QF21 " + n,
+                                "email", compte + "@cabinet.cm", "compteKeycloak", compte)))
+                        .with(role("kc-dj-qf21-" + n, "ROLE_DJ")))
                 .andExpect(status().isCreated());
 
         /*
          * ERR-CONFLICT sert à une dizaine de conflits sans rapport entre eux. Sans « champ », un
          * frontend recevant ce code devait deviner la cible depuis l'endpoint appelé — et se
          * trompait dès qu'un endpoint en gagnait un second.
+         *
+         * Le cas jouait sur une référence client en doublon jusqu'au 2026-09-29 ; le système
+         * attribuant désormais les références, ce conflit-là ne peut plus se produire. Le compte
+         * Keycloak d'un avocat, lui, reste saisi (RG-INT-01) et porte le même besoin.
          */
-        mockMvc.perform(post(api("/clients"))
+        mockMvc.perform(post(api("/intervenants"))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("nom", "Doublon QF21", "reference", reference)))
-                        .with(juriste))
+                        .content(json(Map.of("type", "AVOCAT", "nom", "Doublon QF21",
+                                "email", "doublon-qf21-" + n + "@cabinet.cm", "compteKeycloak", compte)))
+                        .with(role("kc-dj-qf21-" + n, "ROLE_DJ")))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("ERR-CONFLICT"))
-                .andExpect(jsonPath("$.champ").value("reference"));
+                .andExpect(jsonPath("$.champ").value("compteKeycloak"));
 
         // Une erreur qui ne vise aucun champ n'en invente pas : la clé est absente du corps, pas
         // présente à null — c'est ce qui rend l'ajout rétrocompatible.
         mockMvc.perform(post(api("/clients"))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("nom", "Sans référence")))
+                        .content(json(Map.of("email", "sans-nom@client.cm")))
                         .with(juriste))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.champ").doesNotExist());
