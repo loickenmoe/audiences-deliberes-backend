@@ -9,6 +9,8 @@ import com.afriland.audiences.decision.domain.TypeArchiveJurisprudence;
 import com.afriland.audiences.decision.repository.JurisprudenceRepository;
 import com.afriland.audiences.decision.web.dto.JurisprudenceResponse;
 import com.afriland.audiences.dossier.domain.Dossier;
+import com.afriland.audiences.dossier.domain.StatutCycleVie;
+import com.afriland.audiences.dossier.repository.EtapeProcedureRepository;
 import com.afriland.audiences.dossier.repository.DossierRepository;
 import com.afriland.audiences.ged.service.MinioStorageService;
 import com.afriland.audiences.common.web.PageResponse;
@@ -38,6 +40,7 @@ public class JurisprudenceService {
 
     private final JurisprudenceRepository jurisprudenceRepository;
     private final DossierRepository dossierRepository;
+    private final EtapeProcedureRepository etapeProcedureRepository;
     private final HistoriqueActionService historiqueActionService;
     private final MinioStorageService minioStorageService;
 
@@ -47,6 +50,33 @@ public class JurisprudenceService {
      * {@code configuration_systeme} dédiée (contrairement à `FORMATS_GED`/`TAILLE_MAX_GED`, absentes
      * de CONF01-07 pour ce workflow), donc littérales plutôt que configurables.
      */
+    /**
+     * Une décision ne rejoint la base jurisprudentielle que lorsqu'elle est <b>définitive</b>
+     * (métier, 2026-09-29).
+     *
+     * <p><b>Ce que cela protège.</b> {@code Jurisprudence} n'enregistre rien qui dise l'état de la
+     * décision : ni statut, ni lien vers l'étape, ni mention « frappée d'appel ». Les trois types
+     * d'archive — extrait de minute, expédition, grosse — désignent des formes de l'acte, pas des
+     * états de la procédure. Une décision de première instance versée pendant que l'appel court
+     * entrait donc dans la base au même titre qu'un arrêt définitif, et le juriste qui la trouvait
+     * comme précédent ne pouvait pas savoir qu'elle avait peut-être été infirmée depuis.
+     *
+     * <p>« Définitive » a un sens précis — qui n'est plus susceptible de recours — et c'est le nom
+     * même du module. La garde le fait tenir : plus aucune étape du dossier ne doit être en cours.
+     *
+     * <p><b>Une jurisprudence sans dossier reste libre</b> : {@code dossierId} est facultatif, et
+     * sert justement à verser un arrêt trouvé ailleurs, sans rapport avec un dossier de la banque.
+     * Rien ne permet — ni n'a à permettre — d'en juger l'état.
+     */
+    private void verifierQueLeDossierEstTermine(Dossier dossier) {
+        if (etapeProcedureRepository.existsByDossierIdAndStatutCycleVieNotIn(
+                dossier.getId(), StatutCycleVie.FERMES)) {
+            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
+                    "Ce dossier porte encore une étape en cours : une décision ne rejoint la base "
+                            + "jurisprudentielle qu'une fois définitive, tous recours épuisés.");
+        }
+    }
+
     @Transactional
     public JurisprudenceResponse creer(Long dossierId, TypeArchiveJurisprudence typeArchive, List<String> motsCles,
                                         String natureDecision, String juridiction, LocalDate dateDecision, MultipartFile file) {
@@ -64,6 +94,9 @@ public class JurisprudenceService {
         }
 
         Dossier dossier = dossierId != null ? getDossierOrThrow(dossierId) : null;
+        if (dossier != null) {
+            verifierQueLeDossierEstTermine(dossier);
+        }
         String cle = dossier != null ? minioStorageService.deposer(dossierId, file) : minioStorageService.deposerSansDossier(file);
 
         Jurisprudence jurisprudence = jurisprudenceRepository.save(Jurisprudence.builder()

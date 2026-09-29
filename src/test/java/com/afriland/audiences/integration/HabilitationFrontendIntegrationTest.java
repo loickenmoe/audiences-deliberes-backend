@@ -86,6 +86,7 @@ class HabilitationFrontendIntegrationTest {
     @Autowired private UtilisateurRepository utilisateurRepository;
     @Autowired private ProfilRepository profilRepository;
     @Autowired private AvocatRepository avocatRepository;
+    @Autowired private com.afriland.audiences.dossier.repository.EtapeProcedureRepository etapeProcedureRepository;
     @Autowired private AlerteService alerteService;
 
     private Long avocatId;
@@ -925,6 +926,13 @@ class HabilitationFrontendIntegrationTest {
     @DisplayName("Q-89 : la recherche jurisprudentielle est partielle, insensible à la casse, et filtrable par dossier")
     void jurisprudences_rechercheSouple() throws Exception {
         long dossierId = creerDossier();
+        /*
+         * Depuis le 2026-09-29, une décision ne rejoint la base jurisprudentielle qu'une fois
+         * définitive : plus aucune étape du dossier en cours. Ce parcours porte sur la recherche,
+         * pas sur le cycle de vie — dérouler audience, délibéré et clôture n'y prouverait rien de
+         * plus. Les étapes sont donc closes directement, comme P2 antidate son audience.
+         */
+        cloreLesEtapes(dossierId);
         String marque = "Q89M" + COMPTEUR.incrementAndGet();
         RequestPostProcessor consultation = role("kc-assistante-m15", "ROLE_CONSULTATION");
 
@@ -1736,6 +1744,14 @@ class HabilitationFrontendIntegrationTest {
         JsonNode noeud = lireJson(resultat);
         assertThat(noeud.has("reference")).as("réponse sans référence : %s", noeud).isTrue();
         return noeud.get("reference").asText();
+    }
+
+    /** Ferme les étapes d'un dossier, condition du versement en jurisprudence (2026-09-29). */
+    private void cloreLesEtapes(long dossierId) {
+        etapeProcedureRepository.findByDossierIdOrderByTypeAsc(dossierId).forEach(etape -> {
+            etape.setStatutCycleVie(com.afriland.audiences.dossier.domain.StatutCycleVie.CLOTURE);
+            etapeProcedureRepository.save(etape);
+        });
     }
 
     private long extraireId(MvcResult resultat) throws Exception {
