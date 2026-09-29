@@ -177,7 +177,6 @@ class HabilitationFrontendIntegrationTest {
         mockMvc.perform(post(api("/dossiers"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.ofEntries(
-                                Map.entry("reference", "DOS-Q69-" + n),
                                 Map.entry("nature", "Assignation en paiement"),
                                 Map.entry("categorie", "RECOUVREMENT"),
                                 Map.entry("juridictionSaisie", "TGI Douala"),
@@ -578,7 +577,6 @@ class HabilitationFrontendIntegrationTest {
         return extraireId(mockMvc.perform(post(api("/dossiers")).with(juriste)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.ofEntries(
-                                Map.entry("reference", reference),
                                 Map.entry("nature", "Assignation en paiement"),
                                 Map.entry("categorie", "RECOUVREMENT"),
                                 Map.entry("juridictionSaisie", "TGI Douala"),
@@ -722,7 +720,6 @@ class HabilitationFrontendIntegrationTest {
         return extraireId(mockMvc.perform(post(api("/dossiers"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.ofEntries(
-                                Map.entry("reference", "DOS-Q96-" + n),
                                 Map.entry("nature", "Assignation en paiement"),
                                 Map.entry("categorie", "RECOUVREMENT"),
                                 Map.entry("juridictionSaisie", "TGI Douala"),
@@ -846,7 +843,6 @@ class HabilitationFrontendIntegrationTest {
         return extraireId(mockMvc.perform(post(api("/dossiers"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.ofEntries(
-                                Map.entry("reference", "DOS-M15-" + n),
                                 Map.entry("nature", "Assignation en paiement"),
                                 Map.entry("categorie", "RECOUVREMENT"),
                                 Map.entry("juridictionSaisie", "TGI Douala"),
@@ -1050,7 +1046,6 @@ class HabilitationFrontendIntegrationTest {
         mockMvc.perform(post(api("/dossiers"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.ofEntries(
-                                Map.entry("reference", "DOS-M16-" + n),
                                 Map.entry("nature", natureLongue),
                                 Map.entry("juridictionSaisie", "TGI Douala"),
                                 Map.entry("clientId", clientId),
@@ -1092,7 +1087,6 @@ class HabilitationFrontendIntegrationTest {
         mockMvc.perform(post(api("/dossiers"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.ofEntries(
-                                Map.entry("reference", "DOS-M16B-" + n),
                                 Map.entry("nature", "Assignation en paiement"),
                                 Map.entry("juridictionSaisie", "TGI Douala"),
                                 Map.entry("clientId", clientId),
@@ -1128,11 +1122,9 @@ class HabilitationFrontendIntegrationTest {
         long avocatId = avocatRepository.save(Avocat.builder().nom("Me M16c " + n)
                 .compteKeycloak("kc-avocat-m16c-" + n).build()).getId();
 
-        String reference = "DOS-RECH-" + n;
-        mockMvc.perform(post(api("/dossiers"))
+        String reference = extraireReference(mockMvc.perform(post(api("/dossiers"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.ofEntries(
-                                Map.entry("reference", reference),
                                 Map.entry("nature", "Assignation en paiement"),
                                 Map.entry("juridictionSaisie", "TGI Douala"),
                                 Map.entry("clientId", clientId),
@@ -1142,10 +1134,15 @@ class HabilitationFrontendIntegrationTest {
                                 Map.entry("juristesAffectes", List.of(juristeId)),
                                 Map.entry("avocatsAffectes", List.of(avocatId)))))
                         .with(juriste))
-                .andExpect(status().isCreated());
+                .andExpect(status().isCreated())
+                .andReturn());
 
-        // Reference : recherche partielle, on ne retient jamais une reference en entier.
-        mockMvc.perform(get(api("/dossiers")).param("reference", "RECH-" + n).with(juriste))
+        /*
+         * Reference : recherche partielle, on ne retient jamais une reference en entier. Depuis le
+         * 2026-09-29 elle est attribuee par le systeme, le test cherche donc un fragment de la
+         * reference recue — l'annee et le numero, sans le prefixe.
+         */
+        mockMvc.perform(get(api("/dossiers")).param("reference", reference.substring(4)).with(juriste))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.content[0].reference").value(reference));
@@ -1161,12 +1158,12 @@ class HabilitationFrontendIntegrationTest {
          * consulter le portefeuille d'un collegue.
          */
         mockMvc.perform(get(api("/dossiers")).param("mesDossiers", "true")
-                        .param("reference", "RECH-" + n).with(juriste))
+                        .param("reference", reference.substring(4)).with(juriste))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(1));
 
         mockMvc.perform(get(api("/dossiers")).param("mesDossiers", "true")
-                        .param("reference", "RECH-" + n)
+                        .param("reference", reference.substring(4))
                         .with(role("kc-juriste-m16d", "ROLE_JURISTE", "ROLE_CONSULTATION")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(0));
@@ -1193,7 +1190,6 @@ class HabilitationFrontendIntegrationTest {
         long dossierId = extraireId(mockMvc.perform(post(api("/dossiers"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.ofEntries(
-                                Map.entry("reference", "DOS-Q74-" + n),
                                 Map.entry("nature", "Assignation en paiement"),
                                 Map.entry("juridictionSaisie", "TGI Douala"),
                                 Map.entry("clientId", clientId),
@@ -1457,7 +1453,9 @@ class HabilitationFrontendIntegrationTest {
         assertThat(demande).as("la demande reste dans l'historique").isNotNull();
         assertThat(demande.get("statut").asText()).isEqualTo("APPROUVEE");
         assertThat(demande.get("documentNom").asText()).isEqualTo(nom);
-        assertThat(demande.get("referenceDossier").asText()).startsWith("DOS-M15-");
+        // La reference est attribuee par le systeme depuis le 2026-09-29 : le test ne la choisit
+        // plus, il verifie sa forme.
+        assertThat(demande.get("referenceDossier").asText()).matches("DOS-\\d{4}-\\d{4,}");
     }
 
     @Test
@@ -1722,6 +1720,13 @@ class HabilitationFrontendIntegrationTest {
 
     private JsonNode lireJson(MvcResult resultat) throws Exception {
         return objectMapper.readTree(resultat.getResponse().getContentAsString());
+    }
+
+    /** La reference attribuee par le serveur, que le client ne choisit plus (2026-09-29). */
+    private String extraireReference(MvcResult resultat) throws Exception {
+        JsonNode noeud = lireJson(resultat);
+        assertThat(noeud.has("reference")).as("réponse sans référence : %s", noeud).isTrue();
+        return noeud.get("reference").asText();
     }
 
     private long extraireId(MvcResult resultat) throws Exception {

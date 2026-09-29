@@ -626,7 +626,6 @@ class ParcoursEndToEndIntegrationTest {
         return extraireId(mockMvc.perform(post(api("/dossiers"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.ofEntries(
-                                Map.entry("reference", "DOS-E2E-" + n),
                                 Map.entry("nature", "Assignation en paiement"),
                                 Map.entry("categorie", "RECOUVREMENT"),
                                 Map.entry("juridictionSaisie", "TGI Douala"),

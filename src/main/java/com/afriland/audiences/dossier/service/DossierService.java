@@ -7,6 +7,8 @@ import com.afriland.audiences.common.audit.HistoriqueAction;
 import com.afriland.audiences.common.audit.HistoriqueActionRepository;
 import com.afriland.audiences.common.audit.HistoriqueActionService;
 import com.afriland.audiences.common.error.ApiException;
+import com.afriland.audiences.common.reference.FamilleReference;
+import com.afriland.audiences.common.reference.GenerateurReference;
 import com.afriland.audiences.common.error.ErrorCodes;
 import com.afriland.audiences.common.security.CurrentUserService;
 import com.afriland.audiences.common.web.PageResponse;
@@ -95,15 +97,12 @@ public class DossierService {
     private final HistoriqueActionService historiqueActionService;
     private final CurrentUserService currentUserService;
     private final AlerteService alerteService;
+    private final GenerateurReference generateurReference;
 
     // ------------------------------------------------------------------ Création
 
     @Transactional
     public DossierResponse creerDossier(CreerDossierRequest request) {
-        if (dossierRepository.existsByReference(request.reference())) {
-            throw ApiException.conflictSurChamp(ErrorCodes.REFERENCE_DOSSIER_DUPLIQUEE,
-                    "La référence '" + request.reference() + "' est déjà utilisée", "reference");
-        }
         Client client = clientRepository.findById(request.clientId())
                 .orElseThrow(() -> ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE,
                         "Client introuvable : " + request.clientId()));
@@ -126,8 +125,16 @@ public class DossierService {
             validerTypeClientSensible(request.typeClientSensible());
         }
 
+        /*
+         * La référence est attribuée par le système (métier, 2026-09-29). Elle est demandée ici,
+         * une fois les refus passés : un numéro servi n'est jamais rendu, et le demander plus tôt
+         * en consommerait un à chaque client introuvable ou catégorie incohérente. La suite
+         * présenterait des trous que personne ne saurait expliquer.
+         */
+        String reference = referenceAttribuee();
+
         Dossier dossier = Dossier.builder()
-                .reference(request.reference())
+                .reference(reference)
                 .nature(request.nature())
                 .categorie(categorie)
                 .juridictionSaisie(request.juridictionSaisie())
@@ -181,6 +188,28 @@ public class DossierService {
      * libellé est reformulé, et tient dans la colonne — un libellé peut atteindre 100 caractères
      * pour une colonne cible de 50, ce qui reproduirait le défaut corrigé par V7 sur {@code nature}.
      */
+    /**
+     * La référence du prochain dossier.
+     *
+     * <p>Le contrôle d'unicité qui précédait la création est conservé, mais il a changé de sens :
+     * il ne sanctionne plus une saisie, il détecte une <b>anomalie de numérotation</b>. Il ne peut
+     * se déclencher que si une référence au format attribué existait sans que le compteur en ait
+     * tenu compte — ce que la reprise de V36 est censée empêcher. Le laisser tomber silencieusement
+     * sur la contrainte d'unicité de la base donnerait une erreur technique là où un message clair
+     * dit quoi regarder.
+     *
+     * <p>Aucun champ n'est nommé dans l'erreur : il n'y a plus de champ à corriger à l'écran.
+     */
+    private String referenceAttribuee() {
+        String reference = generateurReference.prochaine(FamilleReference.DOSSIER);
+        if (dossierRepository.existsByReference(reference)) {
+            throw ApiException.conflict(ErrorCodes.REFERENCE_DOSSIER_DUPLIQUEE,
+                    "La référence attribuée '" + reference + "' est déjà portée par un dossier : "
+                            + "le compteur de références est désynchronisé (V36)");
+        }
+        return reference;
+    }
+
     private void validerTypeClientSensible(String code) {
         typeClientSensibleRepository.findByCodeIgnoreCase(code)
                 .orElseThrow(() -> ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
