@@ -163,20 +163,38 @@ class DossierServiceTest {
                 .hasMessageContaining("incohérente");
     }
 
+    /**
+     * Amendement de Q-11 (métier, 2026-09-29) : « ce sont les pièces jointes qui sont obligatoires,
+     * pas leur texte associé ». Un dossier de recouvrement se crée donc sans ses références.
+     *
+     * <p>Ce test tenait la règle inverse jusqu'ici. L'obligation n'a pas disparu, elle a changé
+     * d'objet : elle porte désormais sur les fichiers, et ne peut être tenue que par l'écran —
+     * une pièce se dépose après la création, qui seule produit l'identifiant du dossier.
+     */
     @Test
-    void creerDossier_requiresCreditOrigineAndPvTransfertForRecouvrement() {
+    void creerDossier_accepteUnRecouvrementSansSesReferences() {
         when(dossierRepository.existsByReference(any())).thenReturn(false);
         when(clientRepository.findById(1L)).thenReturn(Optional.of(client));
         when(natureDossierRepository.findByLibelleIgnoreCase(any()))
                 .thenReturn(Optional.of(NatureDossier.builder().categorie(CategorieDossier.RECOUVREMENT).build()));
-        var sansPieces = new CreerDossierRequest(
+        when(currentUserService.getCurrentUser()).thenReturn(juriste);
+        when(utilisateurRepository.findById(10L)).thenReturn(Optional.of(juriste));
+        when(dossierRepository.save(any(Dossier.class))).thenAnswer(inv -> {
+            Dossier d = inv.getArgument(0);
+            d.setId(99L);
+            return d;
+        });
+        when(etapeProcedureRepository.save(any(EtapeProcedure.class))).thenAnswer(inv -> inv.getArgument(0));
+        var sansReferences = new CreerDossierRequest(
                 "DOS-2026-001", "Saisie immobilière", null, "Tribunal de Yaoundé", 1L,
                 null, 15_000_000d, null, null, null, null, null, null,
                 null, null, null, false, null, null, List.of(10L), List.of());
 
-        assertThatThrownBy(() -> service.creerDossier(sansPieces))
-                .isInstanceOf(ApiException.class)
-                .hasMessageContaining("dossierCreditOrigine");
+        DossierResponse response = service.creerDossier(sansReferences);
+
+        assertThat(response.reference()).isEqualTo("DOS-2026-001");
+        assertThat(response.dossierCreditOrigine()).isNull();
+        assertThat(response.pvTransfert()).isNull();
     }
 
     @Test

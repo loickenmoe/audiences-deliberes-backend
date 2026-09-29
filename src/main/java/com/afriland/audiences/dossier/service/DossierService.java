@@ -109,7 +109,17 @@ public class DossierService {
                         "Client introuvable : " + request.clientId()));
 
         CategorieDossier categorie = resoudreCategorie(request);
-        validerChampsConditionnels(request, categorie);
+        /*
+         * Les références conditionnelles (dossier de crédit, PV de transfert, incident de compte,
+         * éléments justificatifs) ne sont **plus exigées** — amendement de Q-11, sur arbitrage du
+         * métier du 2026-09-29 : « ce sont les pièces jointes qui sont obligatoires, pas leur texte
+         * associé ». L'obligation a changé d'objet, elle n'a pas disparu.
+         *
+         * Elle ne peut pas être tenue ici : une pièce se dépose en GED **après** la création, qui
+         * seule produit l'identifiant du dossier. Le serveur ne peut pas exiger un fichier qu'il n'a
+         * pas encore reçu. L'écran la tient donc seul — limite acceptée par le métier le même jour,
+         * l'alternative étant de refondre la création pour que le dossier naisse avec ses pièces.
+         */
         // Le champ est enregistré qu'il soit ou non accompagné de `estSensible` : le valider
         // seulement dans la branche sensible laisserait passer une valeur fantaisiste.
         if (StringUtils.hasText(request.typeClientSensible())) {
@@ -188,21 +198,6 @@ public class DossierService {
                             + request.nature() + "', dont la catégorie est " + deduite + " (RG-DOS-02)");
         }
         return deduite;
-    }
-
-    private void validerChampsConditionnels(CreerDossierRequest request, CategorieDossier categorie) {
-        if (categorie == CategorieDossier.RECOUVREMENT) {
-            if (!StringUtils.hasText(request.dossierCreditOrigine()) || !StringUtils.hasText(request.pvTransfert())) {
-                throw ApiException.badRequest(ErrorCodes.METADONNEES_MANQUANTES,
-                        "dossierCreditOrigine et pvTransfert sont obligatoires pour un dossier RECOUVREMENT");
-            }
-        } else {
-            if (!StringUtils.hasText(request.incidentCompteReference())
-                    || !StringUtils.hasText(request.elementsJustificatifs())) {
-                throw ApiException.badRequest(ErrorCodes.METADONNEES_MANQUANTES,
-                        "incidentCompteReference et elementsJustificatifs sont obligatoires pour un dossier EXPLOITATION_LITIGES");
-            }
-        }
     }
 
     private List<Long> affecterJuristes(Dossier dossier, List<Long> juristeIds) {
