@@ -18,8 +18,12 @@ import java.util.List;
 import com.afriland.audiences.dossier.domain.StatutValidation;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import com.afriland.audiences.dossier.domain.StatutCycleVie;
+import com.afriland.audiences.dossier.domain.TypeEtape;
+import com.afriland.audiences.dossier.domain.TriDossiers;
+import org.springframework.format.annotation.DateTimeFormat;
+import java.time.LocalDate;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -71,12 +75,18 @@ public class DossierController {
             @RequestParam(defaultValue = "false") boolean mesDossiers,
             @RequestParam(required = false) Boolean estSensible,
             @RequestParam(required = false) StatutValidation sensibiliteStatut,
+            @RequestParam(required = false) TypeEtape typeEtape,
+            @RequestParam(required = false) StatutCycleVie statutEtape,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateDebut,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFin,
+            @RequestParam(defaultValue = "RECENT") TriDossiers tri,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        // Plus récent d'abord (Q-93) : sans tri, l'ordre des lignes était laissé à PostgreSQL.
+        // Plus récent d'abord (Q-93) : sans tri, l'ordre des lignes était laissé à PostgreSQL. Le
+        // métier peut désormais en demander un autre, parmi ceux que `TriDossiers` énumère.
         return dossierService.listerDossiers(nature, categorie, juridiction, reference, clientId,
-                mesDossiers, estSensible, sensibiliteStatut,
-                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt", "id")));
+                mesDossiers, estSensible, sensibiliteStatut, typeEtape, statutEtape, dateDebut, dateFin,
+                PageRequest.of(page, size, tri.sort()));
     }
 
     @GetMapping("/{id}")

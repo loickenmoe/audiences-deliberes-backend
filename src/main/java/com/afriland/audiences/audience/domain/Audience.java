@@ -14,6 +14,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -62,6 +63,21 @@ public class Audience {
 
     @Column(name = "compte_rendu")
     private String compteRendu;
+
+    /**
+     * La juridiction devant laquelle l'audience se tient (V34).
+     *
+     * <p><b>Distincte de {@code dossier.juridictionSaisie}</b>, qui est celle de la saisine — le
+     * premier degré. Une audience d'appel ne se tient pas devant le tribunal qui a jugé : afficher
+     * la juridiction du dossier pour toutes les audiences ne laissait pas l'information manquante,
+     * elle la rendait <b>fausse</b>.
+     *
+     * <p>Héritée du dossier à la planification quand l'utilisateur n'en indique pas d'autre : c'est
+     * le cas courant, et c'est ce qui était affiché jusqu'ici.
+     */
+    @Size(max = 100)
+    @Column(length = 100)
+    private String juridiction;
 
     @NotNull
     @Builder.Default

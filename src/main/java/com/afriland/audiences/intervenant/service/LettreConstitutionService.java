@@ -87,11 +87,33 @@ public class LettreConstitutionService {
                 .build();
     }
 
-    /** Met la lettre en page sur le papier à en-tête de la banque. */
+    /**
+     * Met la lettre en page sur le papier à en-tête de la banque — c'est l'exemplaire archivé en GED,
+     * celui qui fait foi.
+     */
     public byte[] generer(LettreConstitution lettre) {
+        return generer(lettre, false);
+    }
+
+    /**
+     * @param pourPapierPreimprime tirage destiné aux feuilles que la banque imprime d'avance, qui
+     *                             portent déjà le logo, la colonne et les mentions légales. Le
+     *                             document ne dessine alors que le contenu, <b>aux mêmes
+     *                             emplacements</b> : c'est la géométrie, non le décor, qui fait
+     *                             qu'une lettre tombe juste une fois imprimée.
+     *                             <p>
+     *                             Ce tirage n'est pas archivé et ne remplace pas la pièce du dossier :
+     *                             deux exemplaires en GED poseraient la question de savoir lequel
+     *                             fait foi. Il se régénère à la demande depuis la lettre enregistrée,
+     *                             dont tout le contenu — numéro, destinataire, objet, corps,
+     *                             signataire — est en base.
+     */
+    public byte[] generer(LettreConstitution lettre, boolean pourPapierPreimprime) {
         String titre = "Lettre de constitution " + lettre.referenceComplete();
         Utilisateur validateur = lettre.getDemande() == null ? null : lettre.getDemande().getValidePar();
-        try (DocumentPdf document = DocumentPdf.papierEnTete(titre, nomComplet(validateur), Locale.FRENCH)) {
+        try (DocumentPdf document = pourPapierPreimprime
+                ? DocumentPdf.gabaritPreimprime(titre, nomComplet(validateur), Locale.FRENCH)
+                : DocumentPdf.papierEnTete(titre, nomComplet(validateur), Locale.FRENCH)) {
             document.nouvellePage();
 
             // La ligne du numéro à gauche, le lieu et la date à droite — sur la MÊME ligne, comme sur

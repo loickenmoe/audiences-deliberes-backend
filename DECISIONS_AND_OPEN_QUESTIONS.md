@@ -396,7 +396,15 @@ rôle composite. Vérifié en conditions réelles : un jeton émis pour `juriste
 
 ---
 
-### Q-11 ✅ Champs conditionnels par catégorie : `ET` ou `OU` ? et catégorie saisie ou déduite ? — tranché et implémenté (M4)
+### Q-11 ✅ Champs conditionnels par catégorie : `ET` ou `OU` ? et catégorie saisie ou déduite ? — tranché et implémenté (M4), **volet (a) amendé le 2026-09-29**
+
+> **Amendement (métier, 2026-09-29).** « Ce sont les pièces jointes qui sont obligatoires, pas leur
+> texte associé. » Le volet (a) ci-dessous — exiger les deux **références** par catégorie — est
+> **abandonné** : `validerChampsConditionnels` est retirée, et `chk_categorie_coherence` levée en
+> **V35**. L'obligation porte désormais sur les **fichiers**, et ne peut être tenue que par l'écran :
+> une pièce se dépose en GED après la création, qui seule produit l'identifiant du dossier. Motif :
+> sur 254 dossiers, les deux références étaient remplies partout, 51 seulement portaient un
+> document. Le volet (b) — catégorie déduite de la nature — reste **inchangé**.
 
 **Contradiction 1 — cardinalité.**
 - US 1.1 critères 2-3 et US 1.5 : pour `RECOUVREMENT`, `dossierCreditOrigine` **et** `pvTransfert`

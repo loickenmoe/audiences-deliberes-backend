@@ -107,6 +107,17 @@ public final class DocumentPdf implements AutoCloseable {
      */
     private final boolean papierEnTete;
 
+    /**
+     * Faux pour le tirage destiné au <b>papier préimprimé</b> de la banque : le gabarit garde
+     * exactement sa place — mêmes marges, même hauteur réservée en tête — mais n'est pas dessiné.
+     * Le contenu tombe donc pile dans les zones laissées libres par la feuille imprimée d'avance.
+     * <p>
+     * Retirer le gabarit <b>sans</b> conserver sa géométrie aurait fait remonter le texte dans le
+     * logo et courir les paragraphes sous la colonne : la page seule aurait paru correcte, et
+     * l'impression aurait été illisible.
+     */
+    private final boolean dessinerGabarit;
+
     private PDPageContentStream flux;
     private PDImageXObject logo;
     private float y;
@@ -119,17 +130,18 @@ public final class DocumentPdf implements AutoCloseable {
      * @param langue    langue des libellés ; {@code null} vaut français
      */
     public DocumentPdf(PDRectangle format, String titre, String sousTitre, String auteur, Locale langue) {
-        this(format, titre, sousTitre, auteur, langue, false);
+        this(format, titre, sousTitre, auteur, langue, false, true);
     }
 
     private DocumentPdf(PDRectangle format, String titre, String sousTitre, String auteur, Locale langue,
-                        boolean papierEnTete) {
+                        boolean papierEnTete, boolean dessinerGabarit) {
         this.format = format;
         this.titre = titre;
         this.sousTitre = sousTitre;
         this.auteur = auteur;
         this.libelles = LibellesPdf.pour(langue);
         this.papierEnTete = papierEnTete;
+        this.dessinerGabarit = dessinerGabarit;
     }
 
     /**
@@ -139,7 +151,16 @@ public final class DocumentPdf implements AutoCloseable {
      * fichier et son pied : il reste donc utile.
      */
     public static DocumentPdf papierEnTete(String titre, String auteur, Locale langue) {
-        return new DocumentPdf(PDRectangle.A4, titre, null, auteur, langue, true);
+        return new DocumentPdf(PDRectangle.A4, titre, null, auteur, langue, true, true);
+    }
+
+    /**
+     * Le même document, <b>pour le papier préimprimé</b> de la banque : logo, aplat de la colonne et
+     * mentions légales ne sont pas dessinés, puisque la feuille les porte déjà. Tout le reste est
+     * identique — c'est la condition pour que le texte se pose au bon endroit une fois imprimé.
+     */
+    public static DocumentPdf gabaritPreimprime(String titre, String auteur, Locale langue) {
+        return new DocumentPdf(PDRectangle.A4, titre, null, auteur, langue, true, false);
     }
 
     /** L'abscisse où le contenu commence : après la colonne latérale, s'il y en a une. */
@@ -476,12 +497,15 @@ public final class DocumentPdf implements AutoCloseable {
     private void dessinerPapierEnTete() throws IOException {
         float haut = format.getHeight() - MARGE;
         if (LOGO.length > 0) {
-            if (logo == null) {
-                logo = PDImageXObject.createFromByteArray(document, LOGO, "logo");
-            }
             float hauteur = 30f;
-            float largeur = hauteur * logo.getWidth() / logo.getHeight();
-            flux.drawImage(logo, (format.getWidth() - largeur) / 2, haut - hauteur, largeur, hauteur);
+            if (dessinerGabarit) {
+                if (logo == null) {
+                    logo = PDImageXObject.createFromByteArray(document, LOGO, "logo");
+                }
+                float largeur = hauteur * logo.getWidth() / logo.getHeight();
+                flux.drawImage(logo, (format.getWidth() - largeur) / 2, haut - hauteur, largeur, hauteur);
+            }
+            // La hauteur est retranchée dans les deux cas : c'est elle qui réserve l'en-tête.
             haut -= hauteur + 24;
         }
 
@@ -493,6 +517,11 @@ public final class DocumentPdf implements AutoCloseable {
          * recouvrirait.
          */
         float hautAplat = haut - 20f;
+        if (!dessinerGabarit) {
+            // La colonne reste réservée par `margeGauche()` : rien à dessiner, rien à décaler.
+            y = haut;
+            return;
+        }
         flux.setNonStrokingColor(FOND_COLONNE[0], FOND_COLONNE[1], FOND_COLONNE[2]);
         flux.addRect(0, 0, COLONNE, hautAplat);
         flux.fill();

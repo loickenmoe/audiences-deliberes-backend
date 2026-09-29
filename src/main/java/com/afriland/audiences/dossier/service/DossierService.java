@@ -62,6 +62,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -108,7 +109,17 @@ public class DossierService {
                         "Client introuvable : " + request.clientId()));
 
         CategorieDossier categorie = resoudreCategorie(request);
-        validerChampsConditionnels(request, categorie);
+        /*
+         * Les références conditionnelles (dossier de crédit, PV de transfert, incident de compte,
+         * éléments justificatifs) ne sont **plus exigées** — amendement de Q-11, sur arbitrage du
+         * métier du 2026-09-29 : « ce sont les pièces jointes qui sont obligatoires, pas leur texte
+         * associé ». L'obligation a changé d'objet, elle n'a pas disparu.
+         *
+         * Elle ne peut pas être tenue ici : une pièce se dépose en GED **après** la création, qui
+         * seule produit l'identifiant du dossier. Le serveur ne peut pas exiger un fichier qu'il n'a
+         * pas encore reçu. L'écran la tient donc seul — limite acceptée par le métier le même jour,
+         * l'alternative étant de refondre la création pour que le dossier naisse avec ses pièces.
+         */
         // Le champ est enregistré qu'il soit ou non accompagné de `estSensible` : le valider
         // seulement dans la branche sensible laisserait passer une valeur fantaisiste.
         if (StringUtils.hasText(request.typeClientSensible())) {
@@ -189,21 +200,6 @@ public class DossierService {
         return deduite;
     }
 
-    private void validerChampsConditionnels(CreerDossierRequest request, CategorieDossier categorie) {
-        if (categorie == CategorieDossier.RECOUVREMENT) {
-            if (!StringUtils.hasText(request.dossierCreditOrigine()) || !StringUtils.hasText(request.pvTransfert())) {
-                throw ApiException.badRequest(ErrorCodes.METADONNEES_MANQUANTES,
-                        "dossierCreditOrigine et pvTransfert sont obligatoires pour un dossier RECOUVREMENT");
-            }
-        } else {
-            if (!StringUtils.hasText(request.incidentCompteReference())
-                    || !StringUtils.hasText(request.elementsJustificatifs())) {
-                throw ApiException.badRequest(ErrorCodes.METADONNEES_MANQUANTES,
-                        "incidentCompteReference et elementsJustificatifs sont obligatoires pour un dossier EXPLOITATION_LITIGES");
-            }
-        }
-    }
-
     private List<Long> affecterJuristes(Dossier dossier, List<Long> juristeIds) {
         Utilisateur auteur = currentUserService.getCurrentUser();
         return juristeIds.stream().distinct().map(juristeId -> {
@@ -248,13 +244,21 @@ public class DossierService {
                                                           String juridiction, String reference,
                                                           Long clientId, boolean mesDossiers,
                                                           Boolean estSensible, StatutValidation sensibiliteStatut,
+                                                          TypeEtape typeEtape, StatutCycleVie statutEtape,
+                                                          LocalDate dateDebut, LocalDate dateFin,
                                                           Pageable pageable) {
+        // Une fenêtre à l'envers ne renvoie rien du tout : mieux vaut le dire que laisser croire
+        // qu'aucun dossier n'a eu d'audience sur la période.
+        if (dateDebut != null && dateFin != null && dateDebut.isAfter(dateFin)) {
+            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
+                    "La date de début doit précéder la date de fin");
+        }
         // « Mes dossiers » se lit sur l'utilisateur authentifié, jamais sur un identifiant reçu :
         // le filtre ne peut donc pas servir à consulter le portefeuille d'un collègue.
         Long juristeId = mesDossiers ? currentUserService.getCurrentUser().getId() : null;
         var page = dossierRepository.findAll(
                 DossierSpecifications.withFilters(nature, categorie, juridiction, reference, clientId, juristeId,
-                        estSensible, sensibiliteStatut),
+                        estSensible, sensibiliteStatut, typeEtape, statutEtape, dateDebut, dateFin),
                 pageable);
         // Trois requêtes pour la page entière, et non trois par ligne (QF-41).
         return new PageResponse<>(construireReponses(page.getContent()), page.getTotalPages(), page.getTotalElements());
@@ -473,11 +477,19 @@ public class DossierService {
         return etapeProcedureMapper.toResponse(etape);
     }
 
+    /**
+     * Les étapes que le positionnement direct doit créer si elles manquent (UC-DOS-04 alt. 3-b).
+     *
+     * <p>Le pourvoi CCJA a les mêmes antécédents que le pourvoi national — l'instance et l'appel —
+     * et <b>non</b> {@code RECOURS_2} : les deux cassations sont concurrentes. Positionner un
+     * dossier directement en CCJA ne doit pas faire naître une étape Cour Suprême fantôme, qui
+     * laisserait croire à un pourvoi qui n'a jamais été formé.
+     */
     private List<TypeEtape> etapesPrecedentes(TypeEtape type) {
         return switch (type) {
             case INSTANCE -> List.of();
             case RECOURS_1 -> List.of(TypeEtape.INSTANCE);
-            case RECOURS_2 -> List.of(TypeEtape.INSTANCE, TypeEtape.RECOURS_1);
+            case RECOURS_2, RECOURS_2_CCJA -> List.of(TypeEtape.INSTANCE, TypeEtape.RECOURS_1);
         };
     }
 

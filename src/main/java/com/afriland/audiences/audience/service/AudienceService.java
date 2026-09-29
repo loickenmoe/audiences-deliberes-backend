@@ -63,9 +63,19 @@ public class AudienceService {
             throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
                     "Une audience ne peut être planifiée que sur une étape EN_COURS (RG-AUD-01)");
         }
-        if (!request.datePlanifiee().isAfter(LocalDate.now())) {
+        // RG-AUD-07 amendée (arbitrage du 2026-09-23) : une audience s'enregistre aussi le jour même
+        // et après coup. Exiger une date strictement future rendait impossible l'audience apprise le
+        // matin pour le jour même, et — plus grave — interdisait définitivement de régulariser une
+        // audience qui s'était tenue sans avoir été saisie : le lendemain, sa date était passée.
+        //
+        // La borne retenue est l'ouverture du dossier : une audience ne peut pas précéder la
+        // procédure qui la porte. Elle arrête les fautes de frappe (une année erronée) sans imposer
+        // de délai arbitraire, et laisse régulariser un recours dont l'étape a été ouverte tard.
+        LocalDate ouvertureDossier = dossier.getCreatedAt() == null ? null : dossier.getCreatedAt().toLocalDate();
+        if (ouvertureDossier != null && request.datePlanifiee().isBefore(ouvertureDossier)) {
             throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
-                    "La date planifiée doit être future (RG-AUD-07)");
+                    "Une audience ne peut pas précéder l'ouverture du dossier, le " + ouvertureDossier
+                            + " (RG-AUD-07)");
         }
 
         boolean doublon = audienceRepository.existsByEtapeIdAndDatePlanifieeAndStatutNot(
@@ -79,6 +89,10 @@ public class AudienceService {
                 .dossier(dossier)
                 .etape(etape)
                 .datePlanifiee(request.datePlanifiee())
+                // Sans indication, l'audience se tient là où le dossier a été saisi : c'est le cas
+                // du premier degré, et c'est ce que l'écran affichait déjà. Un appel ou un pourvoi
+                // se tenant ailleurs, la juridiction se précise alors à la planification.
+                .juridiction(juridictionOuCelleDuDossier(request.juridiction(), dossier))
                 .statut(StatutAudience.PLANIFIEE)
                 .build());
 
@@ -90,6 +104,10 @@ public class AudienceService {
         }
 
         return audienceMapper.toResponse(audience);
+    }
+
+    private static String juridictionOuCelleDuDossier(String demandee, Dossier dossier) {
+        return demandee == null || demandee.isBlank() ? dossier.getJuridictionSaisie() : demandee.strip();
     }
 
     /** Q-12/Q-36 (dossier), même mécanisme pour le volet audience de RG-AUD-06. */
@@ -115,7 +133,11 @@ public class AudienceService {
                     "Le compte rendu ne peut être saisi qu'après la tenue de l'audience (RG-AUD-01)");
         }
         audience.setCompteRendu(request.compteRendu());
-        audience.setDateTenue(LocalDate.now());
+        // QF-32 : l'audience s'est tenue le jour prévu, pas le jour où l'on saisit son compte rendu.
+        // Un renvoi s'enregistre comme une annulation motivée suivie d'une replanification (Q-76) :
+        // la date planifiée d'une audience non annulée est donc bien celle à laquelle elle s'est tenue.
+        // Le rapport d'activité compte par cette date : la saisir tardivement ne déplace plus l'audience.
+        audience.setDateTenue(audience.getDatePlanifiee());
         audience.setStatut(StatutAudience.TENUE);
         audience = audienceRepository.save(audience);
 
@@ -187,7 +209,9 @@ public class AudienceService {
         List<Long> avocatsAffectes = dossierAvocatRepository.findByDossierId(dossier.getId()).stream()
                 .map(da -> da.getAvocat().getId()).toList();
         return new CalendrierEntreeResponse(
-                audience.getId(), dossier.getId(), dossier.getReference(), dossier.getJuridictionSaisie(),
+                audience.getId(), dossier.getId(), dossier.getReference(),
+                // Celle de l'audience : un dossier monté en appel ne siège plus là où il a été saisi.
+                audience.getJuridiction() != null ? audience.getJuridiction() : dossier.getJuridictionSaisie(),
                 audience.getEtape() != null ? audience.getEtape().getType().name() : null,
                 juristesAffectes, avocatsAffectes, dossier.getCodeAgenceOrigine(), dossier.getClient().getNom(),
                 dossier.getRisqueEncouru(), audience.getDatePlanifiee());
