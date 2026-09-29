@@ -102,7 +102,7 @@ class DossierServiceTest {
                 natureDossierRepository, typeClientSensibleRepository,
                 transitionValidator, dossierMapper,
                 etapeProcedureMapper, auditSeuilMapper, historiqueActionMapper, historiqueActionService, currentUserService,
-                alerteService, generateurReference);
+                alerteService, generateurReference, List.of());
 
         // Le système attribue la référence : les tests n'en fournissent plus aucune. `lenient` car
         // la majorité des tests de cette classe ne créent pas de dossier et ne l'appelleront jamais.

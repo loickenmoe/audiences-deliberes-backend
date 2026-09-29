@@ -98,6 +98,12 @@ public class DossierService {
     private final CurrentUserService currentUserService;
     private final AlerteService alerteService;
     private final GenerateurReference generateurReference;
+    /*
+     * Les conditions de fait, apportées par les modules qui détiennent les faits (2026-09-29).
+     * Spring rassemble ici tout ce qui implémente le contrat : cette liste est vide tant qu'aucune
+     * condition n'est déclarée, et le comportement reste alors exactement celui d'avant.
+     */
+    private final List<ConditionTransitionEtape> conditionsTransition;
 
     // ------------------------------------------------------------------ Création
 
@@ -454,6 +460,7 @@ public class DossierService {
             throw ApiException.badRequest(ErrorCodes.TRANSITION_NON_AUTORISEE,
                     "Transition " + ancien + " -> " + nouveau + " non autorisée pour l'étape " + etape.getType());
         }
+        verifierLesFaits(etape, ancien, nouveau);
 
         etape.setStatutCycleVie(nouveau);
         etape = etapeProcedureRepository.save(etape);
@@ -468,6 +475,34 @@ public class DossierService {
         }
 
         return etapeProcedureMapper.toResponse(etape);
+    }
+
+    /**
+     * Les conditions de fait du passage (métier, 2026-09-29).
+     *
+     * <p>L'ordre des statuts est vérifié juste avant ; ici on vérifie que ce qui doit avoir eu lieu
+     * a bien eu lieu — une audience tenue avant la mise en délibéré, un jugement défavorable avant
+     * un recours, des frais soldés avant l'archivage.
+     *
+     * <p><b>Toutes les conditions sont évaluées, pas seulement la première.</b> S'arrêter au premier
+     * refus ferait corriger un manque pour en découvrir un autre au clic suivant : l'utilisateur
+     * doit voir d'un coup ce qui lui reste à faire.
+     *
+     * <p>Le code d'erreur reste {@code ERR-004} : du point de vue de celui qui appelle, le passage
+     * est refusé — que ce soit l'ordre ou les faits qui s'y opposent ne change ni son recours ni le
+     * traitement côté écran. Seul le message diffère, et c'est lui qu'on lit.
+     */
+    private void verifierLesFaits(EtapeProcedure etape, StatutCycleVie ancien, StatutCycleVie nouveau) {
+        List<String> empechements = conditionsTransition.stream()
+                .filter(condition -> condition.concerne(ancien, nouveau))
+                .map(condition -> condition.empechement(etape))
+                .flatMap(Optional::stream)
+                .toList();
+
+        if (!empechements.isEmpty()) {
+            throw ApiException.badRequest(ErrorCodes.TRANSITION_NON_AUTORISEE,
+                    String.join(" ", empechements));
+        }
     }
 
     private void ouvrirEtapeSuivante(Dossier dossier, EtapeProcedure etapeActuelle) {
