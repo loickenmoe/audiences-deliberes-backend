@@ -19,6 +19,12 @@ public interface AudienceRepository extends JpaRepository<Audience, Long> {
      */
     boolean existsByEtapeIdAndDatePlanifieeAndStatutNot(Long etapeId, LocalDate datePlanifiee, StatutAudience statut);
 
+    /** Conditions de mise en délibéré (2026-09-29) : une audience tenue est exigée sur l étape. */
+    boolean existsByEtapeIdAndStatut(Long etapeId, StatutAudience statut);
+
+    /** Conditions de mise en délibéré : aucune audience ne doit rester en attente sur l étape. */
+    long countByEtapeIdAndStatut(Long etapeId, StatutAudience statut);
+
     /** FR-AUD-05 : calendrier et exports. Appelé avec {@code ANNULEE} (Q-76) : ils l'écartent. */
     List<Audience> findByDatePlanifieeBetweenAndStatutNot(LocalDate debut, LocalDate fin, StatutAudience statut);
 

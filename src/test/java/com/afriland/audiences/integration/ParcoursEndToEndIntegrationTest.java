@@ -247,6 +247,8 @@ class ParcoursEndToEndIntegrationTest {
         long dossierId = creerDossierRecouvrement();
         long etapeId = premiereEtape(dossierId);
         passerEtape(dossierId, etapeId, "EN_COURS");
+        // Une étape ne part en délibéré qu'avec une audience tenue, et aucune en attente (2026-09-29).
+        tenirUneAudience(dossierId, etapeId);
         passerEtape(dossierId, etapeId, "EN_DELIBERE");
         LocalDate annoncee = LocalDate.now().plusDays(7);
         LocalDate prorogee = LocalDate.now().plusDays(14);
@@ -336,6 +338,8 @@ class ParcoursEndToEndIntegrationTest {
         long dossierId = creerDossierRecouvrement();
         long etapeId = premiereEtape(dossierId);
         passerEtape(dossierId, etapeId, "EN_COURS");
+        // Une étape ne part en délibéré qu'avec une audience tenue, et aucune en attente (2026-09-29).
+        tenirUneAudience(dossierId, etapeId);
         passerEtape(dossierId, etapeId, "EN_DELIBERE");
 
         long delibereId = extraireId(mockMvc.perform(post(api("/dossiers/" + dossierId + "/deliberes"))
@@ -364,6 +368,8 @@ class ParcoursEndToEndIntegrationTest {
         long dossierId = creerDossierRecouvrement();
         long etapeId = premiereEtape(dossierId);
         passerEtape(dossierId, etapeId, "EN_COURS");
+        // Une étape ne part en délibéré qu'avec une audience tenue, et aucune en attente (2026-09-29).
+        tenirUneAudience(dossierId, etapeId);
         passerEtape(dossierId, etapeId, "EN_DELIBERE");
         mockMvc.perform(post(api("/dossiers/" + dossierId + "/deliberes"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -644,6 +650,39 @@ class ParcoursEndToEndIntegrationTest {
         return lireJson(mockMvc.perform(get(api("/dossiers/" + dossierId))
                         .with(role("kc-juriste", "ROLE_CONSULTATION")))
                 .andReturn()).get("etapes").get(0).get("id").asLong();
+    }
+
+    /**
+     * Tient une audience sur l'étape : planification, antidatage, compte rendu.
+     *
+     * <p>Depuis le 2026-09-29, une étape ne part en délibéré que si une audience s'y est <b>tenue</b>
+     * — c'est-à-dire rapportée, le statut {@code TENUE} n'étant posé qu'à la saisie du compte rendu
+     * — et qu'aucune audience n'y reste planifiée. Les parcours qui mettent en délibéré passent
+     * donc par ici.
+     *
+     * <p>L'antidatage reprend celui de P2 : RG-AUD-01 exige une audience passée pour saisir son
+     * compte rendu, et le refus sur audience future est déjà couvert unitairement.
+     */
+    private void tenirUneAudience(long dossierId, long etapeId) throws Exception {
+        long audienceId = extraireId(mockMvc.perform(post(api("/dossiers/" + dossierId + "/audiences"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("etapeId", etapeId,
+                                "datePlanifiee", LocalDate.now().plusDays(7).toString())))
+                        .with(role("kc-juriste", "ROLE_JURISTE")))
+                .andExpect(status().isCreated())
+                .andReturn());
+
+        audienceRepository.findById(audienceId).ifPresent(audience -> {
+            audience.setDatePlanifiee(LocalDate.now().minusDays(1));
+            audienceRepository.save(audience);
+        });
+
+        mockMvc.perform(put(api("/audiences/" + audienceId + "/compte-rendu"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("compteRendu", "Audience tenue, affaire mise en délibéré")))
+                        .with(role("kc-juriste", "ROLE_JURISTE")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statut").value("TENUE"));
     }
 
     private void passerEtape(long dossierId, long etapeId, String statut) throws Exception {
