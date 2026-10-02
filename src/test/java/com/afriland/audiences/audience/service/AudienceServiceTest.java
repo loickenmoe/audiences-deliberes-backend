@@ -97,7 +97,7 @@ class AudienceServiceTest {
     }
 
 /**
-     * RG-AUD-07 amendée (2026-09-23) : l'audience du jour s'enregistre, et son compte rendu est
+     * RG-AUD-08 (2026-09-23) : l'audience du jour s'enregistre, et son compte rendu est
      * recevable dans la foulée — c'était le besoin à l'origine de l'arbitrage.
      */
     @Test
