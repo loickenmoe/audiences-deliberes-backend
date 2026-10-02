@@ -332,6 +332,38 @@ DELIBERE_VIDE ──(recours exercé dans le délai)──▶ ouvre RECOURS_1 / 
 DELIBERE_VIDE ──(délai expiré sans recours)────▶ CLOTURE + bascule décisions définitives (RG-DEL-04)
 ```
 
+### Conditions de fait (métier, 2026-09-29)
+
+L'ordre des statuts ci-dessus dit ce qui **peut** suivre quoi. Il ne disait rien de ce qui **doit
+avoir eu lieu** : on pouvait mettre en délibéré une étape sans audience, exercer un recours contre
+un jugement gagné, archiver un dossier aux frais impayés. Chaque passage porte désormais ses
+conditions, vérifiées par `ConditionTransitionEtape`.
+
+| Passage | Ce qui doit avoir eu lieu | Où la règle vit |
+|---|---|---|
+| `OUVERTURE → EN_COURS` | aucune étape **antérieure** en délibéré | `dossier` |
+| `EN_COURS → EN_DELIBERE` | au moins une audience **TENUE** (donc rapportée) **et** aucune audience `PLANIFIEE` | `audience` |
+| `DELIBERE_VIDE → EN_COURS` | délibéré rendu **DEFAVORABLE** ou **MIXTE**, délai de recours non expiré | `delibere` |
+| `DELIBERE_VIDE → CLOTURE` | délibéré rendu | `delibere` |
+| `CLOTURE → ARCHIVE` | décision définitive enregistrée ; frais du dossier soldés **si c'est la dernière étape ouverte** | `decision`, `frais` |
+
+**Inversion de dépendance.** Ces faits vivent dans quatre modules qui dépendent de `dossier` :
+les interroger depuis `dossier` aurait créé le cycle que Q-67 a refusé pour la GED. `dossier`
+publie donc le contrat, chaque module apporte ses conditions, Spring les rassemble. Ajouter une
+règle, c'est ajouter une classe dans le module concerné.
+
+**Tous les manques sont rendus ensemble**, pas un par clic, et le refus reste un `ERR-004` : du
+point de vue de l'appelant le passage est refusé, que ce soit l'ordre ou les faits qui s'y opposent.
+
+**Une règle validée puis écartée** : « l'étape précédente doit être close ». L'exercice d'un recours
+fait passer l'étape courante à `EN_COURS` — elle se rouvre — avant de créer la suivante ; exiger
+l'antécédent clos aurait bloqué le parcours normal. Ce qui en reste : on n'ouvre pas les débats d'un
+degré tant que le précédent est **en délibéré**.
+
+**Hors cycle de vie, même esprit** : une décision ne rejoint la base jurisprudentielle que lorsque
+le dossier n'a plus aucune étape en cours — `Jurisprudence` n'enregistrant rien qui dise l'état de
+la décision, une décision frappée d'appel y figurerait comme un arrêt définitif.
+
 Un dossier porte **1 à 3 étapes** : `INSTANCE`, `RECOURS_1`, `RECOURS_2`, chacune avec son
 propre cycle de vie. Le juriste peut créer directement une étape ultérieure ; les étapes
 intermédiaires sont alors créées automatiquement au statut `OUVERTURE` (UC-DOS-04 alt. 3-b).

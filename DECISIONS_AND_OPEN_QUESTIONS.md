@@ -2392,7 +2392,15 @@ qui ne change rien n'écrit rien.
 sur un avocat ; notification d'un prestataire ; rien sans changement ; 404) et un parcours d'intégration
 sur PostgreSQL neuf — 403 pour le juriste, type et compte envoyés ignorés, trace lue dans l'audit.
 
-### Q-116 ✅ Un client se corrige, sa référence reste figée — tranché (2026-09-22)
+### Q-116 ✅ Un client se corrige, sa référence reste figée — tranché (2026-09-22), **complété le 2026-09-29**
+
+> **Complément (métier, 2026-09-29).** « Les champs Référence doivent être automatiquement remplis
+> par le système. » La référence n'est plus saisie à la création non plus : `POST /clients` et
+> `POST /dossiers` l'attribuent (`CLI-2026-0001`, `DOS-2026-0001`) au moyen d'un compteur annuel
+> atomique (**V36**). Le revers que cette fiche assumait — « une coquille dans la référence reste
+> définitive » — disparaît : il n'y a plus de saisie où se tromper. La réserve INT-05 demeure et est
+> consignée dans `CreerClientRequest` : un client venu d'un référentiel externe porte une référence
+> imposée, qu'il faudra accueillir dans un second champ plutôt qu'en rouvrant la saisie.
 
 **Le besoin que Q-23 attendait.** Q-23 avait recommandé `PUT /clients/{id}` dès le 2026-09-04, puis
 l'avait différé : « à réévaluer si un besoin de modification client émerge ». Il a émergé en recette :

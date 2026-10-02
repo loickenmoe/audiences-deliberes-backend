@@ -37,6 +37,13 @@ public interface DemandeFraisRepository extends JpaRepository<DemandeFrais, Long
     /** FR-REP-02 (tableau de bord, M13) : demandes non encore soldées (ni payées, ni rejetées). */
     long countByStatutCircuitNotIn(List<StatutCircuitFrais> statuts);
 
+    /**
+     * Condition d archivage (2026-09-29) : les demandes d un dossier qui ne sont ni payées ni
+     * rejetées. Rendues et non comptées : le refus les nomme, celui qui archive n ayant pas la main
+     * sur le circuit des frais et devant savoir auprès de qui aller.
+     */
+    List<DemandeFrais> findByDossierIdAndStatutCircuitNotIn(Long dossierId, List<StatutCircuitFrais> statuts);
+
     /** FR-REP-01 (rapport périodique, M13) : demandes déposées dans la période. */
     long countByCreatedAtBetween(LocalDateTime debut, LocalDateTime fin);
 

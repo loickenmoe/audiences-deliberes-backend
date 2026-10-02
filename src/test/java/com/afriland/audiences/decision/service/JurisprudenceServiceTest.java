@@ -8,6 +8,8 @@ import com.afriland.audiences.decision.repository.JurisprudenceRepository;
 import com.afriland.audiences.decision.web.dto.JurisprudenceResponse;
 import com.afriland.audiences.dossier.domain.Dossier;
 import com.afriland.audiences.dossier.repository.DossierRepository;
+import com.afriland.audiences.dossier.domain.StatutCycleVie;
+import com.afriland.audiences.dossier.repository.EtapeProcedureRepository;
 import com.afriland.audiences.ged.service.MinioStorageService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,6 +38,7 @@ class JurisprudenceServiceTest {
 
     @Mock private JurisprudenceRepository jurisprudenceRepository;
     @Mock private DossierRepository dossierRepository;
+    @Mock private EtapeProcedureRepository etapeProcedureRepository;
     @Mock private HistoriqueActionService historiqueActionService;
     @Mock private MinioStorageService minioStorageService;
 
@@ -44,7 +47,8 @@ class JurisprudenceServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new JurisprudenceService(jurisprudenceRepository, dossierRepository, historiqueActionService, minioStorageService);
+        service = new JurisprudenceService(jurisprudenceRepository, dossierRepository,
+                etapeProcedureRepository, historiqueActionService, minioStorageService);
         dossier = Dossier.builder().id(1L).reference("DOS-2026-001").build();
     }
 
@@ -109,6 +113,10 @@ class JurisprudenceServiceTest {
     void creer_withDossierUsesDeposer() {
         MockMultipartFile fichier = new MockMultipartFile("file", "decision.pdf", "application/pdf", new byte[]{1, 2, 3});
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
+        // Le dossier est terminé : c'est la condition du versement (2026-09-29), dite ici plutôt
+        // que laissée au défaut du mock — sans quoi ce test ne prouverait pas qu'elle est remplie.
+        when(etapeProcedureRepository.existsByDossierIdAndStatutCycleVieNotIn(1L, StatutCycleVie.FERMES))
+                .thenReturn(false);
         when(minioStorageService.deposer(1L, fichier)).thenReturn("dossiers/1/decision.pdf");
         when(jurisprudenceRepository.save(any(Jurisprudence.class))).thenAnswer(inv -> {
             Jurisprudence j = inv.getArgument(0);
@@ -122,6 +130,51 @@ class JurisprudenceServiceTest {
 
         assertThat(result.dossierId()).isEqualTo(1L);
         verify(minioStorageService, never()).deposerSansDossier(any());
+    }
+
+    /**
+     * La garde du 2026-09-29 : une décision ne rejoint la base jurisprudentielle qu'une fois
+     * définitive. {@code Jurisprudence} n'enregistrant rien qui dise l'état de la décision, une
+     * décision frappée d'appel y entrerait au même titre qu'un arrêt définitif — et le juriste qui
+     * la trouve comme précédent ne pourrait pas savoir qu'elle a peut-être été infirmée.
+     */
+    @Test
+    void creer_refuseTantQuUneEtapeDuDossierEstEnCours() {
+        MockMultipartFile fichier = new MockMultipartFile("file", "decision.pdf", "application/pdf", new byte[]{1, 2, 3});
+        when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
+        when(etapeProcedureRepository.existsByDossierIdAndStatutCycleVieNotIn(1L, StatutCycleVie.FERMES))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> service.creer(1L, TypeArchiveJurisprudence.EXPEDITION, List.of("hypotheque"),
+                "Recouvrement", "TGI Douala", LocalDate.now(), fichier))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("encore une étape en cours")
+                .hasMessageContaining("définitive");
+
+        // Rien n'a été déposé ni enregistré : le refus tombe avant tout effet.
+        verify(minioStorageService, never()).deposer(any(Long.class), any(org.springframework.web.multipart.MultipartFile.class));
+        verify(jurisprudenceRepository, never()).save(any(Jurisprudence.class));
+    }
+
+    /**
+     * Une jurisprudence <b>sans dossier</b> reste libre : elle sert à verser un arrêt trouvé
+     * ailleurs, dont rien ne permet — ni n'a à permettre — de juger l'état.
+     */
+    @Test
+    void creer_sansDossierNInterrogeAucuneEtape() {
+        MockMultipartFile fichier = new MockMultipartFile("file", "decision.pdf", "application/pdf", new byte[]{1, 2, 3});
+        when(minioStorageService.deposerSansDossier(fichier)).thenReturn("jurisprudence/decision.pdf");
+        when(jurisprudenceRepository.save(any(Jurisprudence.class))).thenAnswer(inv -> {
+            Jurisprudence j = inv.getArgument(0);
+            j.setId(3L);
+            return j;
+        });
+
+        service.creer(null, TypeArchiveJurisprudence.EXPEDITION, List.of("hypotheque"),
+                "Recouvrement", "TGI Douala", LocalDate.now(), fichier);
+
+        verify(etapeProcedureRepository, never())
+                .existsByDossierIdAndStatutCycleVieNotIn(any(), any());
     }
 
     @Test

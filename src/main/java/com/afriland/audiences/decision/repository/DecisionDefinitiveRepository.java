@@ -14,6 +14,9 @@ import java.util.List;
 @Repository
 public interface DecisionDefinitiveRepository extends JpaRepository<DecisionDefinitive, Long> {
 
+    /** Condition d archivage (2026-09-29) : une étape ne s archive pas sans son issue définitive. */
+    boolean existsByEtapeId(Long etapeId);
+
     /**
      * FR-REP-02 (tableau de bord, M13) : montant total des provisions reprises (toutes périodes) —
      * requête portant sur le sous-type {@link com.afriland.audiences.decision.domain.Adjudication},

@@ -7,6 +7,8 @@ import com.afriland.audiences.common.audit.HistoriqueAction;
 import com.afriland.audiences.common.audit.HistoriqueActionRepository;
 import com.afriland.audiences.common.audit.HistoriqueActionService;
 import com.afriland.audiences.common.error.ApiException;
+import com.afriland.audiences.common.reference.FamilleReference;
+import com.afriland.audiences.common.reference.GenerateurReference;
 import com.afriland.audiences.common.error.ErrorCodes;
 import com.afriland.audiences.common.security.CurrentUserService;
 import com.afriland.audiences.common.web.PageResponse;
@@ -95,15 +97,18 @@ public class DossierService {
     private final HistoriqueActionService historiqueActionService;
     private final CurrentUserService currentUserService;
     private final AlerteService alerteService;
+    private final GenerateurReference generateurReference;
+    /*
+     * Les conditions de fait, apportées par les modules qui détiennent les faits (2026-09-29).
+     * Spring rassemble ici tout ce qui implémente le contrat : cette liste est vide tant qu'aucune
+     * condition n'est déclarée, et le comportement reste alors exactement celui d'avant.
+     */
+    private final List<ConditionTransitionEtape> conditionsTransition;
 
     // ------------------------------------------------------------------ Création
 
     @Transactional
     public DossierResponse creerDossier(CreerDossierRequest request) {
-        if (dossierRepository.existsByReference(request.reference())) {
-            throw ApiException.conflictSurChamp(ErrorCodes.REFERENCE_DOSSIER_DUPLIQUEE,
-                    "La référence '" + request.reference() + "' est déjà utilisée", "reference");
-        }
         Client client = clientRepository.findById(request.clientId())
                 .orElseThrow(() -> ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE,
                         "Client introuvable : " + request.clientId()));
@@ -126,8 +131,16 @@ public class DossierService {
             validerTypeClientSensible(request.typeClientSensible());
         }
 
+        /*
+         * La référence est attribuée par le système (métier, 2026-09-29). Elle est demandée ici,
+         * une fois les refus passés : un numéro servi n'est jamais rendu, et le demander plus tôt
+         * en consommerait un à chaque client introuvable ou catégorie incohérente. La suite
+         * présenterait des trous que personne ne saurait expliquer.
+         */
+        String reference = referenceAttribuee();
+
         Dossier dossier = Dossier.builder()
-                .reference(request.reference())
+                .reference(reference)
                 .nature(request.nature())
                 .categorie(categorie)
                 .juridictionSaisie(request.juridictionSaisie())
@@ -181,6 +194,28 @@ public class DossierService {
      * libellé est reformulé, et tient dans la colonne — un libellé peut atteindre 100 caractères
      * pour une colonne cible de 50, ce qui reproduirait le défaut corrigé par V7 sur {@code nature}.
      */
+    /**
+     * La référence du prochain dossier.
+     *
+     * <p>Le contrôle d'unicité qui précédait la création est conservé, mais il a changé de sens :
+     * il ne sanctionne plus une saisie, il détecte une <b>anomalie de numérotation</b>. Il ne peut
+     * se déclencher que si une référence au format attribué existait sans que le compteur en ait
+     * tenu compte — ce que la reprise de V36 est censée empêcher. Le laisser tomber silencieusement
+     * sur la contrainte d'unicité de la base donnerait une erreur technique là où un message clair
+     * dit quoi regarder.
+     *
+     * <p>Aucun champ n'est nommé dans l'erreur : il n'y a plus de champ à corriger à l'écran.
+     */
+    private String referenceAttribuee() {
+        String reference = generateurReference.prochaine(FamilleReference.DOSSIER);
+        if (dossierRepository.existsByReference(reference)) {
+            throw ApiException.conflict(ErrorCodes.REFERENCE_DOSSIER_DUPLIQUEE,
+                    "La référence attribuée '" + reference + "' est déjà portée par un dossier : "
+                            + "le compteur de références est désynchronisé (V36)");
+        }
+        return reference;
+    }
+
     private void validerTypeClientSensible(String code) {
         typeClientSensibleRepository.findByCodeIgnoreCase(code)
                 .orElseThrow(() -> ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
@@ -425,6 +460,7 @@ public class DossierService {
             throw ApiException.badRequest(ErrorCodes.TRANSITION_NON_AUTORISEE,
                     "Transition " + ancien + " -> " + nouveau + " non autorisée pour l'étape " + etape.getType());
         }
+        verifierLesFaits(etape, ancien, nouveau);
 
         etape.setStatutCycleVie(nouveau);
         etape = etapeProcedureRepository.save(etape);
@@ -439,6 +475,34 @@ public class DossierService {
         }
 
         return etapeProcedureMapper.toResponse(etape);
+    }
+
+    /**
+     * Les conditions de fait du passage (métier, 2026-09-29).
+     *
+     * <p>L'ordre des statuts est vérifié juste avant ; ici on vérifie que ce qui doit avoir eu lieu
+     * a bien eu lieu — une audience tenue avant la mise en délibéré, un jugement défavorable avant
+     * un recours, des frais soldés avant l'archivage.
+     *
+     * <p><b>Toutes les conditions sont évaluées, pas seulement la première.</b> S'arrêter au premier
+     * refus ferait corriger un manque pour en découvrir un autre au clic suivant : l'utilisateur
+     * doit voir d'un coup ce qui lui reste à faire.
+     *
+     * <p>Le code d'erreur reste {@code ERR-004} : du point de vue de celui qui appelle, le passage
+     * est refusé — que ce soit l'ordre ou les faits qui s'y opposent ne change ni son recours ni le
+     * traitement côté écran. Seul le message diffère, et c'est lui qu'on lit.
+     */
+    private void verifierLesFaits(EtapeProcedure etape, StatutCycleVie ancien, StatutCycleVie nouveau) {
+        List<String> empechements = conditionsTransition.stream()
+                .filter(condition -> condition.concerne(ancien, nouveau))
+                .map(condition -> condition.empechement(etape))
+                .flatMap(Optional::stream)
+                .toList();
+
+        if (!empechements.isEmpty()) {
+            throw ApiException.badRequest(ErrorCodes.TRANSITION_NON_AUTORISEE,
+                    String.join(" ", empechements));
+        }
     }
 
     private void ouvrirEtapeSuivante(Dossier dossier, EtapeProcedure etapeActuelle) {

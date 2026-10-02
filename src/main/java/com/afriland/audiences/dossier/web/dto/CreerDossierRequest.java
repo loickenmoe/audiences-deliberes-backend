@@ -12,6 +12,12 @@ import java.util.List;
 /**
  * Requête de création d'un dossier (FR-DOS-01, US 1.1).
  * <p>
+ * <b>La référence n'est pas dans cette requête</b> : le système l'attribue (métier, 2026-09-29 —
+ * « les champs Référence doivent être automatiquement remplis par le système »). Elle est absente
+ * du corps plutôt qu'ignorée, comme {@code ModifierClientRequest} le fait depuis Q-116 : un champ
+ * qu'on accepte sans l'utiliser laisse croire qu'il sert. Un client qui l'enverrait malgré tout la
+ * verrait simplement ignorée par la désérialisation.
+ * <p>
  * {@code categorie} est optionnelle : dérivée du référentiel {@code nature_dossier} à partir de
  * {@code nature} (RG-DOS-02) ; si fournie, elle doit être cohérente avec cette dérivation, sinon
  * 400.
@@ -30,7 +36,6 @@ import java.util.List;
  * (cf. DECISIONS_AND_OPEN_QUESTIONS.md Q-10, Q-26).
  */
 public record CreerDossierRequest(
-        @NotBlank @Size(max = 50) String reference,
         @NotBlank @Size(max = 255) String nature,
         CategorieDossier categorie,
         @NotBlank @Size(max = 100) String juridictionSaisie,
