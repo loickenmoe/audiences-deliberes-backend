@@ -51,6 +51,11 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
+                        // Sidecar Dapr (Q-120) : découverte des abonnements et livraison des accusés
+                        // du Notification Engine. Le sidecar partage la pile réseau de l'application
+                        // et n'a pas de jeton à présenter ; ces routes ne lisent ni n'exposent aucune
+                        // donnée de l'application.
+                        .requestMatchers("/dapr/subscribe", "/notifications/accuses/**").permitAll()
                         .requestMatchers(PUBLIC_PATHS).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .anyRequest().authenticated()

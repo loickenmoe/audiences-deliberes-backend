@@ -11,6 +11,8 @@ public record AudienceResponse(
         Long etapeId,
         LocalDate datePlanifiee,
         LocalDate dateTenue,
+        /** Juridiction de l'audience, héritée du dossier faute d'indication contraire. */
+        String juridiction,
         String compteRendu,
         StatutAudience statut,
         LocalDateTime createdAt,

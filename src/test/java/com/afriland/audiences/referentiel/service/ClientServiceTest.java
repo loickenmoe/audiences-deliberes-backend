@@ -10,6 +10,8 @@ import com.afriland.audiences.referentiel.repository.ClientRepository;
 import com.afriland.audiences.referentiel.web.dto.ClientResponse;
 import com.afriland.audiences.referentiel.web.dto.CreerClientRequest;
 import com.afriland.audiences.referentiel.web.dto.ModifierClientRequest;
+import com.afriland.audiences.common.reference.FamilleReference;
+import com.afriland.audiences.common.reference.GenerateurReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,6 +31,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -49,16 +52,20 @@ class ClientServiceTest {
 
         @Override
         public Client toEntity(CreerClientRequest request) {
-            return Client.builder().reference(request.reference()).nom(request.nom()).build();
+            // La référence n'est plus dans la requête : le service l'attribue et la pose ensuite.
+            return Client.builder().nom(request.nom()).build();
         }
     };
 
     private ClientService service;
     private Client client;
 
+    @Mock private GenerateurReference generateurReference;
+
     @BeforeEach
     void setUp() {
-        service = new ClientService(clientRepository, mapper, historiqueActionService);
+        service = new ClientService(clientRepository, mapper, generateurReference, historiqueActionService);
+        lenient().when(generateurReference.prochaine(FamilleReference.CLIENT)).thenReturn("CLI-2026-0001");
         client = Client.builder().id(1L).reference("CLI-001").nom("Banque Test").build();
     }
 
@@ -108,33 +115,38 @@ class ClientServiceTest {
                 .hasMessageContaining("Client introuvable");
     }
 
+    /**
+     * Depuis le 2026-09-29 la référence est attribuée : un doublon ne peut plus venir d'une saisie,
+     * seulement d'un compteur désynchronisé (V36). Le message le dit, et ne nomme <b>aucun champ</b>
+     * puisqu'il n'y en a plus à corriger à l'écran.
+     */
     @Test
-    void creerClient_rejetteUneReferenceDejaUtilisee() {
-        when(clientRepository.findByReference("CLI-001")).thenReturn(Optional.of(client));
+    void creerClient_signaleUneReferenceAttribueeDejaPortee() {
+        when(clientRepository.findByReference("CLI-2026-0001")).thenReturn(Optional.of(client));
 
-        assertThatThrownBy(() -> service.creerClient(new CreerClientRequest("CLI-001", "Autre", null, null)))
+        assertThatThrownBy(() -> service.creerClient(new CreerClientRequest("Autre", null, null)))
                 .isInstanceOf(ApiException.class)
-                .hasMessageContaining("déjà utilisée")
-                // ERR-CONFLICT couvre une dizaine de conflits : sans ce champ, un client ne peut pas
-                // savoir lequel des siens signaler à l'utilisateur.
+                .hasMessageContaining("désynchronisé")
                 .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.type(ApiException.class))
                 .extracting(ApiException::getChamp)
-                .isEqualTo("reference");
+                .isNull();
     }
 
     @Test
     void creerClient_nominal() {
-        when(clientRepository.findByReference("CLI-002")).thenReturn(Optional.empty());
+        when(clientRepository.findByReference("CLI-2026-0001")).thenReturn(Optional.empty());
         when(clientRepository.save(any(Client.class))).thenAnswer(inv -> {
             Client c = inv.getArgument(0);
             c.setId(2L);
             return c;
         });
 
-        ClientResponse result = service.creerClient(new CreerClientRequest("CLI-002", "Nouveau client", null, null));
+        ClientResponse result = service.creerClient(new CreerClientRequest("Nouveau client", null, null));
 
         assertThat(result.id()).isEqualTo(2L);
-        assertThat(result.reference()).isEqualTo("CLI-002");
+        // La référence vient du générateur, jamais de la requête.
+        assertThat(result.reference()).isEqualTo("CLI-2026-0001");
+        verify(generateurReference).prochaine(FamilleReference.CLIENT);
     }
 
     // ------------------------------------------------------------------ Modification (PUT /clients)

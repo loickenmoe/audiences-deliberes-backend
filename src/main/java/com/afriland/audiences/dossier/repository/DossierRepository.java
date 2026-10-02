@@ -20,6 +20,10 @@ public interface DossierRepository extends JpaRepository<Dossier, Long>, JpaSpec
 
     boolean existsByReference(String reference);
 
+    /** Référence seule, pour les notifications externes : inutile de charger le dossier entier. */
+    @Query("SELECT d.reference FROM Dossier d WHERE d.id = :id")
+    Optional<String> findReferenceById(@Param("id") Long id);
+
     List<Dossier> findByClientId(Long clientId);
 
     /** FR-GED-04 (rapport journalier) : dossiers ouverts (affaires nouvelles) à une date donnée. */
@@ -38,4 +42,24 @@ public interface DossierRepository extends JpaRepository<Dossier, Long>, JpaSpec
             + "ORDER BY da.dossier.createdAt DESC, da.dossier.id DESC",
             countQuery = "SELECT COUNT(da) FROM DossierAvocat da WHERE da.avocat.id = :avocatId")
     Page<Dossier> findDossiersDeLAvocat(@Param("avocatId") Long avocatId, Pageable pageable);
+
+    /**
+     * Les mêmes dossiers, <b>cherchés par référence</b>.
+     *
+     * <p><b>Le défaut qu'elle corrige.</b> Le sélecteur du portail chargeait une seule page et n'y
+     * trouvait que les dossiers les plus récents : un avocat qui en suit plus que la page ne peut
+     * plus désigner les autres — ni déposer de demande de frais, ni de compte rendu, pour ses
+     * dossiers anciens. Le dossier existait, l'affectation aussi : seule la liste était tronquée,
+     * en silence. C'est le même piège que Q-105 sur l'annuaire des avocats, et la même réponse :
+     * chercher sur le serveur plutôt que filtrer une page déjà réduite.
+     *
+     * <p>La restriction à l'avocat reste portée par la requête, jamais ajoutée après coup.
+     */
+    @Query(value = "SELECT da.dossier FROM DossierAvocat da WHERE da.avocat.id = :avocatId "
+            + "AND LOWER(da.dossier.reference) LIKE LOWER(CONCAT('%', :reference, '%')) "
+            + "ORDER BY da.dossier.createdAt DESC, da.dossier.id DESC",
+            countQuery = "SELECT COUNT(da) FROM DossierAvocat da WHERE da.avocat.id = :avocatId "
+                    + "AND LOWER(da.dossier.reference) LIKE LOWER(CONCAT('%', :reference, '%'))")
+    Page<Dossier> rechercherDossiersDeLAvocat(@Param("avocatId") Long avocatId,
+                                              @Param("reference") String reference, Pageable pageable);
 }

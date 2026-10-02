@@ -11,6 +11,8 @@ import com.afriland.audiences.referentiel.repository.ClientRepository;
 import com.afriland.audiences.referentiel.web.dto.ClientResponse;
 import com.afriland.audiences.referentiel.web.dto.CreerClientRequest;
 import com.afriland.audiences.referentiel.web.dto.ModifierClientRequest;
+import com.afriland.audiences.common.reference.FamilleReference;
+import com.afriland.audiences.common.reference.GenerateurReference;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -27,6 +29,7 @@ public class ClientService {
 
     private final ClientRepository clientRepository;
     private final ClientMapper clientMapper;
+    private final GenerateurReference generateurReference;
     private final HistoriqueActionService historiqueActionService;
 
     @Transactional(readOnly = true)
@@ -53,11 +56,20 @@ public class ClientService {
 
     @Transactional
     public ClientResponse creerClient(CreerClientRequest request) {
-        if (clientRepository.findByReference(request.reference()).isPresent()) {
-            throw ApiException.conflictSurChamp(ErrorCodes.CONFLIT,
-                    "La référence client '" + request.reference() + "' est déjà utilisée", "reference");
+        /*
+         * La référence est attribuée par le système (métier, 2026-09-29). Le contrôle qui suit a
+         * changé de sens : il ne sanctionne plus une saisie — il n'y en a plus — mais détecte un
+         * compteur désynchronisé (V36), seul cas où une référence attribuée pourrait être déjà
+         * portée. Aucun champ n'est nommé : il n'y en a plus à corriger à l'écran.
+         */
+        String reference = generateurReference.prochaine(FamilleReference.CLIENT);
+        if (clientRepository.findByReference(reference).isPresent()) {
+            throw ApiException.conflict(ErrorCodes.CONFLIT,
+                    "La référence attribuée '" + reference + "' est déjà portée par un client : "
+                            + "le compteur de références est désynchronisé (V36)");
         }
         Client client = clientMapper.toEntity(request);
+        client.setReference(reference);
         client = clientRepository.save(client);
         return clientMapper.toResponse(client);
     }

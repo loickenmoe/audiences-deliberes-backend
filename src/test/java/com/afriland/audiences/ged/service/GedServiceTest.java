@@ -18,6 +18,9 @@ import com.afriland.audiences.ged.domain.StatutSuppression;
 import com.afriland.audiences.ged.mapper.DemandeSuppressionMapper;
 import com.afriland.audiences.ged.repository.DemandeSuppressionRepository;
 import com.afriland.audiences.ged.repository.DocumentRepository;
+import com.afriland.audiences.notification.service.NotificationPrestataireService;
+import com.afriland.audiences.referentiel.repository.AvocatRepository;
+import com.afriland.audiences.referentiel.service.CompteAvocatService;
 import com.afriland.audiences.ged.web.dto.ApprobationSuppressionRequest;
 import com.afriland.audiences.ged.web.dto.DemandeSuppressionResponse;
 import com.afriland.audiences.ged.web.dto.DocumentResponse;
@@ -79,11 +82,19 @@ class GedServiceTest {
     private Utilisateur juriste;
     private Utilisateur dj;
 
+    @Mock
+    private AvocatRepository avocatRepository;
+
+    @Mock
+    private NotificationPrestataireService notificationPrestataireService;
+
     @BeforeEach
     void setUp() {
         service = new GedService(documentRepository, demandeSuppressionRepository, dossierRepository,
                 dossierJuristeRepository, utilisateurRepository, historiqueActionRepository, audienceRepository,
-                configurationService, alerteService, historiqueActionService, currentUserService, minioStorageService,
+                configurationService, alerteService, historiqueActionService, currentUserService,
+                new CompteAvocatService(avocatRepository, utilisateurRepository), notificationPrestataireService,
+                minioStorageService,
                 new ValidationFichierService(configurationService), demandeSuppressionMapper);
 
         dossier = Dossier.builder().id(1L).reference("DOS-2026-001").build();

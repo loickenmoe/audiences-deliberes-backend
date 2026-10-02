@@ -283,7 +283,7 @@ public class DelibereService {
      * jamais ouvrir la suivante (cf. {@code EtapeTransitionValidator#estExerciceDeRecours}).
      */
     private boolean recoursAEteExerce(Long dossierId, EtapeProcedure etape) {
-        if (etape == null || etape.getType() == TypeEtape.RECOURS_2) {
+        if (etape == null || etape.getType().estTerminale()) {
             return false;
         }
         return etapeProcedureRepository.existsByDossierIdAndType(dossierId, etape.getType().suivante());

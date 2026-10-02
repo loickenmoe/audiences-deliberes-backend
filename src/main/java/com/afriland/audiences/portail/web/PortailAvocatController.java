@@ -53,9 +53,11 @@ public class PortailAvocatController {
      */
     @GetMapping("/mes-dossiers")
     @PreAuthorize("hasRole('AVOCAT')")
-    public PageResponse<DossierAvocatResponse> mesDossiers(@RequestParam(defaultValue = "0") int page,
-                                                             @RequestParam(defaultValue = "20") int size) {
-        return portailAvocatService.mesDossiers(PageRequest.of(page, size));
+    public PageResponse<DossierAvocatResponse> mesDossiers(
+            @RequestParam(required = false) String reference,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return portailAvocatService.mesDossiers(reference, PageRequest.of(page, size));
     }
 
     @GetMapping("/mes-dossiers/{dossierId}/audiences")

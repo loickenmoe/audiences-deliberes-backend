@@ -8,7 +8,9 @@ import com.afriland.audiences.intervenant.web.dto.RedigerLettreRequest;
 import com.afriland.audiences.intervenant.web.dto.ValiderConstitutionRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -62,6 +64,27 @@ public class ConstitutionController {
     @PreAuthorize("hasAnyRole('SH', 'JURISTE')")
     public LettreConstitutionResponse lettre(@PathVariable Long id) {
         return constitutionService.lettre(id);
+    }
+
+    /**
+     * La lettre signée, mise en page <b>pour le papier préimprimé</b> de la banque : sans logo,
+     * sans colonne ni mentions légales, que la feuille porte déjà.
+     *
+     * <p>Désignée par le <b>document de la GED</b> et non par la demande : c'est depuis l'onglet
+     * « Documents » du dossier que le métier la reprend pour l'imprimer.
+     *
+     * <p>Ouverte aux profils qui impriment ou vérifient la correspondance — le juriste qui l'a
+     * rédigée, le SH qui l'a signée, la direction qui en répond.
+     */
+    @GetMapping("${api.prefix}/constitutions/lettres/par-document/{documentId}")
+    @PreAuthorize("hasAnyRole('JURISTE', 'SH', 'DJ', 'DJA')")
+    public ResponseEntity<byte[]> lettrePourPapierPreimprime(@PathVariable Long documentId) {
+        byte[] pdf = constitutionService.lettrePourPapierPreimprime(documentId);
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"lettre-constitution-sans-entete.pdf\"")
+                .body(pdf);
     }
 
     /**

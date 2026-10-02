@@ -5,7 +5,14 @@ import com.afriland.audiences.dossier.domain.DossierJuriste;
 import com.afriland.audiences.dossier.domain.StatutValidation;
 import com.afriland.audiences.referentiel.domain.CategorieDossier;
 import org.springframework.data.jpa.domain.Specification;
+import com.afriland.audiences.audience.domain.Audience;
+import com.afriland.audiences.audience.domain.StatutAudience;
+import com.afriland.audiences.dossier.domain.EtapeProcedure;
+import com.afriland.audiences.dossier.domain.StatutCycleVie;
+import com.afriland.audiences.dossier.domain.TypeEtape;
 import org.springframework.util.StringUtils;
+
+import java.time.LocalDate;
 
 /**
  * Filtres optionnels de {@code GET /dossiers}.
@@ -27,10 +34,18 @@ public final class DossierSpecifications {
     private DossierSpecifications() {
     }
 
+    /**
+     * @param typeEtape    ne garde que les dossiers portant une étape de ce type
+     * @param statutEtape  ne garde que les dossiers portant une étape à ce statut
+     * @param dateDebut    début de la fenêtre d'audiences, incluse ; {@code null} pour ne pas borner
+     * @param dateFin      fin de la fenêtre d'audiences, incluse
+     */
     public static Specification<Dossier> withFilters(String nature, CategorieDossier categorie,
                                                      String juridiction, String reference,
                                                      Long clientId, Long juristeId,
-                                                     Boolean estSensible, StatutValidation sensibiliteStatut) {
+                                                     Boolean estSensible, StatutValidation sensibiliteStatut,
+                                                     TypeEtape typeEtape, StatutCycleVie statutEtape,
+                                                     LocalDate dateDebut, LocalDate dateFin) {
         return (root, query, cb) -> {
             var predicate = cb.conjunction();
             if (StringUtils.hasText(nature)) {
@@ -71,6 +86,54 @@ public final class DossierSpecifications {
                         cb.equal(affectation.get("utilisateur").get("id"), juristeId));
                 predicate = cb.and(predicate, cb.exists(sousRequete));
             }
+            /*
+             * L'étape. Les deux critères portent sur la **même** étape : « un appel en cours » est
+             * une question précise, alors que « un appel, et par ailleurs quelque chose en cours »
+             * n'en est pas une. Cela répond aussi au cas des deux cassations concurrentes — un
+             * dossier porté devant la Cour Suprême et devant la CCJA remonte dans les deux filtres,
+             * ce qui est exact : les deux procédures existent.
+             *
+             * EXISTS et non jointure, pour la même raison que « mes dossiers » : une jointure ferait
+             * remonter un dossier autant de fois qu'il a d'étapes, et fausserait le total paginé.
+             */
+            if ((typeEtape != null || statutEtape != null) && query != null) {
+                var sousRequete = query.subquery(Long.class);
+                var etape = sousRequete.from(EtapeProcedure.class);
+                var conditions = cb.equal(etape.get("dossier").get("id"), root.get("id"));
+                if (typeEtape != null) {
+                    conditions = cb.and(conditions, cb.equal(etape.get("type"), typeEtape));
+                }
+                if (statutEtape != null) {
+                    conditions = cb.and(conditions, cb.equal(etape.get("statutCycleVie"), statutEtape));
+                }
+                sousRequete.select(cb.literal(1L)).where(conditions);
+                predicate = cb.and(predicate, cb.exists(sousRequete));
+            }
+
+            /*
+             * La période porte sur les **audiences** (arbitrage du métier) : « les dossiers qui ont
+             * eu une audience entre ces deux dates ». Les audiences annulées en sont exclues — elles
+             * ne se sont pas tenues, et les compter ferait remonter des dossiers restés muets sur la
+             * période.
+             */
+            if ((dateDebut != null || dateFin != null) && query != null) {
+                var sousRequete = query.subquery(Long.class);
+                var audience = sousRequete.from(Audience.class);
+                var conditions = cb.and(
+                        cb.equal(audience.get("dossier").get("id"), root.get("id")),
+                        cb.notEqual(audience.get("statut"), StatutAudience.ANNULEE));
+                if (dateDebut != null) {
+                    conditions = cb.and(conditions,
+                            cb.greaterThanOrEqualTo(audience.get("datePlanifiee"), dateDebut));
+                }
+                if (dateFin != null) {
+                    conditions = cb.and(conditions,
+                            cb.lessThanOrEqualTo(audience.get("datePlanifiee"), dateFin));
+                }
+                sousRequete.select(cb.literal(1L)).where(conditions);
+                predicate = cb.and(predicate, cb.exists(sousRequete));
+            }
+
             return predicate;
         };
     }

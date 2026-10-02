@@ -86,6 +86,7 @@ class HabilitationFrontendIntegrationTest {
     @Autowired private UtilisateurRepository utilisateurRepository;
     @Autowired private ProfilRepository profilRepository;
     @Autowired private AvocatRepository avocatRepository;
+    @Autowired private com.afriland.audiences.dossier.repository.EtapeProcedureRepository etapeProcedureRepository;
     @Autowired private AlerteService alerteService;
 
     private Long avocatId;
@@ -177,7 +178,6 @@ class HabilitationFrontendIntegrationTest {
         mockMvc.perform(post(api("/dossiers"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.ofEntries(
-                                Map.entry("reference", "DOS-Q69-" + n),
                                 Map.entry("nature", "Assignation en paiement"),
                                 Map.entry("categorie", "RECOUVREMENT"),
                                 Map.entry("juridictionSaisie", "TGI Douala"),
@@ -413,10 +413,11 @@ class HabilitationFrontendIntegrationTest {
     @DisplayName("Q-93 : le client et le dossier qu'on vient de créer sont en tête de la première page")
     void clientsEtDossiers_reviennentDuPlusRecentAuPlusAncien() throws Exception {
         RequestPostProcessor juriste = role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_SAISIE", "ROLE_CONSULTATION");
-        String reference = "CLI-TRI-" + COMPTEUR.incrementAndGet();
-        mockMvc.perform(post(api("/clients")).with(juriste).contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("reference", reference, "nom", "Client " + reference))))
-                .andExpect(status().isCreated());
+        String nom = "Client TRI " + COMPTEUR.incrementAndGet();
+        String reference = extraireReference(mockMvc.perform(post(api("/clients")).with(juriste)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("nom", nom))))
+                .andExpect(status().isCreated()).andReturn());
 
         mockMvc.perform(get(api("/clients")).param("size", "1").with(juriste))
                 .andExpect(status().isOk())
@@ -439,11 +440,12 @@ class HabilitationFrontendIntegrationTest {
     @DisplayName("un client se corrige, sa référence reste figée, et la modification est tracée")
     void client_seModifie_referenceFigee_etTrace() throws Exception {
         RequestPostProcessor juriste = role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_SAISIE", "ROLE_CONSULTATION");
-        String reference = "CLI-MOD-" + COMPTEUR.incrementAndGet();
-        long clientId = extraireId(mockMvc.perform(post(api("/clients")).with(juriste)
+        var creation = mockMvc.perform(post(api("/clients")).with(juriste)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("reference", reference, "nom", "Nom avec coquile"))))
-                .andExpect(status().isCreated()).andReturn());
+                        .content(json(Map.of("nom", "Nom avec coquile"))))
+                .andExpect(status().isCreated()).andReturn();
+        String reference = extraireReference(creation);
+        long clientId = extraireId(creation);
 
         // L'avocat n'a pas ROLE_SAISIE : il ne corrige pas un client de la banque.
         mockMvc.perform(put(api("/clients/" + clientId))
@@ -578,7 +580,6 @@ class HabilitationFrontendIntegrationTest {
         return extraireId(mockMvc.perform(post(api("/dossiers")).with(juriste)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.ofEntries(
-                                Map.entry("reference", reference),
                                 Map.entry("nature", "Assignation en paiement"),
                                 Map.entry("categorie", "RECOUVREMENT"),
                                 Map.entry("juridictionSaisie", "TGI Douala"),
@@ -722,7 +723,6 @@ class HabilitationFrontendIntegrationTest {
         return extraireId(mockMvc.perform(post(api("/dossiers"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.ofEntries(
-                                Map.entry("reference", "DOS-Q96-" + n),
                                 Map.entry("nature", "Assignation en paiement"),
                                 Map.entry("categorie", "RECOUVREMENT"),
                                 Map.entry("juridictionSaisie", "TGI Douala"),
@@ -846,7 +846,6 @@ class HabilitationFrontendIntegrationTest {
         return extraireId(mockMvc.perform(post(api("/dossiers"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.ofEntries(
-                                Map.entry("reference", "DOS-M15-" + n),
                                 Map.entry("nature", "Assignation en paiement"),
                                 Map.entry("categorie", "RECOUVREMENT"),
                                 Map.entry("juridictionSaisie", "TGI Douala"),
@@ -927,6 +926,13 @@ class HabilitationFrontendIntegrationTest {
     @DisplayName("Q-89 : la recherche jurisprudentielle est partielle, insensible à la casse, et filtrable par dossier")
     void jurisprudences_rechercheSouple() throws Exception {
         long dossierId = creerDossier();
+        /*
+         * Depuis le 2026-09-29, une décision ne rejoint la base jurisprudentielle qu'une fois
+         * définitive : plus aucune étape du dossier en cours. Ce parcours porte sur la recherche,
+         * pas sur le cycle de vie — dérouler audience, délibéré et clôture n'y prouverait rien de
+         * plus. Les étapes sont donc closes directement, comme P2 antidate son audience.
+         */
+        cloreLesEtapes(dossierId);
         String marque = "Q89M" + COMPTEUR.incrementAndGet();
         RequestPostProcessor consultation = role("kc-assistante-m15", "ROLE_CONSULTATION");
 
@@ -991,30 +997,37 @@ class HabilitationFrontendIntegrationTest {
         String reference = "CLI-QF21-" + n;
         RequestPostProcessor juriste = role("kc-juriste-qf21", "ROLE_JURISTE", "ROLE_SAISIE");
 
-        mockMvc.perform(post(api("/clients"))
+        String compte = "kc-avocat-qf21-" + n;
+        mockMvc.perform(post(api("/intervenants"))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("nom", "Client QF21 " + n, "reference", reference)))
-                        .with(juriste))
+                        .content(json(Map.of("type", "AVOCAT", "nom", "Me QF21 " + n,
+                                "email", compte + "@cabinet.cm", "compteKeycloak", compte)))
+                        .with(role("kc-dj-qf21-" + n, "ROLE_DJ")))
                 .andExpect(status().isCreated());
 
         /*
          * ERR-CONFLICT sert à une dizaine de conflits sans rapport entre eux. Sans « champ », un
          * frontend recevant ce code devait deviner la cible depuis l'endpoint appelé — et se
          * trompait dès qu'un endpoint en gagnait un second.
+         *
+         * Le cas jouait sur une référence client en doublon jusqu'au 2026-09-29 ; le système
+         * attribuant désormais les références, ce conflit-là ne peut plus se produire. Le compte
+         * Keycloak d'un avocat, lui, reste saisi (RG-INT-01) et porte le même besoin.
          */
-        mockMvc.perform(post(api("/clients"))
+        mockMvc.perform(post(api("/intervenants"))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("nom", "Doublon QF21", "reference", reference)))
-                        .with(juriste))
+                        .content(json(Map.of("type", "AVOCAT", "nom", "Doublon QF21",
+                                "email", "doublon-qf21-" + n + "@cabinet.cm", "compteKeycloak", compte)))
+                        .with(role("kc-dj-qf21-" + n, "ROLE_DJ")))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("ERR-CONFLICT"))
-                .andExpect(jsonPath("$.champ").value("reference"));
+                .andExpect(jsonPath("$.champ").value("compteKeycloak"));
 
         // Une erreur qui ne vise aucun champ n'en invente pas : la clé est absente du corps, pas
         // présente à null — c'est ce qui rend l'ajout rétrocompatible.
         mockMvc.perform(post(api("/clients"))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("nom", "Sans référence")))
+                        .content(json(Map.of("email", "sans-nom@client.cm")))
                         .with(juriste))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.champ").doesNotExist());
@@ -1050,7 +1063,6 @@ class HabilitationFrontendIntegrationTest {
         mockMvc.perform(post(api("/dossiers"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.ofEntries(
-                                Map.entry("reference", "DOS-M16-" + n),
                                 Map.entry("nature", natureLongue),
                                 Map.entry("juridictionSaisie", "TGI Douala"),
                                 Map.entry("clientId", clientId),
@@ -1092,7 +1104,6 @@ class HabilitationFrontendIntegrationTest {
         mockMvc.perform(post(api("/dossiers"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.ofEntries(
-                                Map.entry("reference", "DOS-M16B-" + n),
                                 Map.entry("nature", "Assignation en paiement"),
                                 Map.entry("juridictionSaisie", "TGI Douala"),
                                 Map.entry("clientId", clientId),
@@ -1128,11 +1139,9 @@ class HabilitationFrontendIntegrationTest {
         long avocatId = avocatRepository.save(Avocat.builder().nom("Me M16c " + n)
                 .compteKeycloak("kc-avocat-m16c-" + n).build()).getId();
 
-        String reference = "DOS-RECH-" + n;
-        mockMvc.perform(post(api("/dossiers"))
+        String reference = extraireReference(mockMvc.perform(post(api("/dossiers"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.ofEntries(
-                                Map.entry("reference", reference),
                                 Map.entry("nature", "Assignation en paiement"),
                                 Map.entry("juridictionSaisie", "TGI Douala"),
                                 Map.entry("clientId", clientId),
@@ -1142,10 +1151,15 @@ class HabilitationFrontendIntegrationTest {
                                 Map.entry("juristesAffectes", List.of(juristeId)),
                                 Map.entry("avocatsAffectes", List.of(avocatId)))))
                         .with(juriste))
-                .andExpect(status().isCreated());
+                .andExpect(status().isCreated())
+                .andReturn());
 
-        // Reference : recherche partielle, on ne retient jamais une reference en entier.
-        mockMvc.perform(get(api("/dossiers")).param("reference", "RECH-" + n).with(juriste))
+        /*
+         * Reference : recherche partielle, on ne retient jamais une reference en entier. Depuis le
+         * 2026-09-29 elle est attribuee par le systeme, le test cherche donc un fragment de la
+         * reference recue — l'annee et le numero, sans le prefixe.
+         */
+        mockMvc.perform(get(api("/dossiers")).param("reference", reference.substring(4)).with(juriste))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.content[0].reference").value(reference));
@@ -1161,12 +1175,12 @@ class HabilitationFrontendIntegrationTest {
          * consulter le portefeuille d'un collegue.
          */
         mockMvc.perform(get(api("/dossiers")).param("mesDossiers", "true")
-                        .param("reference", "RECH-" + n).with(juriste))
+                        .param("reference", reference.substring(4)).with(juriste))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(1));
 
         mockMvc.perform(get(api("/dossiers")).param("mesDossiers", "true")
-                        .param("reference", "RECH-" + n)
+                        .param("reference", reference.substring(4))
                         .with(role("kc-juriste-m16d", "ROLE_JURISTE", "ROLE_CONSULTATION")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(0));
@@ -1193,7 +1207,6 @@ class HabilitationFrontendIntegrationTest {
         long dossierId = extraireId(mockMvc.perform(post(api("/dossiers"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.ofEntries(
-                                Map.entry("reference", "DOS-Q74-" + n),
                                 Map.entry("nature", "Assignation en paiement"),
                                 Map.entry("juridictionSaisie", "TGI Douala"),
                                 Map.entry("clientId", clientId),
@@ -1457,7 +1470,9 @@ class HabilitationFrontendIntegrationTest {
         assertThat(demande).as("la demande reste dans l'historique").isNotNull();
         assertThat(demande.get("statut").asText()).isEqualTo("APPROUVEE");
         assertThat(demande.get("documentNom").asText()).isEqualTo(nom);
-        assertThat(demande.get("referenceDossier").asText()).startsWith("DOS-M15-");
+        // La reference est attribuee par le systeme depuis le 2026-09-29 : le test ne la choisit
+        // plus, il verifie sa forme.
+        assertThat(demande.get("referenceDossier").asText()).matches("DOS-\\d{4}-\\d{4,}");
     }
 
     @Test
@@ -1722,6 +1737,21 @@ class HabilitationFrontendIntegrationTest {
 
     private JsonNode lireJson(MvcResult resultat) throws Exception {
         return objectMapper.readTree(resultat.getResponse().getContentAsString());
+    }
+
+    /** La reference attribuee par le serveur, que le client ne choisit plus (2026-09-29). */
+    private String extraireReference(MvcResult resultat) throws Exception {
+        JsonNode noeud = lireJson(resultat);
+        assertThat(noeud.has("reference")).as("réponse sans référence : %s", noeud).isTrue();
+        return noeud.get("reference").asText();
+    }
+
+    /** Ferme les étapes d'un dossier, condition du versement en jurisprudence (2026-09-29). */
+    private void cloreLesEtapes(long dossierId) {
+        etapeProcedureRepository.findByDossierIdOrderByTypeAsc(dossierId).forEach(etape -> {
+            etape.setStatutCycleVie(com.afriland.audiences.dossier.domain.StatutCycleVie.CLOTURE);
+            etapeProcedureRepository.save(etape);
+        });
     }
 
     private long extraireId(MvcResult resultat) throws Exception {

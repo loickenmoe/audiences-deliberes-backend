@@ -31,4 +31,9 @@ public class AutrePrestataire extends Intervenant {
 
     @Builder.Default
     private Boolean notification = false;
+
+    @Override
+    public boolean accepteNotificationsExternes() {
+        return Boolean.TRUE.equals(notification);
+    }
 }

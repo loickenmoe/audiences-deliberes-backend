@@ -40,6 +40,15 @@ public class Avocat extends Intervenant {
     @Builder.Default
     private Double indicateurCharge = 0d;
 
+    /** Consentement aux canaux externes (V29), coché par défaut — cf. Q-119. */
+    @Builder.Default
+    private Boolean notification = true;
+
+    @Override
+    public boolean accepteNotificationsExternes() {
+        return Boolean.TRUE.equals(notification);
+    }
+
     @Builder.Default
     private Double indicateurPerformance = 0d;
 }

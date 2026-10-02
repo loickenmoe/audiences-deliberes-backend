@@ -7,7 +7,10 @@ import com.afriland.audiences.delibere.repository.DelibereRepository;
 import com.afriland.audiences.dossier.domain.Dossier;
 import com.afriland.audiences.dossier.domain.EtapeProcedure;
 import com.afriland.audiences.dossier.domain.StatutCycleVie;
+import com.afriland.audiences.dossier.repository.DossierAvocatRepository;
 import com.afriland.audiences.dossier.repository.DossierJuristeRepository;
+import com.afriland.audiences.notification.domain.EvenementPrestataire;
+import com.afriland.audiences.notification.service.NotificationPrestataireService;
 import com.afriland.audiences.dossier.repository.EtapeProcedureRepository;
 import com.afriland.audiences.referentiel.domain.Utilisateur;
 import lombok.RequiredArgsConstructor;
@@ -39,7 +42,9 @@ public class DelaiRecoursScheduler {
     private final DelibereRepository delibereRepository;
     private final EtapeProcedureRepository etapeProcedureRepository;
     private final DossierJuristeRepository dossierJuristeRepository;
+    private final DossierAvocatRepository dossierAvocatRepository;
     private final AlerteService alerteService;
+    private final NotificationPrestataireService notificationPrestataireService;
 
     @Scheduled(cron = "${delibere.recours.cron:0 0 6 * * *}")
     @Transactional
@@ -61,6 +66,11 @@ public class DelaiRecoursScheduler {
             if (!alerteService.aDejaEteDeclenchee(TypeAlerte.DELAI_RECOURS, juriste.getId(), marqueur)) {
                 alerteService.declencher(TypeAlerte.DELAI_RECOURS, dossier.getId(), juriste, declencheur);
             }
+        }
+        // D19 : l'avocat du dossier est prévenu par ses canaux externes (Q-118).
+        for (var affectation : dossierAvocatRepository.findByDossierId(dossier.getId())) {
+            notificationPrestataireService.notifier(EvenementPrestataire.DELAI_RECOURS, affectation.getAvocat(),
+                    dossier.getId(), "delibere-" + delibere.getId() + "-recours");
         }
 
         EtapeProcedure etape = delibere.getEtape();

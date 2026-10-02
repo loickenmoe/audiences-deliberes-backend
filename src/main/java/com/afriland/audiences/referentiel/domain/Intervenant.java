@@ -61,4 +61,11 @@ public abstract class Intervenant {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    /**
+     * Accord du prestataire pour être notifié <b>hors de l'application</b> : SMS, WhatsApp ou
+     * courriel personnel (Q-118, D15). Chaque type porte son propre champ, avec sa valeur par
+     * défaut : décoché pour un autre prestataire (RG-INT-02, depuis V1), coché pour un avocat (V29).
+     */
+    public abstract boolean accepteNotificationsExternes();
 }

@@ -80,6 +80,65 @@ class LettreConstitutionServiceTest {
         assertThat(texte).contains("www.afrilandfirstbank.com");
     }
 
+    /**
+     * Le tirage destiné au <b>papier préimprimé</b> de la banque (observation métier du 2026-09-25).
+     *
+     * <p>Ce que ces trois tests protègent : le décor disparaît, le <b>contenu</b> reste entier, et
+     * surtout la <b>géométrie ne bouge pas</b>. C'est ce dernier point qui compte à l'impression —
+     * un texte remonté de trois centimètres se poserait sur le logo de la feuille.
+     */
+    @Test
+    @DisplayName("le tirage pour papier préimprimé ne porte ni logo ni mentions légales")
+    void preimprime_neDessinePasLeGabarit() throws Exception {
+        String texte = LecturePdf.texte(service.generer(lettre(), true));
+
+        assertThat(texte).doesNotContain("RC N° : 87R041");
+        assertThat(texte).doesNotContain("00005/MINFI/DCE2");
+        assertThat(texte).doesNotContain("CCEI CMCX");
+        assertThat(texte).doesNotContain("www.afrilandfirstbank.com");
+    }
+
+    @Test
+    @DisplayName("le tirage pour papier préimprimé garde tout le contenu de la lettre")
+    void preimprime_gardeLeContenu() throws Exception {
+        String texte = LecturePdf.texte(service.generer(lettre(), true));
+
+        assertThat(texte).contains("N° 4 /First Bank/DAJR/DR/CM/ABN/18");
+        assertThat(texte).contains("Me Fotso").contains("Huissier de Justice");
+        assertThat(texte).contains("DOSSIER DOS-2026-001");
+        assertThat(texte).contains("Lettre de constitution contenant transmission de pièces.");
+        assertThat(texte).contains("La Direction Juridique");
+        assertThat(texte).contains("Dans le cadre de notre collaboration");
+    }
+
+    /**
+     * La preuve que le contenu ne s'est pas déplacé : les mêmes mots, dans le même ordre, aux mêmes
+     * coordonnées. Comparer les positions plutôt que l'allure générale est le seul moyen de vérifier
+     * qu'une feuille préimprimée recevra le texte au bon endroit.
+     */
+    @Test
+    @DisplayName("le contenu occupe exactement la même place que sur le papier à en-tête")
+    void preimprime_conserveLaGeometrieDuContenu() throws Exception {
+        String avecGabarit = LecturePdf.positions(service.generer(lettre(), false));
+        String sansGabarit = LecturePdf.positions(service.generer(lettre(), true));
+
+        // Les mentions de la colonne n'existent que sur le premier : on compare ce qui reste.
+        for (String ligne : sansGabarit.lines().toList()) {
+            assertThat(avecGabarit).contains(ligne);
+        }
+    }
+
+    /**
+     * Non-régression : l'exemplaire archivé en GED — celui qui fait foi — n'a pas changé d'un octet
+     * de mise en page. Le tirage préimprimé s'ajoute, il ne remplace rien.
+     */
+    @Test
+    @DisplayName("l'exemplaire archivé reste celui du papier à en-tête")
+    void generer_parDefautResteLePapierEnTete() throws Exception {
+        assertThat(LecturePdf.positions(service.generer(lettre())))
+                .isEqualTo(LecturePdf.positions(service.generer(lettre(), false)));
+    }
+
     /** Le corps type du gabarit, ses pointillés conservés là où le rédacteur doit compléter. */
     @Test
     @DisplayName("le corps reprend le gabarit et garde ses pointillés")

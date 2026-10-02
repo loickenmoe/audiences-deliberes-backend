@@ -7,6 +7,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -40,9 +41,13 @@ public class ConfigurationSysteme {
     @Column(nullable = false, unique = true, length = 50)
     private String cle;
 
-    @NotBlank
-    @Size(max = 255)
-    @Column(nullable = false)
+    /**
+     * Peut être vide pour les listes qui l'autorisent (réglages de notification) ; 1000 caractères
+     * depuis V28, pour contenir une grille complète de types d'alerte.
+     */
+    @NotNull
+    @Size(max = 1000)
+    @Column(nullable = false, length = 1000)
     private String valeur;
 
     private String description;

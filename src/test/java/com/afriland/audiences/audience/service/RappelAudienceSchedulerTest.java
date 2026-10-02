@@ -8,7 +8,9 @@ import com.afriland.audiences.audience.repository.AudienceRepository;
 import com.afriland.audiences.dossier.domain.Dossier;
 import com.afriland.audiences.dossier.domain.DossierJuriste;
 import com.afriland.audiences.dossier.domain.DossierJuristeId;
+import com.afriland.audiences.dossier.repository.DossierAvocatRepository;
 import com.afriland.audiences.dossier.repository.DossierJuristeRepository;
+import com.afriland.audiences.notification.service.NotificationPrestataireService;
 import com.afriland.audiences.referentiel.domain.Utilisateur;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,7 +32,9 @@ class RappelAudienceSchedulerTest {
 
     @Mock private AudienceRepository audienceRepository;
     @Mock private DossierJuristeRepository dossierJuristeRepository;
+    @Mock private DossierAvocatRepository dossierAvocatRepository;
     @Mock private AlerteService alerteService;
+    @Mock private NotificationPrestataireService notificationPrestataireService;
 
     @InjectMocks
     private RappelAudienceScheduler scheduler;

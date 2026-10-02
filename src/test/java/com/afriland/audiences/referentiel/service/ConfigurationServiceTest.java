@@ -63,7 +63,7 @@ class ConfigurationServiceTest {
         when(currentUserService.getCurrentUser()).thenReturn(dj);
         when(configurationMapper.toResponse(any(ConfigurationSysteme.class))).thenReturn(
                 new ConfigurationResponse("SEUIL_PROROGATIONS", "12", null, "ROLE_DJ", null, 3L,
-                        TypeValeurConfiguration.ENTIER, 1L, 1_000L, List.of()));
+                        TypeValeurConfiguration.ENTIER, 1L, 1_000L, List.of(), false));
 
         ConfigurationResponse result = configurationService.modifier("SEUIL_PROROGATIONS", "12");
 
@@ -98,10 +98,39 @@ class ConfigurationServiceTest {
         when(currentUserService.getCurrentUser()).thenReturn(Utilisateur.builder().id(3L).build());
         when(configurationMapper.toResponse(any(ConfigurationSysteme.class))).thenReturn(
                 new ConfigurationResponse("FORMATS_GED", "PDF,XLSX", null, "ROLE_DJ", null, 3L,
-                        TypeValeurConfiguration.LISTE, null, null, List.of()));
+                        TypeValeurConfiguration.LISTE, null, null, List.of(), false));
 
         configurationService.modifier("FORMATS_GED", " pdf , xlsx ");
 
         assertThat(config.getValeur()).isEqualTo("PDF,XLSX");
+    }
+
+    /** Q-118 : ne rien envoyer par SMS est un réglage, pas une saisie manquante. */
+    @Test
+    void modifier_acceptsAnEmptyNotificationGrid() {
+        ConfigurationSysteme config = ConfigurationSysteme.builder().cle("GRILLE_NOTIFICATION_SMS").valeur("RAPPEL_AUDIENCE").build();
+        when(configurationSystemeRepository.findByCle("GRILLE_NOTIFICATION_SMS")).thenReturn(Optional.of(config));
+        when(configurationSystemeRepository.save(any(ConfigurationSysteme.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(currentUserService.getCurrentUser()).thenReturn(Utilisateur.builder().id(3L).build());
+
+        configurationService.modifier("GRILLE_NOTIFICATION_SMS", "");
+
+        assertThat(config.getValeur()).isEmpty();
+        verify(historiqueActionService).enregistrerPour(any(), isNull(),
+                eq(TypeActionHistorique.CONFIGURATION_MODIFIEE),
+                eq(Map.of("cle", "GRILLE_NOTIFICATION_SMS", "ancienneValeur", "RAPPEL_AUDIENCE", "nouvelleValeur", "")));
+    }
+
+    /** La requête n'exige plus qu'une valeur non nulle : une clé sans règle garde son refus du vide. */
+    @Test
+    void modifier_stillRejectsBlankValueForAKeyWithoutRule() {
+        ConfigurationSysteme config = ConfigurationSysteme.builder().cle("CLE_SANS_REGLE").valeur("x").build();
+        when(configurationSystemeRepository.findByCle("CLE_SANS_REGLE")).thenReturn(Optional.of(config));
+
+        assertThatThrownBy(() -> configurationService.modifier("CLE_SANS_REGLE", "  "))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("CLE_SANS_REGLE");
+        assertThat(config.getValeur()).isEqualTo("x");
+        verifyNoInteractions(historiqueActionService);
     }
 }

@@ -396,7 +396,15 @@ rôle composite. Vérifié en conditions réelles : un jeton émis pour `juriste
 
 ---
 
-### Q-11 ✅ Champs conditionnels par catégorie : `ET` ou `OU` ? et catégorie saisie ou déduite ? — tranché et implémenté (M4)
+### Q-11 ✅ Champs conditionnels par catégorie : `ET` ou `OU` ? et catégorie saisie ou déduite ? — tranché et implémenté (M4), **volet (a) amendé le 2026-09-29**
+
+> **Amendement (métier, 2026-09-29).** « Ce sont les pièces jointes qui sont obligatoires, pas leur
+> texte associé. » Le volet (a) ci-dessous — exiger les deux **références** par catégorie — est
+> **abandonné** : `validerChampsConditionnels` est retirée, et `chk_categorie_coherence` levée en
+> **V35**. L'obligation porte désormais sur les **fichiers**, et ne peut être tenue que par l'écran :
+> une pièce se dépose en GED après la création, qui seule produit l'identifiant du dossier. Motif :
+> sur 254 dossiers, les deux références étaient remplies partout, 51 seulement portaient un
+> document. Le volet (b) — catégorie déduite de la nature — reste **inchangé**.
 
 **Contradiction 1 — cardinalité.**
 - US 1.1 critères 2-3 et US 1.5 : pour `RECOUVREMENT`, `dossierCreditOrigine` **et** `pvTransfert`
@@ -2160,6 +2168,199 @@ sont unifiées.
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
 
+### Q-122 ✅ WhatsApp ne délivrait pas faute de facturation, et la priorité reste STANDARD — tranché (2026-09-23)
+
+**WhatsApp : ni gabarit, ni numéro, ni configuration applicative.** Les journaux du moteur, consultés
+par l'administrateur, donnent la cause : **les frais d'envoi du canal ne sont pas payés** par
+l'entreprise. Le canal devrait fonctionner une fois la facturation régularisée.
+
+**Ce que cela clôt.** L'hypothèse des modèles de message préapprouvés — la règle habituelle de
+WhatsApp Business, et notre première piste — ne joue aucun rôle ici. Rien à changer dans le code :
+le message WhatsApp part exactement comme le SMS, qui arrive.
+
+**Ce que cela laisse.** Le canal reste éteint dans les réglages (V28 : `CANAUX_NOTIFICATION_PRESTATAIRES`
+ne contient pas WHATSAPP). Le rallumer est un geste du DJ à l'écran 41, le jour où la facturation
+est en règle — et il faudra alors refaire un envoi de contrôle, puisque le canal n'a jamais délivré.
+
+**Priorité : STANDARD, pas CRITICAL.** L'administrateur demande que nos messages portent la priorité
+du compte de service. C'est déjà le cas et cela n'a jamais changé : `notification.engine.priorite`
+vaut `STANDARD` par défaut, la clé n'est pas surchargée dans le `.env`, et quatre tests figent la
+valeur (`FormatMessageTest`, `TransportsTest`, `RemiseNotificationTest`,
+`ChaineNotificationIntegrationTest`). Le `CRITICAL` vu par l'administrateur vient de l'exemple
+d'une autre application, dont nous n'avons repris que la **forme** — jamais les valeurs (Q-121).
+
+### Q-121 ✅ Le contrat du moteur s'écrit d'après un message accepté, pas d'après le Guide — tranché (2026-09-23)
+
+**Le premier envoi réel n'est pas arrivé.** Message publié, aucune erreur, aucun accusé, rien dans la
+boîte. L'administrateur, consulté, a fourni **le JSON d'un message réellement accepté** par le moteur.
+La comparaison a révélé que le Guide V1 décrit autre chose que ce qui fonctionne.
+
+**Sept écarts, tous corrigés** (le format vient de l'exemple, les valeurs restent les nôtres) :
+
+| Point | Guide V1 | Réalité observée |
+|---|---|---|
+| Topic | `notification-send-standard` pour la priorité STANDARD | **`notification-send-request`**, seul topic consommé |
+| Composant pubsub | `notification-pubsub` | **`kafka-pubsub`** |
+| Priorité | portée par le compte de service | **champ `priority` du message** |
+| Identification | le seul jeton | jeton **et** champ `serviceKey` |
+| Destinataire | `channelRecipients` prime, `recipient` ignoré | **`recipient`**, sans `channelRecipients` |
+| `locale`, `metadata` | documentés | **absents** des messages acceptés |
+| Horodatage, traçage | non précisés | `time` local à la seconde ; `traceid`, `traceparent`, `tracestate` |
+
+La référence d'événement perd aussi ses deux-points (`alerte-42-EMAIL` et non `alerte-42:EMAIL`) :
+aucun message accepté n'en porte.
+
+**Après correction, le courriel est arrivé** (expéditeur `digital-notification@afrilandfirstbank.com`),
+et le SMS aussi, au numéro de test. **Le secret s'utilise donc tel quel**, en octets UTF-8 : le jeton a
+été accepté. La question ouverte depuis le début du chantier est tranchée.
+
+**La décision D8 tombe.** Le topic STANDARD n'est lu par personne ; il n'existe qu'un topic d'entrée,
+et c'est le champ `priority` qui distingue les messages. Nous y portons STANDARD, la priorité de notre
+compte.
+
+**Le suivi de délivrance n'existe pas sur cet environnement.** Relus depuis leur tout premier message,
+`notification-sent` et `notification-failed` sont **vides, tous services confondus**. Personne n'y
+publie. Conséquence : une notification remise ne peut pas être confirmée, et attendre un accusé ferait
+passer en SANS_RETOUR des messages pourtant délivrés. La veille est donc **neutralisée par défaut**
+(`notification.engine.suivi-accuses=false`) et l'écran de supervision l'explique. Un seul réglage la
+rétablira le jour où ces topics seront alimentés.
+
+**Un test fige le format** (`FormatMessageTest`), champ par champ, d'après l'exemple accepté : un
+message mal formé étant rejeté sans trace, une régression passerait autrement inaperçue.
+
+**Reste ouvert** : WhatsApp n'a rien délivré là où le SMS est passé, sur le même numéro. Sans accusé,
+la cause n'est pas observable — modèle de message préapprouvé exigé, fenêtre de conversation fermée,
+ou canal non ouvert pour notre compte. Question à poser à l'administrateur.
+
+### Q-120 ✅ Savoir ce qu'une notification est devenue, alors que le moteur ne renvoie pas notre référence — tranché (2026-09-23)
+
+**La contradiction, relevée dans le Guide V1.** Le moteur publie deux topics de suivi
+(`notification-sent`, `notification-failed`), présentés comme la façon de suivre la délivrance. Mais
+leurs messages portent `notificationId`, identifiant **interne au moteur**, jamais transmis à
+l'appelant — et **pas** l'`eventId` que nous avons fourni. Tels quels, ces topics disent *combien* de
+messages sont partis et sur quel canal, jamais *lequel des nôtres*. Le Guide présente pourtant
+l'`eventId` comme la clé de déduplication : il le connaît, il ne le restitue pas.
+
+**Trois couches retenues, du plus exact au plus large.**
+
+1. **`callbackUrl` — le rattachement exact.** Le Guide (§7.9) prévoit que le moteur rappelle une URL
+   après traitement. Nous y plaçons notre référence :
+   `/notifications/accuses/rappel/{eventId}?signature=…`. Le rappel identifie alors sans ambiguïté la
+   ligne de la file, qui passe en ENVOYEE ou en ECHEC.
+   *Sécurité* : le Guide ne décrit **aucune authentification** de ce rappel. L'URL porte donc une
+   signature HMAC-SHA256 de la référence, calculée avec le secret du compte de service et comparée en
+   temps constant. Sans elle, n'importe qui pourrait déclarer une notification délivrée. Une signature
+   invalide reçoit 404, pour ne pas confirmer l'existence de la référence.
+   *Condition* : le moteur doit pouvoir joindre l'application. Depuis un poste de travail, il ne le
+   peut pas : sans `NOTIFICATION_CALLBACK_BASE_URL`, aucun `callbackUrl` n'est annoncé.
+2. **`metadata.correlationId` — le pari sans coût.** Notre référence y est aussi placée. Si le moteur
+   la restitue un jour dans ses accusés, le rattachement se fera tout seul : le code le prévoit déjà.
+3. **Les topics — la mesure d'ensemble.** Ils sont consommés et enregistrés dans `notification_accuse`
+   (V30), filtrés sur `serviceId` (ils portent les accusés de toute la banque) et rendus idempotents
+   par (notificationId, type), puisque la livraison est « au moins une fois ». Ils donnent le taux de
+   délivrance par canal et par fournisseur, même sans rattachement ligne à ligne.
+
+**Le silence devient un état, et non un succès.** Un message au jeton invalide est rejeté « sans aucun
+retour » : ni accusé de succès, ni accusé d'échec. Une notification publiée depuis plus de
+`notification.engine.delai-accuse` (15 min) passe donc en **SANS_RETOUR** plutôt que de rester
+indéfiniment « publiée ». C'est ce qui rendra visible, à l'étape suivante, un secret mal encodé.
+
+**Deux voies de réception, selon le transport.** Sidecar Dapr : l'application annonce ses abonnements
+sur `GET /dapr/subscribe` et reçoit les messages sur ses routes. Kafka direct : deux `@KafkaListener`,
+montés seulement dans ce mode. Ces routes sont ouvertes sans authentification — le sidecar n'a pas de
+jeton à présenter — et n'exposent aucune donnée de l'application.
+
+**Reste ouvert, à poser à l'administrateur** : le moteur peut-il ajouter l'`eventId` (ou restituer
+`correlationId`) dans ses accusés ? Cela rendrait les topics aussi précis que le rappel, sans dépendre
+d'une application joignable.
+
+**Vérifié** : 15 tests unitaires, et contre la pile réelle — les abonnements sont annoncés, un accusé
+d'un autre service est ignoré, le nôtre est enregistré, un doublon ne crée pas de seconde ligne, et un
+rappel sans signature reçoit 404.
+
+### Q-119 ✅ Les prestataires sont notifiés hors de l'application, avec leur consentement — tranché (2026-09-22)
+
+**Ce que cela solde.** Q-52 constatait qu'un prestataire n'était notifié que s'il avait un compte
+applicatif : un avocat sans compte, un notaire ou un huissier n'était jamais prévenu, faute
+d'infrastructure d'envoi. Le Notification Engine (Q-118) la fournit. Les canaux externes visent les
+coordonnées de la fiche et ne demandent plus de compte.
+
+**Neuf événements** (décision du porteur du projet, D19 de `NOTIFICATION_ENGINE_PLAN.md`) : les cinq
+qui existaient — constitution validée, frais rejetés, paiement effectué, publication arbitrée,
+correspondance transmise — et quatre nouveaux : rappel d'audience J-7/J-3/J-1, affectation à un
+dossier, délai de recours du délibéré, suppression de document arbitrée.
+
+**Le consentement devient un champ des deux types d'intervenant.** `autre_prestataire.notification`
+existait depuis V1, décoché par défaut (RG-INT-02) ; `avocat.notification` est ajouté par V29,
+**coché par défaut**. L'asymétrie est voulue : l'avocat est en relation suivie avec la banque et ses
+coordonnées sont au dossier pour cet usage, alors qu'un autre prestataire est ponctuel. Dans les deux
+cas, le DJ retire le consentement depuis la fiche, et le changement est historisé.
+
+Conséquence sur l'API : `POST` et `PUT /intervenants` n'écartent plus le champ `notification` pour un
+avocat. Le refus posé en Q-117 tombe, et son test avec lui.
+
+**Sans consentement, rien ne part** — pas même une ligne « non joignable » : c'est un choix du
+prestataire, pas un défaut à superviser. En revanche, un canal réglé sans coordonnée utilisable donne
+une ligne NON_JOIGNABLE avec son motif, visible en supervision (D14).
+
+**L'alerte applicative ne change pas.** Elle reste réservée à l'avocat qui a un compte, avec son texte
+actuel. Les canaux externes sont un second chemin, au texte distinct et sans donnée sensible (D18).
+
+**Deux extensions à confirmer en recette**, explicitées ici pour qu'elles ne passent pas inaperçues :
+- la publication **validée** déclenche désormais une notification externe à l'avocat, alors que
+  l'alerte applicative n'existait que pour un rejet. L'événement retenu est « publication arbitrée » ;
+- l'autre prestataire est notifié de la validation de sa constitution, ce que Q-52 avait laissé de côté.
+
+**Vérifié** : 7 tests unitaires du point d'entrée, mise à jour des tests des sept services appelants,
+suite complète (594) verte, et parcours Playwright — un avocat sans coordonnées produit des lignes
+NON_JOIGNABLE, un avocat renseigné reçoit un courriel détaillé et un SMS minimal.
+
+### Q-118 ✅ Le DJ règle les notifications externes : canaux actifs et grille par canal — tranché (2026-09-22)
+
+**Contexte.** Le Notification Engine de la banque (SMS, courriel, WhatsApp, Teams) remplace les
+infrastructures SMTP et webhook Teams que Q-37 attendait. Le porteur du projet a tranché : les
+utilisateurs internes reçoivent Outlook et/ou Teams, les prestataires le courriel personnel, le SMS et
+WhatsApp, et le DJ et la DJA règlent **à la fois les canaux et la grille type × canal**. Le plan
+complet est dans `NOTIFICATION_ENGINE_PLAN.md` (décisions D1 à D19).
+
+**Q-37 est soldée, pas contredite.** `CANAUX_NOTIFICATION_DEFAUT` garde sa valeur
+(`APPLICATIF,OUTLOOK`) et sa règle (applicatif obligatoire). Elle devient le réglage des canaux des
+**utilisateurs internes**, ce que disait déjà sa description (RG-ALR-03). `alerte` reste la
+représentation du seul canal applicatif, comme Q-37 le recommandait ; les envois externes vivent dans
+`notification_envoi` (V27).
+
+**Six clés nouvelles (V28)** :
+- `CANAUX_NOTIFICATION_PRESTATAIRES` : courriel personnel, SMS, WhatsApp ;
+- `GRILLE_NOTIFICATION_OUTLOOK` et `GRILLE_NOTIFICATION_TEAMS` : les types d'alerte envoyés sur
+  chaque canal interne ;
+- `GRILLE_NOTIFICATION_COURRIEL_PERSONNEL`, `GRILLE_NOTIFICATION_SMS` et
+  `GRILLE_NOTIFICATION_WHATSAPP` : les événements prestataires envoyés sur chaque canal externe.
+
+**Pourquoi une clé par canal, et non une table dédiée.** Les clés de configuration apportent déjà
+tout ce qu'il faut : la validation par règle (Q-91), les droits du DJ et de la DJA (Q-108), l'auteur
+de la dernière modification (Q-112) et la trace dans l'audit. Une table dédiée aurait demandé de
+reconstruire ces quatre garanties.
+
+**Une liste peut désormais être vide, et seulement pour ces clés.** Couper tous les canaux
+prestataires, ou ne rien envoyer par SMS, est un réglage et non un oubli. La règle déclare ce droit
+(`videAutorise`) et le contrat l'expose (`listeVideAutorisee`) pour que l'écran l'applique sans le
+redéclarer. Les autres clés refusent toujours le vide, y compris celles qui n'ont pas de règle.
+
+**Valeurs initiales.**
+- Grilles : tous les événements. Le DJ retire ce qu'il ne veut pas plutôt que de découvrir qu'un
+  événement ne partait jamais.
+- Canaux prestataires : courriel personnel et SMS. **WhatsApp reste éteint** tant qu'on ignore si le
+  moteur exige des modèles de message préapprouvés, ce qui est la règle habituelle de WhatsApp
+  Business pour un message à l'initiative de l'entreprise.
+
+La colonne `valeur` passe à 1 000 caractères : une grille complète de types d'alerte dépasse 255.
+
+**Vérifié** :
+- tests unitaires des règles et du service (vide accepté ou refusé selon la clé, valeurs inconnues
+  refusées) ;
+- test d'intégration sur PostgreSQL : chaque règle a sa ligne migrée, et chaque valeur initiale est
+  déjà normalisée.
+
 ### Q-117 ✅ Un intervenant se corrige, son type et son identifiant Keycloak restent figés — tranché (2026-09-22)
 
 **Même besoin que Q-116, pour le référentiel des intervenants.** Aucun endpoint ne permettait de
@@ -2191,7 +2392,15 @@ qui ne change rien n'écrit rien.
 sur un avocat ; notification d'un prestataire ; rien sans changement ; 404) et un parcours d'intégration
 sur PostgreSQL neuf — 403 pour le juriste, type et compte envoyés ignorés, trace lue dans l'audit.
 
-### Q-116 ✅ Un client se corrige, sa référence reste figée — tranché (2026-09-22)
+### Q-116 ✅ Un client se corrige, sa référence reste figée — tranché (2026-09-22), **complété le 2026-09-29**
+
+> **Complément (métier, 2026-09-29).** « Les champs Référence doivent être automatiquement remplis
+> par le système. » La référence n'est plus saisie à la création non plus : `POST /clients` et
+> `POST /dossiers` l'attribuent (`CLI-2026-0001`, `DOS-2026-0001`) au moyen d'un compteur annuel
+> atomique (**V36**). Le revers que cette fiche assumait — « une coquille dans la référence reste
+> définitive » — disparaît : il n'y a plus de saisie où se tromper. La réserve INT-05 demeure et est
+> consignée dans `CreerClientRequest` : un client venu d'un référentiel externe porte une référence
+> imposée, qu'il faudra accueillir dans un second champ plutôt qu'en rouvrant la saisie.
 
 **Le besoin que Q-23 attendait.** Q-23 avait recommandé `PUT /clients/{id}` dès le 2026-09-04, puis
 l'avait différé : « à réévaluer si un besoin de modification client émerge ». Il a émergé en recette :

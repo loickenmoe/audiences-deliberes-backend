@@ -15,5 +15,7 @@ public record AudienceAvocatResponse(
         Long id,
         LocalDate datePlanifiee,
         LocalDate dateTenue,
+        /** Là où l'audience se tient : l'avocat s'y rend, il lui faut mieux que la juridiction de saisine. */
+        String juridiction,
         StatutAudience statut) {
 }

@@ -16,6 +16,7 @@ import com.afriland.audiences.frais.domain.StatutCircuitFrais;
 import com.afriland.audiences.frais.domain.StatutPaiementFrais;
 import com.afriland.audiences.frais.domain.ValidationFrais;
 import com.afriland.audiences.frais.repository.DemandeFraisRepository;
+import com.afriland.audiences.notification.service.NotificationPrestataireService;
 import com.afriland.audiences.frais.repository.ValidationFraisRepository;
 import com.afriland.audiences.frais.web.dto.ControleConformiteRequest;
 import com.afriland.audiences.frais.web.dto.ControleOpportuniteRequest;
@@ -73,11 +74,14 @@ class FraisServiceTest {
     private Utilisateur dja;
     private Utilisateur dj;
 
+    @Mock
+    private NotificationPrestataireService notificationPrestataireService;
+
     @BeforeEach
     void setUp() {
         service = new FraisService(demandeFraisRepository, validationFraisRepository, dossierRepository,
                 dossierAvocatRepository, new CompteAvocatService(avocatRepository, utilisateurRepository),
-                utilisateurRepository, currentUserService,
+                notificationPrestataireService, utilisateurRepository, currentUserService,
                 historiqueActionService, alerteService, configurationService, minioStorageService);
         // Toute réponse porte le seuil applicable (Q-82).
         lenient().when(configurationService.getOrThrow("SEUIL_MONTANT_DEFAUT"))

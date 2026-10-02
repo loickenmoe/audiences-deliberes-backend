@@ -22,6 +22,9 @@ import com.afriland.audiences.ged.domain.StatutSuppression;
 import com.afriland.audiences.ged.mapper.DemandeSuppressionMapper;
 import com.afriland.audiences.ged.repository.DemandeSuppressionRepository;
 import com.afriland.audiences.ged.repository.DocumentRepository;
+import com.afriland.audiences.referentiel.service.CompteAvocatService;
+import com.afriland.audiences.notification.domain.EvenementPrestataire;
+import com.afriland.audiences.notification.service.NotificationPrestataireService;
 import com.afriland.audiences.ged.web.dto.ActePlanifieResponse;
 import com.afriland.audiences.ged.web.dto.ApprobationSuppressionRequest;
 import com.afriland.audiences.ged.web.dto.DemandeSuppressionResponse;
@@ -60,6 +63,8 @@ public class GedService {
     private final AlerteService alerteService;
     private final HistoriqueActionService historiqueActionService;
     private final CurrentUserService currentUserService;
+    private final CompteAvocatService compteAvocatService;
+    private final NotificationPrestataireService notificationPrestataireService;
     private final MinioStorageService minioStorageService;
     // RG-GED-04/08, partagé avec les pièces justificatives de frais (Q-97).
     private final ValidationFichierService validationFichierService;
@@ -215,6 +220,13 @@ public class GedService {
                     "Votre demande de suppression du document « " + document.getNomFichier()
                             + " » a été rejetée : " + request.motifRejet());
         }
+        // D19 : si le demandeur est un avocat, il est aussi prévenu par ses canaux externes (Q-118).
+        // Copie locale : la variable demande est réaffectée juste après, et une lambda exige une variable finale.
+        DemandeSuppression arbitree = demande;
+        compteAvocatService.avocatDe(arbitree.getDemandeur()).ifPresent(avocat ->
+                notificationPrestataireService.notifier(EvenementPrestataire.SUPPRESSION_DOCUMENT_ARBITREE, avocat,
+                        document.getDossier().getId(), "suppression-" + arbitree.getId() + "-arbitrage"));
+
         demande = demandeSuppressionRepository.save(demande);
 
         historiqueActionService.enregistrerPour(validateur, document.getDossier().getId(),

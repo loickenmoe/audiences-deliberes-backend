@@ -1,5 +1,6 @@
 package com.afriland.audiences.dossier.service;
 
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import com.afriland.audiences.dossier.web.dto.AuditSeuilResponse;
@@ -10,6 +11,8 @@ import com.afriland.audiences.common.audit.HistoriqueAction;
 import com.afriland.audiences.common.audit.HistoriqueActionRepository;
 import com.afriland.audiences.common.audit.HistoriqueActionService;
 import com.afriland.audiences.common.error.ApiException;
+import com.afriland.audiences.common.reference.FamilleReference;
+import com.afriland.audiences.common.reference.GenerateurReference;
 import com.afriland.audiences.common.security.CurrentUserService;
 import com.afriland.audiences.dossier.domain.AuditSeuilDossier;
 import com.afriland.audiences.dossier.domain.Dossier;
@@ -23,6 +26,7 @@ import com.afriland.audiences.dossier.mapper.EtapeProcedureMapper;
 import com.afriland.audiences.dossier.mapper.HistoriqueActionMapper;
 import com.afriland.audiences.dossier.repository.AuditSeuilDossierRepository;
 import com.afriland.audiences.dossier.repository.DossierAvocatRepository;
+import com.afriland.audiences.notification.service.NotificationPrestataireService;
 import com.afriland.audiences.dossier.repository.DossierJuristeRepository;
 import com.afriland.audiences.dossier.repository.DossierRepository;
 import com.afriland.audiences.dossier.repository.EtapeProcedureRepository;
@@ -74,6 +78,7 @@ class DossierServiceTest {
     @Mock private HistoriqueActionService historiqueActionService;
     @Mock private CurrentUserService currentUserService;
     @Mock private AlerteService alerteService;
+    @Mock private GenerateurReference generateurReference;
 
     private final EtapeTransitionValidator transitionValidator = new EtapeTransitionValidator();
     private final DossierMapper dossierMapper = new DossierMapper();
@@ -86,14 +91,22 @@ class DossierServiceTest {
     private Client client;
     private Utilisateur juriste;
 
+    @Mock
+    private NotificationPrestataireService notificationPrestataireService;
+
     @BeforeEach
     void setUp() {
         service = new DossierService(dossierRepository, etapeProcedureRepository, dossierJuristeRepository,
                 dossierAvocatRepository, auditSeuilDossierRepository, historiqueActionRepository, clientRepository,
-                utilisateurRepository, avocatRepository, natureDossierRepository, typeClientSensibleRepository,
+                utilisateurRepository, avocatRepository, notificationPrestataireService,
+                natureDossierRepository, typeClientSensibleRepository,
                 transitionValidator, dossierMapper,
                 etapeProcedureMapper, auditSeuilMapper, historiqueActionMapper, historiqueActionService, currentUserService,
-                alerteService);
+                alerteService, generateurReference, List.of());
+
+        // Le système attribue la référence : les tests n'en fournissent plus aucune. `lenient` car
+        // la majorité des tests de cette classe ne créent pas de dossier et ne l'appelleront jamais.
+        lenient().when(generateurReference.prochaine(FamilleReference.DOSSIER)).thenReturn("DOS-2026-0001");
 
         client = Client.builder().id(1L).reference("CLI-1").nom("Client Test").build();
         juriste = Utilisateur.builder().id(10L).nom("Juriste").build();
@@ -101,7 +114,7 @@ class DossierServiceTest {
 
     private CreerDossierRequest baseRequest(boolean sensible) {
         return new CreerDossierRequest(
-                "DOS-2026-001", "Saisie immobilière", null, "Tribunal de Yaoundé", 1L,
+                "Saisie immobilière", null, "Tribunal de Yaoundé", 1L,
                 null, 15_000_000d, null, null, null, null,
                 sensible ? null : "CREDIT-1", sensible ? null : "PV-1",
                 null, null, null,
@@ -109,21 +122,49 @@ class DossierServiceTest {
                 List.of(10L), List.of());
     }
 
+    /**
+     * Depuis le 2026-09-29, la référence est attribuée par le système : un doublon ne peut plus
+     * venir d'une saisie. S'il survient, c'est que le compteur (V36) est désynchronisé — le message
+     * doit le dire, et ne nommer <b>aucun champ</b> puisqu'il n'y en a plus à corriger à l'écran.
+     */
     @Test
-    void creerDossier_rejectsDuplicateReference() {
-        when(dossierRepository.existsByReference("DOS-2026-001")).thenReturn(true);
+    void creerDossier_signaleUneReferenceAttribueeDejaPortee() {
+        when(clientRepository.findById(1L)).thenReturn(Optional.of(client));
+        when(natureDossierRepository.findByLibelleIgnoreCase(any()))
+                .thenReturn(Optional.of(NatureDossier.builder().categorie(CategorieDossier.RECOUVREMENT).build()));
+        when(dossierRepository.existsByReference("DOS-2026-0001")).thenReturn(true);
 
         assertThatThrownBy(() -> service.creerDossier(baseRequest(false)))
                 .isInstanceOf(ApiException.class)
-                .hasMessageContaining("déjà utilisée")
+                .hasMessageContaining("désynchronisé")
                 .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.type(ApiException.class))
                 .extracting(ApiException::getChamp)
-                .isEqualTo("reference");
+                .isNull();
+    }
+
+    /** La référence ne vient pas de la requête : elle est demandée au générateur. */
+    @Test
+    void creerDossier_attribueLaReferenceLuiMeme() {
+        when(clientRepository.findById(1L)).thenReturn(Optional.of(client));
+        when(natureDossierRepository.findByLibelleIgnoreCase(any()))
+                .thenReturn(Optional.of(NatureDossier.builder().categorie(CategorieDossier.RECOUVREMENT).build()));
+        when(currentUserService.getCurrentUser()).thenReturn(juriste);
+        when(utilisateurRepository.findById(10L)).thenReturn(Optional.of(juriste));
+        when(dossierRepository.save(any(Dossier.class))).thenAnswer(inv -> {
+            Dossier d = inv.getArgument(0);
+            d.setId(99L);
+            return d;
+        });
+        when(etapeProcedureRepository.save(any(EtapeProcedure.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        DossierResponse response = service.creerDossier(baseRequest(false));
+
+        assertThat(response.reference()).isEqualTo("DOS-2026-0001");
+        verify(generateurReference).prochaine(FamilleReference.DOSSIER);
     }
 
     @Test
     void creerDossier_rejectsUnknownClient() {
-        when(dossierRepository.existsByReference(any())).thenReturn(false);
         when(clientRepository.findById(1L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.creerDossier(baseRequest(false)))
@@ -133,7 +174,6 @@ class DossierServiceTest {
 
     @Test
     void creerDossier_rejectsUnknownNature() {
-        when(dossierRepository.existsByReference(any())).thenReturn(false);
         when(clientRepository.findById(1L)).thenReturn(Optional.of(client));
         when(natureDossierRepository.findByLibelleIgnoreCase("Saisie immobilière")).thenReturn(Optional.empty());
 
@@ -144,12 +184,11 @@ class DossierServiceTest {
 
     @Test
     void creerDossier_rejectsInconsistentCategorie() {
-        when(dossierRepository.existsByReference(any())).thenReturn(false);
         when(clientRepository.findById(1L)).thenReturn(Optional.of(client));
         when(natureDossierRepository.findByLibelleIgnoreCase("Saisie immobilière"))
                 .thenReturn(Optional.of(NatureDossier.builder().categorie(CategorieDossier.RECOUVREMENT).build()));
         var incoherent = new CreerDossierRequest(
-                "DOS-2026-001", "Saisie immobilière", CategorieDossier.EXPLOITATION_LITIGES, "Tribunal de Yaoundé", 1L,
+                "Saisie immobilière", CategorieDossier.EXPLOITATION_LITIGES, "Tribunal de Yaoundé", 1L,
                 null, 15_000_000d, null, null, null, null, "CREDIT-1", "PV-1",
                 null, null, null, false, null, null, List.of(10L), List.of());
 
@@ -158,32 +197,48 @@ class DossierServiceTest {
                 .hasMessageContaining("incohérente");
     }
 
+    /**
+     * Amendement de Q-11 (métier, 2026-09-29) : « ce sont les pièces jointes qui sont obligatoires,
+     * pas leur texte associé ». Un dossier de recouvrement se crée donc sans ses références.
+     *
+     * <p>Ce test tenait la règle inverse jusqu'ici. L'obligation n'a pas disparu, elle a changé
+     * d'objet : elle porte désormais sur les fichiers, et ne peut être tenue que par l'écran —
+     * une pièce se dépose après la création, qui seule produit l'identifiant du dossier.
+     */
     @Test
-    void creerDossier_requiresCreditOrigineAndPvTransfertForRecouvrement() {
-        when(dossierRepository.existsByReference(any())).thenReturn(false);
+    void creerDossier_accepteUnRecouvrementSansSesReferences() {
         when(clientRepository.findById(1L)).thenReturn(Optional.of(client));
         when(natureDossierRepository.findByLibelleIgnoreCase(any()))
                 .thenReturn(Optional.of(NatureDossier.builder().categorie(CategorieDossier.RECOUVREMENT).build()));
-        var sansPieces = new CreerDossierRequest(
-                "DOS-2026-001", "Saisie immobilière", null, "Tribunal de Yaoundé", 1L,
+        when(currentUserService.getCurrentUser()).thenReturn(juriste);
+        when(utilisateurRepository.findById(10L)).thenReturn(Optional.of(juriste));
+        when(dossierRepository.save(any(Dossier.class))).thenAnswer(inv -> {
+            Dossier d = inv.getArgument(0);
+            d.setId(99L);
+            return d;
+        });
+        when(etapeProcedureRepository.save(any(EtapeProcedure.class))).thenAnswer(inv -> inv.getArgument(0));
+        var sansReferences = new CreerDossierRequest(
+                "Saisie immobilière", null, "Tribunal de Yaoundé", 1L,
                 null, 15_000_000d, null, null, null, null, null, null,
                 null, null, null, false, null, null, List.of(10L), List.of());
 
-        assertThatThrownBy(() -> service.creerDossier(sansPieces))
-                .isInstanceOf(ApiException.class)
-                .hasMessageContaining("dossierCreditOrigine");
+        DossierResponse response = service.creerDossier(sansReferences);
+
+        assertThat(response.reference()).isEqualTo("DOS-2026-0001");
+        assertThat(response.dossierCreditOrigine()).isNull();
+        assertThat(response.pvTransfert()).isNull();
     }
 
     @Test
     void creerDossier_rejetteUnTypeClientSensibleHorsReferentiel() {
-        when(dossierRepository.existsByReference(any())).thenReturn(false);
         when(clientRepository.findById(1L)).thenReturn(Optional.of(client));
         when(natureDossierRepository.findByLibelleIgnoreCase(any()))
                 .thenReturn(Optional.of(NatureDossier.builder().categorie(CategorieDossier.RECOUVREMENT).build()));
         when(typeClientSensibleRepository.findByCodeIgnoreCase("VIPP")).thenReturn(Optional.empty());
 
         var faute = new CreerDossierRequest(
-                "DOS-2026-001", "Saisie immobilière", null, "Tribunal de Yaoundé", 1L,
+                "Saisie immobilière", null, "Tribunal de Yaoundé", 1L,
                 null, 15_000_000d, null, null, null, null, "CREDIT-1", "PV-1",
                 null, null, null, true, 60_000_000d, "VIPP", List.of(10L), List.of());
 
@@ -209,7 +264,7 @@ class DossierServiceTest {
         });
         when(etapeProcedureRepository.save(any(EtapeProcedure.class))).thenAnswer(inv -> inv.getArgument(0));
         var sensibleSansSeuil = new CreerDossierRequest(
-                "DOS-2026-001", "Saisie immobilière", null, "Tribunal de Yaoundé", 1L,
+                "Saisie immobilière", null, "Tribunal de Yaoundé", 1L,
                 null, 15_000_000d, null, null, null, null, "CREDIT-1", "PV-1",
                 null, null, null, true, null, null, List.of(10L), List.of());
 
@@ -235,7 +290,7 @@ class DossierServiceTest {
 
         DossierResponse response = service.creerDossier(baseRequest(false));
 
-        assertThat(response.reference()).isEqualTo("DOS-2026-001");
+        assertThat(response.reference()).isEqualTo("DOS-2026-0001");
         assertThat(response.etapes()).hasSize(1);
         assertThat(response.etapes().get(0).type()).isEqualTo(TypeEtape.INSTANCE);
         assertThat(response.etapes().get(0).statutCycleVie()).isEqualTo(StatutCycleVie.OUVERTURE);

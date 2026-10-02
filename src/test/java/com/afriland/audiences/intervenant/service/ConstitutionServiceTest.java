@@ -16,6 +16,7 @@ import com.afriland.audiences.intervenant.domain.DemandeConstitution;
 import com.afriland.audiences.intervenant.domain.StatutConstitution;
 import com.afriland.audiences.intervenant.mapper.DemandeConstitutionMapper;
 import com.afriland.audiences.intervenant.repository.DemandeConstitutionRepository;
+import com.afriland.audiences.notification.service.NotificationPrestataireService;
 import com.afriland.audiences.intervenant.web.dto.CreerConstitutionRequest;
 import com.afriland.audiences.intervenant.web.dto.DemandeConstitutionResponse;
 import com.afriland.audiences.intervenant.web.dto.ValiderConstitutionRequest;
@@ -35,6 +36,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
 
@@ -77,13 +79,16 @@ class ConstitutionServiceTest {
     private Utilisateur juriste;
     private Utilisateur sh;
 
+    @Mock
+    private NotificationPrestataireService notificationPrestataireService;
+
     @BeforeEach
     void setUp() {
         service = new ConstitutionService(demandeConstitutionRepository, dossierRepository, intervenantRepository,
                 utilisateurRepository, currentUserService, historiqueActionService, alerteService,
                 lettreConstitutionService, lettreConstitutionRepository, minioStorageService,
                 documentRepository, mapper,
-                new CompteAvocatService(avocatRepository, utilisateurRepository));
+                new CompteAvocatService(avocatRepository, utilisateurRepository), notificationPrestataireService);
 
         dossier = Dossier.builder().id(1L).reference("DOS-2026-001").build();
         juriste = Utilisateur.builder().id(10L).nom("Juriste").prenom("Test").build();
@@ -252,4 +257,35 @@ class ConstitutionServiceTest {
         assertThat(service.lister(null, PageRequest.of(0, 10)).content())
                 .extracting(DemandeConstitutionResponse::id).containsExactly(101L, 100L);
     }
+    /**
+     * Le tirage pour papier préimprimé part du <b>document de la GED</b> : c'est de l'onglet
+     * « Documents » d'un dossier que le métier reprend la lettre pour l'imprimer, et cet écran ne
+     * connaît que la pièce, jamais la demande de constitution qui l'a produite.
+     */
+    @Test
+    void lettrePourPapierPreimprime_regenereDepuisLaLettreEnregistree() {
+        Document piece = Document.builder().id(77L).nomFichier("lettre-constitution-4.pdf").build();
+        DemandeConstitution demande = DemandeConstitution.builder().id(100L).lettreDocument(piece).build();
+        LettreConstitution lettre = LettreConstitution.builder().id(9L).numero(4).demande(demande).build();
+        when(demandeConstitutionRepository.findByLettreDocumentId(77L)).thenReturn(Optional.of(demande));
+        when(lettreConstitutionRepository.findByDemandeId(100L)).thenReturn(Optional.of(lettre));
+        when(lettreConstitutionService.generer(lettre, true)).thenReturn("%PDF-preimprime".getBytes(StandardCharsets.UTF_8));
+
+        byte[] pdf = service.lettrePourPapierPreimprime(77L);
+
+        assertThat(new String(pdf, StandardCharsets.UTF_8)).isEqualTo("%PDF-preimprime");
+        // Le tirage se régénère : rien n'est déposé dans la GED, aucun second exemplaire ne naît.
+        verify(minioStorageService, never()).deposer(any(), any(), any(), any());
+    }
+
+    /** La GED porte des pièces de toutes sortes : aucune autre n'est régénérable. */
+    @Test
+    void lettrePourPapierPreimprime_refuseUnDocumentQuiNEstPasUneLettre() {
+        when(demandeConstitutionRepository.findByLettreDocumentId(55L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.lettrePourPapierPreimprime(55L))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("pas une lettre de constitution");
+    }
+
 }

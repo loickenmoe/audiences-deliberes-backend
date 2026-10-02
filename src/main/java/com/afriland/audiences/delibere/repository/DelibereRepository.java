@@ -10,6 +10,7 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface DelibereRepository extends JpaRepository<Delibere, Long> {
@@ -69,4 +70,13 @@ public interface DelibereRepository extends JpaRepository<Delibere, Long> {
 
     /** Q-78 : au plus un délibéré en attente (ni vidé, ni rabattu) par étape. */
     boolean existsByEtapeIdAndResultatIsNullAndDateRabattementIsNull(Long etapeId);
+
+    /**
+     * Le dernier délibéré <b>rendu</b> sur une étape (2026-09-29).
+     *
+     * <p>Une étape peut en porter plusieurs — prorogée, rabattue, remise en délibéré. C est le
+     * dernier rendu qui décide de ce qui peut suivre : recours ou clôture. Tri par identifiant
+     * décroissant, soit l ordre de création — et non par date délibérée, qu une prorogation déplace.
+     */
+    Optional<Delibere> findFirstByEtapeIdAndResultatIsNotNullOrderByIdDesc(Long etapeId);
 }
