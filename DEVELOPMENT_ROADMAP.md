@@ -8,6 +8,11 @@
 > Précédente : 2026-09-07 (M0 à M15 terminés et validés — feuille de route achevée,
 > M15 ajouté hors roadmap initiale pour rendre le backend consommable par un frontend).
 
+> **Lot en cours — observations de la Direction Juridique du 03/10/2026.** Les quinze
+> observations issues de la première présentation sont analysées et séquencées dans
+> `after_presentation/PLAN_OBSERVATIONS_03_OCT.md` (jalons N1 à N11). Cette feuille de route
+> reste close à M22 ; le plan N la prolonge pour les deux dépôts à la fois.
+
 ---
 
 ## Principes de conduite

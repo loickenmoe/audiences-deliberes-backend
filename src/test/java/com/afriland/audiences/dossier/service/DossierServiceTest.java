@@ -246,7 +246,7 @@ class DossierServiceTest {
         // sans lui, une faute de frappe était enregistrée en silence et ressortait dans les rapports.
         assertThatThrownBy(() -> service.creerDossier(faute))
                 .isInstanceOf(ApiException.class)
-                .hasMessageContaining("Type de client sensible inconnu");
+                .hasMessageContaining("Type de client inconnu");
     }
 
     @Test
@@ -270,7 +270,7 @@ class DossierServiceTest {
 
         assertThatThrownBy(() -> service.creerDossier(sensibleSansSeuil))
                 .isInstanceOf(ApiException.class)
-                .hasMessageContaining("obligatoires pour un dossier sensible");
+                .hasMessageContaining("obligatoires pour un dossier à diligence particulière");
     }
 
     @Test
@@ -373,7 +373,7 @@ class DossierServiceTest {
         assertThatThrownBy(() -> service.validerDerogationSeuil(1L, 5L,
                 new ValiderDerogationRequest(StatutValidation.VALIDEE, null)))
                 .isInstanceOf(ApiException.class)
-                .hasMessageContaining("validation de sensibilité");
+                .hasMessageContaining("validation de la diligence particulière");
         verify(auditSeuilDossierRepository, never()).save(any());
     }
 
@@ -401,7 +401,7 @@ class DossierServiceTest {
         assertThatThrownBy(() -> service.demanderDerogationSeuil(1L,
                 new DemandeDerogationSeuilRequest(80_000_000d, "Motif")))
                 .isInstanceOf(ApiException.class)
-                .hasMessageContaining("sensible déjà validé");
+                .hasMessageContaining("diligence particulière déjà validé");
     }
 
     @Test

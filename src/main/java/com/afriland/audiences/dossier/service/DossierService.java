@@ -171,10 +171,10 @@ public class DossierService {
         if (Boolean.TRUE.equals(request.estSensible())) {
             if (request.seuilMontant() == null || !StringUtils.hasText(request.typeClientSensible())) {
                 throw ApiException.badRequest(ErrorCodes.METADONNEES_MANQUANTES,
-                        "seuilMontant et typeClientSensible sont obligatoires pour un dossier sensible");
+                        "seuilMontant et typeClientSensible sont obligatoires pour un dossier à diligence particulière");
             }
             creerPropositionSeuil(dossier, request.seuilMontant(),
-                    "Proposition initiale de sensibilité à la création du dossier");
+                    "Proposition initiale de diligence particulière à la création du dossier");
         }
 
         Utilisateur auteur = currentUserService.getCurrentUser();
@@ -219,7 +219,7 @@ public class DossierService {
     private void validerTypeClientSensible(String code) {
         typeClientSensibleRepository.findByCodeIgnoreCase(code)
                 .orElseThrow(() -> ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
-                        "Type de client sensible inconnu du référentiel : " + code));
+                        "Type de client inconnu du référentiel : " + code));
     }
 
     private CategorieDossier resoudreCategorie(CreerDossierRequest request) {
@@ -573,7 +573,7 @@ public class DossierService {
         Dossier dossier = getDossierOrThrow(dossierId);
         if (!Boolean.TRUE.equals(dossier.getEstSensible()) || dossier.getSensibiliteStatut() != StatutValidation.VALIDEE) {
             throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
-                    "Une dérogation de seuil ne peut être demandée que sur un dossier sensible déjà validé");
+                    "Une dérogation de seuil ne peut être demandée que sur un dossier à diligence particulière déjà validé");
         }
         AuditSeuilDossier audit = creerPropositionSeuil(dossier, request.nouveauSeuil(), request.motif());
         return auditSeuilMapper.toResponse(audit);
@@ -626,7 +626,7 @@ public class DossierService {
          */
         if (dossier.getSensibiliteStatut() != StatutValidation.VALIDEE) {
             throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
-                    "La proposition initiale se tranche par la validation de sensibilité, pas comme une dérogation");
+                    "La proposition initiale se tranche par la validation de la diligence particulière, pas comme une dérogation");
         }
         AuditSeuilDossier audit = auditSeuilDossierRepository.findById(auditId)
                 .filter(a -> a.getDossier().getId().equals(dossierId))
@@ -666,7 +666,7 @@ public class DossierService {
         Dossier dossier = getDossierOrThrow(dossierId);
         if (!Boolean.TRUE.equals(dossier.getEstSensible()) || dossier.getSensibiliteStatut() != StatutValidation.EN_ATTENTE) {
             throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
-                    "Aucune proposition de sensibilité en attente pour ce dossier");
+                    "Aucune proposition de diligence particulière en attente pour ce dossier");
         }
         if (request.statut() == StatutValidation.REJETEE && !StringUtils.hasText(request.motifRejet())) {
             throw ApiException.badRequest(ErrorCodes.METADONNEES_MANQUANTES, "Le motif est obligatoire en cas de rejet");

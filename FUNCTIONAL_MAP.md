@@ -16,6 +16,14 @@ M9+M11), 6 (GED, M8), 7 (Alertes, M5) et 8 (Décisions définitives M12 + Report
 REF-03 §8 (`UC-01`…`UC-17`) et REF-04 §3 (`UC-DOS-01`…`UC-REP-03`).
 **Ce document utilise la numérotation REF-04** (plus complète et détaillée). Cf. Q-09.
 
+
+> **Vocabulaire (métier, 2026-10-03).** Ce que ce document appelait « dossier sensible »
+> se dit désormais **« dossier à diligence particulière »**, et l'étape `INSTANCE` s'affiche
+> **« Instance »** et non « Première instance ». Les **noms techniques n'ont pas changé** :
+> les colonnes `est_sensible`, `sensibilite_statut`, `type_client_sensible` et le champ
+> `estSensible` gardent leur nom. Un changement de vocabulaire ne justifie pas une migration
+> de schéma, qui risquerait des données pour un mot.
+
 ---
 
 ## 0. Modules et dépendances
@@ -67,18 +75,18 @@ FR-AUD-01, FR-AUD-03, FR-DEL-02, FR-DEL-04, FR-INT-01, FR-INT-05, FR-GED-01, FR-
 | FR-DOS-03 | 1.3 | UC-DOS-03 | RG-DOS-06 | + `document`, `historique_action` | `GET /dossiers/{id}` | Métadonnées + étapes avec statuts + historique chronologique, < 2 s ; 404 si absent. **Les documents sont servis par l'endpoint dédié `GET /dossiers/{id}/documents` (#43)** — le champ `documents` de la réponse reste vide par construction, le module `dossier` ne pouvant dépendre de `ged` (Q-67, tranché en M14, **close en M15** : ne pas le consommer côté frontend) | ✅ |
 | FR-DOS-02 | 1.2, 1.7 | UC-DOS-02 | RG-DOS-03, RG-DOS-07 | `dossier_juriste`, `dossier_avocat`, `historique_action` | `PUT /dossiers/{id}/affectation` | Détecte les doublons → **409/ERR-003 avec possibilité de confirmer** (Q-12) ; historise ancienne + nouvelle affectation | ✅ |
 | FR-DOS-04 | 1.4 | UC-DOS-04 | RG-DOS-04, RG-DOS-06 | `etape_procedure`, `historique_action` | `PATCH /dossiers/{id}/etapes/{etapeId}/statut` | Vérifie que la transition est autorisée (400/ERR-004 sinon) ; création directe d'une étape ultérieure → crée les étapes intermédiaires en `OUVERTURE` ; `DELIBERE_VIDE` + recours → ouvre automatiquement `RECOURS_1`/`RECOURS_2`. **`RECOURS_2_CCJA` ne s'ouvre jamais automatiquement** : les deux cassations sont concurrentes, le pourvoi CCJA se décide et passe par un positionnement direct (2026-09-28) | ✅ |
-| — | — | — | RG-DOS-09 | `dossier`, `audit_seuil_dossier` | `POST /dossiers/{id}/seuil-derogation` | Juriste propose un nouveau seuil + motif obligatoire → `EN_ATTENTE` ; 400 si dossier non sensible ; **201** | ✅ |
+| — | — | — | RG-DOS-09 | `dossier`, `audit_seuil_dossier` | `POST /dossiers/{id}/seuil-derogation` | Juriste propose un nouveau seuil + motif obligatoire → `EN_ATTENTE` ; 400 si dossier non à diligence particulière ; **201** | ✅ |
 | — | — | — | RG-DOS-09 | `audit_seuil_dossier` | `PUT /dossiers/{id}/seuil-derogation/{auditId}` | DJ/DJA valide ou rejette (motif obligatoire si rejet) ; si validée → `dossier.seuil_montant` + `seuil_origine='DEROGATION'` | ✅ |
 | FR-DOS-01 | 1.6 | toutes | RG-DOS-06 | `historique_action` | *(transversal)* | Chaque opération de modification insère une ligne `{dossier_id, utilisateur_id, action, details JSONB, date_action}` | ✅ |
 | — | 1.6 | — | RG-DOS-06 | `historique_action` | `GET /historique?perimetre&dossierId&utilisateurId&code&dateDebut&dateFin&page&size` | **`ROLE_DJ` ou `ROLE_DJA` (Q-112)** ; écran d'audit. Remplace `GET /historique/systeme` (Q-110), qui ne lisait que les actions sans dossier : le périmètre devient un **critère** (tout / hors dossier / un dossier). Filtre par **personne** autorisé (NF-CONF-01). **Toute consultation est elle-même historisée** (`AUDIT_CONSULTE`) avec ses critères, sur la première page seulement — feuilleter n'est pas une nouvelle consultation. **Ne recense que les modifications** : aucune lecture n'est tracée, hormis celle de cet écran | ✅ |
 | FR-REP-03 | 8.6 | UC-REP-03 | RG-REP-04 | `client`, `dossier` | `GET /clients`, `GET /clients/{id}` | Recherche par nom (partielle) / référence, paginée | ✅ |
 
 **Tests attendus** : création nominale, référence en doublon, client inexistant, champs
-conditionnels manquants par catégorie, dossier sensible, doublon d'affectation, transition de
+conditionnels manquants par catégorie, dossier à diligence particulière, doublon d'affectation, transition de
 statut interdite, création directe de `RECOURS_2`, historisation systématique.
 
 **Écrans frontend impliqués** : *Liste des dossiers* (recherche/filtres) · *Création de dossier*
-(formulaire adaptatif Recouvrement/Litiges, section affectation, case « dossier sensible ») ·
+(formulaire adaptatif Recouvrement/Litiges, section affectation, case « dossier à diligence particulière ») ·
 *Fiche dossier* (onglets Métadonnées / Étapes / Audiences / Délibérés / Documents / Historique) ·
 *Modification des affectations* (modale) · *Validation des dérogations de seuil* (DJ/DJA).
 
@@ -159,8 +167,8 @@ schéma de dépendances de la §0 ci-dessus (`frais` y était dessiné comme dé
 `configuration_systeme['SEUIL_MONTANT_DEFAUT']` (50 000 000 FCFA).
 
 **Tests attendus** : dépôt sans pièces, facture en double (y compris sur une demande déjà rejetée
-— US 4.3), rejet sans motif à chaque étape, transitions de statut illégales, cas sensible
-déclenchant la double validation, cas non sensible sous seuil (DJA valide seul), montant
+— US 4.3), rejet sans motif à chaque étape, transitions de statut illégales, cas à diligence particulière
+déclenchant la double validation, cas non à diligence particulière sous seuil (DJA valide seul), montant
 strictement supérieur au seuil, un seul des deux accords, paiement d'une demande non validée,
 chaque rôle non autorisé → 403.
 
@@ -324,7 +332,7 @@ bout en bout, y compris les 4 formats d'export du rapport.
 | P3 | **Cycle d'un délibéré** | Étape `EN_DELIBERE` → prorogations successives (alerte DJ/DJA au seuil) **ou** rabattement (retour `EN_COURS`, nouvelles audiences) → délibéré enregistré → `DELIBERE_VIDE` |
 | P4 | **Voie de recours** | Délibéré défavorable/mixte → alarme délai de recours → recours exercé (ouvre `RECOURS_1`) **ou** délai expiré → `CLOTURE` + bascule décisions définitives |
 | P5 | **Décision devenue définitive** | Recours épuisés → adjudication (bénéficiaire, provision, soulte, reliquat) **ou** condamnation pécuniaire → archivage jurisprudentiel → étape `ARCHIVE` |
-| P6 | **Demande de frais** | Avocat dépose → Assistante (conformité + anti-doublon) → DJA (opportunité) → [DJ+DJA si sensible/seuil] → Assistante (paiement) → avocat notifié |
+| P6 | **Demande de frais** | Avocat dépose → Assistante (conformité + anti-doublon) → DJA (opportunité) → [DJ+DJA si à diligence particulière/seuil] → Assistante (paiement) → avocat notifié |
 | P7 | **Constitution d'un prestataire** | Juriste sollicite → SH signe → lettre générée → avocat notifié dans l'application / autre prestataire par email |
 | P8 | **Suppression d'un document** | Juriste demande → DJ/DJA notifiés (relance 72 h) → approbation → suppression MinIO + notification. DJ/DJA : suppression directe |
 | P9 | **Pilotage** | DJ consulte le tableau de bord temps réel → génère des rapports → consulte la vue consolidée d'un client → ajuste les seuils |
@@ -352,7 +360,7 @@ l'épic 4 n'avaient, pour trois d'entre eux, **aucune source de données** — `
 (dernier volet de Q-24, close). S'y ajoutent les trois onglets d'une fiche dossier
 (`/dossiers/{id}/audiences|deliberes|alarmes`), l'administration du référentiel des intervenants
 (`POST`/`GET /intervenants` — sans quoi aucun avocat ne pouvait exister) et les deux référentiels
-de formulaire (`/referentiels/natures-dossier`, `/referentiels/types-client-sensible`), que le
+de formulaire (`/referentiels/natures-dossier`, `/referentiels/types-client-à diligence particulière`), que le
 backend impose en écriture mais n'exposait pas en lecture, enfin le répertoire des utilisateurs
 internes (`GET /utilisateurs?profil=`, Q-69) — sans lequel la « section affectation » de l'écran
 « Création de dossier » ne pouvait pas être renseignée, alors que `juristesAffectes` est
