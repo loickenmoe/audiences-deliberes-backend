@@ -1,6 +1,7 @@
 package com.afriland.audiences.dossier.web.dto;
 
 import com.afriland.audiences.referentiel.domain.CategorieDossier;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -40,7 +41,7 @@ public record CreerDossierRequest(
         CategorieDossier categorie,
         @NotBlank @Size(max = 100) String juridictionSaisie,
         @NotNull Long clientId,
-        PartiesDto parties,
+        @NotNull @Valid PartiesDto parties,
         @NotNull @PositiveOrZero Double risqueEncouru,
         String recoursExerces,
         @Size(max = 255) String motifRenvoi,

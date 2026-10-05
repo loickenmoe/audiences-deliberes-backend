@@ -186,7 +186,11 @@ class HabilitationFrontendIntegrationTest {
                                 Map.entry("dossierCreditOrigine", "CRD-Q69-" + n),
                                 Map.entry("pvTransfert", "PV-Q69-" + n),
                                 Map.entry("juristesAffectes", List.of(juristeId)),
-                                Map.entry("avocatsAffectes", List.of(avocatId)))))
+                                Map.entry("avocatsAffectes", List.of(avocatId)),
+                                // Obligatoires depuis le 2026-10-05 (observations 1 et 3).
+                                Map.entry("parties", Map.of(
+                                        "demandeurs", List.of("AFRILAND FIRST BANK"),
+                                        "defendeurs", List.of("Défendeur au procès"))))))
                         .with(role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_SAISIE")))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.juristesAffectes[0]").value(juristeId));
@@ -588,7 +592,11 @@ class HabilitationFrontendIntegrationTest {
                                 Map.entry("dossierCreditOrigine", "CRD-" + reference),
                                 Map.entry("pvTransfert", "PV-" + reference),
                                 Map.entry("juristesAffectes", List.of(juristeId)),
-                                Map.entry("avocatsAffectes", List.of(avocat))))))
+                                Map.entry("avocatsAffectes", List.of(avocat)),
+                                // Obligatoires depuis le 2026-10-05 (observations 1 et 3).
+                                Map.entry("parties", Map.of(
+                                        "demandeurs", List.of("AFRILAND FIRST BANK"),
+                                        "defendeurs", List.of("Défendeur " + reference)))))))
                 .andExpect(status().isCreated())
                 .andReturn());
     }
@@ -731,7 +739,11 @@ class HabilitationFrontendIntegrationTest {
                                 Map.entry("dossierCreditOrigine", "CRD-Q96-" + n),
                                 Map.entry("pvTransfert", "PV-Q96-" + n),
                                 Map.entry("juristesAffectes", List.of(juristeId)),
-                                Map.entry("avocatsAffectes", List.of(autreAvocat)))))
+                                Map.entry("avocatsAffectes", List.of(autreAvocat)),
+                                // Obligatoires depuis le 2026-10-05 (observations 1 et 3).
+                                Map.entry("parties", Map.of(
+                                        "demandeurs", List.of("AFRILAND FIRST BANK"),
+                                        "defendeurs", List.of("Défendeur " + n))))))
                         .with(role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_SAISIE")))
                 .andExpect(status().isCreated())
                 .andReturn());
@@ -854,7 +866,11 @@ class HabilitationFrontendIntegrationTest {
                                 Map.entry("dossierCreditOrigine", "CRD-M15-" + n),
                                 Map.entry("pvTransfert", "PV-M15-" + n),
                                 Map.entry("juristesAffectes", List.of(juristeId)),
-                                Map.entry("avocatsAffectes", List.of(avocatId)))))
+                                Map.entry("avocatsAffectes", List.of(avocatId)),
+                                // Obligatoires depuis le 2026-10-05 (observations 1 et 3).
+                                Map.entry("parties", Map.of(
+                                        "demandeurs", List.of("AFRILAND FIRST BANK"),
+                                        "defendeurs", List.of("Défendeur au procès"))))))
                         .with(role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_SAISIE")))
                 .andExpect(status().isCreated())
                 .andReturn());
@@ -1073,7 +1089,11 @@ class HabilitationFrontendIntegrationTest {
                                 Map.entry("seuilMontant", 60_000_000),
                                 Map.entry("typeClientSensible", "VIP"),
                                 Map.entry("juristesAffectes", List.of(juristeId)),
-                                Map.entry("avocatsAffectes", List.of(avocatId)))))
+                                Map.entry("avocatsAffectes", List.of(avocatId)),
+                                // Obligatoires depuis le 2026-10-05 (observations 1 et 3).
+                                Map.entry("parties", Map.of(
+                                        "demandeurs", List.of("AFRILAND FIRST BANK"),
+                                        "defendeurs", List.of("Défendeur au procès"))))))
                         .with(juriste))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.nature").value(natureLongue))
@@ -1114,7 +1134,11 @@ class HabilitationFrontendIntegrationTest {
                                 Map.entry("seuilMontant", 60_000_000),
                                 Map.entry("typeClientSensible", "VIPP"),
                                 Map.entry("juristesAffectes", List.of(juristeId)),
-                                Map.entry("avocatsAffectes", List.of(avocatId)))))
+                                Map.entry("avocatsAffectes", List.of(avocatId)),
+                                // Obligatoires depuis le 2026-10-05 (observations 1 et 3).
+                                Map.entry("parties", Map.of(
+                                        "demandeurs", List.of("AFRILAND FIRST BANK"),
+                                        "defendeurs", List.of("Défendeur au procès"))))))
                         .with(juriste))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(containsString("inconnu du référentiel")));
@@ -1149,7 +1173,11 @@ class HabilitationFrontendIntegrationTest {
                                 Map.entry("dossierCreditOrigine", "CRD-" + n),
                                 Map.entry("pvTransfert", "PV-" + n),
                                 Map.entry("juristesAffectes", List.of(juristeId)),
-                                Map.entry("avocatsAffectes", List.of(avocatId)))))
+                                Map.entry("avocatsAffectes", List.of(avocatId)),
+                                // Obligatoires depuis le 2026-10-05 (observations 1 et 3).
+                                Map.entry("parties", Map.of(
+                                        "demandeurs", List.of("AFRILAND FIRST BANK"),
+                                        "defendeurs", List.of("Défendeur au procès"))))))
                         .with(juriste))
                 .andExpect(status().isCreated())
                 .andReturn());
@@ -1217,7 +1245,11 @@ class HabilitationFrontendIntegrationTest {
                                 Map.entry("seuilMontant", 60_000_000),
                                 Map.entry("typeClientSensible", "VIP"),
                                 Map.entry("juristesAffectes", List.of(juristeId)),
-                                Map.entry("avocatsAffectes", List.of(avocatId)))))
+                                Map.entry("avocatsAffectes", List.of(avocatId)),
+                                // Obligatoires depuis le 2026-10-05 (observations 1 et 3).
+                                Map.entry("parties", Map.of(
+                                        "demandeurs", List.of("AFRILAND FIRST BANK"),
+                                        "defendeurs", List.of("Défendeur au procès"))))))
                         .with(juriste))
                 .andExpect(status().isCreated())
                 .andReturn());

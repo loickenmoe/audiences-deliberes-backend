@@ -120,6 +120,14 @@ class ParcoursEndToEndIntegrationTest {
     void p1_ouvertureDossierRecouvrement() throws Exception {
         long dossierId = creerDossierRecouvrement();
 
+        // Observations 1 et 3 (métier, 2026-10-03) : les parties sont obligatoires, et multiples.
+        // Le dossier créé ci-dessus en porte deux côté défendeur ; on vérifie qu'elles ressortent
+        // telles quelles, puis que leur absence est refusée à l'entrée.
+        mockMvc.perform(get(api("/dossiers/" + dossierId)).with(role("kc-juriste", "ROLE_CONSULTATION")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.parties.demandeurs.length()").value(1))
+                .andExpect(jsonPath("$.parties.defendeurs.length()").value(2));
+
         // Chargement d'une pièce en GED par le juriste
         MockMultipartFile fichier = new MockMultipartFile("file", "piece.pdf", "application/pdf", new byte[]{1, 2, 3});
         mockMvc.perform(multipart(api("/ged/documents"))
@@ -643,6 +651,62 @@ class ParcoursEndToEndIntegrationTest {
 
     // ---------------------------------------------------------------- Utilitaires
 
+    /**
+     * Observations 1 et 3 : un dossier contentieux dit qui s'oppose à qui, ou n'est pas créé.
+     *
+     * <p>L'information manquait sur 340 des 341 dossiers de recette, précisément parce que rien ne
+     * l'exigeait. Le refus porte sur le champ, pour que l'écran sache où afficher le message.
+     */
+    @Test
+    void lesPartiesSontObligatoiresALaCreation() throws Exception {
+        int n = COMPTEUR.incrementAndGet();
+        long clientId = extraireId(mockMvc.perform(post(api("/clients"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("nom", "Client parties " + n)))
+                        .with(role("kc-juriste", "ROLE_JURISTE", "ROLE_SAISIE")))
+                .andExpect(status().isCreated())
+                .andReturn());
+        Long juristeId = utilisateurRepository.findByKeycloakId("kc-juriste").orElseThrow().getId();
+
+        Map<String, Object> socle = Map.ofEntries(
+                Map.entry("nature", "Assignation en paiement"),
+                Map.entry("categorie", "RECOUVREMENT"),
+                Map.entry("juridictionSaisie", "TGI Douala"),
+                Map.entry("clientId", clientId),
+                Map.entry("risqueEncouru", 1_000_000),
+                Map.entry("juristesAffectes", List.of(juristeId)),
+                Map.entry("avocatsAffectes", List.of(avocatId)));
+
+        // Sans parties du tout.
+        mockMvc.perform(post(api("/dossiers"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(socle))
+                        .with(role("kc-juriste", "ROLE_JURISTE", "ROLE_SAISIE")))
+                .andExpect(status().isBadRequest());
+
+        // Avec un côté vide : « aucun défendeur » n'est pas un défendeur.
+        Map<String, Object> sansDefendeur = new java.util.HashMap<>(socle);
+        sansDefendeur.put("parties", Map.of(
+                "demandeurs", List.of("AFRILAND FIRST BANK"),
+                "defendeurs", List.of()));
+        mockMvc.perform(post(api("/dossiers"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(sansDefendeur))
+                        .with(role("kc-juriste", "ROLE_JURISTE", "ROLE_SAISIE")))
+                .andExpect(status().isBadRequest());
+
+        // Avec un nom vide : une partie sans nom ne nomme personne.
+        Map<String, Object> nomVide = new java.util.HashMap<>(socle);
+        nomVide.put("parties", Map.of(
+                "demandeurs", List.of("   "),
+                "defendeurs", List.of("Débiteur")));
+        mockMvc.perform(post(api("/dossiers"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(nomVide))
+                        .with(role("kc-juriste", "ROLE_JURISTE", "ROLE_SAISIE")))
+                .andExpect(status().isBadRequest());
+    }
+
     private long creerDossierRecouvrement() throws Exception {
         int n = COMPTEUR.incrementAndGet();
         long clientId = extraireId(mockMvc.perform(post(api("/clients"))
@@ -665,7 +729,12 @@ class ParcoursEndToEndIntegrationTest {
                                 Map.entry("dossierCreditOrigine", "CRD-" + n),
                                 Map.entry("pvTransfert", "PV-" + n),
                                 Map.entry("juristesAffectes", List.of(juristeId)),
-                                Map.entry("avocatsAffectes", List.of(avocatId)))))
+                                Map.entry("avocatsAffectes", List.of(avocatId)),
+                                // Obligatoires depuis le 2026-10-05 (observations 1 et 3) : au
+                                // moins un demandeur et un défendeur, plusieurs étant permis.
+                                Map.entry("parties", Map.of(
+                                        "demandeurs", List.of("AFRILAND FIRST BANK"),
+                                        "defendeurs", List.of("Débiteur " + n, "Caution " + n))))))
                         .with(role("kc-juriste", "ROLE_JURISTE", "ROLE_SAISIE")))
                 .andExpect(status().isCreated())
                 .andReturn());
