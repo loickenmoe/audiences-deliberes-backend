@@ -24,4 +24,14 @@ public interface CompteRenduAudienceRepository extends JpaRepository<CompteRendu
      */
     List<CompteRenduAudience> findByAudienceIdInAndStatutValidation(Collection<Long> audienceIds,
                                                                     StatutPublication statutValidation);
+
+    /**
+     * RG-INT-11 : l'avocat a-t-il rendu compte de cette audience ?
+     *
+     * <p>Un compte rendu REJETE ne compte pas : l'Assistante l'a écarté, l'audience reste sans
+     * récit, et l'avocat en doit toujours un. La relance reprend donc après un rejet — ce qui
+     * est le comportement voulu, l'avocat ayant par ailleurs été averti du rejet.
+     */
+    boolean existsByAudienceIdAndStatutValidationIn(Long audienceId,
+                                                    Collection<StatutPublication> statuts);
 }

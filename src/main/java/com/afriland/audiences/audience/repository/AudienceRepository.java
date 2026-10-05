@@ -32,6 +32,17 @@ public interface AudienceRepository extends JpaRepository<Audience, Long> {
     List<Audience> findByStatutAndDatePlanifiee(StatutAudience statut, LocalDate datePlanifiee);
 
     /**
+     * RG-INT-11 : les audiences dont la date est passée, hors annulées — une audience annulée
+     * ne s'est pas tenue, elle n'a donc aucun compte rendu à attendre.
+     *
+     * <p>Le statut n'est volontairement PAS restreint à {@code TENUE} : c'est le juriste qui
+     * marque une audience tenue en saisissant son propre compte rendu, et faire dépendre la
+     * relance de l'avocat d'un geste interne la retarderait d'autant. L'avocat, lui, était à
+     * l'audience.
+     */
+    List<Audience> findByDatePlanifieeBeforeAndStatutNot(LocalDate date, StatutAudience statut);
+
+    /**
      * Les audiences d'un jour donné, annulées exclues : le journal des audiences (écran 44).
      *
      * <p>Paginé comme les autres listes du système : une juridiction chargée aligne les audiences,

@@ -3082,6 +3082,8 @@ une formation des utilisateurs clés a été réalisée ; les données historiqu
 
 | Date | Réf. | Décision | Impact |
 |---|---|---|---|
+| 2026-10-05 | RG-INT-11 | **Relance de l'avocat dont le compte rendu manque.** Une audience passée, non annulée, sur une étape non close et sans compte rendu `DEPOSE` ni `VALIDE` relance l'avocat affecté par ses canaux externes. Cadence et premier délai : `DELAI_RAPPEL_CR_AVOCAT` (défaut 2 jours). Un compte rendu rejeté ne vaut pas dépôt : la relance reprend | Demandé par la Direction Juridique en présentation. `CompteRenduAttenduScheduler`, V38 |
+| 2026-10-05 | RG-INT-11 | **Hypothèse non arbitrée : cinq relances au plus.** Le métier a demandé une relance, pas un nombre. Sans borne, un avocat serait rappelé tous les deux jours des années durant au sujet d'une audience ancienne. La valeur est une constante du code, commentée comme telle, à transformer en paramètre si la Direction Juridique veut la choisir | **À confirmer par le métier** |
 | 2026-09-04 | Q-00 | Ordre de préséance retenu : `US ≻ Contrat API ≻ Dictionnaire ≻ Conception ≻ Analyse ≻ Spécifications`, sauf règle métier où Spécifications/Analyse priment | Sert d'arbitre par défaut pour toute contradiction non listée ici |
 | 2026-09-04 | Q-01 | Création de `dossier_juriste` et `dossier_avocat` (association N:N, historique via `historique_action`) | Prévu au schéma M2 |
 | 2026-09-04 | Q-04 | Création d'une table `alarme` distincte de `alerte` (objet + échéance + étape ; l'alarme génère une `alerte` à échéance) | Prévu au schéma M2, module `audience`/`delibere` M6/M7 |
