@@ -163,7 +163,7 @@ class ParcoursEndToEndIntegrationTest {
         long etapeId = premiereEtape(dossierId);
         passerEtape(dossierId, etapeId, "EN_COURS");
 
-        // RG-AUD-07 : la planification exige une date future…
+        // RG-AUD-08 : la date ne peut pas précéder l'ouverture du dossier…
         long audienceId = extraireId(mockMvc.perform(post(api("/dossiers/" + dossierId + "/audiences"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("etapeId", etapeId, "datePlanifiee", LocalDate.now().plusDays(7).toString())))
