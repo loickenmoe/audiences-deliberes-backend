@@ -24,5 +24,14 @@ public enum EvenementPrestataire {
      * (RG-INT-11, métier du 2026-10-05). Relancé tous les {@code DELAI_RAPPEL_CR_AVOCAT}
      * jours jusqu'au dépôt.
      */
-    COMPTE_RENDU_ATTENDU
+    COMPTE_RENDU_ATTENDU,
+
+    /**
+     * L'Assistante a accusé réception d'un compte rendu (RG-INT-06 amendée, 2026-10-05).
+     *
+     * <p>Distinct de {@link #PUBLICATION_ARBITREE} : celui-ci annonce une décision prise sur
+     * la pièce, ce qui n'arrive plus à un compte rendu. Dire « examinée » quand on a seulement
+     * reçu laisserait l'avocat attendre un verdict qui ne viendra pas.
+     */
+    COMPTE_RENDU_RECU
 }

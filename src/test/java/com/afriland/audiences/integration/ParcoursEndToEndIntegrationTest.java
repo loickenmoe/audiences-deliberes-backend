@@ -209,7 +209,7 @@ class ParcoursEndToEndIntegrationTest {
                         .with(role("kc-avocat", "ROLE_AVOCAT")))
                 .andExpect(status().isBadRequest());
 
-        // Q-86 : l'Assistante lit la publication à valider, nommée ; un juriste, pas encore
+        // Q-86 : l'Assistante lit la publication à valider, nommée.
         mockMvc.perform(get(api("/publications/" + publicationId)).with(role("kc-assistante", "ROLE_CONSULTATION")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statutValidation").value("DEPOSE"))
@@ -218,8 +218,36 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(jsonPath("$.audienceDate").isNotEmpty())
                 // Q-98 : la pièce du compte rendu se lit comme celle d'une autre publication.
                 .andExpect(jsonPath("$.nomFichier").value("plumitif.pdf"));
+
+        // RG-INT-06 amendée (métier du 2026-10-05) : le compte rendu est ouvert à TOUS les
+        // habilités dès son dépôt. Il attendait jusqu'ici la validation de l'Assistante, pendant
+        // que l'avocat, lui, avait déjà rendu compte.
         mockMvc.perform(get(api("/publications/" + publicationId)).with(role("kc-juriste", "ROLE_CONSULTATION")))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statutValidation").value("DEPOSE"));
+
+        // … et il en est prévenu AU DÉPÔT, non à la validation.
+        mockMvc.perform(get(api("/alertes/mes-notifications")).with(role("kc-juriste", "ROLE_JURISTE")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.type == 'NOUVELLE_PUBLICATION')]").isNotEmpty());
+
+        // Le SH n'a aucun régime propre : il lit comme les autres, et dès le dépôt.
+        mockMvc.perform(get(api("/publications/" + publicationId)).with(role("kc-sh", "ROLE_CONSULTATION")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statutValidation").value("DEPOSE"));
+
+        // Et un compte rendu ne se rejette pas : l'Assistante n'en accuse que réception.
+        mockMvc.perform(put(api("/publications/" + publicationId + "/validation"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("statut", "REJETE", "motifRejet", "Récit incomplet")))
+                        .with(role("kc-assistante", "ROLE_ASSISTANTE")))
+                .andExpect(status().isBadRequest());
+
+        // L'onglet du dossier le liste pour le juriste affecté, sans filtre de statut.
+        mockMvc.perform(get(api("/publications")).param("dossierId", String.valueOf(dossierId))
+                        .with(role("kc-juriste", "ROLE_JURISTE")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.id == " + publicationId + ")]").isNotEmpty());
 
         mockMvc.perform(put(api("/publications/" + publicationId + "/validation"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -233,10 +261,7 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.commentaires").isArray());
 
-        // … et le juriste du dossier en est prévenu (Q-86, UC-INT-08 étape 1)
-        mockMvc.perform(get(api("/alertes/mes-notifications")).with(role("kc-juriste", "ROLE_JURISTE")))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content[?(@.type == 'NOUVELLE_PUBLICATION')]").isNotEmpty());
+        // L'accusé de réception n'ajoute aucune alerte : tous pouvaient déjà lire.
     }
 
     // ---------------------------------------------------------------- P3
