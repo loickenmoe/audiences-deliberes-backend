@@ -54,6 +54,7 @@ import com.afriland.audiences.referentiel.repository.AvocatRepository;
 import com.afriland.audiences.referentiel.repository.ClientRepository;
 import com.afriland.audiences.referentiel.repository.NatureDossierRepository;
 import com.afriland.audiences.referentiel.repository.TypeClientSensibleRepository;
+import com.afriland.audiences.referentiel.service.AgenceService;
 import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
 import com.afriland.audiences.referentiel.web.dto.VueClientDossiersResponse;
 import lombok.RequiredArgsConstructor;
@@ -97,6 +98,7 @@ public class DossierService {
     private final HistoriqueActionService historiqueActionService;
     private final CurrentUserService currentUserService;
     private final AlerteService alerteService;
+    private final AgenceService agenceService;
     private final GenerateurReference generateurReference;
     /*
      * Les conditions de fait, apportées par les modules qui détiennent les faits (2026-09-29).
@@ -129,6 +131,20 @@ public class DossierService {
         // seulement dans la branche sensible laisserait passer une valeur fantaisiste.
         if (StringUtils.hasText(request.typeClientSensible())) {
             validerTypeClientSensible(request.typeClientSensible());
+        }
+
+        /*
+         * Les deux codes d'agence désignent désormais une agence du référentiel (métier,
+         * 2026-10-03, observation 2). Celui d'origine est obligatoire, celui du contentieux
+         * facultatif — mais s'il est fourni, il doit exister lui aussi : un code inventé dans un
+         * champ facultatif reste un code inventé.
+         *
+         * Le contrôle est ici et non en annotation : il interroge la base, ce qu'une contrainte de
+         * validation ne fait pas.
+         */
+        validerAgence(request.codeAgenceOrigine(), "codeAgenceOrigine");
+        if (StringUtils.hasText(request.codeAgenceContentieuse())) {
+            validerAgence(request.codeAgenceContentieuse(), "codeAgenceContentieuse");
         }
 
         /*
@@ -214,6 +230,19 @@ public class DossierService {
                             + "le compteur de références est désynchronisé (V36)");
         }
         return reference;
+    }
+
+    /**
+     * Ce code désigne-t-il une agence ouverte du référentiel ?
+     *
+     * <p>Le message nomme le champ : le formulaire sait alors sous lequel afficher le refus. Il
+     * cite aussi le code reçu, car c'est souvent une saisie d'un autre système, recopiée.
+     */
+    private void validerAgence(String code, String champ) {
+        if (!agenceService.existeEtEstActive(code)) {
+            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
+                    "Aucune agence ouverte ne porte le code « " + code + " » (" + champ + ")");
+        }
     }
 
     private void validerTypeClientSensible(String code) {

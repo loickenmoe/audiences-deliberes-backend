@@ -734,7 +734,9 @@ class ParcoursEndToEndIntegrationTest {
                                 // moins un demandeur et un défendeur, plusieurs étant permis.
                                 Map.entry("parties", Map.of(
                                         "demandeurs", List.of("AFRILAND FIRST BANK"),
-                                        "defendeurs", List.of("Débiteur " + n, "Caution " + n))))))
+                                        "defendeurs", List.of("Débiteur " + n, "Caution " + n))),
+                                // Obligatoire depuis le 2026-10-05 (observation 2) : 00002 = Bonanjo.
+                                Map.entry("codeAgenceOrigine", "00002"))))
                         .with(role("kc-juriste", "ROLE_JURISTE", "ROLE_SAISIE")))
                 .andExpect(status().isCreated())
                 .andReturn());

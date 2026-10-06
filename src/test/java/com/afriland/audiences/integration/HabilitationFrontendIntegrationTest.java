@@ -40,6 +40,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -143,6 +144,164 @@ class HabilitationFrontendIntegrationTest {
                 .andExpect(status().isForbidden());
     }
 
+    // ---------------------------------------------------------------- Référentiel des agences (N1)
+
+    /**
+     * Le cycle de vie complet d'une agence, par HTTP (métier, 2026-10-03 et 2026-10-06).
+     *
+     * <p>Ce test tient en une méthode parce que c'est une <b>chaîne</b> : chaque étape dépend de
+     * l'identifiant rendu par la précédente. La découper imposerait de recréer une agence à chaque
+     * fois, et le code étant unique, de forger un code différent par test.
+     *
+     * <p>Ce qu'il prouve : la création, le refus du doublon de code, le refus du changement de code,
+     * la fermeture, la <b>réouverture</b>, et le fait qu'une agence fermée disparaît des listes de
+     * saisie <b>sans disparaître de la base</b>.
+     */
+    @Test
+    @DisplayName("Une agence se crée, se corrige, se ferme et se rouvre ; son code ne change jamais")
+    void agences_cycleDeVieComplet() throws Exception {
+        String corps = """
+                {"code":"00901","nom":"AGENCE INTEGRATION","ville":"Douala",
+                 "adresse":"Rue du test","telephone":"650 228 936"}
+                """;
+
+        JsonNode creee = lireJson(mockMvc.perform(post(api("/referentiels/agences"))
+                        .contentType(MediaType.APPLICATION_JSON).content(corps)
+                        .with(role("kc-dj-m15", "ROLE_DJ")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.actif").value(true))
+                .andReturn());
+        long id = creee.get("id").asLong();
+
+        // Le code est unique : le doublon est un 409, non un 500 venu de la contrainte SQL.
+        mockMvc.perform(post(api("/referentiels/agences"))
+                        .contentType(MediaType.APPLICATION_JSON).content(corps)
+                        .with(role("kc-dj-m15", "ROLE_DJ")))
+                .andExpect(status().isConflict());
+
+        // Le code ne se modifie pas : les dossiers le portent en clair, sans clé étrangère.
+        mockMvc.perform(put(api("/referentiels/agences/" + id))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"code":"00902","nom":"AGENCE INTEGRATION","ville":"Douala"}
+                                """)
+                        .with(role("kc-dj-m15", "ROLE_DJ")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("ne se modifie pas")));
+
+        // Le reste se corrige, code inchangé.
+        mockMvc.perform(put(api("/referentiels/agences/" + id))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"code":"00901","nom":"AGENCE INTEGRATION 2","ville":"Yaoundé"}
+                                """)
+                        .with(role("kc-dj-m15", "ROLE_DJ")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nom").value("AGENCE INTEGRATION 2"))
+                .andExpect(jsonPath("$.ville").value("Yaoundé"));
+
+        // Fermeture : l'agence quitte les listes de saisie...
+        mockMvc.perform(delete(api("/referentiels/agences/" + id))
+                        .with(role("kc-dj-m15", "ROLE_DJ")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.actif").value(false));
+
+        assertThat(codesProposes()).doesNotContain("00901");
+        // ...mais pas la base : l'écran d'administration la voit toujours.
+        assertThat(codesConnus()).contains("00901");
+
+        // Réouverture (2026-10-06) : même agence, même code, de nouveau proposable.
+        mockMvc.perform(patch(api("/referentiels/agences/" + id + "/reactivation"))
+                        .with(role("kc-dja-m15", "ROLE_DJA")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.actif").value(true))
+                .andExpect(jsonPath("$.code").value("00901"));
+
+        assertThat(codesProposes()).contains("00901");
+    }
+
+    /**
+     * La <b>lecture</b> est ouverte à la consultation - elle explique ce que propose le formulaire -
+     * mais l'écriture est réservée au DJ et à la DJA : un code d'agence engage les dossiers qui le
+     * portent, et sa tenue n'est pas un geste de saisie.
+     */
+    @Test
+    @DisplayName("Les agences se lisent avec CONSULTATION, ne s'écrivent qu'en DJ ou DJA")
+    void agences_lectureOuverteEcritureFermee() throws Exception {
+        mockMvc.perform(get(api("/referentiels/agences"))
+                        .with(role("kc-juriste-m15", "ROLE_CONSULTATION")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(org.hamcrest.Matchers.greaterThan(0)));
+
+        mockMvc.perform(post(api("/referentiels/agences"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"code":"00903","nom":"INTERDITE","ville":"Douala"}
+                                """)
+                        .with(role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_CONSULTATION")))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(patch(api("/referentiels/agences/1/reactivation"))
+                        .with(role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_CONSULTATION")))
+                .andExpect(status().isForbidden());
+    }
+
+    /**
+     * La recherche porte sur le <b>code</b> et sur le <b>nom</b>, par fragment et sans distinction de
+     * casse : « bona » doit ramener Bonanjo, Bonabéri, Bonamoussadi et Bonapriso, chargées par V42.
+     */
+    @Test
+    @DisplayName("La recherche d'agence porte sur le code et sur le nom, sans distinction de casse")
+    void agences_rechercheSurCodeEtNom() throws Exception {
+        JsonNode parNom = lireJson(mockMvc.perform(get(api("/referentiels/agences"))
+                        .param("recherche", "BONA").param("size", "100")
+                        .with(role("kc-juriste-m15", "ROLE_CONSULTATION")))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(parNom.get("totalElements").asInt()).isGreaterThan(1);
+        parNom.get("content").forEach(agence ->
+                assertThat(agence.get("nom").asText().toLowerCase()).contains("bona"));
+
+        JsonNode parCode = lireJson(mockMvc.perform(get(api("/referentiels/agences"))
+                        .param("recherche", "00002")
+                        .with(role("kc-juriste-m15", "ROLE_CONSULTATION")))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(parCode.get("totalElements").asInt()).isEqualTo(1);
+        assertThat(parCode.get("content").get(0).get("nom").asText()).isEqualTo("BONANJO");
+
+        // Les 82 agences de V42 portent toutes une ville : c'est elle qui sépare les homonymes.
+        JsonNode toutes = lireJson(mockMvc.perform(get(api("/referentiels/agences"))
+                        .param("size", "200")
+                        .with(role("kc-juriste-m15", "ROLE_CONSULTATION")))
+                .andExpect(status().isOk())
+                .andReturn());
+        toutes.get("content").forEach(agence ->
+                assertThat(agence.get("ville").asText()).isNotBlank());
+    }
+
+    /** Les codes que la <b>saisie</b> propose : agences ouvertes seulement. */
+    private List<String> codesProposes() throws Exception {
+        return codes(true);
+    }
+
+    /** Les codes que l'<b>administration</b> voit : ouvertes et fermées. */
+    private List<String> codesConnus() throws Exception {
+        return codes(false);
+    }
+
+    private List<String> codes(boolean actifSeulement) throws Exception {
+        JsonNode page = lireJson(mockMvc.perform(get(api("/referentiels/agences"))
+                        .param("actifSeulement", String.valueOf(actifSeulement))
+                        .param("size", "300")
+                        .with(role("kc-dj-m15", "ROLE_DJ", "ROLE_CONSULTATION")))
+                .andExpect(status().isOk())
+                .andReturn());
+        List<String> resultat = new java.util.ArrayList<>();
+        page.get("content").forEach(agence -> resultat.add(agence.get("code").asText()));
+        return resultat;
+    }
+
     // ---------------------------------------------------------------- Répertoire des utilisateurs internes
 
     /**
@@ -190,7 +349,9 @@ class HabilitationFrontendIntegrationTest {
                                 // Obligatoires depuis le 2026-10-05 (observations 1 et 3).
                                 Map.entry("parties", Map.of(
                                         "demandeurs", List.of("AFRILAND FIRST BANK"),
-                                        "defendeurs", List.of("Défendeur au procès"))))))
+                                        "defendeurs", List.of("Défendeur au procès"))),
+                                // Obligatoire depuis le 2026-10-05 (observation 2) : 00002 = Bonanjo.
+                                Map.entry("codeAgenceOrigine", "00002"))))
                         .with(role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_SAISIE")))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.juristesAffectes[0]").value(juristeId));
@@ -596,7 +757,9 @@ class HabilitationFrontendIntegrationTest {
                                 // Obligatoires depuis le 2026-10-05 (observations 1 et 3).
                                 Map.entry("parties", Map.of(
                                         "demandeurs", List.of("AFRILAND FIRST BANK"),
-                                        "defendeurs", List.of("Défendeur " + reference)))))))
+                                        "defendeurs", List.of("Défendeur " + reference))),
+                                // Obligatoire depuis le 2026-10-05 (observation 2) : 00002 = Bonanjo.
+                                Map.entry("codeAgenceOrigine", "00002")))))
                 .andExpect(status().isCreated())
                 .andReturn());
     }
@@ -743,7 +906,9 @@ class HabilitationFrontendIntegrationTest {
                                 // Obligatoires depuis le 2026-10-05 (observations 1 et 3).
                                 Map.entry("parties", Map.of(
                                         "demandeurs", List.of("AFRILAND FIRST BANK"),
-                                        "defendeurs", List.of("Défendeur " + n))))))
+                                        "defendeurs", List.of("Défendeur " + n))),
+                                // Obligatoire depuis le 2026-10-05 (observation 2) : 00002 = Bonanjo.
+                                Map.entry("codeAgenceOrigine", "00002"))))
                         .with(role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_SAISIE")))
                 .andExpect(status().isCreated())
                 .andReturn());
@@ -870,7 +1035,9 @@ class HabilitationFrontendIntegrationTest {
                                 // Obligatoires depuis le 2026-10-05 (observations 1 et 3).
                                 Map.entry("parties", Map.of(
                                         "demandeurs", List.of("AFRILAND FIRST BANK"),
-                                        "defendeurs", List.of("Défendeur au procès"))))))
+                                        "defendeurs", List.of("Défendeur au procès"))),
+                                // Obligatoire depuis le 2026-10-05 (observation 2) : 00002 = Bonanjo.
+                                Map.entry("codeAgenceOrigine", "00002"))))
                         .with(role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_SAISIE")))
                 .andExpect(status().isCreated())
                 .andReturn());
@@ -1093,7 +1260,9 @@ class HabilitationFrontendIntegrationTest {
                                 // Obligatoires depuis le 2026-10-05 (observations 1 et 3).
                                 Map.entry("parties", Map.of(
                                         "demandeurs", List.of("AFRILAND FIRST BANK"),
-                                        "defendeurs", List.of("Défendeur au procès"))))))
+                                        "defendeurs", List.of("Défendeur au procès"))),
+                                // Obligatoire depuis le 2026-10-05 (observation 2) : 00002 = Bonanjo.
+                                Map.entry("codeAgenceOrigine", "00002"))))
                         .with(juriste))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.nature").value(natureLongue))
@@ -1138,7 +1307,9 @@ class HabilitationFrontendIntegrationTest {
                                 // Obligatoires depuis le 2026-10-05 (observations 1 et 3).
                                 Map.entry("parties", Map.of(
                                         "demandeurs", List.of("AFRILAND FIRST BANK"),
-                                        "defendeurs", List.of("Défendeur au procès"))))))
+                                        "defendeurs", List.of("Défendeur au procès"))),
+                                // Obligatoire depuis le 2026-10-05 (observation 2) : 00002 = Bonanjo.
+                                Map.entry("codeAgenceOrigine", "00002"))))
                         .with(juriste))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(containsString("inconnu du référentiel")));
@@ -1177,7 +1348,9 @@ class HabilitationFrontendIntegrationTest {
                                 // Obligatoires depuis le 2026-10-05 (observations 1 et 3).
                                 Map.entry("parties", Map.of(
                                         "demandeurs", List.of("AFRILAND FIRST BANK"),
-                                        "defendeurs", List.of("Défendeur au procès"))))))
+                                        "defendeurs", List.of("Défendeur au procès"))),
+                                // Obligatoire depuis le 2026-10-05 (observation 2) : 00002 = Bonanjo.
+                                Map.entry("codeAgenceOrigine", "00002"))))
                         .with(juriste))
                 .andExpect(status().isCreated())
                 .andReturn());
@@ -1249,7 +1422,9 @@ class HabilitationFrontendIntegrationTest {
                                 // Obligatoires depuis le 2026-10-05 (observations 1 et 3).
                                 Map.entry("parties", Map.of(
                                         "demandeurs", List.of("AFRILAND FIRST BANK"),
-                                        "defendeurs", List.of("Défendeur au procès"))))))
+                                        "defendeurs", List.of("Défendeur au procès"))),
+                                // Obligatoire depuis le 2026-10-05 (observation 2) : 00002 = Bonanjo.
+                                Map.entry("codeAgenceOrigine", "00002"))))
                         .with(juriste))
                 .andExpect(status().isCreated())
                 .andReturn());

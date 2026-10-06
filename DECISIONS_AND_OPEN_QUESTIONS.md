@@ -2168,6 +2168,50 @@ sont unifiées.
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
 
+### Q-123 ✅ Référentiel des agences : le code ne se modifie pas, la fermeture se défait — tranché (2026-10-03, complété le 2026-10-06)
+
+**Le point de départ.** Les deux codes d'agence d'un dossier — celle d'origine, celle du contentieux
+— étaient du **texte libre** de vingt caractères, sans référentiel ni vérification. Sur les 341
+dossiers de la base de recette, **un seul** portait un code : `5466546546`, qui ne désigne aucune
+agence. La Direction Juridique a demandé une liste déroulante cherchable, tenue par le DJ et la DJA.
+
+**Trois règles ont été tranchées, et chacune a une raison qui survit à son implémentation.**
+
+**1. Le code n'est pas la clé primaire, et il ne se modifie pas.** Une agence se renomme, se
+déplace, ferme ; un identifiant technique stable survit à cela. Mais le dossier porte le **code en
+clair**, sans clé étrangère — c'est lui que la banque emploie dans ses propres états. Le modifier
+détacherait silencieusement les dossiers de leur agence, et personne ne le verrait avant un rapport
+annuel. Une agence qui change de code est **une autre agence** : on la crée, on désactive l'ancienne.
+`PUT` refuse donc un code différent de celui enregistré (400), et le champ est inactif à l'écran.
+
+**2. On désactive, on ne supprime pas — et la fermeture se défait** (complément du 2026-10-06). Un
+dossier ouvert sous une agence fermée reste un dossier valide, et son code doit continuer de
+désigner quelque chose : l'audit pose des questions des années après. `DELETE` désactive donc, sans
+rien effacer. **La réouverture a été ajoutée trois jours plus tard**, et son absence était un
+défaut, non un choix : une fermeture par erreur de manipulation n'avait qu'une issue — recréer
+l'agence sous un autre code, c'est-à-dire **inventer un code**, précisément ce que le référentiel
+existe pour empêcher. Et une agence réouvre : locaux rendus, travaux terminés. C'est la même agence,
+elle garde son code. D'où `PATCH /referentiels/agences/{id}/reactivation` — `PATCH` et non `PUT`,
+parce qu'on ne remplace pas l'agence, on change son seul état d'ouverture. Rouvrir une agence déjà
+ouverte est **sans effet et sans refus** : l'état demandé est atteint, et refuser obligerait
+l'appelant à lire avant d'écrire pour rien.
+
+**3. La ville est obligatoire.** Deux agences du référentiel portent le même nom — les deux
+« MBALLA II », codes `00108` et `108` — et sans ville la liste de saisie les présenterait à
+l'identique. La liste affiche donc `code · Agence nom · ville`, l'adresse venant en seconde ligne
+pour les cas où la ville ne suffit pas — les deux MBALLA II sont toutes deux à Yaoundé. Le mot
+« Agence » devant le nom est une demande du 2026-10-06 : les noms sont des toponymes, et
+« 00001 HIPPODROME » pouvait se lire comme un lieu plutôt que comme une agence. Il est traduit
+(« Branch » en anglais), non écrit en dur.
+
+**Ce qui reste à relire par le métier.** Le PDF fourni est un **scan sans couche de texte** : les 82
+agences ont été transcrites à la main. La liste porte des doublons de nom assumés, des codes de
+longueurs hétérogènes (`101` et `108` côtoient `00002`), et **une inférence signalée comme telle**
+dans l'en-tête de `V42` : `101 MEIGANGA` n'avait ni ville ni adresse lisible, la ville a été posée
+à « Meiganga ». « /// BAFOUSSAM III » a été écartée sur indication du porteur du projet : ce n'est
+pas une agence. **Aucun test, nulle part, ne nomme un code d'agence en dur** — pour que cette
+relecture ne casse pas les suites.
+
 ### Q-122 ✅ WhatsApp ne délivrait pas faute de facturation, et la priorité reste STANDARD — tranché (2026-09-23)
 
 **WhatsApp : ni gabarit, ni numéro, ni configuration applicative.** Les journaux du moteur, consultés

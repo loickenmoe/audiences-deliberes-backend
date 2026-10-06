@@ -67,7 +67,7 @@ qu'après une décision d'ajout — traité comme tel dès M4.
   `PUT /deliberes/{id}/resultat` et `GET /deliberes/{id}/prorogations` (Q-78),
   `GET /frais/demandes/{id}` (Q-82), `GET /dossiers/{id}/decisions` (Q-88).
 
-Soit **74 endpoints HTTP exposés au total** : les 66 numérotés, `POST /dossiers/{id}/etapes` et les
+Soit **79 endpoints HTTP exposés au total** : les 71 numérotés, `POST /dossiers/{id}/etapes` et les
 sept ajouts de M16 — décompte des annotations de mapping du code, le 2026-09-11 (le « 66 » inscrit
 ici jusqu'au 2026-09-10 n'avait pas suivi les ajouts non numérotés).
 
@@ -457,14 +457,42 @@ stockage dédié sans dossier (Q-58), recherche paginée par mots-clés/nature/j
 transition automatique d'étape vers `ARCHIVE` (Q-60, reste manuelle via l'endpoint générique M4).
 13 tests automatisés dédiés. Voir `DECISIONS_AND_OPEN_QUESTIONS.md` Q-58, Q-59, Q-60, Q-61.
 
-## 11. Référentiels de formulaire et utilisateurs internes (M15)
+## 11. Référentiels de formulaire, agences et utilisateurs internes (M15, N1)
 
 | # | Méthode | Endpoint | Rôle requis | FR / US | Src | Statut |
 |---|---|---|---|---|---|---|
 | 64 | GET | `/referentiels/natures-dossier?categorie=` | `ROLE_CONSULTATION` | RG-DOS-02 / US 1.1 | 🆕 | ✅ M15 |
 | 65 | GET | `/referentiels/types-client-sensible` | `ROLE_CONSULTATION` | RG-DOS-09 / US 1.1 | 🆕 | ✅ M15 |
 | 66 | GET | `/utilisateurs?profil=&inclureInactifs=` | `ROLE_CONSULTATION` | RG-DOS-03 / US 1.1, 1.2 | 🆕 | ✅ M15 |
+| 67 | GET | `/referentiels/agences?recherche=&actifSeulement=` | `ROLE_CONSULTATION` | RG-REF-01 / observation 2 | 🆕 | ✅ N1 |
+| 68 | POST | `/referentiels/agences` | `ROLE_DJ`, `ROLE_DJA` | RG-REF-01 / observation 2 | 🆕 | ✅ N1 |
+| 69 | PUT | `/referentiels/agences/{id}` | `ROLE_DJ`, `ROLE_DJA` | RG-REF-01 / observation 2 | 🆕 | ✅ N1 |
+| 70 | DELETE | `/referentiels/agences/{id}` | `ROLE_DJ`, `ROLE_DJA` | RG-REF-01 / observation 2 | 🆕 | ✅ N1 |
+| 71 | PATCH | `/referentiels/agences/{id}/reactivation` | `ROLE_DJ`, `ROLE_DJA` | RG-REF-01 / métier 2026-10-06 | 🆕 | ✅ N1 |
 
+> **#67 à #70 (N1, métier du 2026-10-03, observation 2)** : les deux codes d'agence d'un dossier
+> étaient du **texte libre** de vingt caractères, sans référentiel ni vérification. Sur les 341
+> dossiers de recette, un seul en portait un - `5466546546` - et il ne désignait aucune agence. La
+> table `agence` (migration `V42`, 82 entrées) ferme la saisie : `codeAgenceOrigine` devient
+> **obligatoire** et vérifié, `codeAgenceContentieuse` est vérifiée si présente.
+>
+> **Ce n'est pas un référentiel en lecture seule**, contrairement à #64/#65 : le métier a demandé
+> que le DJ et la DJA le tiennent depuis l'application. Trois règles en découlent. Le **code est
+> unique** (409) et **ne se modifie pas** (400) : les dossiers le portent en clair, sans clé
+> étrangère, et le changer les détacherait silencieusement. `DELETE` **désactive** : un dossier
+> ouvert sous une agence fermée reste valide, son code doit continuer de désigner quelque chose.
+> La **ville est obligatoire** - deux agences portent le même nom, elle les distingue à la saisie.
+> La recherche est **partielle, insensible à la casse, sur le code et sur le nom**, les jokers
+> étant échappés par le service (même procédé que Q-89).
+>
+> **#71 (métier, 2026-10-06)** : la fermeture est **réversible**. Elle ne l'était pas, et c'était un
+> défaut : une fermeture par erreur de manipulation n'avait qu'une issue - recréer l'agence sous un
+> autre code, c'est-à-dire inventer un code, ce que le référentiel existe pour empêcher. Et une
+> agence réouvre : locaux rendus, travaux terminés. C'est la même agence, elle garde son code.
+> `PATCH` et non `PUT` : on ne remplace pas l'agence, on change son seul état d'ouverture, comme
+> `PATCH /audiences/{id}/annulation`. Rouvrir une agence déjà ouverte est **sans effet et sans
+> refus** : l'état demandé est atteint, et refuser obligerait l'appelant à lire avant d'écrire.
+>
 > **#64/#65 (M15, Q-68)** : le backend **impose** ces référentiels fermés en écriture — `POST
 > /dossiers` rejette en 400 toute nature hors taxonomie (RG-DOS-02) — mais ne les exposait nulle
 > part en lecture : le formulaire de création ne pouvait pas peupler ses listes déroulantes.

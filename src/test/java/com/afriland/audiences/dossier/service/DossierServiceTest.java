@@ -35,6 +35,7 @@ import com.afriland.audiences.dossier.web.dto.CreerEtapeRequest;
 import com.afriland.audiences.dossier.web.dto.DemandeDerogationSeuilRequest;
 import com.afriland.audiences.dossier.web.dto.DossierResponse;
 import com.afriland.audiences.dossier.web.dto.ModifierAffectationRequest;
+import com.afriland.audiences.dossier.web.dto.PartiesDto;
 import com.afriland.audiences.dossier.web.dto.ModifierStatutEtapeRequest;
 import com.afriland.audiences.dossier.web.dto.ValiderSensibiliteRequest;
 import com.afriland.audiences.referentiel.domain.CategorieDossier;
@@ -42,6 +43,7 @@ import com.afriland.audiences.referentiel.domain.Client;
 import com.afriland.audiences.referentiel.domain.NatureDossier;
 import com.afriland.audiences.referentiel.domain.Utilisateur;
 import com.afriland.audiences.referentiel.repository.AvocatRepository;
+import com.afriland.audiences.referentiel.service.AgenceService;
 import com.afriland.audiences.referentiel.repository.ClientRepository;
 import com.afriland.audiences.referentiel.repository.NatureDossierRepository;
 import com.afriland.audiences.referentiel.repository.TypeClientSensibleRepository;
@@ -78,6 +80,7 @@ class DossierServiceTest {
     @Mock private HistoriqueActionService historiqueActionService;
     @Mock private CurrentUserService currentUserService;
     @Mock private AlerteService alerteService;
+    @Mock private AgenceService agenceService;
     @Mock private GenerateurReference generateurReference;
 
     private final EtapeTransitionValidator transitionValidator = new EtapeTransitionValidator();
@@ -85,6 +88,13 @@ class DossierServiceTest {
     private final EtapeProcedureMapper etapeProcedureMapper = new EtapeProcedureMapperTestImpl();
     private final AuditSeuilMapper auditSeuilMapper = new AuditSeuilMapperTestImpl();
     private final HistoriqueActionMapper historiqueActionMapper = new HistoriqueActionMapperTestImpl();
+
+    /** Bonanjo : une agence reelle du referentiel (V42), pour ne pas inventer de code. */
+    private static final String AGENCE = "00002";
+
+    /** Les parties sont obligatoires depuis le 2026-10-05 (observation 6). */
+    private static final PartiesDto PARTIES =
+            new PartiesDto(List.of("Afriland First Bank"), List.of("Client Test"));
 
     private DossierService service;
 
@@ -102,11 +112,16 @@ class DossierServiceTest {
                 natureDossierRepository, typeClientSensibleRepository,
                 transitionValidator, dossierMapper,
                 etapeProcedureMapper, auditSeuilMapper, historiqueActionMapper, historiqueActionService, currentUserService,
-                alerteService, generateurReference, List.of());
+                alerteService, agenceService, generateurReference, List.of());
 
         // Le système attribue la référence : les tests n'en fournissent plus aucune. `lenient` car
         // la majorité des tests de cette classe ne créent pas de dossier et ne l'appelleront jamais.
         lenient().when(generateurReference.prochaine(FamilleReference.DOSSIER)).thenReturn("DOS-2026-0001");
+
+        // L'agence d'origine est obligatoire depuis le 2026-10-05 (observation 2) et son code est
+        // verifie au referentiel. `lenient` pour la meme raison que la reference : la plupart des
+        // tests de cette classe ne creent aucun dossier.
+        lenient().when(agenceService.existeEtEstActive(AGENCE)).thenReturn(true);
 
         client = Client.builder().id(1L).reference("CLI-1").nom("Client Test").build();
         juriste = Utilisateur.builder().id(10L).nom("Juriste").build();
@@ -115,7 +130,7 @@ class DossierServiceTest {
     private CreerDossierRequest baseRequest(boolean sensible) {
         return new CreerDossierRequest(
                 "Saisie immobilière", null, "Tribunal de Yaoundé", 1L,
-                null, 15_000_000d, null, null, null, null,
+                PARTIES, 15_000_000d, null, null, AGENCE, null,
                 sensible ? null : "CREDIT-1", sensible ? null : "PV-1",
                 null, null, null,
                 sensible, sensible ? 60_000_000d : null, sensible ? "VIP" : null,
@@ -189,7 +204,7 @@ class DossierServiceTest {
                 .thenReturn(Optional.of(NatureDossier.builder().categorie(CategorieDossier.RECOUVREMENT).build()));
         var incoherent = new CreerDossierRequest(
                 "Saisie immobilière", CategorieDossier.EXPLOITATION_LITIGES, "Tribunal de Yaoundé", 1L,
-                null, 15_000_000d, null, null, null, null, "CREDIT-1", "PV-1",
+                PARTIES, 15_000_000d, null, null, AGENCE, null, "CREDIT-1", "PV-1",
                 null, null, null, false, null, null, List.of(10L), List.of());
 
         assertThatThrownBy(() -> service.creerDossier(incoherent))
@@ -220,7 +235,7 @@ class DossierServiceTest {
         when(etapeProcedureRepository.save(any(EtapeProcedure.class))).thenAnswer(inv -> inv.getArgument(0));
         var sansReferences = new CreerDossierRequest(
                 "Saisie immobilière", null, "Tribunal de Yaoundé", 1L,
-                null, 15_000_000d, null, null, null, null, null, null,
+                PARTIES, 15_000_000d, null, null, AGENCE, null, null, null,
                 null, null, null, false, null, null, List.of(10L), List.of());
 
         DossierResponse response = service.creerDossier(sansReferences);
@@ -228,6 +243,60 @@ class DossierServiceTest {
         assertThat(response.reference()).isEqualTo("DOS-2026-0001");
         assertThat(response.dossierCreditOrigine()).isNull();
         assertThat(response.pvTransfert()).isNull();
+    }
+
+    /**
+     * Le code d'agence ne s'invente plus (métier, 2026-10-03, observation 2).
+     *
+     * <p>Sur les 341 dossiers de recette, un seul code était renseigné - {@code 5466546546} - et il
+     * ne désignait aucune agence. Le refus doit nommer le champ fautif : le formulaire porte deux
+     * codes d'agence, et l'utilisateur ne saurait pas lequel reprendre.
+     */
+    @Test
+    void creerDossier_rejetteUnCodeAgenceInconnu() {
+        when(clientRepository.findById(1L)).thenReturn(Optional.of(client));
+        when(natureDossierRepository.findByLibelleIgnoreCase(any()))
+                .thenReturn(Optional.of(NatureDossier.builder().categorie(CategorieDossier.RECOUVREMENT).build()));
+        when(agenceService.existeEtEstActive("5466546546")).thenReturn(false);
+
+        var codeInvente = new CreerDossierRequest(
+                "Saisie immobilière", null, "Tribunal de Yaoundé", 1L,
+                PARTIES, 15_000_000d, null, null, "5466546546", null, "CREDIT-1", "PV-1",
+                null, null, null, false, null, null, List.of(10L), List.of());
+
+        assertThatThrownBy(() -> service.creerDossier(codeInvente))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("Aucune agence ouverte")
+                .hasMessageContaining("codeAgenceOrigine");
+
+        // Le refus tombe avant toute écriture : aucune référence consommée, aucun dossier enregistré.
+        verify(generateurReference, never()).prochaine(any());
+        verify(dossierRepository, never()).save(any());
+    }
+
+    /**
+     * L'agence du contentieux, quand elle est renseignée, passe le même contrôle.
+     *
+     * <p>Elle reste facultative - un dossier n'est pas toujours transféré - mais un code présent et
+     * faux vaut un code inventé : les rapports par agence le compteraient nulle part.
+     */
+    @Test
+    void creerDossier_rejetteUnCodeAgenceContentieuseInconnu() {
+        when(clientRepository.findById(1L)).thenReturn(Optional.of(client));
+        when(natureDossierRepository.findByLibelleIgnoreCase(any()))
+                .thenReturn(Optional.of(NatureDossier.builder().categorie(CategorieDossier.RECOUVREMENT).build()));
+        when(agenceService.existeEtEstActive("00000000")).thenReturn(false);
+
+        var contentieuseInvente = new CreerDossierRequest(
+                "Saisie immobilière", null, "Tribunal de Yaoundé", 1L,
+                PARTIES, 15_000_000d, null, null, AGENCE, "00000000", "CREDIT-1", "PV-1",
+                null, null, null, false, null, null, List.of(10L), List.of());
+
+        assertThatThrownBy(() -> service.creerDossier(contentieuseInvente))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("codeAgenceContentieuse");
+
+        verify(dossierRepository, never()).save(any());
     }
 
     @Test
@@ -239,7 +308,7 @@ class DossierServiceTest {
 
         var faute = new CreerDossierRequest(
                 "Saisie immobilière", null, "Tribunal de Yaoundé", 1L,
-                null, 15_000_000d, null, null, null, null, "CREDIT-1", "PV-1",
+                PARTIES, 15_000_000d, null, null, AGENCE, null, "CREDIT-1", "PV-1",
                 null, null, null, true, 60_000_000d, "VIPP", List.of(10L), List.of());
 
         // Q-06 laisse la colonne libre de toute clé étrangère, mais confie ce contrôle au service :
@@ -265,7 +334,7 @@ class DossierServiceTest {
         when(etapeProcedureRepository.save(any(EtapeProcedure.class))).thenAnswer(inv -> inv.getArgument(0));
         var sensibleSansSeuil = new CreerDossierRequest(
                 "Saisie immobilière", null, "Tribunal de Yaoundé", 1L,
-                null, 15_000_000d, null, null, null, null, "CREDIT-1", "PV-1",
+                PARTIES, 15_000_000d, null, null, AGENCE, null, "CREDIT-1", "PV-1",
                 null, null, null, true, null, null, List.of(10L), List.of());
 
         assertThatThrownBy(() -> service.creerDossier(sensibleSansSeuil))
