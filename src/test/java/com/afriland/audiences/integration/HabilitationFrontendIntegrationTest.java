@@ -31,6 +31,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Arrays;
@@ -142,6 +143,169 @@ class HabilitationFrontendIntegrationTest {
         mockMvc.perform(get(api("/referentiels/natures-dossier"))
                         .with(role("kc-juriste-m15", "ROLE_JURISTE")))
                 .andExpect(status().isForbidden());
+    }
+
+    // ------------------------------------------------- Diligence particulière après l'ouverture (N4)
+
+    /**
+     * Le circuit complet, par HTTP : le juriste propose, le DJ arbitre, puis la DJA retire.
+     *
+     * <p>Une seule méthode, parce que c'est une <b>chaîne</b> : chaque étape suppose l'état laissé
+     * par la précédente, et la découper imposerait de recréer un dossier à chaque fois.
+     *
+     * <p>Ce qu'elle prouve, et que les tests unitaires ne peuvent pas prouver : les
+     * {@code @PreAuthorize} sont au bon endroit, et le seuil suit réellement la décision - global
+     * tant que rien n'est validé, dérogatoire après, global de nouveau après le retrait.
+     */
+    @Test
+    @DisplayName("La diligence particulière se propose, s'arbitre et se retire après l'ouverture")
+    void diligence_circuitCompletApresOuverture() throws Exception {
+        long dossierId = creerDossierOrdinaire();
+
+        // 1. Le juriste propose. Rien ne doit changer pour les frais avant l'arbitrage (Q-10).
+        JsonNode propose = lireJson(mockMvc.perform(post(api("/dossiers/" + dossierId + "/sensibilite/proposition"))
+                        .contentType(MediaType.APPLICATION_JSON).characterEncoding(StandardCharsets.UTF_8)
+                        .content("""
+                                {"seuilMontant":60000000,"typeClientSensible":"VIP",
+                                 "motif":"La contrepartie est devenue une personne exposée"}
+                                """)
+                        .with(role("kc-juriste-m15", "ROLE_SAISIE")))
+                .andExpect(status().isCreated())
+                .andReturn());
+        assertThat(propose.get("estSensible").asBoolean()).isTrue();
+        assertThat(propose.get("sensibiliteStatut").asText()).isEqualTo("EN_ATTENTE");
+        assertThat(propose.get("seuilOrigine").asText()).isEqualTo("GLOBAL");
+        assertThat(propose.get("seuilMontant").isNull()).isTrue();
+
+        // Proposer deux fois n'a pas de sens : le refus dit laquelle des deux situations on est.
+        mockMvc.perform(post(api("/dossiers/" + dossierId + "/sensibilite/proposition"))
+                        .contentType(MediaType.APPLICATION_JSON).characterEncoding(StandardCharsets.UTF_8)
+                        .content("""
+                                {"seuilMontant":60000000,"typeClientSensible":"VIP","motif":"Encore"}
+                                """)
+                        .with(role("kc-juriste-m15", "ROLE_SAISIE")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("déjà en attente")));
+
+        // 2. Le DJ arbitre, par l'endpoint qui existait déjà : il ignore d'où vient la proposition.
+        JsonNode valide = lireJson(mockMvc.perform(post(api("/dossiers/" + dossierId + "/sensibilite/validation"))
+                        .contentType(MediaType.APPLICATION_JSON).characterEncoding(StandardCharsets.UTF_8)
+                        .content("""
+                                {"statut":"VALIDEE"}
+                                """)
+                        .with(role("kc-dj-m15", "ROLE_DJ")))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(valide.get("sensibiliteStatut").asText()).isEqualTo("VALIDEE");
+        assertThat(valide.get("seuilMontant").asDouble()).isEqualTo(60_000_000d);
+        assertThat(valide.get("seuilOrigine").asText()).isEqualTo("DEROGATION");
+
+        // 3. Le retrait exige un motif : lever la diligence sort le dossier du circuit des frais.
+        mockMvc.perform(put(api("/dossiers/" + dossierId + "/sensibilite"))
+                        .contentType(MediaType.APPLICATION_JSON).characterEncoding(StandardCharsets.UTF_8)
+                        .content("""
+                                {"estSensible":false}
+                                """)
+                        .with(role("kc-dja-m15", "ROLE_DJA")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("motif est obligatoire")));
+
+        JsonNode retire = lireJson(mockMvc.perform(put(api("/dossiers/" + dossierId + "/sensibilite"))
+                        .contentType(MediaType.APPLICATION_JSON).characterEncoding(StandardCharsets.UTF_8)
+                        .content("""
+                                {"estSensible":false,"motif":"L'affaire s'est révélée ordinaire"}
+                                """)
+                        .with(role("kc-dja-m15", "ROLE_DJA")))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(retire.get("estSensible").asBoolean()).isFalse();
+        assertThat(retire.get("sensibiliteMotifRetrait").asText()).isEqualTo("L'affaire s'est révélée ordinaire");
+        // Le seuil redevient global : un seuil dérogatoire n'existe que pour un dossier sensible.
+        assertThat(retire.get("seuilOrigine").asText()).isEqualTo("GLOBAL");
+        assertThat(retire.get("seuilMontant").isNull()).isTrue();
+
+        // 4. Rien à retirer deux fois.
+        mockMvc.perform(put(api("/dossiers/" + dossierId + "/sensibilite"))
+                        .contentType(MediaType.APPLICATION_JSON).characterEncoding(StandardCharsets.UTF_8)
+                        .content("""
+                                {"estSensible":false,"motif":"Encore"}
+                                """)
+                        .with(role("kc-dj-m15", "ROLE_DJ")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("rien à retirer")));
+
+        // 5. Et le dossier peut repartir en diligence : le passé ne le condamne pas.
+        mockMvc.perform(post(api("/dossiers/" + dossierId + "/sensibilite/proposition"))
+                        .contentType(MediaType.APPLICATION_JSON).characterEncoding(StandardCharsets.UTF_8)
+                        .content("""
+                                {"seuilMontant":90000000,"typeClientSensible":"VIP","motif":"Le risque a doublé"}
+                                """)
+                        .with(role("kc-juriste-m15", "ROLE_SAISIE")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.sensibiliteStatut").value("EN_ATTENTE"))
+                // Le motif du retrait est effacé : il ne porte plus sur la situation en cours.
+                .andExpect(jsonPath("$.sensibiliteMotifRetrait").doesNotExist());
+    }
+
+    /**
+     * Le partage des rôles : le juriste <b>propose</b>, le DJ et la DJA <b>décident</b>.
+     *
+     * <p>Même règle que la dérogation de seuil, et pour la même raison : poser la diligence engage
+     * la double validation des frais, ce n'est pas un geste de saisie.
+     */
+    @Test
+    @DisplayName("Le juriste propose la diligence, il ne la pose pas ; le DJ fait l'inverse")
+    void diligence_partageDesRoles() throws Exception {
+        long dossierId = creerDossierOrdinaire();
+
+        // Le juriste n'a pas la main sur la pose directe.
+        mockMvc.perform(put(api("/dossiers/" + dossierId + "/sensibilite"))
+                        .contentType(MediaType.APPLICATION_JSON).characterEncoding(StandardCharsets.UTF_8)
+                        .content("""
+                                {"estSensible":true,"seuilMontant":60000000,"typeClientSensible":"VIP"}
+                                """)
+                        .with(role("kc-juriste-m15", "ROLE_SAISIE", "ROLE_JURISTE")))
+                .andExpect(status().isForbidden());
+
+        // Le DJ pose directement, sans proposition : il est lui-même la décision.
+        mockMvc.perform(put(api("/dossiers/" + dossierId + "/sensibilite"))
+                        .contentType(MediaType.APPLICATION_JSON).characterEncoding(StandardCharsets.UTF_8)
+                        .content("""
+                                {"estSensible":true,"seuilMontant":60000000,"typeClientSensible":"VIP",
+                                 "motif":"Décision du comité"}
+                                """)
+                        .with(role("kc-dj-m15", "ROLE_DJ")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sensibiliteStatut").value("VALIDEE"))
+                .andExpect(jsonPath("$.seuilOrigine").value("DEROGATION"));
+
+        // L'Assistante ne touche à ni l'un ni l'autre.
+        mockMvc.perform(post(api("/dossiers/" + dossierId + "/sensibilite/proposition"))
+                        .contentType(MediaType.APPLICATION_JSON).characterEncoding(StandardCharsets.UTF_8)
+                        .content("""
+                                {"seuilMontant":60000000,"typeClientSensible":"VIP","motif":"Motif"}
+                                """)
+                        .with(role("kc-assistante-m15", "ROLE_ASSISTANTE", "ROLE_CONSULTATION")))
+                .andExpect(status().isForbidden());
+    }
+
+    /**
+     * Un dossier **ordinaire**, sans diligence particulière : le point de départ de N4.
+     *
+     * <p>Avant N4, un dossier créé ainsi ne pouvait plus jamais devenir sensible - c'est précisément
+     * ce que ces deux tests vérifient.
+     */
+    private long creerDossierOrdinaire() throws Exception {
+        int n = COMPTEUR.incrementAndGet();
+        long clientId = extraireId(mockMvc.perform(post(api("/clients"))
+                        .contentType(MediaType.APPLICATION_JSON).characterEncoding(StandardCharsets.UTF_8)
+                        .content(json(Map.of("nom", "Client N4 " + n)))
+                        .with(role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_SAISIE")))
+                .andExpect(status().isCreated())
+                .andReturn());
+        Long juristeId = utilisateurRepository.findByKeycloakId("kc-juriste-m15").orElseThrow().getId();
+        return creerDossierPourClient(role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_SAISIE"),
+                clientId, juristeId, avocatId, "N4-" + n);
     }
 
     // ---------------------------------------------------------------- Référentiel des agences (N1)
@@ -1942,8 +2106,16 @@ class HabilitationFrontendIntegrationTest {
         return objectMapper.writeValueAsString(valeur);
     }
 
+    /**
+     * Le corps de la réponse, lu en <b>UTF-8</b>.
+     *
+     * <p>{@code getContentAsString()} sans argument décode en ISO-8859-1 quand la réponse ne
+     * déclare pas de jeu de caractères : un motif accentué ressortait alors double-encodé
+     * (« révélée » devenait « rÃ©vÃ©lÃ©e »). Le défaut ne se voyait pas, parce qu'aucun test ne
+     * comparait d'accents - jusqu'à celui du retrait de diligence, dont le motif en porte.
+     */
     private JsonNode lireJson(MvcResult resultat) throws Exception {
-        return objectMapper.readTree(resultat.getResponse().getContentAsString());
+        return objectMapper.readTree(resultat.getResponse().getContentAsString(StandardCharsets.UTF_8));
     }
 
     /** La reference attribuee par le serveur, que le client ne choisit plus (2026-09-29). */

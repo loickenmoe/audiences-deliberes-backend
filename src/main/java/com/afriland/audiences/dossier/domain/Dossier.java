@@ -148,6 +148,17 @@ public class Dossier {
     @Column(name = "sensibilite_motif_rejet")
     private String sensibiliteMotifRejet;
 
+    /**
+     * Motif du retrait de la diligence particulière (métier, 2026-10-06), réservé au DJ et à la DJA.
+     *
+     * <p><b>Distinct de {@link #sensibiliteMotifRejet}.</b> Le rejet refuse une proposition ; le
+     * retrait lève une diligence qui avait été validée, parfois des mois plus tôt. Confondre les deux
+     * ferait dire à la fiche qu'une proposition a été refusée alors qu'elle avait été acceptée.
+     */
+    @Size(max = 255)
+    @Column(name = "sensibilite_motif_retrait")
+    private String sensibiliteMotifRetrait;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

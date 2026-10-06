@@ -42,15 +42,26 @@ public interface DelibereRepository extends JpaRepository<Delibere, Long> {
         Long getTotal();
     }
 
-    /** FR-REP-02 (tableau de bord, M13) : taux de succès recouvrement, toutes périodes confondues. */
+    /**
+     * FR-REP-02 (tableau de bord, M13) : la performance en recouvrement, toutes périodes confondues.
+     *
+     * <p><b>Les trois résultats sont comptés séparément</b> (métier, 2026-10-03, observation 12). Le
+     * décompte ne portait que les favorables et le total ; « perdus » n'est pas
+     * « total moins gagnés », car un délibéré {@code MIXTE} n'est ni l'un ni l'autre - le déduire
+     * aurait compté les affaires partiellement gagnées comme des échecs.
+     */
     @Query("SELECT SUM(CASE WHEN d.resultat = com.afriland.audiences.delibere.domain.ResultatDelibere.FAVORABLE THEN 1L ELSE 0L END) AS favorables, "
+            + "SUM(CASE WHEN d.resultat = com.afriland.audiences.delibere.domain.ResultatDelibere.DEFAVORABLE THEN 1L ELSE 0L END) AS defavorables, "
+            + "SUM(CASE WHEN d.resultat = com.afriland.audiences.delibere.domain.ResultatDelibere.MIXTE THEN 1L ELSE 0L END) AS mixtes, "
             + "COUNT(d) AS total FROM Delibere d "
             + "WHERE d.dossier.categorie = com.afriland.audiences.referentiel.domain.CategorieDossier.RECOUVREMENT "
             + "AND d.resultat IS NOT NULL")
     PerformanceGlobale calculerTauxSuccesRecouvrement();
 
-    /** FR-REP-01 (rapport périodique, M13) : même indicateur, restreint aux délibérés rendus dans la période. */
+    /** FR-REP-01 (rapport périodique, M13) : mêmes indicateurs, restreints aux délibérés rendus dans la période. */
     @Query("SELECT SUM(CASE WHEN d.resultat = com.afriland.audiences.delibere.domain.ResultatDelibere.FAVORABLE THEN 1L ELSE 0L END) AS favorables, "
+            + "SUM(CASE WHEN d.resultat = com.afriland.audiences.delibere.domain.ResultatDelibere.DEFAVORABLE THEN 1L ELSE 0L END) AS defavorables, "
+            + "SUM(CASE WHEN d.resultat = com.afriland.audiences.delibere.domain.ResultatDelibere.MIXTE THEN 1L ELSE 0L END) AS mixtes, "
             + "COUNT(d) AS total FROM Delibere d "
             + "WHERE d.dossier.categorie = com.afriland.audiences.referentiel.domain.CategorieDossier.RECOUVREMENT "
             + "AND d.resultat IS NOT NULL AND d.dateDeliberee BETWEEN :debut AND :fin")
@@ -58,6 +69,12 @@ public interface DelibereRepository extends JpaRepository<Delibere, Long> {
 
     interface PerformanceGlobale {
         Long getFavorables();
+
+        /** Les délibérés défavorables : les litiges <b>perdus</b>, et eux seuls. */
+        Long getDefavorables();
+
+        /** Ni gagnés ni perdus. Les compter à part est la seule façon de ne pas les attribuer. */
+        Long getMixtes();
 
         Long getTotal();
     }

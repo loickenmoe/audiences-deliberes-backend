@@ -46,6 +46,7 @@ public record DossierResponse(
         SeuilOrigine seuilOrigine,
         StatutValidation sensibiliteStatut,
         String sensibiliteMotifRejet,
+        String sensibiliteMotifRetrait,
         List<EtapeProcedureResponse> etapes,
         List<Long> juristesAffectes,
         List<Long> avocatsAffectes,

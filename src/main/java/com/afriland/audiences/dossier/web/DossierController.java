@@ -10,6 +10,8 @@ import com.afriland.audiences.dossier.web.dto.DossierResponse;
 import com.afriland.audiences.dossier.web.dto.HistoriqueActionResponse;
 import com.afriland.audiences.dossier.web.dto.EtapeProcedureResponse;
 import com.afriland.audiences.dossier.web.dto.ModifierAffectationRequest;
+import com.afriland.audiences.dossier.web.dto.ModifierSensibiliteRequest;
+import com.afriland.audiences.dossier.web.dto.ProposerSensibiliteRequest;
 import com.afriland.audiences.dossier.web.dto.ModifierStatutEtapeRequest;
 import com.afriland.audiences.dossier.web.dto.ValiderDerogationRequest;
 import com.afriland.audiences.dossier.web.dto.ValiderSensibiliteRequest;
@@ -156,5 +158,34 @@ public class DossierController {
     public DossierResponse validerSensibilite(@PathVariable Long id,
                                                @Valid @RequestBody ValiderSensibiliteRequest request) {
         return dossierService.validerSensibilite(id, request);
+    }
+
+    /**
+     * Le juriste propose la diligence particulière sur un dossier déjà ouvert (métier, 2026-10-03,
+     * observation 5).
+     *
+     * <p>Même partage des rôles que la dérogation de seuil : {@code ROLE_SAISIE} propose,
+     * {@code ROLE_DJ}/{@code ROLE_DJA} arbitrent - par l'endpoint de validation ci-dessus, qui n'a
+     * pas à savoir si la proposition vient de la création ou d'ici.
+     */
+    @PostMapping("/{id}/sensibilite/proposition")
+    @PreAuthorize("hasRole('SAISIE')")
+    public ResponseEntity<DossierResponse> proposerSensibilite(@PathVariable Long id,
+                                                                @Valid @RequestBody ProposerSensibiliteRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(dossierService.proposerSensibilite(id, request));
+    }
+
+    /**
+     * Le DJ ou la DJA pose ou lève la diligence particulière <b>directement</b>, sans proposition
+     * (métier, 2026-10-03, observation 5 ; les deux sens arrêtés le 2026-10-06).
+     *
+     * <p>{@code PUT} et non {@code POST} : on ne crée pas une demande, on fixe l'état de la
+     * diligence du dossier. Le retrait exige un motif, la pose exige seuil et type de client.
+     */
+    @PutMapping("/{id}/sensibilite")
+    @PreAuthorize("hasAnyRole('DJ', 'DJA')")
+    public DossierResponse modifierSensibilite(@PathVariable Long id,
+                                                @Valid @RequestBody ModifierSensibiliteRequest request) {
+        return dossierService.modifierSensibilite(id, request);
     }
 }

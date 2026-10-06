@@ -33,7 +33,9 @@ public enum TypeActionHistorique {
     /** {@code details} : {@code decision}, {@code auditId}, {@code motif}. */
     DEROGATION_SEUIL_ARBITREE("Décision sur la dérogation de seuil"),
     /** {@code details} : {@code decision}, {@code motifRejet}. */
+    SENSIBILITE_PROPOSEE("Proposition de diligence particulière"),
     SENSIBILITE_ARBITREE("Décision sur la sensibilité du dossier"),
+    SENSIBILITE_RETIREE("Retrait de la diligence particulière"),
 
     // ── Audiences et alarmes ──────────────────────────────────────────────────
     AUDIENCE_PLANIFIEE("Planification d'une audience"),

@@ -50,7 +50,11 @@ class TypeActionHistoriqueTest {
         // AUDIT_EXPORTE et ARCHIVE_TELECHARGEE (Q-113), LETTRE_CONSTITUTION_REDIGEE (Q-115 B2),
         // CLIENT_MODIFIE (PUT /clients), INTERVENANT_MODIFIE (PUT /intervenants),
         // et NON_CLASSEE pour la reprise.
-        assertThat(TypeActionHistorique.values()).hasSize(49);
+        //
+        // + SENSIBILITE_PROPOSEE et SENSIBILITE_RETIREE (N4, 2026-10-06) : la diligence
+        // particulière se révise après l'ouverture, dans les deux sens. `V43` étend
+        // `chk_historique_code` en conséquence — c'est exactement le lien que ce test rappelle.
+        assertThat(TypeActionHistorique.values()).hasSize(51);
         assertThat(TypeActionHistorique.NON_CLASSEE.libelle()).isEqualTo("Action non classée");
     }
 }

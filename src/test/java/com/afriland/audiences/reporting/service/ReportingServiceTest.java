@@ -55,6 +55,8 @@ class ReportingServiceTest {
         when(alerteRepository.countByTypeAndStatut(TypeAlerte.PROROGATION, StatutAlerte.DECLENCHEE)).thenReturn(2L);
         when(delibereRepository.calculerTauxSuccesRecouvrement()).thenReturn(performanceGlobale);
         when(performanceGlobale.getFavorables()).thenReturn(3L);
+        when(performanceGlobale.getDefavorables()).thenReturn(1L);
+        when(performanceGlobale.getMixtes()).thenReturn(0L);
         when(performanceGlobale.getTotal()).thenReturn(4L);
         when(decisionDefinitiveRepository.sommeProvisionsReprises()).thenReturn(500000d);
 
@@ -65,7 +67,41 @@ class ReportingServiceTest {
         assertThat(result.nbDemandesFraisEnAttente()).isEqualTo(3L);
         assertThat(result.nbProrogationsAlerte()).isEqualTo(2L);
         assertThat(result.tauxSuccesRecouvrement()).isEqualTo(0.75d);
+        // Observation 12 : la Direction lisait un taux sans savoir sur combien d'affaires il portait.
+        assertThat(result.nbLitigesGagnes()).isEqualTo(3L);
+        assertThat(result.nbLitigesPerdus()).isEqualTo(1L);
+        assertThat(result.nbLitigesMixtes()).isZero();
         assertThat(result.provisionsReprises()).isEqualTo(500000d);
+    }
+
+    /**
+     * « Perdus » n'est <b>pas</b> « total moins gagnés » (métier, 2026-10-03, observation 12).
+     *
+     * <p>{@code ResultatDelibere} a trois valeurs : un délibéré {@code MIXTE} n'est ni un succès ni
+     * un échec. Le déduire du total aurait compté les affaires partiellement gagnées comme des
+     * pertes, et la Direction aurait lu un chiffre faux sans moyen de s'en apercevoir.
+     */
+    @Test
+    void tableauDeBord_neCompteNiGagneNiPerduUnDelibereMixte() {
+        when(etapeProcedureRepository.countDistinctDossierIdByStatutCycleVieNotIn(anyList())).thenReturn(0L);
+        when(audienceRepository.countByStatut(any())).thenReturn(0L);
+        when(demandeFraisRepository.countByStatutCircuitNotIn(anyList())).thenReturn(0L);
+        when(alerteRepository.countByTypeAndStatut(any(), any())).thenReturn(0L);
+        when(delibereRepository.calculerTauxSuccesRecouvrement()).thenReturn(performanceGlobale);
+        when(performanceGlobale.getFavorables()).thenReturn(4L);
+        when(performanceGlobale.getDefavorables()).thenReturn(2L);
+        when(performanceGlobale.getMixtes()).thenReturn(4L);
+        when(performanceGlobale.getTotal()).thenReturn(10L);
+        when(decisionDefinitiveRepository.sommeProvisionsReprises()).thenReturn(null);
+
+        TableauDeBordResponse result = service.tableauDeBord();
+
+        assertThat(result.nbLitigesGagnes()).isEqualTo(4L);
+        assertThat(result.nbLitigesPerdus()).isEqualTo(2L);
+        assertThat(result.nbLitigesMixtes()).isEqualTo(4L);
+        // Les trois s'additionnent au total : rien n'est perdu de vue, rien n'est attribué d'office.
+        assertThat(result.nbLitigesGagnes() + result.nbLitigesPerdus() + result.nbLitigesMixtes())
+                .isEqualTo(10L);
     }
 
     @Test
@@ -75,7 +111,10 @@ class ReportingServiceTest {
         when(demandeFraisRepository.countByStatutCircuitNotIn(anyList())).thenReturn(0L);
         when(alerteRepository.countByTypeAndStatut(any(), any())).thenReturn(0L);
         when(delibereRepository.calculerTauxSuccesRecouvrement()).thenReturn(performanceGlobale);
+        // `SUM` rend `null` sur un ensemble vide, non zéro : les trois décomptes doivent y survivre.
         when(performanceGlobale.getFavorables()).thenReturn(null);
+        when(performanceGlobale.getDefavorables()).thenReturn(null);
+        when(performanceGlobale.getMixtes()).thenReturn(null);
         when(performanceGlobale.getTotal()).thenReturn(0L);
         when(decisionDefinitiveRepository.sommeProvisionsReprises()).thenReturn(null);
 

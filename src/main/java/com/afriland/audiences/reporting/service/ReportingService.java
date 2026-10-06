@@ -55,7 +55,9 @@ public class ReportingService {
         double provisionsReprises = valeurOuZero(decisionDefinitiveRepository.sommeProvisionsReprises());
 
         return new TableauDeBordResponse(nbDossiersActifs, nbAudiencesPlanifiees, nbDemandesFraisEnAttente,
-                nbProrogationsAlerte, tauxSuccesRecouvrement, provisionsReprises);
+                nbProrogationsAlerte, tauxSuccesRecouvrement,
+                nombreOuZero(performance.getFavorables()), nombreOuZero(performance.getDefavorables()),
+                nombreOuZero(performance.getMixtes()), provisionsReprises);
     }
 
     /**
@@ -86,6 +88,14 @@ public class ReportingService {
             return 0d;
         }
         return (double) (favorables == null ? 0L : favorables) / total;
+    }
+
+    /**
+     * {@code SUM} rend {@code null} sur un ensemble vide, non zéro : une base sans délibéré rendu
+     * ferait échouer l'autoboxing vers {@code long}.
+     */
+    private long nombreOuZero(Long valeur) {
+        return valeur == null ? 0L : valeur;
     }
 
     private double valeurOuZero(Double valeur) {

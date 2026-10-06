@@ -82,6 +82,7 @@ public class DossierMapper {
                 dossier.getSeuilOrigine(),
                 dossier.getSensibiliteStatut(),
                 dossier.getSensibiliteMotifRejet(),
+                dossier.getSensibiliteMotifRetrait(),
                 etapes,
                 juristesAffectes,
                 avocatsAffectes,

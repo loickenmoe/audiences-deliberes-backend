@@ -67,7 +67,7 @@ qu'après une décision d'ajout — traité comme tel dès M4.
   `PUT /deliberes/{id}/resultat` et `GET /deliberes/{id}/prorogations` (Q-78),
   `GET /frais/demandes/{id}` (Q-82), `GET /dossiers/{id}/decisions` (Q-88).
 
-Soit **79 endpoints HTTP exposés au total** : les 71 numérotés, `POST /dossiers/{id}/etapes` et les
+Soit **81 endpoints HTTP exposés au total** : les 73 numérotés, `POST /dossiers/{id}/etapes` et les
 sept ajouts de M16 — décompte des annotations de mapping du code, le 2026-09-11 (le « 66 » inscrit
 ici jusqu'au 2026-09-10 n'avait pas suivi les ajouts non numérotés).
 
@@ -469,6 +469,8 @@ transition automatique d'étape vers `ARCHIVE` (Q-60, reste manuelle via l'endpo
 | 69 | PUT | `/referentiels/agences/{id}` | `ROLE_DJ`, `ROLE_DJA` | RG-REF-01 / observation 2 | 🆕 | ✅ N1 |
 | 70 | DELETE | `/referentiels/agences/{id}` | `ROLE_DJ`, `ROLE_DJA` | RG-REF-01 / observation 2 | 🆕 | ✅ N1 |
 | 71 | PATCH | `/referentiels/agences/{id}/reactivation` | `ROLE_DJ`, `ROLE_DJA` | RG-REF-01 / métier 2026-10-06 | 🆕 | ✅ N1 |
+| 72 | POST | `/dossiers/{id}/sensibilite/proposition` | `ROLE_SAISIE` | RG-DOS-09 / observation 5 | 🆕 | ✅ N4 |
+| 73 | PUT | `/dossiers/{id}/sensibilite` | `ROLE_DJ`, `ROLE_DJA` | RG-DOS-09 / observation 5 | 🆕 | ✅ N4 |
 
 > **#67 à #70 (N1, métier du 2026-10-03, observation 2)** : les deux codes d'agence d'un dossier
 > étaient du **texte libre** de vingt caractères, sans référentiel ni vérification. Sur les 341
@@ -507,6 +509,26 @@ transition automatique d'étape vers `ARCHIVE` (Q-60, reste manuelle via l'endpo
 > authentifié, Keycloak restant la source de vérité des identités (REF-05 §1.3). `keycloakId`
 > **n'est pas exposé** ; comptes actifs seuls par défaut ; `ROLE_CONSULTATION` — porté par les six
 > profils internes mais **pas par `AVOCAT`**, qui ne doit pas énumérer le personnel interne.
+
+
+> **#72 et #73 (N4, métier du 2026-10-03, observation 5)** : `est_sensible` ne se posait qu'**à la
+> création**. `POST /dossiers/{id}/sensibilite/validation` exige une proposition déjà en attente, ce
+> que seule la création produisait : un dossier ouvert comme ordinaire ne pouvait donc plus jamais
+> devenir sensible, alors qu'une affaire se révèle telle en cours de route.
+>
+> **Le partage des rôles est celui de la dérogation de seuil** : `ROLE_SAISIE` propose, DJ et DJA
+> décident. La proposition rejoint le circuit existant - l'arbitrage n'a pas à savoir si elle vient
+> de la création ou d'ici - et **ne produit aucun effet avant la validation** (Q-10).
+>
+> **Le retrait** (arrêté le 2026-10-06) remet le seuil à `GLOBAL` : un seuil dérogatoire n'existe
+> que pour un dossier à diligence particulière, et le laisser en place donnerait au dossier un seuil
+> que rien ne justifie et que `POST /dossiers/{id}/seuil-derogation` refuserait de réviser. Son motif
+> est obligatoire et vit dans sa propre colonne (`V43`), distincte du motif de rejet : le rejet
+> refuse une proposition, le retrait lève une diligence qui avait été acceptée.
+>
+> **`V43` étend aussi `chk_historique_code`**, qui énumère les codes en dur. C'est le piège que V24,
+> V25 et V26 ont documenté : un code ajouté à l'énumération Java sans passer par la migration
+> échoue **à l'écriture seulement**, donc en production, sur la première proposition d'un juriste.
 
 ---
 
