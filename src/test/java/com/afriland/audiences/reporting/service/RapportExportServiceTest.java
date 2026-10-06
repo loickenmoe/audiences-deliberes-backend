@@ -24,8 +24,10 @@ class RapportExportServiceTest {
     @BeforeEach
     void setUp() {
         service = new RapportExportService();
+        // Le taux est encore renvoyé par l'API, mais l'export ne le porte plus (2026-10-06) :
+        // ce sont les trois décomptes qui doivent s'y retrouver.
         rapport = new RapportResponse(TypeRapport.MENSUEL, LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30),
-                4L, 3L, 2L, 1L, 0.75d, 150000d);
+                4L, 3L, 2L, 1L, 0.75d, 3L, 1L, 0L, 150000d);
     }
 
     @Test
@@ -49,7 +51,11 @@ class RapportExportServiceTest {
          */
         assertThat(texte).containsPattern("Nouveaux dossiers\s+4");
         assertThat(texte).containsPattern("Audiences tenues\s+3");
-        assertThat(texte).containsPattern("Taux de succ.s recouvrement\s+75[.,]00 %");
+        assertThat(texte).containsPattern("Litiges gagn.s\s+3");
+        assertThat(texte).containsPattern("Litiges perdus\s+1");
+        assertThat(texte).containsPattern("D.cisions mixtes\s+0");
+        // Des nombres, pas un pourcentage (métier, 2026-10-06) : le taux a quitté l'export.
+        assertThat(texte).doesNotContain("Taux de succ");
         // La marque est sur la page, et la page est numérotée.
         assertThat(texte).contains("Afriland First Bank").contains("Page 1 sur 1");
     }
@@ -82,17 +88,22 @@ class RapportExportServiceTest {
         assertThat(csv).contains("Demandes de frais déposées,2");
         assertThat(csv).contains("Délibérés enregistrés,1");
         assertThat(csv).contains("Provisions reprises,150000.0");
-        assertThat(csv).containsPattern("Taux de succès recouvrement,75[.,]00 %");
+        // Des nombres, pas un pourcentage : le métier lit l'export tel quel.
+        assertThat(csv).contains("Litiges gagnés,3");
+        assertThat(csv).contains("Litiges perdus,1");
+        assertThat(csv).contains("Décisions mixtes,0");
+        assertThat(csv).doesNotContain("Taux de succès");
+        assertThat(csv).doesNotContain("%");
     }
 
     @Test
     void exportCsv_surUnRapportVideResteStructurellementValide() {
         RapportResponse vide = new RapportResponse(TypeRapport.JOURNALIER, LocalDate.now(), LocalDate.now(),
-                0L, 0L, 0L, 0L, 0d, 0d);
+                0L, 0L, 0L, 0L, 0d, 0L, 0L, 0L, 0d);
 
         String csv = new String(service.exportCsv(vide), StandardCharsets.UTF_8);
 
-        assertThat(csv.lines()).hasSize(7); // en-tête + 6 indicateurs
+        assertThat(csv.lines()).hasSize(9); // en-tête + 8 indicateurs
         assertThat(vide.estVide()).isTrue();
     }
 }

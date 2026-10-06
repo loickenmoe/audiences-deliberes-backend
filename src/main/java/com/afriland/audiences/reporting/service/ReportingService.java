@@ -83,7 +83,9 @@ public class ReportingService {
         double provisionsReprises = valeurOuZero(decisionDefinitiveRepository.sommeProvisionsReprisesPeriode(dateDebut, dateFin));
 
         return new RapportResponse(type, dateDebut, dateFin, nbNouveauxDossiers, nbAudiencesTenues,
-                nbDemandesFraisDeposees, nbDeliberesEnregistres, tauxSuccesRecouvrement, provisionsReprises);
+                nbDemandesFraisDeposees, nbDeliberesEnregistres, tauxSuccesRecouvrement,
+                nombreOuZero(performance.getFavorables()), nombreOuZero(performance.getDefavorables()),
+                nombreOuZero(performance.getMixtes()), provisionsReprises);
     }
 
     private double tauxSucces(Long favorables, Long total) {
