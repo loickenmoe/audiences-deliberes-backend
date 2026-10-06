@@ -50,6 +50,7 @@ class ReportingServiceTest {
     @Test
     void tableauDeBord_aggregatesAllMetrics() {
         when(etapeProcedureRepository.countDistinctDossierIdByStatutCycleVieNotIn(anyList())).thenReturn(12L);
+        when(etapeProcedureRepository.countDossiersSansEtapeEnCours(anyList())).thenReturn(5L);
         when(audienceRepository.countByStatut(StatutAudience.PLANIFIEE)).thenReturn(7L);
         when(demandeFraisRepository.countByStatutCircuitNotIn(anyList())).thenReturn(3L);
         when(alerteRepository.countByTypeAndStatut(TypeAlerte.PROROGATION, StatutAlerte.DECLENCHEE)).thenReturn(2L);
@@ -71,6 +72,12 @@ class ReportingServiceTest {
         assertThat(result.nbLitigesGagnes()).isEqualTo(3L);
         assertThat(result.nbLitigesPerdus()).isEqualTo(1L);
         assertThat(result.nbLitigesMixtes()).isZero();
+        /*
+         * « Une affaire est vidée lorsqu'elle est à l'étape clôturée » (métier, 2026-10-06). Un
+         * dossier portant plusieurs étapes, la règle se lit au niveau du dossier : plus aucune
+         * étape en cours. C'est le complément exact des dossiers actifs, affiché à côté.
+         */
+        assertThat(result.nbAffairesVidees()).isEqualTo(5L);
         assertThat(result.provisionsReprises()).isEqualTo(500000d);
     }
 
@@ -84,6 +91,7 @@ class ReportingServiceTest {
     @Test
     void tableauDeBord_neCompteNiGagneNiPerduUnDelibereMixte() {
         when(etapeProcedureRepository.countDistinctDossierIdByStatutCycleVieNotIn(anyList())).thenReturn(0L);
+        when(etapeProcedureRepository.countDossiersSansEtapeEnCours(anyList())).thenReturn(0L);
         when(audienceRepository.countByStatut(any())).thenReturn(0L);
         when(demandeFraisRepository.countByStatutCircuitNotIn(anyList())).thenReturn(0L);
         when(alerteRepository.countByTypeAndStatut(any(), any())).thenReturn(0L);
@@ -107,6 +115,7 @@ class ReportingServiceTest {
     @Test
     void tableauDeBord_defaultsTauxToZeroWhenNoDelibere() {
         when(etapeProcedureRepository.countDistinctDossierIdByStatutCycleVieNotIn(anyList())).thenReturn(0L);
+        when(etapeProcedureRepository.countDossiersSansEtapeEnCours(anyList())).thenReturn(0L);
         when(audienceRepository.countByStatut(any())).thenReturn(0L);
         when(demandeFraisRepository.countByStatutCircuitNotIn(anyList())).thenReturn(0L);
         when(alerteRepository.countByTypeAndStatut(any(), any())).thenReturn(0L);

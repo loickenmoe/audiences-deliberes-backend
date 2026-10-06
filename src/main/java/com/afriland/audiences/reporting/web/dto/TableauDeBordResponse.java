@@ -18,5 +18,13 @@ public record TableauDeBordResponse(
         long nbLitigesGagnes,
         long nbLitigesPerdus,
         long nbLitigesMixtes,
+        /**
+         * Les <b>affaires vidées</b> : les dossiers dont plus aucune étape n'est en cours (métier,
+         * 2026-10-06).
+         *
+         * <p>Complément exact de {@code nbDossiersActifs} : les deux s'additionnent pour faire les
+         * dossiers qui portent au moins une étape.
+         */
+        long nbAffairesVidees,
         double provisionsReprises) {
 }

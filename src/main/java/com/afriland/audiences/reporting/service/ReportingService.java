@@ -47,6 +47,9 @@ public class ReportingService {
     @Transactional(readOnly = true)
     public TableauDeBordResponse tableauDeBord() {
         long nbDossiersActifs = etapeProcedureRepository.countDistinctDossierIdByStatutCycleVieNotIn(ETAPES_FERMEES);
+        // Les affaires vidées : plus aucune étape en cours (métier, 2026-10-06). Le complément
+        // exact du compteur ci-dessus, et la même notion qu'au Q-53.
+        long nbAffairesVidees = etapeProcedureRepository.countDossiersSansEtapeEnCours(ETAPES_FERMEES);
         long nbAudiencesPlanifiees = audienceRepository.countByStatut(StatutAudience.PLANIFIEE);
         long nbDemandesFraisEnAttente = demandeFraisRepository.countByStatutCircuitNotIn(FRAIS_SOLDES);
         long nbProrogationsAlerte = alerteRepository.countByTypeAndStatut(TypeAlerte.PROROGATION, StatutAlerte.DECLENCHEE);
@@ -57,7 +60,7 @@ public class ReportingService {
         return new TableauDeBordResponse(nbDossiersActifs, nbAudiencesPlanifiees, nbDemandesFraisEnAttente,
                 nbProrogationsAlerte, tauxSuccesRecouvrement,
                 nombreOuZero(performance.getFavorables()), nombreOuZero(performance.getDefavorables()),
-                nombreOuZero(performance.getMixtes()), provisionsReprises);
+                nombreOuZero(performance.getMixtes()), nbAffairesVidees, provisionsReprises);
     }
 
     /**
