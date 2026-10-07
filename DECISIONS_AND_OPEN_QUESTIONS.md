@@ -2168,6 +2168,107 @@ sont unifiées.
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
 
+### Q-129 ✅ Deux audiences sans compte rendu remontent à la direction — tranché (2026-10-07)
+
+**La définition, enfin posée.** L'observation 8 demandait une relance « après deux manquements » et
+une demande d'explication du DJ. Deux choses manquaient : ce que « deux fois successivement »
+voulait dire, et qui déclenche. La seconde avait été tranchée le 05/10 - l'alerte va à la direction,
+qui décide. La première l'est le 2026-10-07 : **deux audiences consécutives dont le même avocat n'a
+pas déposé le compte rendu**, à travers tous ses dossiers. Ce sont les manquements de la personne
+qui comptent, pas ceux d'une affaire.
+
+**Ce que la relance ne savait pas faire.** RG-INT-11, livrée le 05/10, raisonne **par audience** :
+elle relance sur chacune, sans jamais voir qu'un même avocat en a manqué deux. Le nouveau comptage
+raisonne **par avocat**. Les deux vivent dans la même classe, et c'est voulu : ils partagent quatre
+règles - le délai, l'audience échue, l'étape fermée, le compte rendu déposé. Séparés, ils
+dériveraient, et la direction serait alertée sur une audience pour laquelle l'avocat n'a jamais été
+relancé.
+
+**Au DJ et à la DJA** (précision du métier, même jour). L'un des deux peut être absent le jour où un
+avocat décroche, et un signalement qui attend un retour de congé n'en est plus un. Les deux profils
+sont lus **tels quels**, jamais par un rôle : `ROLE_JURISTE` est composite (Q-81) et les porterait
+tous les deux, mais aussi tous les juristes - c'est le trou que Q-126 a fermé ailleurs, et il ne se
+rouvre pas ici.
+
+**Seule la série en cours est regardée**, et pour deux raisons. Un avocat qui a manqué deux audiences
+puis s'est remis à rendre compte n'a plus à être signalé : la série est rompue, et nommer un
+comportement corrigé ferait du bruit. Et au premier passage après la mise en service, regarder tout
+l'historique produirait une alerte par série ancienne - une avalanche le matin de la livraison.
+
+**Une alerte par série, pas une par jour.** « Deux audiences sans compte rendu » est un **état** : il
+reste vrai tant que rien n'arrive. Le marqueur porte donc la première audience de la série, non la
+date : une troisième audience manquée allonge la même série et ne réveille personne. Le métier a dit
+« au deuxième manquement », pas « à chaque manquement ».
+
+**V45 étend `chk_alerte_type`.** C'est une contrainte fermée, posée en V1 : une valeur ajoutée côté
+Java sans migration compile, passe les tests qui ne déclenchent pas cette alerte, et **échoue
+seulement en écriture, en production**. Le défaut s'est produit trois fois avec la contrainte jumelle
+des codes d'historique (V24 à V26, puis V43).
+
+**Ce qui reste à faire - le temps 2.** La **demande d'explication** elle-même : un message de la
+direction à l'avocat, sur le modèle de la correspondance, avec sa **réponse suivie** - l'avocat
+répond depuis son espace, la direction voit qui s'est expliqué. Deux arbitrages déjà pris pour ce
+temps-là (2026-10-07) : la réponse **est** suivie, et la relance automatique **se suspend** dès
+qu'une demande part - un responsable qui écrit en personne doit couvrir la machine, pas rivaliser
+avec elle.
+
+**Le plafond de cinq relances reste une hypothèse**, et le code le dit. Il deviendra sans objet
+quand la suspension du temps 2 sera livrée, puisque l'escalade arrivera toujours avant. On le laisse
+en filet, sans en faire un paramètre tant que personne ne demande à le régler.
+
+### Q-128 ✅ Les placeholders explicatifs, et l'astérisque qui ne se voyait pas — tranché (2026-10-07)
+
+**Les textes, et où ils vont.** Observation 4 : des **placeholders explicatifs** sur le formulaire
+de création. Les textes ont été proposés puis validés le 2026-10-07 - mais posés **sous** les champs
+au lieu d'être mis **dedans**. Le métier l'a repris le jour même : « ces messages sont des
+placeholders dans les champs concernés, pas des textes en dessous ». L'observation le disait, je
+l'avais lue comme une aide à la saisie.
+
+**Trois champs étaient déjà servis**, et ce sont eux le modèle : les deux sélecteurs d'agence
+portaient « Code, nom ou ville de l'agence… » depuis N1, et le choix du client son « Choisissez un
+client ». Restaient **dix** champs libres, qui portent désormais le leur.
+
+**Les textes ont été raccourcis en changeant de place.** Une phrase qui tient sous un champ ne tient
+pas dedans : « L'agence d'où vient le dossier. Cherchez par code ou par nom ; la ville et l'adresse
+distinguent les agences homonymes » est devenue superflue, le sélecteur disant déjà quoi taper.
+**Un placeholder disparaît dès qu'on écrit** : c'est le revers de la forme demandée, et il vaut
+pour les quatre références de pièces, dont le texte rappelle la règle que l'on inverse le plus
+souvent. Chacun redit une
+règle déjà posée plutôt que d'en inventer une : la référence du client est attribuée par le système
+(arbitrage du 29/09), plusieurs demandeurs sont possibles (observations 1 et 3), l'agence vient du
+référentiel (observation 2), et les quatre références de pièces sont **facultatives** - c'est la
+pièce jointe qui est exigée (arbitrage du 29/09).
+
+**Trois d'entre eux étaient des suppositions**, signalées comme telles avant validation : risque
+encouru, recours exercés, motif de renvoi. Aucune règle ne les définissait. Le métier les a retenus ;
+ils sont donc désormais la règle, et non plus mon hypothèse.
+
+**La répétition des trois références est voulue.** Elles disent toutes « Référence facultative :
+c'est le fichier qui est exigé », parce que c'est exactement la règle que les utilisateurs
+inversent. La redite est ici une sécurité.
+
+**Un défaut trouvé en posant les textes : l'astérisque du sélecteur cherchable.** Le métier l'a vue
+noire sur « Agence d'origine » là où tous les autres champs la portent en rouge. Elle avait en
+réalité **deux** défauts, et le second ne se voyait pas :
+
+- elle n'avait pas la classe `text-danger`, donc héritait la couleur du libellé ;
+- elle vivait **à l'intérieur du `<label>`**, ce que `Champ` évite explicitement depuis toujours. Le
+  nom accessible du champ valait « Agence d'origine * » et non « Agence d'origine » : une recherche
+  par libellé exact ne le trouvait pas. Deux parcours y échappaient en employant une expression
+  régulière - un contournement, non une solution.
+
+Les deux sont corrigés, et trois tests les tiennent : couleur, absence quand le champ est
+facultatif, et nom accessible réduit au libellé seul.
+
+**Le changement est entièrement frontend** ; il est consigné ici parce que c’est ce journal qui porte la suite continue des décisions métier.
+
+**`ListeParties` a reçu la propriété manquante** : ses champs ne portaient aucun placeholder, et
+chaque partie ajoutée porte désormais le même.
+
+**Le rattachement de `Champ` reste**, bien qu'il ait été découvert par un chemin abandonné : il sert
+les messages d'**erreur** des 128 champs, et les aides qui subsistent ailleurs - l'accueil et le
+formulaire des agences. Seul l'usage sur le formulaire de création a disparu.
+
 ### Q-127 ✅ Le message court de la constitution, dicté par la Direction Juridique — tranché (2026-10-07)
 
 **Le texte.** Le SMS et le message WhatsApp envoyés au prestataire à la validation d'une constitution

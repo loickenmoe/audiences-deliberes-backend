@@ -5,10 +5,15 @@ import com.afriland.audiences.audience.domain.StatutAudience;
 import com.afriland.audiences.audience.repository.AudienceRepository;
 import com.afriland.audiences.dossier.domain.DossierAvocat;
 import com.afriland.audiences.dossier.repository.DossierAvocatRepository;
+import com.afriland.audiences.alerte.domain.TypeAlerte;
+import com.afriland.audiences.alerte.service.AlerteService;
 import com.afriland.audiences.notification.domain.EvenementPrestataire;
 import com.afriland.audiences.notification.service.NotificationPrestataireService;
 import com.afriland.audiences.publication.domain.StatutPublication;
 import com.afriland.audiences.publication.repository.CompteRenduAudienceRepository;
+import com.afriland.audiences.referentiel.domain.Avocat;
+import com.afriland.audiences.referentiel.domain.Utilisateur;
+import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
 import com.afriland.audiences.referentiel.service.ConfigurationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,7 +23,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -53,6 +62,18 @@ public class CompteRenduAttenduScheduler {
     private static final String CLE_DELAI = "DELAI_RAPPEL_CR_AVOCAT";
 
     /**
+     * Les profils avertis d'un manquement repete : le Directeur Juridique et son adjointe.
+     *
+     * <p>Lus tels quels, et <b>jamais par un role</b> : {@code ROLE_JURISTE} est composite (Q-81) et
+     * couvrirait les deux, mais aussi tous les juristes. C'est le trou que Q-126 a ferme ailleurs,
+     * et il ne se rouvre pas ici.
+     */
+    private static final List<String> PROFILS_AVERTIS = List.of("DJ", "DJA");
+
+    /** Deux audiences de suite sans compte rendu : c'est le seuil arrete par le metier. */
+    private static final int MANQUEMENTS_AVANT_ALERTE = 2;
+
+    /**
      * Nombre de relances au-delà duquel on cesse.
      *
      * <p>Une relance qui ne s'arrête jamais n'est plus une relance : sans borne, un avocat serait
@@ -75,6 +96,8 @@ public class CompteRenduAttenduScheduler {
     private final DossierAvocatRepository dossierAvocatRepository;
     private final NotificationPrestataireService notificationPrestataireService;
     private final ConfigurationService configurationService;
+    private final UtilisateurRepository utilisateurRepository;
+    private final AlerteService alerteService;
 
     @Scheduled(cron = "${publication.relance-compte-rendu.cron:0 30 6 * * *}")
     @Transactional
@@ -127,6 +150,123 @@ public class CompteRenduAttenduScheduler {
                     affectation.getAvocat(),
                     dossierId,
                     "cr-attendu-" + audience.getId() + "-relance-" + rang);
+        }
+    }
+
+
+    /**
+     * N7 : deux audiences consecutives sans compte rendu remontent au Directeur Juridique
+     * (observation 8, definition arretee le 2026-10-07).
+     *
+     * <p><b>Ce que compte cette methode, et que l'autre ne comptait pas.</b> La relance raisonne
+     * <b>par audience</b> : elle ne sait pas qu'un meme avocat en a manque deux. Celle-ci raisonne
+     * <b>par avocat</b>, a travers tous ses dossiers - c'est la lecture que le metier a retenue :
+     * ce sont les manquements de la personne qui comptent, pas ceux d'une affaire.
+     *
+     * <p><b>Seule la serie en cours est regardee.</b> On prend les audiences echues de l'avocat dans
+     * l'ordre des dates et on remonte depuis la fin tant que le compte rendu manque. Deux raisons :
+     * un avocat qui a manque deux audiences puis s'est remis a rendre compte n'a plus a etre
+     * signale - la serie est rompue, et nommer un comportement corrige ferait du bruit ; et au
+     * premier passage apres la mise en service, regarder tout l'historique produirait une alerte
+     * par serie ancienne, c'est-a-dire une avalanche le matin de la livraison.
+     *
+     * <p><b>Une alerte par serie, pas une par jour.</b> « Deux audiences sans compte rendu » est un
+     * <b>etat</b> : il reste vrai tant que rien n'arrive. Le marqueur porte donc la premiere
+     * audience de la serie, et non la date : la troisieme audience manquee allonge la meme serie et
+     * ne reveille personne. Le metier a dit « au deuxieme manquement », pas « a chaque manquement ».
+     *
+     * <p>L'application constate ; <b>c'est la direction qui decide</b> d'envoyer une demande
+     * d'explication. L'alerte va au Directeur Juridique <b>et a son adjointe</b> : l'un des deux
+     * peut etre absent le jour ou un avocat decroche, et un signalement qui attend un retour de
+     * conge n'en est plus un.
+     */
+    @Scheduled(cron = "${publication.manquement-compte-rendu.cron:0 45 6 * * *}")
+    @Transactional
+    public void signalerManquementsRepetes() {
+        int delai = delaiEnJours();
+        if (delai <= 0) {
+            return;
+        }
+        List<Utilisateur> directeurs = PROFILS_AVERTIS.stream()
+                .map(utilisateurRepository::findByProfilCodeAndActifTrue)
+                .flatMap(List::stream)
+                .toList();
+        if (directeurs.isEmpty()) {
+            // Personne a prevenir : ce n'est pas une anomalie du planificateur, mais cela se dit.
+            log.info("Manquements de comptes rendus non signales : ni Directeur Juridique ni adjointe actifs");
+            return;
+        }
+
+        for (Map.Entry<Avocat, List<Audience>> entree : audiencesEchuesParAvocat(delai).entrySet()) {
+            List<Audience> serie = serieDeManquementsEnCours(entree.getValue());
+            if (serie.size() < MANQUEMENTS_AVANT_ALERTE) {
+                continue;
+            }
+            signaler(entree.getKey(), serie, directeurs);
+        }
+    }
+
+    /**
+     * Les audiences dont le delai de depot est ecoule, rangees par avocat et par date.
+     *
+     * <p>« Echue » a ici le <b>meme sens</b> que pour la relance : le delai passe, l'audience non
+     * annulee, l'etape encore ouverte. Un autre seuil ferait signaler au DJ une audience pour
+     * laquelle l'avocat n'a jamais ete relance.
+     */
+    private Map<Avocat, List<Audience>> audiencesEchuesParAvocat(int delai) {
+        LocalDate limite = LocalDate.now().minusDays(delai);
+        List<Audience> echues = audienceRepository
+                .findByDatePlanifieeBeforeAndStatutNot(LocalDate.now(), StatutAudience.ANNULEE)
+                .stream()
+                .filter(audience -> !audience.getDatePlanifiee().isAfter(limite))
+                .filter(audience -> audience.getEtape() == null
+                        || audience.getEtape().getStatutCycleVie() == null
+                        || !audience.getEtape().getStatutCycleVie().estFerme())
+                .sorted(Comparator.comparing(Audience::getDatePlanifiee).thenComparing(Audience::getId))
+                .toList();
+
+        Map<Avocat, List<Audience>> parAvocat = new LinkedHashMap<>();
+        for (Audience audience : echues) {
+            for (DossierAvocat affectation : dossierAvocatRepository
+                    .findByDossierId(audience.getDossier().getId())) {
+                parAvocat.computeIfAbsent(affectation.getAvocat(), avocat -> new ArrayList<>())
+                        .add(audience);
+            }
+        }
+        return parAvocat;
+    }
+
+    /** La suite de manquements qui termine la liste : vide des que le dernier compte rendu existe. */
+    private List<Audience> serieDeManquementsEnCours(List<Audience> audiences) {
+        List<Audience> serie = new ArrayList<>();
+        for (int rang = audiences.size() - 1; rang >= 0; rang--) {
+            Audience audience = audiences.get(rang);
+            if (compteRenduAudienceRepository.existsByAudienceIdAndStatutValidationIn(
+                    audience.getId(), DEPOSE_OU_VALIDE)) {
+                break;
+            }
+            serie.add(0, audience);
+        }
+        return serie;
+    }
+
+    private void signaler(Avocat avocat, List<Audience> serie, List<Utilisateur> directeurs) {
+        // Le marqueur porte la **premiere** audience de la serie : une serie qui s'allonge reste
+        // la meme, et n'alerte qu'une fois.
+        String marqueur = "[avocat:" + avocat.getId() + ";serie:" + serie.get(0).getId() + "] ";
+        Audience derniere = serie.get(serie.size() - 1);
+        String declencheur = marqueur + "L'avocat " + avocat.getNom() + " n'a pas depose le compte "
+                + "rendu de " + serie.size() + " audiences consecutives, la derniere du "
+                + derniere.getDatePlanifiee() + " sur le dossier "
+                + derniere.getDossier().getReference() + " (observation 8).";
+
+        for (Utilisateur directeur : directeurs) {
+            if (alerteService.aDejaEteDeclenchee(TypeAlerte.MANQUEMENT_COMPTE_RENDU,
+                    directeur.getId(), marqueur)) {
+                continue;
+            }
+            alerteService.declencher(TypeAlerte.MANQUEMENT_COMPTE_RENDU,
+                    derniere.getDossier().getId(), directeur, declencheur);
         }
     }
 

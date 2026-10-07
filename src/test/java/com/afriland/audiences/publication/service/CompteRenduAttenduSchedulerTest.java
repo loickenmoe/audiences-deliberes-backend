@@ -12,8 +12,12 @@ import com.afriland.audiences.notification.domain.EvenementPrestataire;
 import com.afriland.audiences.notification.service.NotificationPrestataireService;
 import com.afriland.audiences.publication.domain.StatutPublication;
 import com.afriland.audiences.publication.repository.CompteRenduAudienceRepository;
+import com.afriland.audiences.alerte.domain.TypeAlerte;
+import com.afriland.audiences.alerte.service.AlerteService;
 import com.afriland.audiences.referentiel.domain.ConfigurationSysteme;
 import com.afriland.audiences.referentiel.domain.Avocat;
+import com.afriland.audiences.referentiel.domain.Utilisateur;
+import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
 import com.afriland.audiences.referentiel.service.ConfigurationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -63,6 +67,10 @@ class CompteRenduAttenduSchedulerTest {
     private NotificationPrestataireService notificationPrestataireService;
     @Mock
     private ConfigurationService configurationService;
+    @Mock
+    private UtilisateurRepository utilisateurRepository;
+    @Mock
+    private AlerteService alerteService;
 
     @InjectMocks
     private CompteRenduAttenduScheduler scheduler;
@@ -266,5 +274,155 @@ class CompteRenduAttenduSchedulerTest {
                 .notifier(any(), any(), anyLong(), eq("cr-attendu-43-relance-1"));
         verify(notificationPrestataireService, never())
                 .notifier(any(), any(), anyLong(), eq("cr-attendu-42-relance-1"));
+    }
+
+    // ── N7 : deux audiences consecutives sans compte rendu remontent au DJ ────
+
+    private static final long AUTRE_AUDIENCE_ID = 43L;
+
+    private Utilisateur directeur;
+    private Utilisateur adjointe;
+
+    /** Une audience passee de {@code jours}, avec son propre identifiant. */
+    private Audience audiencePassee(long identifiant, long jours) {
+        Dossier dossier = Dossier.builder().id(DOSSIER_ID).reference("DOS-2026-0001").build();
+        EtapeProcedure etape = EtapeProcedure.builder().id(1L).statutCycleVie(StatutCycleVie.EN_COURS).build();
+        return Audience.builder()
+                .id(identifiant)
+                .dossier(dossier)
+                .etape(etape)
+                .statut(StatutAudience.TENUE)
+                .datePlanifiee(LocalDate.now().minusDays(jours))
+                .build();
+    }
+
+    /**
+     * La direction au complet : le Directeur Juridique et son adjointe.
+     *
+     * <p>Les deux sont avertis (metier, 2026-10-07) : l'un des deux peut etre absent le jour ou un
+     * avocat decroche, et un signalement qui attend un retour de conge n'en est plus un.
+     */
+    private void laDirectionJuridique() {
+        directeur = Utilisateur.builder().id(500L).nom("Dir").prenom("Juridique").build();
+        adjointe = Utilisateur.builder().id(501L).nom("Adjointe").prenom("Dir").build();
+        lenient().when(utilisateurRepository.findByProfilCodeAndActifTrue("DJ"))
+                .thenReturn(List.of(directeur));
+        lenient().when(utilisateurRepository.findByProfilCodeAndActifTrue("DJA"))
+                .thenReturn(List.of(adjointe));
+    }
+
+    private void compteRenduDepose(long audienceId, boolean depose) {
+        lenient().when(compteRenduAudienceRepository.existsByAudienceIdAndStatutValidationIn(
+                eq(audienceId), any())).thenReturn(depose);
+    }
+
+    @Test
+    void manquement_deuxAudiencesDeSuiteSansCompteRendu_alerteLeDirecteur() {
+        laDirectionJuridique();
+        lesAudiencesPassees(audiencePassee(AUDIENCE_ID, 10), audiencePassee(AUTRE_AUDIENCE_ID, 5));
+        compteRenduDepose(AUDIENCE_ID, false);
+        compteRenduDepose(AUTRE_AUDIENCE_ID, false);
+
+        scheduler.signalerManquementsRepetes();
+
+        ArgumentCaptor<String> declencheur = ArgumentCaptor.forClass(String.class);
+        verify(alerteService).declencher(eq(TypeAlerte.MANQUEMENT_COMPTE_RENDU), eq(DOSSIER_ID),
+                eq(directeur), declencheur.capture());
+        // L'adjointe est avertie aussi : l'absence de l'un ne doit pas retarder le signalement.
+        verify(alerteService).declencher(eq(TypeAlerte.MANQUEMENT_COMPTE_RENDU), eq(DOSSIER_ID),
+                eq(adjointe), anyString());
+        // Le marqueur porte la **premiere** audience de la serie : c'est lui qui evite le doublon.
+        assertThat(declencheur.getValue()).startsWith("[avocat:99;serie:42] ")
+                .contains("Cabinet TAMO").contains("2 audiences");
+    }
+
+    /**
+     * Une seule audience manquee ne remonte pas.
+     *
+     * <p>C'est la relance ordinaire qui s'en charge (RG-INT-11). Le metier a dit « au deuxieme
+     * manquement » : deranger le DJ au premier banaliserait l'alerte.
+     */
+    @Test
+    void manquement_uneSeuleAudience_neRemontePas() {
+        laDirectionJuridique();
+        lesAudiencesPassees(audiencePassee(AUDIENCE_ID, 5));
+        compteRenduDepose(AUDIENCE_ID, false);
+
+        scheduler.signalerManquementsRepetes();
+
+        verify(alerteService, never()).declencher(any(), anyLong(), any(), anyString());
+    }
+
+    /**
+     * Une serie rompue par un depot ne remonte pas.
+     *
+     * <p>L'avocat a manque la plus ancienne et rendu compte de la plus recente : il s'est remis en
+     * regle, et nommer un comportement corrige ferait du bruit.
+     */
+    @Test
+    void manquement_serieRompueParUnDepot_neRemontePas() {
+        laDirectionJuridique();
+        lesAudiencesPassees(audiencePassee(AUDIENCE_ID, 10), audiencePassee(AUTRE_AUDIENCE_ID, 5));
+        compteRenduDepose(AUDIENCE_ID, false);
+        compteRenduDepose(AUTRE_AUDIENCE_ID, true);
+
+        scheduler.signalerManquementsRepetes();
+
+        verify(alerteService, never()).declencher(any(), anyLong(), any(), anyString());
+    }
+
+    /**
+     * Une serie deja signalee ne reveille personne.
+     *
+     * <p>« Deux audiences sans compte rendu » est un **etat** : sans cette garde, le DJ recevrait
+     * la meme alerte chaque matin jusqu'au depot.
+     */
+    @Test
+    void manquement_serieDejaSignalee_neRemontePasDeuxFois() {
+        laDirectionJuridique();
+        lesAudiencesPassees(audiencePassee(AUDIENCE_ID, 10), audiencePassee(AUTRE_AUDIENCE_ID, 5));
+        compteRenduDepose(AUDIENCE_ID, false);
+        compteRenduDepose(AUTRE_AUDIENCE_ID, false);
+        // Deja signale a l'un comme a l'autre.
+        when(alerteService.aDejaEteDeclenchee(eq(TypeAlerte.MANQUEMENT_COMPTE_RENDU), anyLong(),
+                anyString())).thenReturn(true);
+
+        scheduler.signalerManquementsRepetes();
+
+        verify(alerteService, never()).declencher(any(), anyLong(), any(), anyString());
+    }
+
+    /**
+     * L'adjointe seule suffit : le signalement part meme sans Directeur Juridique actif.
+     *
+     * <p>C'est le but de l'ouvrir aux deux. Si la liste du DJ decidait du depart, l'adjointe ne
+     * serait qu'un destinataire de plus, et non un relais.
+     */
+    @Test
+    void manquement_sansDirecteurMaisAvecAdjointe_remonteQuandMeme() {
+        adjointe = Utilisateur.builder().id(501L).nom("Adjointe").prenom("Dir").build();
+        when(utilisateurRepository.findByProfilCodeAndActifTrue("DJ")).thenReturn(List.of());
+        when(utilisateurRepository.findByProfilCodeAndActifTrue("DJA")).thenReturn(List.of(adjointe));
+        lesAudiencesPassees(audiencePassee(AUDIENCE_ID, 10), audiencePassee(AUTRE_AUDIENCE_ID, 5));
+        compteRenduDepose(AUDIENCE_ID, false);
+        compteRenduDepose(AUTRE_AUDIENCE_ID, false);
+
+        scheduler.signalerManquementsRepetes();
+
+        verify(alerteService).declencher(eq(TypeAlerte.MANQUEMENT_COMPTE_RENDU), eq(DOSSIER_ID),
+                eq(adjointe), anyString());
+    }
+
+    /** Sans personne a la direction, le traitement se tait au lieu de tomber. */
+    @Test
+    void manquement_aucunDestinataireActif_neTombePas() {
+        when(utilisateurRepository.findByProfilCodeAndActifTrue("DJ")).thenReturn(List.of());
+        when(utilisateurRepository.findByProfilCodeAndActifTrue("DJA")).thenReturn(List.of());
+
+        scheduler.signalerManquementsRepetes();
+
+        verify(alerteService, never()).declencher(any(), anyLong(), any(), anyString());
+        // Et il ne lit meme pas les audiences : personne a prevenir, rien a calculer.
+        verify(audienceRepository, never()).findByDatePlanifieeBeforeAndStatutNot(any(), any());
     }
 }

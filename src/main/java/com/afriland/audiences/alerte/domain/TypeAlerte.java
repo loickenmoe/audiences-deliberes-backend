@@ -22,5 +22,14 @@ public enum TypeAlerte {
     CONSTITUTION_A_SIGNER,
     CHARGE_MAX_AVOCAT,
     DELIBERE_ATTENDU,
-    DOSSIER_INCOMPLET
+    DOSSIER_INCOMPLET,
+    /**
+     * Deux audiences consecutives sans compte rendu, pour un meme avocat (N7, metier du 2026-10-07).
+     *
+     * <p>Elle va au <b>Directeur Juridique</b>, et a lui seul : c'est lui qui decide d'envoyer une
+     * demande d'explication. L'application constate un manquement, elle ne le sanctionne pas.
+     *
+     * <p>Toute valeur ajoutee ici exige une migration de {@code chk_alerte_type} - voir V45.
+     */
+    MANQUEMENT_COMPTE_RENDU
 }
