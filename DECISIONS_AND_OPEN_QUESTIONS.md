@@ -2168,6 +2168,35 @@ sont unifiées.
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
 
+### Q-127 ✅ Le message court de la constitution, dicté par la Direction Juridique — tranché (2026-10-07)
+
+**Le texte.** Le SMS et le message WhatsApp envoyés au prestataire à la validation d'une constitution
+disaient : « Afriland First Bank, Direction Juridique : Constitution validée. Détails par courriel ou
+auprès de la Direction Juridique. » La Direction Juridique les a réécrits :
+
+> Afriland First Bank, Direction Juridique : Vous avez été notifié(e) d'une lettre de constitution.
+> Veuillez consulter votre boîte mail.
+
+**Ce message-là, et lui seul.** Treize autres événements empruntaient le même gabarit - frais
+rejetés, paiement effectué, rappel d'audience, compte rendu attendu... La Direction Juridique n'a
+relu qu'un texte ; emporter les autres au passage aurait changé, **sous le nom de la banque**, des
+formulations que personne n'a validées. Chaque événement peut donc porter sa **propre phrase courte**
+(`prestataire.X.minimal`), et ceux qui n'en ont pas retombent sur le défaut, inchangé.
+
+**Le niveau minimal reste ce qu'il est** (D18) : 160 caractères au plus, **ni référence de dossier ni
+lien**. Un SMS se lit sur un écran verrouillé, par-dessus l'épaule de son destinataire. Le nouveau
+texte en fait 134 et ne nomme aucun dossier - il dit moins que l'ancien, qui annonçait que la
+constitution était *validée*.
+
+**Deux tests le tiennent, au mot près.** Un texte dicté par le métier n'est pas une formulation du
+projet : c'est une parole qu'on nous a confiée, et qui part sous le nom de la banque. Un test de
+forme générale aurait laissé passer une reformulation involontaire. Un second test vérifie l'autre
+moitié - que les treize autres messages n'ont pas bougé.
+
+**Le garde-fou des textes orphelins a été étendu, non relâché.** Il tenait deux choses : aucun
+événement sans texte, aucun texte que personne ne lit. Les deux restent vraies ; une phrase courte
+est facultative, mais doit porter le nom d'un événement connu.
+
 ### Q-126 ✅ La lettre appartient à son demandeur ; seul le SH y passe après lui — tranché (2026-10-07)
 
 **Le trou que cette décision ferme.** Le droit d'écrire sur une lettre de constitution tenait au
@@ -2229,12 +2258,12 @@ d'exemplaires que de courriers.
 hauteur des deux côtés, remplie ou non. Sans cela, le nom de celui qui n'a rien déposé remonterait
 et la lettre paraîtrait bancale - alors que ne rien avoir déposé est un cas normal, pas un défaut.
 
-**⚠ Un point reste à arbitrer : qui occupe la gauche quand le SH a corrigé la lettre.** Depuis
-Q-124 il peut récrire avant de signer, et `redige_par` désigne alors **lui**. Le prendre tel quel le
-mettrait des **deux** côtés de la lettre, ce qui ne dit plus rien. En attendant l'arbitrage, la
-gauche revient au **juriste qui a sollicité la constitution** (`demande.demandeur`) : c'est à lui que
-la lettre revient, et la correction du SH reste tracée à l'écran et dans l'historique. **Ce repli
-est une hypothèse de ma part, pas une règle du métier** - à confirmer ou à corriger.
+**Qui occupe la gauche quand le SH a corrigé la lettre — tranché le 2026-10-07.** Depuis Q-124 il
+peut récrire avant de signer, et `redige_par` désigne alors **lui** : le prendre tel quel le mettrait
+des **deux** côtés de la lettre, ce qui ne dirait plus rien. La gauche revient donc au **juriste qui
+a sollicité la constitution** (`demande.demandeur`) - c'est à lui que la lettre revient, et la
+correction du SH reste tracée à l'écran et dans l'historique. Proposé comme repli, **confirmé par le
+métier** : c'est la règle.
 
 ### Q-124 ✅ Le SH corrige la lettre, et sa signature s'y appose — tranché (2026-10-06)
 

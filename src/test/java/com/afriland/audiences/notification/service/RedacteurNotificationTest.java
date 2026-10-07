@@ -90,8 +90,29 @@ class RedacteurNotificationTest {
             attendues.add("prestataire." + evenement.name() + ".titre");
             attendues.add("prestataire." + evenement.name() + ".phrase");
         }
+        /*
+         * La phrase courte (SMS, WhatsApp) est **facultative** : sans elle, l'événement retombe sur
+         * le défaut commun. La Direction Juridique rédige ces textes un par un - celui de la
+         * constitution le 2026-10-07 - et rien n'oblige les autres à suivre.
+         *
+         * Elle doit en revanche porter le nom d'un événement **connu** : une phrase courte posée
+         * sur un nom inexistant ne serait lue par personne, et c'est exactement ce que ce test
+         * existe pour empêcher.
+         */
+        Set<String> courtesAdmises = new HashSet<>();
+        for (TypeAlerte type : TypeAlerte.values()) {
+            courtesAdmises.add("interne." + type.name() + ".minimal");
+        }
+        for (EvenementPrestataire evenement : EvenementPrestataire.values()) {
+            courtesAdmises.add("prestataire." + evenement.name() + ".minimal");
+        }
+
         Set<String> presentes = new HashSet<>(textes.stringPropertyNames());
         presentes.removeIf(cle -> cle.startsWith("commun."));
+        Set<String> courtes = new HashSet<>(presentes);
+        courtes.removeIf(cle -> !cle.endsWith(".minimal"));
+        assertThat(courtesAdmises).as("phrase courte sur un événement inconnu").containsAll(courtes);
+        presentes.removeAll(courtes);
 
         assertThat(presentes).containsExactlyInAnyOrderElementsOf(attendues);
     }
@@ -156,6 +177,39 @@ class RedacteurNotificationTest {
             assertThat(contenu.corps()).doesNotContain(REFERENCE, "http", "<").hasSizeLessThanOrEqualTo(160)
                     .startsWith("Afriland First Bank, Direction Juridique : ");
         }
+    }
+
+    /**
+     * Le texte de la constitution, <b>au mot près</b> (Direction Juridique, 2026-10-07).
+     *
+     * <p>Ce n'est pas une formulation du projet : c'est une parole qu'on nous a confiée, et qui part
+     * sous le nom de la banque. Un test de forme générale laisserait passer une reformulation
+     * involontaire - celui-ci ne le permet pas.
+     */
+    @Test
+    void le_message_court_de_la_constitution_est_celui_dicte_par_la_direction_juridique() {
+        ContenuNotification contenu = redacteur.pourPrestataire(
+                EvenementPrestataire.CONSTITUTION_VALIDEE, SMS, new Contexte(REFERENCE, LIEN));
+
+        assertThat(contenu.corps()).isEqualTo("Afriland First Bank, Direction Juridique : "
+                + "Vous avez été notifié(e) d'une lettre de constitution. "
+                + "Veuillez consulter votre boîte mail.");
+    }
+
+    /**
+     * Et les autres événements n'ont pas bougé.
+     *
+     * <p>La Direction Juridique a réécrit <b>un</b> message. Les treize autres gardent le leur : les
+     * emporter au passage changerait, sous le nom de la banque, des textes que personne n'a relus.
+     */
+    @Test
+    void les_autres_messages_courts_gardent_leur_formulation() {
+        ContenuNotification contenu = redacteur.pourPrestataire(
+                EvenementPrestataire.FRAIS_REJETES, SMS, new Contexte(REFERENCE, LIEN));
+
+        assertThat(contenu.corps()).isEqualTo("Afriland First Bank, Direction Juridique : "
+                + "Demande de frais rejetée. "
+                + "Détails par courriel ou auprès de la Direction Juridique.");
     }
 
     @Test

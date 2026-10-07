@@ -242,7 +242,12 @@ Livrée, en attente du commit de l'utilisateur. Backend seulement ; aucun appela
   - Niveau **complet** (Outlook et Teams) : phrase, dossier, lien et pied de message.
   - Niveau **modéré** (courriel personnel) : salutation, phrase et dossier, puis le lien de l'espace
     avocat, ou à défaut une invitation à contacter la Direction Juridique.
-  - Niveau **minimal** (SMS et WhatsApp) : titre seul, 160 caractères au plus, sans référence ni lien.
+  - Niveau **minimal** (SMS et WhatsApp) : 160 caractères au plus, sans référence ni lien. Par
+    défaut le titre de l'événement suivi de « Détails par courriel ou auprès de la Direction
+    Juridique. ». Un événement peut porter sa **propre phrase courte**
+    (`prestataire.X.minimal`) : la Direction Juridique rédige ces textes un par un, et celui de
+    la constitution a été dicté le 2026-10-07 - « Vous avez été notifié(e) d'une lettre de
+    constitution. Veuillez consulter votre boîte mail. ». Les autres gardent le défaut.
   - Les courriels partent en HTML échappé, Teams, SMS et WhatsApp en texte brut. L'objet est
     `[Audiences et délibérés] <titre> - <référence>`.
 - `LiensApplication` : `NOTIFICATION_LIEN_APPLICATION` (par défaut `http://localhost:3000`),
