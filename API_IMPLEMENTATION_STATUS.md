@@ -67,7 +67,7 @@ qu'après une décision d'ajout — traité comme tel dès M4.
   `PUT /deliberes/{id}/resultat` et `GET /deliberes/{id}/prorogations` (Q-78),
   `GET /frais/demandes/{id}` (Q-82), `GET /dossiers/{id}/decisions` (Q-88).
 
-Soit **81 endpoints HTTP exposés au total** : les 73 numérotés, `POST /dossiers/{id}/etapes` et les
+Soit **85 endpoints HTTP exposés au total** : les 77 numérotés, `POST /dossiers/{id}/etapes` et les
 sept ajouts de M16 — décompte des annotations de mapping du code, le 2026-09-11 (le « 66 » inscrit
 ici jusqu'au 2026-09-10 n'avait pas suivi les ajouts non numérotés).
 
@@ -471,6 +471,10 @@ transition automatique d'étape vers `ARCHIVE` (Q-60, reste manuelle via l'endpo
 | 71 | PATCH | `/referentiels/agences/{id}/reactivation` | `ROLE_DJ`, `ROLE_DJA` | RG-REF-01 / métier 2026-10-06 | 🆕 | ✅ N1 |
 | 72 | POST | `/dossiers/{id}/sensibilite/proposition` | `ROLE_SAISIE` | RG-DOS-09 / observation 5 | 🆕 | ✅ N4 |
 | 73 | PUT | `/dossiers/{id}/sensibilite` | `ROLE_DJ`, `ROLE_DJA` | RG-DOS-09 / observation 5 | 🆕 | ✅ N4 |
+| 74 | GET | `/utilisateurs/moi/signature` | authentifié | RG-SIG-01 / observation 10 | 🆕 | ✅ N8 |
+| 75 | GET | `/utilisateurs/moi/signature/image` | authentifié | RG-SIG-01 / observation 10 | 🆕 | ✅ N8 |
+| 76 | PUT | `/utilisateurs/moi/signature` | authentifié | RG-SIG-01 / observation 10 | 🆕 | ✅ N8 |
+| 77 | DELETE | `/utilisateurs/moi/signature` | authentifié | RG-SIG-01 / observation 10 | 🆕 | ✅ N8 |
 
 > **#67 à #70 (N1, métier du 2026-10-03, observation 2)** : les deux codes d'agence d'un dossier
 > étaient du **texte libre** de vingt caractères, sans référentiel ni vérification. Sur les 341
@@ -529,6 +533,30 @@ transition automatique d'étape vers `ARCHIVE` (Q-60, reste manuelle via l'endpo
 > **`V43` étend aussi `chk_historique_code`**, qui énumère les codes en dur. C'est le piège que V24,
 > V25 et V26 ont documenté : un code ajouté à l'énumération Java sans passer par la migration
 > échoue **à l'écriture seulement**, donc en production, sur la première proposition d'un juriste.
+
+
+> **#74 à #77 (N8, observation 10 ; provenance arrêtée le 2026-10-06 ; disposition arrêtée le
+> 2026-10-07)** : les signatures enregistrées s'apposent sur la lettre de constitution, à la
+> place des noms à signer à la main.
+>
+> **Deux signatures, et sous le nom du service** (Q-125). « La Direction Juridique » nomme un
+> service, pas une personne : rien ne s'y signe. Le rédacteur signe à gauche, celui qui valide à
+> droite, chacun sous son trait et avec son nom. Chacune vient du compte de son titulaire, où
+> elle n'existe qu'une fois.
+>
+> **Ce qu'elle est, et ce qu'elle n'est pas.** Un confort de présentation. Elle n'apporte **aucune
+> valeur probante supplémentaire** : ce qui fait preuve, c'est la trace horodatée de qui a signé, que
+> l'application enregistre déjà. L'écran le dit à l'utilisateur plutôt que de le laisser croire le
+> contraire.
+>
+> **Chacun dépose la sienne, et personne d'autre.** Les quatre endpoints disent « moi » et ne
+> prennent jamais d'identifiant. La lettre appose celle du **SH qui signe**, identifié par sa session
+> et non par le champ « signataire », qui est du texte libre : apposer une image sur la foi d'un
+> texte libre permettrait de signer au nom d'autrui. L'appel est **interne**, l'image ne transitant
+> par aucun écran.
+>
+> **`V44` porte aussi `lettre_constitution.redige_par`** : le SH peut désormais corriger la lettre
+> avant de la signer, là où Q-115 B2 lui rendait un 403. Voir **Q-124**.
 
 ---
 

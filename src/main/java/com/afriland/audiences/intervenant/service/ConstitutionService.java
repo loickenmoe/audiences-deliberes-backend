@@ -32,6 +32,7 @@ import com.afriland.audiences.referentiel.domain.Intervenant;
 import com.afriland.audiences.referentiel.domain.Utilisateur;
 import com.afriland.audiences.referentiel.repository.IntervenantRepository;
 import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
+import com.afriland.audiences.referentiel.service.SignatureService;
 import com.afriland.audiences.referentiel.service.CompteAvocatService;
 import lombok.RequiredArgsConstructor;
 import org.hibernate.Hibernate;
@@ -43,6 +44,7 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /** Épic 5 volet constitutions (RG-INT-08, US 5.6/5.7) — cf. FUNCTIONAL_MAP.md §5, API_IMPLEMENTATION_STATUS.md §7. */
 @Service
@@ -65,6 +67,7 @@ public class ConstitutionService {
     private final HistoriqueActionService historiqueActionService;
     private final AlerteService alerteService;
     private final LettreConstitutionService lettreConstitutionService;
+    private final SignatureService signatureService;
     private final LettreConstitutionRepository lettreConstitutionRepository;
     private final MinioStorageService minioStorageService;
     private final DocumentRepository documentRepository;
@@ -183,15 +186,28 @@ public class ConstitutionService {
         LettreConstitution lettre = lettreConstitutionRepository.findByDemandeId(demande.getId())
                 .orElseThrow(() -> ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE,
                         "Lettre introuvable pour la demande " + demande.getId()));
-        return lettreConstitutionService.generer(lettre, true);
+        /*
+         * Le tirage pour papier préimprimé porte les mêmes signatures que l'exemplaire archivé : ce
+         * sont deux tirages d'une même lettre, et l'un sans signature ferait douter de l'autre.
+         */
+        return lettreConstitutionService.generer(lettre, true,
+                signataire(redacteurDe(lettre)), signataire(demande.getValidePar()));
     }
 
     /**
-     * Enregistre la rédaction du juriste (B2).
+     * Enregistre la rédaction, du juriste <b>ou du SH</b> (B2, amendée le 2026-10-06).
      *
-     * <p><b>Une lettre générée ne se réécrit pas.</b> Elle est partie chez un huissier et figure dans
-     * la GED : la retoucher en silence ferait mentir la pièce. Une correction passe par une nouvelle
-     * demande, donc une nouvelle lettre et un nouveau numéro — et la première reste consultable.
+     * <p><b>Ce qui a changé, et pourquoi.</b> Q-115 B2 réservait la plume au juriste : le SH
+     * consultait sans pouvoir récrire, car « lui donner la plume viderait la seconde signature de
+     * son sens ». Le métier a tranché l'inverse (observation 10) : le SH corrige la lettre avant de
+     * la signer, plutôt que de la renvoyer. La séparation des plumes cède, et la <b>traçabilité</b>
+     * la remplace : chaque rédaction porte son auteur, rendu à l'écran, pour que le juriste voie que
+     * sa lettre a été réécrite et par qui.
+     *
+     * <p><b>Une lettre générée ne se réécrit pas.</b> Cela, en revanche, ne bouge pas. Elle est
+     * partie chez un huissier et figure dans la GED : la retoucher en silence ferait mentir la
+     * pièce. Une correction passe par une nouvelle demande, donc une nouvelle lettre et un nouveau
+     * numéro — et la première reste consultable.
      */
     @Transactional
     public LettreConstitutionResponse redigerLettre(Long demandeId, RedigerLettreRequest requete) {
@@ -217,12 +233,22 @@ public class ConstitutionService {
         lettre.setObjet(requete.objet());
         lettre.setCorps(requete.corps());
         lettre.setSignataire(requete.signataire());
+        Utilisateur redacteur = currentUserService.getCurrentUser();
+        lettre.setRedigePar(redacteur);
         lettre = lettreConstitutionRepository.save(lettre);
 
-        // La lettre engage la banque : savoir qui l'a rédigée, et quand, fait partie de la pièce.
-        historiqueActionService.enregistrerPour(currentUserService.getCurrentUser(),
+        /*
+         * La lettre engage la banque : savoir qui l'a rédigée, et quand, fait partie de la pièce.
+         * Le profil est consigné avec le nom : depuis que le SH peut corriger (2026-10-06), lire
+         * « rédigée par X » sans savoir à quel titre ne dit plus si la séparation a été franchie.
+         */
+        historiqueActionService.enregistrerPour(redacteur,
                 lettre.getDemande().getDossier().getId(), TypeActionHistorique.LETTRE_CONSTITUTION_REDIGEE,
-                Map.of("demandeId", demandeId, "objet", requete.objet()));
+                Map.of("demandeId", demandeId,
+                        // `Map.of` refuse les valeurs nulles : un objet non renseigné est permis
+                        // (Q-115 B2, le gabarit se complète à la main), et un profil peut manquer.
+                        "objet", Optional.ofNullable(requete.objet()).orElse(""),
+                        "profilRedacteur", Optional.ofNullable(profil(redacteur)).orElse("")));
 
         return versReponse(lettre);
     }
@@ -239,7 +265,59 @@ public class ConstitutionService {
                 lettre.getNumero(), lettre.getSuffixeNumero(), lettre.getLieu(),
                 lettre.getDestinataireNom(), lettre.getDestinataireQualite(), lettre.getDestinataireVille(),
                 lettre.getConcerne(), lettre.getObjet(), lettre.getCorps(), lettre.getSignataire(),
-                !lettre.estGelee(), lettre.getDateGeneration(), lettre.getDateModification());
+                !lettre.estGelee(), lettre.getDateGeneration(), lettre.getDateModification(),
+                nomDu(lettre.getRedigePar()), profil(lettre.getRedigePar()));
+    }
+
+    /**
+     * Celui dont la plume a écrit la lettre, pour la colonne de gauche.
+     *
+     * <p>C'est <b>le rédacteur enregistré</b>. Il n'y en a qu'un cas où il ne convient pas : quand
+     * le supérieur hiérarchique a corrigé la lettre avant de la signer (Q-124), il devient le
+     * dernier rédacteur et se retrouverait des <b>deux</b> côtés, ce qui ne dit plus rien. On
+     * reprend alors le juriste qui a sollicité la constitution - c'est à lui que la lettre revient,
+     * et sa correction par le SH reste tracée par ailleurs, à l'écran comme dans l'historique.
+     */
+    private static Utilisateur redacteurDe(LettreConstitution lettre) {
+        Utilisateur redacteur = lettre.getRedigePar();
+        Utilisateur valideur = lettre.getDemande() == null ? null : lettre.getDemande().getValidePar();
+        boolean memePersonne = redacteur != null && valideur != null
+                && redacteur.getId() != null && redacteur.getId().equals(valideur.getId());
+        if (redacteur == null || memePersonne) {
+            return lettre.getDemande() == null ? null : lettre.getDemande().getDemandeur();
+        }
+        return redacteur;
+    }
+
+    /** Une personne et sa signature enregistrée - l'image peut manquer, le nom non. */
+    private LettreConstitutionService.Signataire signataire(Utilisateur utilisateur) {
+        if (utilisateur == null) {
+            return null;
+        }
+        byte[] image = signatureService.pour(utilisateur.getId()).map(s -> s.image()).orElse(null);
+        return new LettreConstitutionService.Signataire(image, nomDu(utilisateur));
+    }
+
+    /** L'identifiant, ou rien : une demande non encore validée n'a pas de signataire. */
+    private static Long idDu(Utilisateur utilisateur) {
+        return utilisateur == null ? null : utilisateur.getId();
+    }
+
+    /** Le nom du rédacteur, ou rien : le brouillon naît avec la demande, avant toute rédaction. */
+    private static String nomDu(Utilisateur utilisateur) {
+        if (utilisateur == null) {
+            return null;
+        }
+        String prenom = utilisateur.getPrenom() == null ? "" : utilisateur.getPrenom() + " ";
+        return (prenom + (utilisateur.getNom() == null ? "" : utilisateur.getNom())).trim();
+    }
+
+    /** Le code du profil du rédacteur - `JURISTE`, `SH` - pour que l'écran le nomme lui-même. */
+    private static String profil(Utilisateur utilisateur) {
+        if (utilisateur == null || utilisateur.getProfil() == null) {
+            return null;
+        }
+        return utilisateur.getProfil().getCode();
     }
 
     /**
@@ -263,7 +341,14 @@ public class ConstitutionService {
         lettre.setDateGeneration(LocalDateTime.now());
         lettre = lettreConstitutionRepository.save(lettre);
 
-        byte[] pdf = lettreConstitutionService.generer(lettre);
+        /*
+         * Les signatures apposées sont celles des **deux personnes qui ont fait la lettre**, prises
+         * à leur compte où elles seules les déposent (métier, 2026-10-06 puis 2026-10-07) - jamais
+         * sur la foi du champ « signataire », qui est du texte libre : apposer une image sur un
+         * texte libre permettrait de signer au nom d'autrui.
+         */
+        byte[] pdf = lettreConstitutionService.generer(lettre,
+                signataire(redacteurDe(lettre)), signataire(sh));
         String nomFichier = "lettre-constitution-" + lettre.getNumero() + ".pdf";
         String cle = minioStorageService.deposer(demande.getDossier().getId(), nomFichier, "application/pdf", pdf);
 

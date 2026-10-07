@@ -2168,6 +2168,89 @@ sont unifiées.
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
 
+### Q-125 ✅ La lettre porte deux signatures, sous le nom du service — tranché (2026-10-07)
+
+**Ce qui était faux.** N8 apposait la signature du SH juste au-dessus de « La Direction Juridique ».
+Mis entre les mains du métier, le résultat a été rejeté aussitôt, et avec raison : cette ligne nomme
+un **service**, pas une personne. Une signature posée là laisse croire que la Direction Juridique
+signe en propre, ce qu'aucune direction ne fait. L'erreur était la mienne : j'ai pris le champ
+`signataire` pour un nom de signataire alors qu'il porte le service émetteur, et sa valeur par
+défaut - `SIGNATAIRE_PAR_DEFAUT = "La Direction Juridique"` - le disait depuis le début.
+
+**Ce que le métier demande.** La ligne du service reste **telle quelle, sans signature**. En
+dessous, **deux** blocs : à gauche la signature du rédacteur et son nom, à droite celle du chef de
+département et son nom. C'est la disposition d'un courrier qui engage deux personnes, et elle rend
+visible ce que la lettre dit déjà : quelqu'un l'a écrite, quelqu'un d'autre l'a validée.
+
+**Une signature par compte, et une seule.** Rien ne change ici : l'image vit sur `utilisateur`, son
+titulaire seul la dépose, et la lettre y puise à la volée. Ce n'est pas une pièce qu'on recopie dans
+chaque lettre - la dupliquer la rendrait impossible à corriger après coup, et ferait circuler autant
+d'exemplaires que de courriers.
+
+**Les deux noms restent alignés même sans image.** La bande réservée à chaque signature a la même
+hauteur des deux côtés, remplie ou non. Sans cela, le nom de celui qui n'a rien déposé remonterait
+et la lettre paraîtrait bancale - alors que ne rien avoir déposé est un cas normal, pas un défaut.
+
+**⚠ Un point reste à arbitrer : qui occupe la gauche quand le SH a corrigé la lettre.** Depuis
+Q-124 il peut récrire avant de signer, et `redige_par` désigne alors **lui**. Le prendre tel quel le
+mettrait des **deux** côtés de la lettre, ce qui ne dit plus rien. En attendant l'arbitrage, la
+gauche revient au **juriste qui a sollicité la constitution** (`demande.demandeur`) : c'est à lui que
+la lettre revient, et la correction du SH reste tracée à l'écran et dans l'historique. **Ce repli
+est une hypothèse de ma part, pas une règle du métier** - à confirmer ou à corriger.
+
+### Q-124 ✅ Le SH corrige la lettre, et sa signature s'y appose — tranché (2026-10-06)
+
+**Cette décision en renverse une autre, et il faut le dire.** Q-115 B2, tranchée le 2026-09-18,
+réservait la plume au juriste : « le supérieur hiérarchique **consulte** avant de signer, sans
+pouvoir récrire [...] lui donner la plume viderait la seconde signature de son sens ». Le serveur
+renvoyait un **403** au SH qui tentait d'écrire. L'observation 10 de la Direction Juridique demande
+l'inverse, et la demande a été confirmée : **le SH corrige la lettre avant de la signer**.
+
+**Ce qui remplaçait la séparation des rôles doit être remplacé à son tour.** La garantie de Q-115 B2
+était structurelle : celui qui signe ne peut pas avoir écrit. En la levant, on perd cette garantie,
+et il fallait en mettre une autre à la place plutôt que de laisser un trou. C'est la **traçabilité**
+qui s'en charge : `lettre_constitution.redige_par` porte l'auteur de la dernière rédaction, l'écran
+l'affiche à l'ouverture de la lettre, et la correction du SH y est **nommée comme telle** - c'est le
+seul cas où la séparation a été franchie, et le juriste doit le voir sans aller fouiller
+l'historique. L'historisation consigne aussi le **profil** du rédacteur : lire « rédigée par X »
+sans savoir à quel titre ne dirait plus rien.
+
+**Le gel après signature ne bouge pas.** Une lettre générée est partie chez un huissier et figure
+dans la GED : 409 pour tout le monde, juriste comme SH. La porte s'ouvre **avant** la signature, et
+seulement là.
+
+**La signature enregistrée est un confort, et l'application le dit.** L'image s'appose sur la lettre
+à la place du nom à signer à la main. Elle **n'apporte aucune valeur probante supplémentaire** :
+ce qui fait preuve, c'est la trace horodatée de qui a signé - `valide_par` et l'historique. L'effacer
+ne retirerait rien à la preuve, la falsifier n'en créerait aucune. L'écran « Mon compte » l'écrit à
+l'utilisateur, plutôt que de le laisser croire le contraire : quelqu'un qui penserait tenir là une
+garantie juridique s'appuierait sur du vide.
+
+**Chacun dépose la sienne, et personne d'autre.** Les trois endpoints disent « moi » et ne prennent
+jamais d'identifiant : {@code GET/PUT/DELETE /utilisateurs/moi/signature}. Aucun endpoint ne rend la
+signature d'autrui - la lettre appose celle du signataire par un appel **interne**, l'image ne
+transitant par aucun écran. C'est la seule forme où une signature garde un sens : celle qu'un tiers
+détient ne vaut déjà plus rien. Et l'image apposée est celle du **SH qui signe**, identifié par sa
+session, non celle du nom écrit dans le champ « signataire », qui est du texte libre : apposer une
+image sur la foi d'un texte libre permettrait de signer au nom d'autrui.
+
+**En base, et non dans la GED.** Une signature n'est pas une pièce de dossier : la déposer dans
+MinIO la ferait apparaître dans des listes de documents et ferait circuler son chemin. PNG ou JPEG,
+200 Ko au plus - les deux formats que PDFBox sait apposer, et une borne qui distingue une signature
+d'une photographie. Cette borne n'est **pas** un réglage de `configuration_systeme` : ce n'est pas un
+paramètre d'exploitation.
+
+**Un défaut trouvé en vérifiant sur la pile réelle.** Les décodeurs d'image de PDFBox ne lèvent pas
+seulement des `IOException` sur une entrée mal formée : un PNG tronqué produit un
+`ArrayIndexOutOfBoundsException`. Le filet posé autour de l'apposition était trop étroit, et la
+**lettre entière tombait en 500** - une pièce officielle perdue pour une vignette. Le filet couvre
+désormais les exceptions non vérifiées, et deux tests le tiennent.
+
+**Chaîne vérifiée sur la pile réelle** : dépôt d'un PDF (**400**) → dépôt d'un PNG (200) → lecture
+de l'image (200) → la signature d'un autre utilisateur reste invisible → **rédaction par le SH
+(200, là où Q-115 B2 rendait 403)**, tracée « Henri Huissier / SH » → signature → lettre produite
+**avec** image (1734 octets) → signature retirée → lettre produite **sans** image (1248 octets).
+
 ### Q-123 ✅ Référentiel des agences : le code ne se modifie pas, la fermeture se défait — tranché (2026-10-03, complété le 2026-10-06)
 
 **Le point de départ.** Les deux codes d'agence d'un dossier — celle d'origine, celle du contentieux
@@ -2472,7 +2555,9 @@ Un champ facultatif vidé est enregistré comme absent (`null`), et non comme un
 changement ; un champ vidé devient absent ; 404) et un parcours d'intégration sur PostgreSQL neuf —
 403 pour l'avocat, référence ignorée, 400 pour un nom vide, trace lue dans l'audit. 459 tests.
 
-### Q-115 · B2 ✅ Le juriste rédige la lettre, le SH la consulte — tranché (2026-09-18)
+### Q-115 · B2 ⚠ Le juriste rédige la lettre, le SH la consulte — tranché (2026-09-18), **amendé le 2026-10-06 (Q-124)**
+
+> **Ce qui suit n'est plus la règle en vigueur sur un point.** Le SH **peut désormais récrire** la lettre avant de la signer (métier, observation 10) : le 403 est devenu un 200, et c'est la traçabilité de l'auteur qui remplace la séparation des plumes. Voir **Q-124**. Le reste de cette fiche — le brouillon sans numéro, le gel après signature, le numéro modifiable mais unique — tient toujours.
 
 **La répartition des rôles est tout le jalon.** Le juriste rédige — c'est lui qui tient le dossier,
 connaît le débiteur, le montant et le tiers saisi. Le supérieur hiérarchique **consulte** avant de

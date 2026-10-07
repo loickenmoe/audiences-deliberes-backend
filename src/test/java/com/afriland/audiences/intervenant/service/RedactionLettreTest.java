@@ -22,6 +22,7 @@ import com.afriland.audiences.referentiel.domain.Utilisateur;
 import com.afriland.audiences.referentiel.repository.IntervenantRepository;
 import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
 import com.afriland.audiences.referentiel.service.CompteAvocatService;
+import com.afriland.audiences.referentiel.service.SignatureService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -81,7 +82,11 @@ class RedactionLettreTest {
     void setUp() {
         service = new ConstitutionService(demandeConstitutionRepository, dossierRepository, intervenantRepository,
                 utilisateurRepository, currentUserService, historiqueActionService, alerteService,
-                new LettreConstitutionService(), lettreConstitutionRepository, minioStorageService,
+                new LettreConstitutionService(),
+                // Aucune signature déposée dans ce parcours : la lettre part avec le nom seul, comme
+                // avant N8. C'est le cas de tous ceux qui n'ont rien déposé.
+                new SignatureService(utilisateurRepository, currentUserService),
+                lettreConstitutionRepository, minioStorageService,
                 documentRepository, mapper,
                 new CompteAvocatService(avocatRepository, utilisateurRepository), notificationPrestataireService);
 

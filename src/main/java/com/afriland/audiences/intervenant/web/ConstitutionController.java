@@ -94,8 +94,18 @@ public class ConstitutionController {
      * seconde signature : celui qui signe n'est pas celui qui a écrit, et son refus renvoie la
      * lettre à son auteur avec un motif.
      */
+    /**
+     * La rédaction, ouverte au juriste <b>et au SH</b> (métier, 2026-10-06, observation 10).
+     *
+     * <p>Q-115 B2 la réservait au juriste et renvoyait un 403 au SH : « lui donner la plume viderait
+     * la seconde signature de son sens ». Le métier a tranché l'inverse - le SH corrige avant de
+     * signer, plutôt que de renvoyer la lettre. Chaque rédaction porte désormais son auteur, rendu
+     * à l'écran : ce que la séparation des rôles garantissait, la traçabilité le garantit.
+     *
+     * <p>Le gel après signature, lui, ne bouge pas : 409 pour tout le monde.
+     */
     @PutMapping("${api.prefix}/constitutions/prestataires/{id}/lettre")
-    @PreAuthorize("hasRole('JURISTE')")
+    @PreAuthorize("hasAnyRole('JURISTE', 'SH')")
     public LettreConstitutionResponse redigerLettre(@PathVariable Long id,
                                                     @Valid @RequestBody RedigerLettreRequest request) {
         return constitutionService.redigerLettre(id, request);

@@ -12,6 +12,11 @@ import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/*
+ * Un PNG minuscule mais **valide** : ce test vérifie une géométrie, pas un dessin. Il suffit que
+ * PDFBox l'accepte, pour que la bande réservée soit bien remplie d'un côté et vide de l'autre.
+ */
+
 /**
  * La charte, éprouvée sur ce qu'elle promet (Q-115 A2).
  *
@@ -20,6 +25,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * en-têtes de tableau redessinés après un saut de page, et les données ni tronquées ni débordantes.
  */
 class DocumentPdfTest {
+    private static final byte[] PNG_VALIDE = java.util.Base64.getDecoder().decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==");
+
 
     private static final List<String> ENTETES = List.of("Référence", "Juridiction", "Client");
     private static final float[] LARGEURS = {120f, 160f, 200f};
@@ -163,5 +171,67 @@ class DocumentPdfTest {
             var ressources = document.getPage(0).getResources();
             assertThat(ressources.getXObjectNames()).as("une image en ressource de la page").isNotEmpty();
         }
+    }
+
+    /**
+     * Une image illisible ne doit pas emporter le document (N8).
+     *
+     * <p>La signature enregistrée est un <b>confort</b> ; la lettre de constitution est une
+     * <b>pièce officielle</b>. Perdre la seconde pour la première serait disproportionné - et c'est
+     * arrivé : les décodeurs de PDFBox lèvent sur une entrée mal formée des exceptions non
+     * vérifiées, qu'un filet trop étroit laissait passer.
+     */
+    @Test
+    void deuxSignatures_ignoreUneImageIllisibleEtRendLeDocument() throws Exception {
+        byte[] pdf;
+        try (DocumentPdf doc = new DocumentPdf(PDRectangle.A4, "Lettre", null, null, Locale.FRENCH)) {
+            doc.nouvellePage();
+            doc.centre("La Direction Juridique", true, 10f);
+            doc.deuxSignatures("ceci n'est pas une image".getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                    "Clara Juriste", null, "Le Secrétaire Général", 42f);
+            pdf = doc.finaliser();
+        }
+
+        // Le document existe, et porte les deux noms : la lettre est partie sans la vignette.
+        assertThat(LecturePdf.texte(pdf)).contains("Clara Juriste").contains("Le Secrétaire Général");
+    }
+
+    /** Rien à apposer : celui qui n'a rien déposé signe à la main, et le document ne bronche pas. */
+    @Test
+    void deuxSignatures_toleLAbsenceDImage() throws Exception {
+        byte[] pdf;
+        try (DocumentPdf doc = new DocumentPdf(PDRectangle.A4, "Lettre", null, null, Locale.FRENCH)) {
+            doc.nouvellePage();
+            doc.deuxSignatures(null, "Clara Juriste", new byte[0], "Henri Huissier", 42f);
+            pdf = doc.finaliser();
+        }
+
+        assertThat(LecturePdf.texte(pdf)).contains("Clara Juriste").contains("Henri Huissier");
+    }
+
+    /**
+     * Les deux noms restent sur la <b>même ligne</b>, qu'il y ait une signature ou deux.
+     *
+     * <p>C'est ce qui distingue cette disposition d'une pile de blocs : le nom de celui qui n'a rien
+     * déposé ne doit pas remonter là où l'autre a son trait. Ne pas avoir déposé d'image est un cas
+     * normal - la lettre ne doit pas en paraître bancale.
+     */
+    @Test
+    void deuxSignatures_alignentLesNomsMemeSansImage() throws Exception {
+        byte[] avecUneImage;
+        byte[] sansAucuneImage;
+        try (DocumentPdf doc = new DocumentPdf(PDRectangle.A4, "Lettre", null, null, Locale.FRENCH)) {
+            doc.nouvellePage();
+            doc.deuxSignatures(PNG_VALIDE, "Clara Juriste", null, "Henri Huissier", 42f);
+            avecUneImage = doc.finaliser();
+        }
+        try (DocumentPdf doc = new DocumentPdf(PDRectangle.A4, "Lettre", null, null, Locale.FRENCH)) {
+            doc.nouvellePage();
+            doc.deuxSignatures(null, "Clara Juriste", null, "Henri Huissier", 42f);
+            sansAucuneImage = doc.finaliser();
+        }
+
+        // La bande réservée est la même : les noms tombent au même endroit dans les deux cas.
+        assertThat(LecturePdf.positions(avecUneImage)).isEqualTo(LecturePdf.positions(sansAucuneImage));
     }
 }

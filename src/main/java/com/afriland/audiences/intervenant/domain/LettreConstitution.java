@@ -7,10 +7,12 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import com.afriland.audiences.referentiel.domain.Utilisateur;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -104,6 +106,20 @@ public class LettreConstitution {
 
     @Column(name = "date_modification")
     private LocalDateTime dateModification;
+
+    /**
+     * Qui a écrit la dernière version (métier, 2026-10-06).
+     *
+     * <p><b>Pourquoi cette colonne existe.</b> Q-115 B2 réservait la plume au juriste, pour que la
+     * seconde signature garde son sens : le SH consultait sans pouvoir récrire. Le métier a tranché
+     * l'inverse - le SH corrige avant de signer. La séparation des plumes cède, et c'est la
+     * traçabilité qui la remplace : le juriste doit voir que sa lettre a été réécrite, et par qui.
+     *
+     * <p>L'historique le consigne aussi, mais il faut aller le lire. Ici, l'écran le montre.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "redige_par")
+    private Utilisateur redigePar;
 
     /** Vrai une fois le PDF produit : la lettre ne se modifie plus. */
     public boolean estGelee() {

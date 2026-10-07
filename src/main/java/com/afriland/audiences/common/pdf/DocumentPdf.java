@@ -73,6 +73,10 @@ public final class DocumentPdf implements AutoCloseable {
     private static final float TAILLE_COLONNE = 5f;
     /** Souffle entre l'aplat et le texte : le corps commence à 102 pt sur le contrat. */
     private static final float ECART_COLONNE = 20f;
+    /** La gouttière entre les deux colonnes de signature : assez pour qu'on ne les confonde pas. */
+    private static final float ECART_SIGNATURES = 24f;
+    /** La taille du nom sous une signature, alignée sur celle du corps de la lettre. */
+    private static final float TAILLE_SIGNATAIRE = 10f;
     private static final float HAUTEUR_LOGO = 26f;
     private static final float HAUTEUR_LIGNE = 14f;
     /** Interligne à l'intérieur d'une cellule repliée : le corps de 8 pt, plus une respiration. */
@@ -257,7 +261,84 @@ public final class DocumentPdf implements AutoCloseable {
         y -= taille * 1.45f;
     }
 
+    /**
+     * Les <b>deux signataires</b> d'une lettre, côte à côte : le rédacteur à gauche, celui qui
+     * valide à droite (métier, 2026-10-07).
+     *
+     * <p><b>Pourquoi deux, et pourquoi là.</b> La lettre porte d'abord le nom du <i>service</i> qui
+     * écrit - « La Direction Juridique ». Ce n'est pas une personne : rien ne se signe au-dessus.
+     * Les deux personnes qui engagent la banque signent <b>dessous</b>, chacune sous son trait, à la
+     * place que la lecture attend : celui qui a rédigé à gauche, celui qui a validé à droite.
+     *
+     * <p><b>Les deux noms restent alignés</b> même quand une seule signature est déposée : la bande
+     * réservée à l'image a la même hauteur des deux côtés, remplie ou non. Sans cela, le nom du
+     * signataire sans image remonterait et la lettre paraîtrait bancale - alors que ne pas avoir
+     * déposé d'image est un cas normal, pas un défaut.
+     *
+     * <p>Le rapport de chaque image est <b>conservé</b> : une signature étirée ne ressemble plus à
+     * rien. Trop large pour sa colonne, elle est réduite plutôt que de mordre sur l'autre.
+     *
+     * @param hauteur la hauteur de la bande réservée à chaque signature, en points.
+     */
+    public void deuxSignatures(byte[] imageGauche, String nomGauche,
+                               byte[] imageDroite, String nomDroite, float hauteur) {
+        float largeurColonne = (largeurUtile() - ECART_SIGNATURES) / 2;
+        float centreGauche = margeGauche() + largeurColonne / 2;
+        float centreDroite = format.getWidth() - MARGE - largeurColonne / 2;
+        float sommet = y;
+
+        apposer(imageGauche, centreGauche, sommet, largeurColonne, hauteur);
+        apposer(imageDroite, centreDroite, sommet, largeurColonne, hauteur);
+
+        float ligneDesNoms = sommet - hauteur - 6f;
+        centrerSur(nomGauche, centreGauche, ligneDesNoms);
+        centrerSur(nomDroite, centreDroite, ligneDesNoms);
+        y = ligneDesNoms - 16f;
+    }
+
+    /**
+     * Appose une image dans sa colonne, posée sur le bas de la bande.
+     *
+     * <p><b>Une image illisible ne fait pas échouer la lettre.</b> Un fichier corrompu ou d'un
+     * format que PDFBox refuse est ignoré : la lettre part avec le nom seul, à signer à la main.
+     * Perdre la lettre pour une vignette serait disproportionné - l'image est un confort, la lettre
+     * est la pièce.
+     *
+     * <p>Le filet est large à dessein. Les décodeurs d'image de PDFBox ne se contentent pas de
+     * lever des {@code IOException} sur une entrée mal formée : un PNG tronqué produit un
+     * {@code ArrayIndexOutOfBoundsException}, constaté en conditions réelles. Un filet étroit
+     * faisait tomber la lettre entière - une pièce officielle perdue pour une vignette.
+     */
+    private void apposer(byte[] image, float centre, float sommet, float largeurMax, float hauteur) {
+        if (image == null || image.length == 0) {
+            return;
+        }
+        try {
+            PDImageXObject vignette = PDImageXObject.createFromByteArray(document, image, "signature");
+            float largeur = hauteur * vignette.getWidth() / vignette.getHeight();
+            float haute = hauteur;
+            if (largeur > largeurMax) {
+                largeur = largeurMax;
+                haute = largeur * vignette.getHeight() / vignette.getWidth();
+            }
+            // Posée sur le bas de la bande : le trait touche le nom, comme une signature manuscrite.
+            flux.drawImage(vignette, centre - largeur / 2, sommet - hauteur, largeur, haute);
+        } catch (java.io.IOException | RuntimeException erreur) {
+            // Voir le bloc de documentation : la lettre prime sur la vignette.
+        }
+    }
+
+    /** Un nom centré sur l'axe de sa colonne. Absent, rien n'est écrit - et rien ne décale. */
+    private void centrerSur(String texte, float centre, float ordonnee) {
+        if (texte == null || texte.isBlank()) {
+            return;
+        }
+        ecrire(texte, centre - largeurDe(texte, grasse, TAILLE_SIGNATAIRE) / 2, ordonnee,
+                grasse, TAILLE_SIGNATAIRE, ANTHRACITE);
+    }
+
     /** Écrit un texte centré sur la largeur utile — le bloc de signature, notamment. */
+
     public void centre(String texte, boolean gras, float taille) {
         PDType1Font police = gras ? grasse : normale;
         float x = margeGauche() + (largeurUtile() - largeurDe(texte, police, taille)) / 2;
