@@ -67,6 +67,15 @@ public class ConstitutionService {
     private final HistoriqueActionService historiqueActionService;
     private final AlerteService alerteService;
     private final LettreConstitutionService lettreConstitutionService;
+    /**
+     * Le profil du supérieur hiérarchique, lu tel quel.
+     *
+     * <p>Et non un rôle : {@code ROLE_JURISTE} est composite (Q-81), si bien qu'un droit accordé par
+     * rôle s'étend au DJ et à la DJA sans qu'on l'ait voulu. Le profil ne désigne qu'une personne à
+     * la fois.
+     */
+    private static final String PROFIL_SH = "SH";
+
     private final SignatureService signatureService;
     private final LettreConstitutionRepository lettreConstitutionRepository;
     private final MinioStorageService minioStorageService;
@@ -106,7 +115,7 @@ public class ConstitutionService {
         List<Utilisateur> sh = utilisateurRepository.findByProfilCodeAndActifTrue("SH");
         sh.forEach(u -> alerteService.declencher(TypeAlerte.CONSTITUTION_A_SIGNER, dossier.getId(), u, declencheur));
 
-        return demandeConstitutionMapper.toResponse(demande);
+        return versReponse(demande);
     }
 
     @Transactional
@@ -140,7 +149,7 @@ public class ConstitutionService {
         historiqueActionService.enregistrerPour(sh, demande.getDossier().getId(), TypeActionHistorique.CONSTITUTION_ARBITREE,
                 Map.of("demandeId", demandeId, "decision", request.decision().name()));
 
-        return demandeConstitutionMapper.toResponse(demande);
+        return versReponse(demande);
     }
 
     /**
@@ -152,7 +161,12 @@ public class ConstitutionService {
         var demandes = statut == null
                 ? demandeConstitutionRepository.findByOrderByDateDemandeDesc(pageable)
                 : demandeConstitutionRepository.findByStatutOrderByDateDemandeAsc(statut, pageable);
-        return PageResponse.of(demandes, demandeConstitutionMapper::toResponse);
+        /*
+         * Chaque ligne dit si **celui qui lit** peut écrire sur sa lettre (Q-126). Sans cela,
+         * l'écran proposerait « Rédiger » à qui recevrait ensuite un 403 - une porte qui s'ouvre
+         * sur un mur est pire qu'une porte absente.
+         */
+        return PageResponse.of(demandes, this::versReponse);
     }
 
     /**
@@ -212,6 +226,11 @@ public class ConstitutionService {
     @Transactional
     public LettreConstitutionResponse redigerLettre(Long demandeId, RedigerLettreRequest requete) {
         LettreConstitution lettre = lettreOuErreur(demandeId);
+        if (!puisJeRediger(lettre.getDemande())) {
+            throw ApiException.forbidden(ErrorCodes.DROITS_INSUFFISANTS,
+                    "Cette lettre appartient au demandeur de la constitution : lui seul l'écrit, "
+                            + "et le supérieur hiérarchique la corrige avant de la signer.");
+        }
         if (lettre.estGelee()) {
             throw ApiException.conflict(ErrorCodes.CONFLIT,
                     "Cette lettre a été signée et versée au dossier : elle ne peut plus être modifiée. "
@@ -253,6 +272,36 @@ public class ConstitutionService {
         return versReponse(lettre);
     }
 
+    /**
+     * Puis-je écrire sur la lettre de cette demande (métier, 2026-10-07) ?
+     *
+     * <p><b>La lettre est à celui qui a sollicité la constitution.</b> Jusqu'ici le droit tenait au
+     * rôle, et {@code ROLE_JURISTE} étant composite (Q-81), tout juriste, le DJ et la DJA pouvaient
+     * récrire la lettre d'un autre. C'était un trou : une lettre engage la banque sous le nom de
+     * celui qui l'a écrite, et nul ne doit pouvoir écrire sous le nom d'un autre.
+     *
+     * <p><b>Le supérieur hiérarchique passe après lui, et lui seul.</b> C'est la contrepartie de
+     * Q-124 : il corrige au lieu de renvoyer la lettre. Le droit se lit sur le <b>profil</b>, non
+     * sur un rôle composite - c'est la seule façon de ne pas rouvrir la porte au DJ et à la DJA.
+     */
+    private boolean puisJeRediger(DemandeConstitution demande) {
+        Utilisateur moi = currentUserService.getCurrentUser();
+        if (moi == null) {
+            return false;
+        }
+        return PROFIL_SH.equals(profil(moi)) || estLaMemePersonne(moi, demande.getDemandeur());
+    }
+
+    /** Deux utilisateurs sont la même personne quand ils portent le même identifiant, pas avant. */
+    private static boolean estLaMemePersonne(Utilisateur un, Utilisateur autre) {
+        return un != null && autre != null && un.getId() != null && un.getId().equals(autre.getId());
+    }
+
+    /** La demande telle qu'un écran la lit, avec le droit d'écrire de celui qui la lit. */
+    private DemandeConstitutionResponse versReponse(DemandeConstitution demande) {
+        return demandeConstitutionMapper.toResponse(demande).avecRedactionPossible(puisJeRediger(demande));
+    }
+
     private LettreConstitution lettreOuErreur(Long demandeId) {
         return lettreConstitutionRepository.findByDemandeId(demandeId)
                 .orElseThrow(() -> ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE,
@@ -265,7 +314,10 @@ public class ConstitutionService {
                 lettre.getNumero(), lettre.getSuffixeNumero(), lettre.getLieu(),
                 lettre.getDestinataireNom(), lettre.getDestinataireQualite(), lettre.getDestinataireVille(),
                 lettre.getConcerne(), lettre.getObjet(), lettre.getCorps(), lettre.getSignataire(),
-                !lettre.estGelee(), lettre.getDateGeneration(), lettre.getDateModification(),
+                // `modifiable` dit « par moi », non « en général » : l'écran ouvre ses champs
+                // sur cette seule foi, et un formulaire ouvert qui finit en 403 ment à qui le lit.
+                !lettre.estGelee() && puisJeRediger(lettre.getDemande()),
+                lettre.getDateGeneration(), lettre.getDateModification(),
                 nomDu(lettre.getRedigePar()), profil(lettre.getRedigePar()));
     }
 

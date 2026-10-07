@@ -76,7 +76,9 @@ class ConstitutionServiceTest {
             demande.getMotifRejet(), demande.getLettreDocument() != null ? demande.getLettreDocument().getId() : null,
             demande.getDateDemande(), demande.getDateDecision(),
             demande.getDossier() != null ? demande.getDossier().getReference() : null,
-            demande.getPrestataire() != null ? demande.getPrestataire().getNom() : null, null, null, null);
+            demande.getPrestataire() != null ? demande.getPrestataire().getNom() : null, null, null, null,
+            // Le mappeur ne connaît pas la session : le service pose le droit d'écrire après lui.
+            false);
 
     private ConstitutionService service;
     private Dossier dossier;

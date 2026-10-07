@@ -2168,6 +2168,44 @@ sont unifiées.
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
 
+### Q-126 ✅ La lettre appartient à son demandeur ; seul le SH y passe après lui — tranché (2026-10-07)
+
+**Le trou que cette décision ferme.** Le droit d'écrire sur une lettre de constitution tenait au
+**rôle** : `hasAnyRole('JURISTE', 'SH')`. Or `ROLE_JURISTE` est composite depuis Q-81 - le DJ et la
+DJA le portent aussi. Conséquence : **n'importe quel juriste, le DJ et la DJA pouvaient récrire la
+lettre d'un autre**, et la signer de son nom sans qu'il le sache. Une lettre engage la banque sous le
+nom de celui qui l'a écrite ; nul ne doit pouvoir écrire sous le nom d'un autre. Le métier l'a
+demandé le 2026-10-07 ; le défaut était là depuis Q-115 B2.
+
+**La règle.** La lettre est à **celui qui a sollicité la constitution**. Lui seul l'écrit, et le
+**supérieur hiérarchique** la corrige avant de la signer (contrepartie de Q-124 : il corrige au lieu
+de renvoyer). Tout autre - juriste, DJ, DJA - reçoit un **403**. Il lit la lettre, il ne la touche
+pas. L'auteur garde sa plume jusqu'à la signature : lui refuser la correction de sa propre coquille
+imposerait un aller-retour avec le SH pour une virgule, et la lettre n'est encore partie nulle part.
+
+**Le droit se lit sur le profil, jamais sur un rôle.** C'est le point technique qui décide de tout :
+un droit accordé par `hasRole` s'étend aux rôles composites et rouvrirait la porte au DJ et à la DJA.
+`@PreAuthorize` dit donc seulement **qui peut toucher à la fonction** ; c'est le service qui dit qui
+peut toucher à **cette lettre-là**, parce que lui seul sait qui l'a demandée.
+
+**L'écran ne redouble pas la règle.** `DemandeConstitutionResponse.redactionPossible` et
+`LettreConstitutionResponse.modifiable` disent tous deux « **par moi** », calculés par le serveur.
+L'écran ne pourrait pas les calculer - il connaît les rôles de qui regarde, pas l'identifiant interne
+du demandeur - et un bouton « Rédiger » déduit d'un rôle ouvrirait sur un 403. Une porte qui donne
+sur un mur est pire qu'une porte absente.
+
+**L'Assistante entre dans le circuit** (même décision). Elle sollicite une constitution et rédige sa
+lettre, comme un juriste : `POST /constitutions/prestataires` et le `PUT .../lettre` lui sont
+ouverts, ainsi que la file des constitutions. La lettre qu'elle fait naître est **la sienne**, et la
+règle ci-dessus vaut pour elle comme pour les autres.
+
+**Ce qui ne bouge pas.** Le gel après signature : 409 pour tout le monde, SH compris (Q-115 B2, puis
+Q-124). La porte ouverte au SH l'est **avant** la signature, et là seulement.
+
+**Un décor de test qui mentait.** `RedactionLettreTest` construisait une demande **sans demandeur**,
+alors que la colonne est `nullable = false` : une telle demande n'existe pas en base. Le défaut ne
+se voyait pas tant que le droit tenait au rôle ; la nouvelle garde l'a mis au jour.
+
 ### Q-125 ✅ La lettre porte deux signatures, sous le nom du service — tranché (2026-10-07)
 
 **Ce qui était faux.** N8 apposait la signature du SH juste au-dessus de « La Direction Juridique ».

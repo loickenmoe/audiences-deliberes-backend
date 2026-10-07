@@ -295,7 +295,7 @@ automatisés dédiés. Voir `DECISIONS_AND_OPEN_QUESTIONS.md` Q-20, Q-25, Q-55, 
 
 | # | Méthode | Endpoint | Rôle requis | FR / US | Src | Statut |
 |---|---|---|---|---|---|---|
-| 35 | POST | `/constitutions/prestataires` | `ROLE_JURISTE` | FR-INT-06 / US 5.6 | 💡 | ✅ M9 |
+| 35 | POST | `/constitutions/prestataires` | `ROLE_JURISTE`, `ROLE_ASSISTANTE` | FR-INT-06 / US 5.6 | 💡 | ✅ M9 |
 | 36 | PUT | `/constitutions/prestataires/{id}/validation` | `ROLE_SH` | FR-INT-07 / US 5.7 | 💡 | ✅ M9 |
 | 37 | GET | `/repertoire/avocats?nom&page&size` | `ROLE_JURISTE`, `ROLE_ASSISTANTE` | FR-INT-08 / US 5.8 | 💡 | ✅ M9 |
 | 60 | GET | `/constitutions/prestataires?statut&page&size` *(paginé M22)* | `ROLE_SH`, `ROLE_JURISTE` | UC-INT-07 (« constitutions à signer ») | 🆕 | ✅ M15 |
@@ -314,6 +314,18 @@ automatisés dédiés. Voir `DECISIONS_AND_OPEN_QUESTIONS.md` Q-20, Q-25, Q-55, 
 > aucune (pas de compte, pas d'infrastructure email — même limite que Q-37). **#37** :
 > `indicateurCharge`/`indicateurPerformance` calculés à la demande (Q-53), triés par charge
 > croissante, recherche par `?nom=`.
+>
+> **La lettre appartient à son demandeur** (Q-126, métier du 2026-10-07). `PUT
+> /constitutions/prestataires/{id}/lettre` n'est plus gardé par le seul rôle : `ROLE_JURISTE` est
+> composite (Q-81), si bien que **tout juriste, le DJ et la DJA pouvaient récrire la lettre d'un
+> autre** et la signer de son nom. Le service vérifie désormais la **personne** : le demandeur de la
+> constitution, ou le supérieur hiérarchique qui corrige avant de signer (Q-124). Tout autre reçoit
+> **403**. Le gel après signature ne bouge pas : 409 pour tous.
+>
+> `DemandeConstitutionResponse.redactionPossible` et `LettreConstitutionResponse.modifiable` disent
+> « **par moi** » : l'écran ne saurait pas les calculer, et un bouton déduit d'un rôle ouvrirait sur
+> un 403. **L'Assistante** sollicite et rédige comme un juriste depuis la même décision ; elle ne
+> signe pas.
 >
 > **#60 (M15, Q-68)** : dernier volet de Q-24 pour les constitutions — `statut=EN_ATTENTE` alimente
 > la file de travail du SH ; sans filtre, l'historique complet (plus récentes d'abord).

@@ -645,7 +645,19 @@ class HabilitationFrontendIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content").isArray())
                 .andExpect(jsonPath("$.totalElements").exists());
+        /*
+         * L'Assistante y accède depuis le 2026-10-07 : elle sollicite et rédige comme un juriste
+         * (Q-126). La lettre qu'elle fait naître est la sienne - elle seule y écrit, et le
+         * supérieur hiérarchique la corrige avant de la signer.
+         */
         mockMvc.perform(get(api("/constitutions/prestataires"))
+                        .with(role("kc-assistante-m15", "ROLE_ASSISTANTE")))
+                .andExpect(status().isOk());
+        // Elle rédige, elle ne signe pas : la seconde signature reste au supérieur hiérarchique.
+        mockMvc.perform(put(api("/constitutions/prestataires/1/validation"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding(StandardCharsets.UTF_8)
+                        .content("{\"decision\":\"VALIDEE\"}")
                         .with(role("kc-assistante-m15", "ROLE_ASSISTANTE")))
                 .andExpect(status().isForbidden());
     }
