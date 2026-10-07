@@ -31,5 +31,17 @@ public enum TypeAlerte {
      *
      * <p>Toute valeur ajoutee ici exige une migration de {@code chk_alerte_type} - voir V45.
      */
-    MANQUEMENT_COMPTE_RENDU
+    MANQUEMENT_COMPTE_RENDU,
+
+    /**
+     * La demande d'explication, et la reponse qui revient (N7 temps 2, metier du 2026-10-07).
+     *
+     * <p><b>Un seul type pour les deux sens.</b> La demande part vers l'avocat, la reponse revient
+     * vers la direction : c'est le meme fil, et le texte de l'alerte dit lequel. Deux types
+     * auraient double la grille de notification pour une distinction que le destinataire fait deja
+     * de lui-meme - il sait s'il a ecrit ou s'il attend.
+     *
+     * <p>Toute valeur ajoutee ici exige une migration de {@code chk_alerte_type} - voir V46.
+     */
+    DEMANDE_EXPLICATION
 }

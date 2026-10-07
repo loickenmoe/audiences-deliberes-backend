@@ -12,6 +12,7 @@ import com.afriland.audiences.notification.domain.EvenementPrestataire;
 import com.afriland.audiences.notification.service.NotificationPrestataireService;
 import com.afriland.audiences.publication.domain.StatutPublication;
 import com.afriland.audiences.publication.repository.CompteRenduAudienceRepository;
+import com.afriland.audiences.publication.repository.DemandeExplicationRepository;
 import com.afriland.audiences.alerte.domain.TypeAlerte;
 import com.afriland.audiences.alerte.service.AlerteService;
 import com.afriland.audiences.referentiel.domain.ConfigurationSysteme;
@@ -71,6 +72,8 @@ class CompteRenduAttenduSchedulerTest {
     private UtilisateurRepository utilisateurRepository;
     @Mock
     private AlerteService alerteService;
+    @Mock
+    private DemandeExplicationRepository demandeExplicationRepository;
 
     @InjectMocks
     private CompteRenduAttenduScheduler scheduler;
@@ -84,6 +87,8 @@ class CompteRenduAttenduSchedulerTest {
         avocat = Avocat.builder().id(99L).nom("Cabinet TAMO").build();
         lenient().when(dossierAvocatRepository.findByDossierId(DOSSIER_ID))
                 .thenReturn(List.of(DossierAvocat.builder().avocat(avocat).build()));
+        // Par défaut, personne ne doit d'explication : la relance fait son travail ordinaire.
+        lenient().when(demandeExplicationRepository.avocatsEnAttenteDeReponse()).thenReturn(List.of());
     }
 
     /** Une audience passée de {@code jours}, sur une étape en cours. */
@@ -274,6 +279,62 @@ class CompteRenduAttenduSchedulerTest {
                 .notifier(any(), any(), anyLong(), eq("cr-attendu-43-relance-1"));
         verify(notificationPrestataireService, never())
                 .notifier(any(), any(), anyLong(), eq("cr-attendu-42-relance-1"));
+    }
+
+    // ── N7 temps 2 : une demande d'explication suspend la relance ─────────────
+
+    /**
+     * La machine se tait pendant qu'un responsable ecrit.
+     *
+     * <p>Continuer a envoyer un rappel automatique tous les deux jours pendant qu'une demande
+     * d'explication attend sa reponse affaiblirait les deux : le rappel, qu'on cesse de lire, et la
+     * demande, noyee dedans.
+     */
+    @Test
+    void relance_suspendue_quandUneExplicationEstAttendue() {
+        lesAudiencesPassees(audiencePassee(2, StatutCycleVie.EN_COURS));
+        aucunCompteRendu();
+        when(demandeExplicationRepository.avocatsEnAttenteDeReponse()).thenReturn(List.of(99L));
+
+        scheduler.verifier();
+
+        verify(notificationPrestataireService, never()).notifier(any(), any(), any(), anyString());
+    }
+
+    /**
+     * Et elle reprend des que l'avocat a repondu.
+     *
+     * <p>Le compte rendu manque toujours : s'etre explique n'est pas l'avoir depose, et c'est de
+     * nouveau l'affaire du rappel automatique.
+     */
+    @Test
+    void relance_reprise_quandLExplicationEstDonnee() {
+        lesAudiencesPassees(audiencePassee(2, StatutCycleVie.EN_COURS));
+        aucunCompteRendu();
+        when(demandeExplicationRepository.avocatsEnAttenteDeReponse()).thenReturn(List.of());
+
+        scheduler.verifier();
+
+        verify(notificationPrestataireService).notifier(
+                eq(EvenementPrestataire.COMPTE_RENDU_ATTENDU), eq(avocat), eq(DOSSIER_ID), anyString());
+    }
+
+    /** La dispense ne vaut que pour celui qui doit une explication, pas pour ses confreres. */
+    @Test
+    void relance_suspendue_pourLeSeulAvocatConcerne() {
+        Avocat confrere = Avocat.builder().id(77L).nom("Cabinet NANA").build();
+        when(dossierAvocatRepository.findByDossierId(DOSSIER_ID)).thenReturn(List.of(
+                DossierAvocat.builder().avocat(avocat).build(),
+                DossierAvocat.builder().avocat(confrere).build()));
+        lesAudiencesPassees(audiencePassee(2, StatutCycleVie.EN_COURS));
+        aucunCompteRendu();
+        when(demandeExplicationRepository.avocatsEnAttenteDeReponse()).thenReturn(List.of(99L));
+
+        scheduler.verifier();
+
+        verify(notificationPrestataireService, never()).notifier(any(), eq(avocat), any(), anyString());
+        verify(notificationPrestataireService).notifier(
+                eq(EvenementPrestataire.COMPTE_RENDU_ATTENDU), eq(confrere), eq(DOSSIER_ID), anyString());
     }
 
     // ── N7 : deux audiences consecutives sans compte rendu remontent au DJ ────

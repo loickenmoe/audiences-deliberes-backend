@@ -54,7 +54,11 @@ class TypeActionHistoriqueTest {
         // + SENSIBILITE_PROPOSEE et SENSIBILITE_RETIREE (N4, 2026-10-06) : la diligence
         // particulière se révise après l'ouverture, dans les deux sens. `V43` étend
         // `chk_historique_code` en conséquence — c'est exactement le lien que ce test rappelle.
-        assertThat(TypeActionHistorique.values()).hasSize(51);
+        //
+        // + EXPLICATION_DEMANDEE et EXPLICATION_REPONDUE (N7 temps 2, 2026-10-07) : la direction
+        // demande à un avocat de s'expliquer, l'avocat répond, et l'échange reste. `V46` étend
+        // la contrainte - le même lien, la troisième fois.
+        assertThat(TypeActionHistorique.values()).hasSize(53);
         assertThat(TypeActionHistorique.NON_CLASSEE.libelle()).isEqualTo("Action non classée");
     }
 }

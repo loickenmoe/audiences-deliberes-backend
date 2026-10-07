@@ -2168,6 +2168,56 @@ sont unifiées.
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
 
+### Q-130 ✅ La demande d'explication, et la réponse de l'avocat — tranché (2026-10-07)
+
+**Ce que le temps 1 laissait en plan.** Q-129 signale à la direction qu'un avocat a manqué deux
+audiences de suite. Ensuite, rien : le DJ écrivait hors de l'application, et plus personne ne savait
+qui s'était expliqué. Deux arbitrages ont ouvert ce temps 2 : la réponse **est** suivie, et la
+relance automatique **se suspend** dès qu'une demande part.
+
+**Pourquoi une table, et non une correspondance.** `correspondance_avocat` pend à une publication,
+par une clé étrangère obligatoire et unique. Or une demande d'explication porte sur une
+**absence** : il n'y a précisément rien de publié à quoi l'accrocher. Elle pend donc à l'avocat,
+et le dossier n'y est que **facultatif** - elle vise une conduite, pas une affaire. Exiger un
+dossier obligerait à en choisir un arbitrairement, et la demande se lirait comme un reproche sur
+celui-là.
+
+**La réponse vit dans la même ligne.** Une table de réponses autoriserait plusieurs réponses à une
+même demande, ce que personne n'a demandé, et obligerait chaque lecture à joindre pour savoir si
+l'on attend encore. Le statut se **déduit** de la date de réponse : une colonne de plus pourrait
+dire le contraire des deux autres, et c'est toujours elle qu'on finirait par croire.
+
+**Quatre refus font de cet échange une pièce, et non une conversation.** Une seule demande en
+attente à la fois - une seconde brouillerait la file : laquelle suspend la relance, à laquelle
+faut-il répondre ? On ne répond pas à la demande d'un autre (403). On ne répond qu'une fois : une
+prise de position datée, que la direction lira peut-être des mois plus tard, ne se récrit pas (409)
+- corriger passe par une nouvelle demande. Et un compte non rattaché au répertoire ne répond pas.
+
+**La relance se tait pendant l'échange.** Un responsable qui écrit en personne doit couvrir la
+machine, pas rivaliser avec elle : continuer les rappels automatiques pendant qu'une demande attend
+affaiblirait les deux - le rappel, qu'on cesse de lire, et la demande, noyée dedans. Elle reprend à
+la réponse : le compte rendu manque toujours, et c'est de nouveau son affaire. La question est posée
+**une fois par passage**, non une fois par audience.
+
+**⚠ Ce qui n'est pas fait, et pourquoi.** Aucune relance de la demande elle-même. « Reprendre si
+rien n'arrive » supposerait un délai que personne n'a fixé, et je n'en invente pas. Une demande sans
+réponse reste **visible** dans la file de la direction, filtrable sur « en attente », qui décide
+d'insister ou non. Le jour où le métier donnera ce délai, il devra devenir un paramètre.
+
+**Un seul type d'alerte pour les deux sens.** La demande part vers l'avocat, la réponse revient vers
+la direction : c'est le même fil, et le texte de l'alerte dit lequel. Deux types auraient doublé la
+grille de notification pour une distinction que le destinataire fait déjà de lui-même.
+
+**V46 traverse les trois référentiels fermés d'un coup** - codes d'historique, types d'alerte,
+grilles de notification. Les trois échouent au même endroit, en écriture et en production, le jour
+où l'événement se produit ; les poser ensemble vaut mieux que de les découvrir l'un après l'autre.
+
+**Un test assoupli, sans être relâché.** `les_grilles_couvrent_initialement_tous_les_evenements`
+comparait l'**ordre** là où il vérifie la **couverture**. L'ordre d'une liste que la direction
+réécrit à sa guise ne veut rien dire, et l'exiger faisait échouer le test parce qu'une valeur
+nouvelle s'ajoute à la suite sans être déclarée en dernier dans son énumération. L'égalité des
+ensembles reste exigée : aucun événement oublié, aucun inconnu en trop.
+
 ### Q-129 ✅ Deux audiences sans compte rendu remontent à la direction — tranché (2026-10-07)
 
 **La définition, enfin posée.** L'observation 8 demandait une relance « après deux manquements » et

@@ -27,6 +27,16 @@ public enum EvenementPrestataire {
     COMPTE_RENDU_ATTENDU,
 
     /**
+     * La direction demande à l'avocat de s'expliquer (N7 temps 2, observation 8).
+     *
+     * <p>Distinct de {@link #COMPTE_RENDU_ATTENDU}, qui est un rappel automatique : celui-ci est
+     * écrit par quelqu'un, et appelle une réponse. C'est précisément parce que la machine a cessé
+     * d'obtenir quoi que ce soit qu'un responsable prend la plume ; les confondre viderait le
+     * second de ce qui lui donne son poids.
+     */
+    DEMANDE_EXPLICATION,
+
+    /**
      * L'Assistante a accusé réception d'un compte rendu (RG-INT-06 amendée, 2026-10-05).
      *
      * <p>Distinct de {@link #PUBLICATION_ARBITREE} : celui-ci annonce une décision prise sur

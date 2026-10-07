@@ -315,6 +315,13 @@ automatisés dédiés. Voir `DECISIONS_AND_OPEN_QUESTIONS.md` Q-20, Q-25, Q-55, 
 > `indicateurCharge`/`indicateurPerformance` calculés à la demande (Q-53), triés par charge
 > croissante, recherche par `?nom=`.
 >
+> **La demande d'explication** (N7 temps 2, Q-130) : `POST /demandes-explication` (DJ, DJA), `PUT
+> /demandes-explication/{id}/reponse` (AVOCAT, la sienne seule), `GET /demandes-explication` -
+> une seule route de lecture pour deux publics, le **périmètre étant décidé par le serveur** sur
+> l'identité de qui appelle : un paramètre d'écran suffirait à un avocat pour demander la liste
+> entière. V46 crée la table et traverse les **trois référentiels fermés** d'un coup - codes
+> d'historique, types d'alerte, grilles de notification.
+>
 > **La lettre appartient à son demandeur** (Q-126, métier du 2026-10-07). `PUT
 > /constitutions/prestataires/{id}/lettre` n'est plus gardé par le seul rôle : `ROLE_JURISTE` est
 > composite (Q-81), si bien que **tout juriste, le DJ et la DJA pouvaient récrire la lettre d'un

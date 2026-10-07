@@ -11,6 +11,7 @@ import com.afriland.audiences.notification.domain.EvenementPrestataire;
 import com.afriland.audiences.notification.service.NotificationPrestataireService;
 import com.afriland.audiences.publication.domain.StatutPublication;
 import com.afriland.audiences.publication.repository.CompteRenduAudienceRepository;
+import com.afriland.audiences.publication.repository.DemandeExplicationRepository;
 import com.afriland.audiences.referentiel.domain.Avocat;
 import com.afriland.audiences.referentiel.domain.Utilisateur;
 import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
@@ -98,6 +99,7 @@ public class CompteRenduAttenduScheduler {
     private final ConfigurationService configurationService;
     private final UtilisateurRepository utilisateurRepository;
     private final AlerteService alerteService;
+    private final DemandeExplicationRepository demandeExplicationRepository;
 
     @Scheduled(cron = "${publication.relance-compte-rendu.cron:0 30 6 * * *}")
     @Transactional
@@ -107,6 +109,19 @@ public class CompteRenduAttenduScheduler {
             return;
         }
         LocalDate aujourdHui = LocalDate.now();
+        /*
+         * Les avocats à qui la direction a écrit et qui n'ont pas encore répondu (N7 temps 2).
+         *
+         * **Un responsable qui écrit en personne couvre la machine.** Continuer à envoyer un rappel
+         * automatique tous les deux jours pendant qu'une demande d'explication attend sa réponse
+         * ferait du bruit, et affaiblirait les deux : le rappel, qu'on cesse de lire, et la demande,
+         * noyée dedans. La relance reprend à la réponse - le compte rendu manque toujours, et c'est
+         * de nouveau l'affaire du rappel.
+         *
+         * La question est posée **une fois par passage**, et non une fois par audience : la réponse
+         * ne change pas d'une ligne à l'autre, et le planificateur en parcourt des centaines.
+         */
+        Set<Long> dispenses = Set.copyOf(demandeExplicationRepository.avocatsEnAttenteDeReponse());
 
         for (Audience audience : audienceRepository.findByDatePlanifieeBeforeAndStatutNot(
                 aujourdHui, StatutAudience.ANNULEE)) {
@@ -130,11 +145,11 @@ public class CompteRenduAttenduScheduler {
                     audience.getId(), DEPOSE_OU_VALIDE)) {
                 continue;
             }
-            relancer(audience, rang, jours);
+            relancer(audience, rang, jours, dispenses);
         }
     }
 
-    private void relancer(Audience audience, long rang, long joursEcoules) {
+    private void relancer(Audience audience, long rang, long joursEcoules, Set<Long> dispenses) {
         Long dossierId = audience.getDossier().getId();
         List<DossierAvocat> affectations = dossierAvocatRepository.findByDossierId(dossierId);
         if (affectations.isEmpty()) {
@@ -145,6 +160,10 @@ public class CompteRenduAttenduScheduler {
             return;
         }
         for (DossierAvocat affectation : affectations) {
+            // Une demande d'explication attend sa réponse : la machine se tait pour celui-ci.
+            if (dispenses.contains(affectation.getAvocat().getId())) {
+                continue;
+            }
             notificationPrestataireService.notifier(
                     EvenementPrestataire.COMPTE_RENDU_ATTENDU,
                     affectation.getAvocat(),

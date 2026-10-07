@@ -107,6 +107,23 @@ public enum TypeActionHistorique {
     INTERVENANT_MODIFIE("Modification d'un intervenant"),
 
     /**
+     * Demande d'explication adressée à un avocat (N7 temps 2, observation 8). {@code details} porte
+     * {@code avocatId} et {@code demandeId}.
+     *
+     * <p>Elle naît d'un constat de l'application - deux audiences sans compte rendu - mais c'est
+     * une décision de la direction : l'historique doit dire qui l'a prise, et quand.
+     */
+    EXPLICATION_DEMANDEE("Demande d'explication adressée à un avocat"),
+
+    /**
+     * Réponse de l'avocat à une demande d'explication. {@code details} porte {@code demandeId}.
+     *
+     * <p>C'est elle qui clôt l'échange, et qui relâche la relance automatique suspendue par la
+     * demande. Sans trace, personne ne saurait dire qui s'est expliqué.
+     */
+    EXPLICATION_REPONDUE("Réponse à une demande d'explication"),
+
+    /**
      * Consultation de l'écran d'audit (Q-112). {@code details} porte les critères employés :
      * {@code perimetre}, et le cas échéant {@code auteurRecherche}, {@code dossierId},
      * {@code codeRecherche}, {@code dateDebut}, {@code dateFin}.
