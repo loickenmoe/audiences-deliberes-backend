@@ -2168,6 +2168,99 @@ sont unifiées.
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
 
+### Q-132 ✅ Le rapport d'activité par personne : des indicateurs, pas une note — tranché (2026-10-09)
+
+**A — Ce que le métier demande.** L'observation 14 du 03/10 réclame « des rapports nominatifs ».
+L'arbitrage du 2026-10-07 l'a précisée : **sans note**. « Dossiers traités, audiences suivies,
+comptes rendus déposés dans les délais, délais moyens - par personne et par période. Le responsable
+apprécie, l'application compte. » La liste exacte des informations n'est jamais venue.
+
+**B — Ce que le code implémente.** `GET /rapports/nominatif?dateDebut&dateFin`, servi par
+`RapportNominatifService`, agrège `historique_action` : six décomptes par personne — dossiers
+ouverts, audiences planifiées, comptes rendus saisis, délibérés enregistrés, lettres rédigées, frais
+contrôlés — et le **délai moyen** entre une audience et la saisie de son compte rendu. **Rien n'a
+été collecté en plus** : chaque indicateur correspond à un code d'action déjà tracé. C'est ce qui
+permet de livrer sans la liste manquante — je ne déduis aucune information nouvelle, j'expose ce que
+l'historique porte déjà.
+
+**C — Les quatre refus qui donnent sa forme à ce rapport.**
+
+1. **Pas de note, pas de score, pas de total « global ».** Additionner des actions de natures
+   différentes fabriquerait un chiffre de mérite que rien ne justifie — trente dossiers simples ne
+   valent pas deux affaires difficiles, et l'application n'a aucun moyen de le savoir.
+2. **Pas de tri par volume.** Les lignes suivent l'ordre des **noms**. Un tri par activité ferait du
+   rapport un palmarès, où le premier passerait pour le meilleur — c'est la note, réintroduite par
+   la mise en page.
+3. **Pas de « dossiers gagnés par personne ».** L'issue d'un délibéré appartient au **dossier**, pas
+   à celui qui l'a saisi : l'attribuer à une personne serait une règle métier que personne n'a
+   donnée. Plusieurs juristes interviennent sur une même affaire, et c'est le juge qui tranche.
+4. **Pas de « temps passé ».** L'application horodate des **actions**, jamais des durées de travail.
+   En déduire un temps de présence serait une invention, et une invention consultable par la
+   hiérarchie.
+
+**Le délai moyen vaut `null`, jamais zéro**, quand la personne n'a saisi aucun compte rendu. Zéro se
+lirait comme une saisie le jour même, c'est-à-dire comme la **meilleure performance possible** —
+exactement l'inverse de ce que l'absence signifie. L'écran affiche « Sans objet ».
+
+**Qui le lit : `hasAnyRole('DJ','DJA')`, et c'est délibérément plus étroit que `GET /rapports`.** Ce
+rapport **nomme des collègues**. L'adosser à `ROLE_JURISTE`, composite depuis Q-81, l'aurait ouvert
+à chaque juriste — donc à chacun des nommés. Même raisonnement qu'en Q-126 : un droit qui désigne
+des personnes ne se lit pas sur un rôle composite.
+
+**Deux pièges techniques, tous deux vérifiés sur base réelle.** Le délai moyen se calcule en SQL
+natif en rattachant l'action à son audience par `details ->> 'audienceId'` ; l'opérateur
+d'existence JSONB `?` y est **interdit**, JDBC le lisant comme un paramètre positionnel — d'où
+`jsonb_exists(h.details, 'audienceId')`. Et la borne haute est `fin.plusDays(1).atStartOfDay()` :
+comparer un `timestamp` à une `date` de fin exclurait toute la dernière journée.
+
+**Un compte retiré du référentiel garde ses lignes**, nommées « Compte retiré (#id) ». Les masquer
+ferait disparaître de l'activité réelle ; les laisser sans nom les rendrait anonymes, alors que
+c'est précisément le « qui » qui est en jeu.
+
+**Au passage, le dernier pourcentage de l'application disparaît.** Le répertoire des avocats
+affichait un taux de performance ; `AvocatRepertoireResponse` expose désormais
+`deliberesFavorables` et `deliberesTotal`, et l'écran lit « 3 gagnés sur 4 délibérés » — « Aucun
+délibéré » quand il n'y a rien à compter, un 0 % se lisant comme un échec là où rien n'a été jugé.
+Le taux reste dans la réponse, inutilisé : le retirer du contrat serait une rupture sans gain.
+
+**Ce que N11 laisse ouvert.** Le troisième indicateur approuvé le 2026-10-07 — « comptes rendus
+manquants » par avocat, dans le répertoire — n'est **pas** livré ici : il ne partage pas cette
+agrégation, et il comble un trou de N7 (un avocat qui manque une audience sur trois ne déclenche
+jamais l'escalade des séries consécutives).
+
+### Q-131 ✅ Les événements sans libellé de l'écran de configuration — corrigé (2026-10-07)
+
+**Signalé par le porteur du projet** : connecté en DJ, l'écran *Configuration* affichait **cinq
+erreurs** de message manquant. Trois venaient de N7, deux étaient **antérieures**.
+
+**Ce qui manquait.** `DEMANDE_EXPLICATION` n'avait de libellé ni dans `domaine.TypeAlerte`, ni dans
+`domaine.EvenementPrestataire`, ni dans `supervisionNotifications.evenements`. Et ce dernier bloc
+ignorait **`COMPTE_RENDU_ATTENDU` et `COMPTE_RENDU_RECU` depuis le 2026-10-05** : deux événements
+livrés avec RG-INT-11 et RG-INT-06, que la supervision affichait en code brut au DJ sans que
+personne le sache.
+
+**Pourquoi le garde-fou n'a rien vu, alors qu'il existe.** Le test « chaque valeur d'énumération a un
+libellé » parcourt les listes de `types/enums.ts`. `DEMANDE_EXPLICATION` n'y avait pas été ajouté :
+le test n'avait donc **rien à vérifier**. Un garde-fou qui tire sa liste du code qu'il garde ne
+protège que ce qu'on a pensé à y inscrire - c'est sa limite, et elle doit être connue.
+
+**Pourquoi les parcours Playwright ne l'ont pas vu non plus.** Ils tournent sur un build de
+production, où `next-intl` **remplace** un message manquant par le chemin de sa clé au lieu de
+lever. Le sélecteur `/ par SMS$/` du parcours de la grille continuait donc de trouver sa case, dont
+le nom accessible était devenu
+`domaine.EvenementPrestataire.DEMANDE_EXPLICATION par SMS`. En développement, la même absence
+produit une erreur visible - c'est ainsi qu'elle a été trouvée.
+
+**Ce qui ferme la classe de défaut.** Un test nouveau : **chaque alerte interne et chaque événement
+prestataire doit avoir un libellé dans `supervisionNotifications.evenements`**, dans les deux
+langues. Ce bloc n'était couvert par rien, alors qu'il nomme les mêmes événements **ailleurs** que
+`domaine.*` : traduire dans l'un et oublier l'autre ne se voyait pas.
+
+**Ce que cela confirme.** Un événement nouveau traverse désormais **cinq** référentiels, et non
+trois : la contrainte en base, la grille de notification, les textes du moteur, la liste
+d'énumération du frontend, et les deux blocs de libellés. Les cinq se taisent tant que l'événement
+ne se produit pas.
+
 ### Q-130 ✅ La demande d'explication, et la réponse de l'avocat — tranché (2026-10-07)
 
 **Ce que le temps 1 laissait en plan.** Q-129 signale à la direction qu'un avocat a manqué deux

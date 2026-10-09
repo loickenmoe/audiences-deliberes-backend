@@ -420,6 +420,12 @@ coup. Réponses réduites à ce que l'usage exige.
 | 48 | PUT | `/configurations/{cle}` | `ROLE_DJ` | CONF01-07 | 📋 | ✅ M5 · **validé par clé M17** (Q-91) |
 | 49 | GET | `/rapports` | `ROLE_JURISTE` | FR-REP-01 / US 8.4 | 📋 | ✅ |
 | 50 | GET | `/tableau-de-bord` | `ROLE_DJ` **et `ROLE_DJA`** | FR-REP-02 / US 8.5 | 📋 | ✅ · **élargi M18** (Q-95) |
+| — | GET | `/rapports/nominatif?dateDebut&dateFin` 🆕 Q-132 | `ROLE_DJ` **et `ROLE_DJA`** | observation 14 du 03/10 | 💡 | ✅ 2026-10-09 |
+
+> **`/rapports/nominatif`** : six décomptes par personne agrégés depuis `historique_action`, plus le
+> délai moyen de saisie d'un compte rendu ; **204** si la période ne porte aucune activité ; lignes
+> triées par **nom**, jamais par volume (Q-132). L'habilitation est **plus étroite que `#49`** à
+> dessein : le rapport nomme des collègues, et `ROLE_JURISTE` est composite depuis Q-81.
 
 > **#44** : `type` doit valoir `CHARGE_MAX_AVOCAT` (400 sinon) — seul type d'alerte du contrat
 > adossé à un seuil configurable (RG-ALR-02) ; délègue à `PUT /configurations/{cle}` en interne.

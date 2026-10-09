@@ -4,11 +4,13 @@ import com.afriland.audiences.common.security.CurrentUserService;
 import com.afriland.audiences.reporting.domain.TypeRapport;
 import com.afriland.audiences.reporting.service.JournalAudiencesService;
 import com.afriland.audiences.reporting.service.RapportExportService;
+import com.afriland.audiences.reporting.service.RapportNominatifService;
 import com.afriland.audiences.reporting.service.ReportingService;
 import com.afriland.audiences.common.web.PageResponse;
 import com.afriland.audiences.reporting.web.dto.AudienceDuJourResponse;
 import com.afriland.audiences.reporting.web.dto.CompteRenduAttenduResponse;
 import com.afriland.audiences.reporting.web.dto.FormatRapport;
+import com.afriland.audiences.reporting.web.dto.RapportNominatifResponse;
 import com.afriland.audiences.reporting.web.dto.RapportResponse;
 import com.afriland.audiences.reporting.web.dto.TableauDeBordResponse;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +39,7 @@ public class ReportingController {
 
     private final ReportingService reportingService;
     private final RapportExportService rapportExportService;
+    private final RapportNominatifService rapportNominatifService;
     private final JournalAudiencesService journalAudiencesService;
     /** Pour attribuer l'export dans le pied de page : un document dit qui l'a demandé (A2). */
     private final CurrentUserService currentUserService;
@@ -115,6 +118,25 @@ public class ReportingController {
                     .contentType(MediaType.parseMediaType("text/csv"))
                     .body(rapportExportService.exportCsv(rapport));
         };
+    }
+
+    /**
+     * L'activité de chacun sur une période (observation 14, N6).
+     *
+     * <p><b>Réservé au DJ et à la DJA</b>, et lu sur leurs rôles propres : ce rapport nomme des
+     * personnes, et {@code ROLE_JURISTE} étant composite (Q-81), l'ouvrir par lui le donnerait à
+     * tous les juristes - chacun lirait l'activité de ses collègues. C'est la même discipline que
+     * Q-126.
+     *
+     * <p>204 quand la période est vide, comme le rapport périodique : une page de zéros laisserait
+     * croire que personne n'a rien fait, alors que la période n'a rien à dire.
+     */
+    @GetMapping("${api.prefix}/rapports/nominatif")
+    @PreAuthorize("hasAnyRole('DJ', 'DJA')")
+    public ResponseEntity<RapportNominatifResponse> rapportNominatif(@RequestParam LocalDate dateDebut,
+                                                                     @RequestParam LocalDate dateFin) {
+        RapportNominatifResponse rapport = rapportNominatifService.produire(dateDebut, dateFin);
+        return rapport.estVide() ? ResponseEntity.noContent().build() : ResponseEntity.ok(rapport);
     }
 
     /**
