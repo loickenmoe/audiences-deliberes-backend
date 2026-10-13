@@ -2,8 +2,10 @@ package com.afriland.audiences.reporting.service;
 
 import com.afriland.audiences.common.audit.HistoriqueActionRepository;
 import com.afriland.audiences.common.audit.TypeActionHistorique;
+import com.afriland.audiences.referentiel.domain.Avocat;
 import com.afriland.audiences.referentiel.domain.Profil;
 import com.afriland.audiences.referentiel.domain.Utilisateur;
+import com.afriland.audiences.referentiel.repository.AvocatRepository;
 import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -41,6 +43,7 @@ class RapportNominatifServiceTest {
 
     @Mock private HistoriqueActionRepository historiqueActionRepository;
     @Mock private UtilisateurRepository utilisateurRepository;
+    @Mock private AvocatRepository avocatRepository;
 
     @InjectMocks private RapportNominatifService service;
 
@@ -240,5 +243,137 @@ class RapportNominatifServiceTest {
         assertThat(rapport.lignes().get(0).utilisateurId()).isEqualTo(99L);
         assertThat(rapport.lignes().get(0).nom()).isNull();
         assertThat(rapport.lignes().get(0).dossiersOuverts()).isEqualTo(4L);
+    }
+
+    private static HistoriqueActionRepository.ActiviteDeposee depot(
+            Long utilisateurId, String prenom, String nom, String identifiant,
+            TypeActionHistorique code, long total) {
+        return new HistoriqueActionRepository.ActiviteDeposee() {
+            @Override public Long getUtilisateurId() { return utilisateurId; }
+            @Override public String getNom() { return nom; }
+            @Override public String getPrenom() { return prenom; }
+            @Override public String getIdentifiant() { return identifiant; }
+            @Override public String getKeycloakId() { return null; }
+            @Override public TypeActionHistorique getCode() { return code; }
+            @Override public long getTotal() { return total; }
+        };
+    }
+
+    private static Avocat inscription(Long id, String nom, String compte) {
+        Avocat avocat = new Avocat();
+        avocat.setId(id);
+        avocat.setNom(nom);
+        avocat.setCompteKeycloak(compte);
+        return avocat;
+    }
+
+    /**
+     * **Le tableau que le porteur du projet a reclame le 2026-10-13.** « Activite par personne » ne
+     * montrait que les profils internes, et c'etait exact : ses six colonnes comptent des natures de
+     * production interne qu'un avocat n'accomplit jamais. Il **depose** ; c'est le juriste qui
+     * enregistre. Un second tableau, avec ses propres colonnes, plutot qu'une ligne de zeros.
+     */
+    @Test
+    @DisplayName("compte les dépôts de chaque avocat, et le nomme depuis le répertoire")
+    void compteLesDepotsDesAvocats() {
+        when(historiqueActionRepository.compterDepotsParPersonne(anyCollection(), any(), any()))
+                .thenReturn(List.of(
+                        depot(21L, "Me", "Fotso", "me.fotso",
+                                TypeActionHistorique.PUBLICATION_CR_DEPOSE, 6),
+                        depot(21L, "Me", "Fotso", "me.fotso",
+                                TypeActionHistorique.FRAIS_DEMANDE_DEPOSEE, 3),
+                        depot(22L, "Me", "Nkolo", "me.nkolo",
+                                TypeActionHistorique.EXPLICATION_REPONDUE, 1)));
+        when(avocatRepository.findByCompteKeycloakIn(anyCollection()))
+                .thenReturn(List.of(inscription(5L, "Cabinet Fotso & Associés", "me.fotso"),
+                        inscription(7L, "Me Nkolo", "me.nkolo")));
+
+        var rapport = service.produireAvocats(DEBUT, FIN);
+
+        assertThat(rapport.lignes()).hasSize(2);
+        // Par nom : « Cabinet… » avant « Me Nkolo ».
+        var premier = rapport.lignes().get(0);
+        assertThat(premier.nom()).isEqualTo("Cabinet Fotso & Associés");
+        // Le nom du **répertoire**, pas celui du compte : c'est sous celui-là que la direction le
+        // connaît, et c'est lui qui figure sur les lettres de constitution.
+        assertThat(premier.avocatId()).isEqualTo(5L);
+        assertThat(premier.utilisateurId()).isEqualTo(21L);
+        assertThat(premier.comptesRendusDeposes()).isEqualTo(6);
+        assertThat(premier.demandesFraisDeposees()).isEqualTo(3);
+        assertThat(premier.autresPublicationsDeposees()).isZero();
+        assertThat(rapport.lignes().get(1).explicationsFournies()).isEqualTo(1);
+    }
+
+    /**
+     * Les quatre natures comptees sont exclusives a l'avocat - les trois depots et la reponse a une
+     * demande d'explication sont tous `hasRole('AVOCAT')`. Grouper sur elles suffit donc, sans
+     * condition sur le profil : une condition de moins a garder d'accord avec les habilitations.
+     */
+    @Test
+    @DisplayName("n'interroge que les quatre natures qu'un avocat accomplit")
+    void seulesLesNaturesDAvocat() {
+        when(historiqueActionRepository.compterDepotsParPersonne(anyCollection(), any(), any()))
+                .thenReturn(List.of());
+
+        service.produireAvocats(DEBUT, FIN);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<java.util.Collection<TypeActionHistorique>> codes =
+                ArgumentCaptor.forClass(java.util.Collection.class);
+        verify(historiqueActionRepository).compterDepotsParPersonne(codes.capture(), any(), any());
+        assertThat(codes.getValue()).containsExactlyInAnyOrder(
+                TypeActionHistorique.PUBLICATION_CR_DEPOSE,
+                TypeActionHistorique.FRAIS_DEMANDE_DEPOSEE,
+                TypeActionHistorique.PUBLICATION_AUTRE_DEPOSEE,
+                TypeActionHistorique.EXPLICATION_REPONDUE);
+        // Aucune des six natures du tableau interne : un avocat n'en accomplit aucune.
+        assertThat(codes.getValue()).doesNotContain(
+                TypeActionHistorique.DOSSIER_CREE,
+                TypeActionHistorique.AUDIENCE_COMPTE_RENDU_ENREGISTRE,
+                TypeActionHistorique.FRAIS_CONFORMITE_CONTROLEE);
+    }
+
+    @Test
+    @DisplayName("une période sans dépôt est vide, et n'interroge pas le répertoire")
+    void periodeSansDepot() {
+        when(historiqueActionRepository.compterDepotsParPersonne(anyCollection(), any(), any()))
+                .thenReturn(List.of());
+
+        assertThat(service.produireAvocats(DEBUT, FIN).estVide()).isTrue();
+        verify(avocatRepository, never()).findByCompteKeycloakIn(anyCollection());
+    }
+
+    /**
+     * Une inscription retiree du repertoire ne fait pas disparaitre ce que l'avocat a depose. L'ecran
+     * l'ouvre alors par son compte, faute d'inscription a designer - d'ou un `avocatId` nul, qui est
+     * une information et non un trou.
+     */
+    @Test
+    @DisplayName("un avocat retiré du répertoire garde ses dépôts, sous le nom de son compte")
+    void avocatRetireDuRepertoire() {
+        when(historiqueActionRepository.compterDepotsParPersonne(anyCollection(), any(), any()))
+                .thenReturn(List.of(depot(30L, "Me", "Ancien", "me.ancien",
+                        TypeActionHistorique.PUBLICATION_CR_DEPOSE, 2)));
+        when(avocatRepository.findByCompteKeycloakIn(anyCollection())).thenReturn(List.of());
+
+        var ligne = service.produireAvocats(DEBUT, FIN).lignes().get(0);
+
+        assertThat(ligne.avocatId()).isNull();
+        assertThat(ligne.nom()).isEqualTo("Me Ancien");
+        assertThat(ligne.comptesRendusDeposes()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("la borne haute couvre toute la journée de fin, comme le tableau interne")
+    void borneHauteDesAvocats() {
+        when(historiqueActionRepository.compterDepotsParPersonne(anyCollection(), any(), any()))
+                .thenReturn(List.of());
+
+        service.produireAvocats(DEBUT, FIN);
+
+        ArgumentCaptor<LocalDateTime> haute = ArgumentCaptor.forClass(LocalDateTime.class);
+        verify(historiqueActionRepository)
+                .compterDepotsParPersonne(anyCollection(), any(), haute.capture());
+        assertThat(haute.getValue()).isEqualTo(FIN.plusDays(1).atStartOfDay());
     }
 }

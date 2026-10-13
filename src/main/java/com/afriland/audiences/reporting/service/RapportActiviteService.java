@@ -7,10 +7,13 @@ import com.afriland.audiences.common.error.ApiException;
 import com.afriland.audiences.common.error.ErrorCodes;
 import com.afriland.audiences.common.security.CurrentUserService;
 import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
+import com.afriland.audiences.referentiel.service.CompteAvocatService;
 import com.afriland.audiences.dossier.repository.DossierRepository;
 import com.afriland.audiences.reporting.web.dto.ActionDetailleeResponse;
 import com.afriland.audiences.reporting.web.dto.RapportActiviteResponse;
+import com.afriland.audiences.referentiel.domain.Avocat;
 import com.afriland.audiences.referentiel.domain.Utilisateur;
+import com.afriland.audiences.referentiel.repository.AvocatRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -84,6 +87,8 @@ public class RapportActiviteService {
     private final DossierRepository dossierRepository;
     private final CurrentUserService currentUserService;
     private final UtilisateurRepository utilisateurRepository;
+    private final CompteAvocatService compteAvocatService;
+    private final AvocatRepository avocatRepository;
 
     /**
      * L'activité d'une personne sur une période.
@@ -93,8 +98,9 @@ public class RapportActiviteService {
      *                             par son identifiant.
      */
     @Transactional(readOnly = true)
-    public RapportActiviteResponse produire(Long utilisateurIdDemande, LocalDate debut, LocalDate fin) {
-        Utilisateur cible = resoudreCible(utilisateurIdDemande);
+    public RapportActiviteResponse produire(Long utilisateurIdDemande, Long avocatIdDemande,
+                                            LocalDate debut, LocalDate fin) {
+        Utilisateur cible = resoudreCible(utilisateurIdDemande, avocatIdDemande);
         LocalDateTime borneBasse = debut.atStartOfDay();
         // La borne haute inclut toute la journée de fin : comparer un horodatage à une date nue
         // exclurait le dernier jour de la période demandée.
@@ -124,13 +130,14 @@ public class RapportActiviteService {
      * protège.
      */
     @Transactional(readOnly = true)
-    public Page<ActionDetailleeResponse> detailler(Long utilisateurIdDemande, TypeActionHistorique code,
+    public Page<ActionDetailleeResponse> detailler(Long utilisateurIdDemande, Long avocatIdDemande,
+                                                   TypeActionHistorique code,
                                                    LocalDate debut, LocalDate fin, Pageable pageable) {
         if (CODES_EXCLUS.contains(code)) {
             throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
                     "Cette nature d'action n'est pas comptée dans la fiche d'activité.");
         }
-        Utilisateur cible = resoudreCible(utilisateurIdDemande);
+        Utilisateur cible = resoudreCible(utilisateurIdDemande, avocatIdDemande);
         Page<HistoriqueAction> actions = historiqueActionRepository.listerActionsDe(
                 cible.getId(), code, debut.atStartOfDay(), fin.plusDays(1).atStartOfDay(), pageable);
 
@@ -170,11 +177,48 @@ public class RapportActiviteService {
      * désigne des personnes - et celui-ci désigne un collègue nommément - ne peut pas s'y adosser,
      * c'est la leçon de Q-126 et de Q-132.
      */
-    private Utilisateur resoudreCible(Long utilisateurIdDemande) {
+    private Utilisateur resoudreCible(Long utilisateurIdDemande, Long avocatIdDemande) {
+        /*
+         * Les deux ensemble n'ont pas de sens, et le silence serait pire que le refus : servir l'un
+         * en ignorant l'autre laisserait croire qu'on a lu l'activite demandee.
+         */
+        if (utilisateurIdDemande != null && avocatIdDemande != null) {
+            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
+                    "Demandez une personne par son compte ou par son inscription au repertoire, pas les deux.");
+        }
         Utilisateur moi = currentUserService.getCurrentUser();
         if (moi == null) {
             throw ApiException.forbidden(ErrorCodes.DROITS_INSUFFISANTS,
                     "Votre compte n'est pas rattaché au référentiel des utilisateurs.");
+        }
+        /*
+         * Un avocat du répertoire est désigné par son <b>inscription</b>, non par son compte : la
+         * direction le connaît par le répertoire, où l'identifiant d'utilisateur ne figure pas. Le
+         * pont entre les deux existe déjà - c'est celui qui restreint les lectures de l'avocat
+         * lui-même (QF-45).
+         *
+         * <p><b>Le droit est vérifié avant le compte, et l'ordre compte.</b> Une première version
+         * résolvait le compte d'abord, puis appliquait la règle : un avocat passant l'inscription
+         * d'un confrère obtenait un refus, mais apprenait au passage, par la nature du refus, si ce
+         * confrère s'était déjà connecté. {@code estLeCompteDe} répond à la seule question utile -
+         * est-ce la sienne ? - sans rien lire du compte visé.
+         */
+        if (avocatIdDemande != null) {
+            Avocat avocat = avocatRepository.findById(avocatIdDemande)
+                    .orElseThrow(() -> ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE,
+                            "Avocat introuvable : " + avocatIdDemande));
+            if (!PROFILS_DIRECTION.contains(profilDe(moi)) && !compteAvocatService.estLeCompteDe(moi, avocat)) {
+                throw ApiException.forbidden(ErrorCodes.DROITS_INSUFFISANTS,
+                        "Vous ne pouvez consulter que votre propre activité.");
+            }
+            /*
+             * Inscrit au répertoire mais jamais connecté : pas de compte, donc pas une seule ligne
+             * d'historique. Le dire distingue « n'a rien fait » de « n'est jamais venu » - une fiche
+             * vide confondrait les deux, et c'est la première qui ferait accuser à tort.
+             */
+            return compteAvocatService.utilisateurDe(avocat)
+                    .orElseThrow(() -> ApiException.notFound(ErrorCodes.AVOCAT_NON_RATTACHE,
+                            "Cet avocat ne s'est jamais connecté : aucune activité n'est tracée sous son nom."));
         }
         if (utilisateurIdDemande == null || utilisateurIdDemande.equals(moi.getId())) {
             return moi;

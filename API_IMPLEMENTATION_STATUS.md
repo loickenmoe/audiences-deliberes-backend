@@ -420,11 +420,18 @@ coup. Réponses réduites à ce que l'usage exige.
 | 48 | PUT | `/configurations/{cle}` | `ROLE_DJ` | CONF01-07 | 📋 | ✅ M5 · **validé par clé M17** (Q-91) |
 | 49 | GET | `/rapports` | `ROLE_JURISTE` | FR-REP-01 / US 8.4 | 📋 | ✅ |
 | 50 | GET | `/tableau-de-bord` | `ROLE_DJ` **et `ROLE_DJA`** | FR-REP-02 / US 8.5 | 📋 | ✅ · **élargi M18** (Q-95) |
-| — | GET | `/rapports/activite?dateDebut&dateFin&utilisateurId` 🆕 Q-133 | `ROLE_CONSULTATION` — les cinq profils internes | observation 14 du 03/10 | 💡 | ✅ 2026-10-13 |
-| — | GET | `/rapports/activite/export?…&format=PDF\|EXCEL\|CSV` 🆕 Q-133 | `ROLE_CONSULTATION` | métier, 2026-10-13 | 💡 | ✅ 2026-10-13 |
-| — | GET | `/rapports/activite/details?…&code&page&size` 🆕 Q-133 | `ROLE_CONSULTATION` | métier, 2026-10-13 | 💡 | ✅ 2026-10-13 |
+| — | GET | `/rapports/activite?dateDebut&dateFin&utilisateurId&avocatId` 🆕 Q-133, élargi Q-135 | `ROLE_CONSULTATION` **et `ROLE_AVOCAT`** | observation 14 du 03/10 | 💡 | ✅ 2026-10-13 |
+| — | GET | `/rapports/activite/export?…&format=PDF\|EXCEL\|CSV` 🆕 Q-133, élargi Q-135 | `ROLE_CONSULTATION` **et `ROLE_AVOCAT`** | métier, 2026-10-13 | 💡 | ✅ 2026-10-13 |
+| — | GET | `/rapports/activite/details?…&code&page&size` 🆕 Q-133, élargi Q-135 | `ROLE_CONSULTATION` **et `ROLE_AVOCAT`** | métier, 2026-10-13 | 💡 | ✅ 2026-10-13 |
+| — | GET | `/rapports/nominatif/avocats?dateDebut&dateFin` 🆕 Q-136 | `ROLE_DJ` **et `ROLE_DJA`** | signalé en recette, 2026-10-13 | 💡 | ✅ 2026-10-13 |
 | — | GET | `/rapports/nominatif?dateDebut&dateFin` 🆕 Q-132 | `ROLE_DJ` **et `ROLE_DJA`** | observation 14 du 03/10 | 💡 | ✅ 2026-10-09 |
 
+> **Élargis à l'avocat (Q-135)** : il dépose ses demandes de frais, ses comptes rendus d'audience,
+> ses autres publications et répond aux demandes d'explication - j'avais écrit l'inverse. Un avocat se
+> désigne par `avocatId`, son inscription au répertoire, la direction le connaissant par là ; les deux
+> désignations ensemble sont refusées. **Le droit est vérifié avant le compte** : l'ordre inverse
+> faisait dire au refus, par sa nature, si l'avocat visé s'était déjà connecté.
+>
 > **Les trois `/rapports/activite`** : la fiche d'une personne, son export et le détail d'un
 > décompte (Q-133). `utilisateurId` **absent signifie « moi »** ; renseigné, il n'est servi qu'au DJ,
 > à la DJA, ou à la personne elle-même — c'est le **service** qui le vérifie, une annotation ne
@@ -433,6 +440,13 @@ coup. Réponses réduites à ce que l'usage exige.
 > rien fait. Le détail porte le `dossierId` de chaque action, ce qui rend le décompte cliquable
 > jusqu'à la fiche du dossier.
 
+> **`/rapports/nominatif/avocats`** : le pendant du tableau interne, pour l'autre population (Q-136).
+> Un avocat n'accomplit **aucune** des six natures du tableau interne - il dépose, le juriste
+> enregistre -, d'où quatre colonnes propres : comptes rendus déposés, demandes de frais
+> déposées, autres publications, explications fournies. Les quatre natures étant exclusives à
+> `ROLE_AVOCAT`, grouper sur elles suffit : aucune condition sur le profil. **204** si personne
+> n'a rien déposé ; tri par **nom**.
+>
 > **`/rapports/nominatif`** : six décomptes par personne agrégés depuis `historique_action`, plus le
 > délai moyen de saisie d'un compte rendu ; **204** si la période ne porte aucune activité ; lignes
 > triées par **nom**, jamais par volume (Q-132). L'habilitation est **plus étroite que `#49`** à

@@ -146,6 +146,45 @@ public interface HistoriqueActionRepository extends JpaRepository<HistoriqueActi
                                 @Param("debut") LocalDateTime debut,
                                 @Param("fin") LocalDateTime fin);
 
+    /**
+     * L'activité des avocats, comptée par personne et par nature (Q-136).
+     *
+     * <p>Identique dans sa forme à {@link #compterActivitesParPersonne}, et c'est voulu : le
+     * tableau des avocats se lit comme celui des internes, et confondre les deux dans une requête
+     * unique obligerait l'appelant à trier des lignes qu'il n'a pas demandées.
+     *
+     * <p>Le {@code keycloakId} et l'{@code identifiant} du compte voyagent avec le décompte : c'est
+     * par eux que l'inscription au répertoire se retrouve, et les lire ici évite une seconde
+     * requête par avocat.
+     */
+    @Query("select h.utilisateur.id as utilisateurId, h.utilisateur.nom as nom, "
+            + "h.utilisateur.prenom as prenom, h.utilisateur.identifiant as identifiant, "
+            + "h.utilisateur.keycloakId as keycloakId, h.code as code, count(h) as total "
+            + "from HistoriqueAction h "
+            + "where h.code in :codes and h.dateAction >= :debut and h.dateAction < :fin "
+            + "group by h.utilisateur.id, h.utilisateur.nom, h.utilisateur.prenom, "
+            + "h.utilisateur.identifiant, h.utilisateur.keycloakId, h.code")
+    List<ActiviteDeposee> compterDepotsParPersonne(@Param("codes") Collection<TypeActionHistorique> codes,
+                                                   @Param("debut") LocalDateTime debut,
+                                                   @Param("fin") LocalDateTime fin);
+
+    /** Un compte, une nature de dépôt, un décompte - avec de quoi retrouver l'inscription. */
+    interface ActiviteDeposee {
+        Long getUtilisateurId();
+
+        String getNom();
+
+        String getPrenom();
+
+        String getIdentifiant();
+
+        String getKeycloakId();
+
+        TypeActionHistorique getCode();
+
+        long getTotal();
+    }
+
     /** Une nature d'action et son décompte, pour la fiche d'une personne. */
     interface ActiviteParCode {
         TypeActionHistorique getCode();

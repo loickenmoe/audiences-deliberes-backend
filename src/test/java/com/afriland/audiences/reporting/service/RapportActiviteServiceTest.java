@@ -5,9 +5,12 @@ import com.afriland.audiences.common.audit.TypeActionHistorique;
 import com.afriland.audiences.common.error.ApiException;
 import com.afriland.audiences.common.security.CurrentUserService;
 import com.afriland.audiences.dossier.repository.DossierRepository;
+import com.afriland.audiences.referentiel.domain.Avocat;
 import com.afriland.audiences.referentiel.domain.Profil;
+import com.afriland.audiences.referentiel.repository.AvocatRepository;
 import com.afriland.audiences.referentiel.domain.Utilisateur;
 import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
+import com.afriland.audiences.referentiel.service.CompteAvocatService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,6 +30,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -49,6 +53,8 @@ class RapportActiviteServiceTest {
     @Mock private DossierRepository dossierRepository;
     @Mock private CurrentUserService currentUserService;
     @Mock private UtilisateurRepository utilisateurRepository;
+    @Mock private CompteAvocatService compteAvocatService;
+    @Mock private AvocatRepository avocatRepository;
 
     @InjectMocks private RapportActiviteService service;
 
@@ -82,7 +88,7 @@ class RapportActiviteServiceTest {
                         activite(TypeActionHistorique.AUDIENCE_PLANIFIEE, 9)));
         when(historiqueActionRepository.delaiMoyenDeSaisieDe(anyLong(), any(), any())).thenReturn(2.5);
 
-        var rapport = service.produire(null, DEBUT, FIN);
+        var rapport = service.produire(null, null, DEBUT, FIN);
 
         assertThat(rapport.nom()).isEqualTo("Awa Ndiaye");
         assertThat(rapport.profil()).isEqualTo("JURISTE");
@@ -108,7 +114,7 @@ class RapportActiviteServiceTest {
                 .thenReturn(List.of(activite(TypeActionHistorique.LETTRE_CONSTITUTION_REDIGEE, 5)));
         lenient().when(historiqueActionRepository.delaiMoyenDeSaisieDe(anyLong(), any(), any())).thenReturn(null);
 
-        service.produire(null, DEBUT, FIN);
+        service.produire(null, null, DEBUT, FIN);
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Collection<TypeActionHistorique>> codes = ArgumentCaptor.forClass(Collection.class);
@@ -148,7 +154,7 @@ class RapportActiviteServiceTest {
                 .thenReturn(List.of(activite(TypeActionHistorique.DOSSIER_CREE, 2)));
         when(historiqueActionRepository.delaiMoyenDeSaisieDe(anyLong(), any(), any())).thenReturn(null);
 
-        assertThat(service.produire(null, DEBUT, FIN).delaiMoyenSaisieCompteRendu()).isNull();
+        assertThat(service.produire(null, null, DEBUT, FIN).delaiMoyenSaisieCompteRendu()).isNull();
     }
 
     @Test
@@ -158,7 +164,7 @@ class RapportActiviteServiceTest {
         when(historiqueActionRepository.compterActivitesDe(any(), anyCollection(), any(), any()))
                 .thenReturn(List.of());
 
-        var rapport = service.produire(null, DEBUT, FIN);
+        var rapport = service.produire(null, null, DEBUT, FIN);
 
         assertThat(rapport.estVide()).isTrue();
         // Pas de délai à chercher sans la moindre action : une requête native de moins, et un
@@ -173,7 +179,7 @@ class RapportActiviteServiceTest {
         when(historiqueActionRepository.compterActivitesDe(any(), anyCollection(), any(), any()))
                 .thenReturn(List.of());
 
-        service.produire(null, DEBUT, FIN);
+        service.produire(null, null, DEBUT, FIN);
 
         ArgumentCaptor<LocalDateTime> haute = ArgumentCaptor.forClass(LocalDateTime.class);
         verify(historiqueActionRepository)
@@ -186,7 +192,7 @@ class RapportActiviteServiceTest {
     void unJuristeNeLitQueLaSienne() {
         when(currentUserService.getCurrentUser()).thenReturn(personne(7L, "Awa", "Ndiaye", "JURISTE"));
 
-        assertThatThrownBy(() -> service.produire(9L, DEBUT, FIN))
+        assertThatThrownBy(() -> service.produire(9L, null, DEBUT, FIN))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("votre propre activité");
         verify(historiqueActionRepository, never()).compterActivitesDe(any(), anyCollection(), any(), any());
@@ -208,7 +214,7 @@ class RapportActiviteServiceTest {
                     .thenReturn(List.of(activite(TypeActionHistorique.DOSSIER_CREE, 1)));
             lenient().when(historiqueActionRepository.delaiMoyenDeSaisieDe(anyLong(), any(), any())).thenReturn(null);
 
-            var rapport = service.produire(9L, DEBUT, FIN);
+            var rapport = service.produire(9L, null, DEBUT, FIN);
 
             assertThat(rapport.utilisateurId()).isEqualTo(9L);
             assertThat(rapport.nom()).isEqualTo("Awa Ndiaye");
@@ -223,7 +229,7 @@ class RapportActiviteServiceTest {
                 .thenReturn(List.of(activite(TypeActionHistorique.DOSSIER_CREE, 1)));
         when(historiqueActionRepository.delaiMoyenDeSaisieDe(anyLong(), any(), any())).thenReturn(null);
 
-        assertThat(service.produire(7L, DEBUT, FIN).utilisateurId()).isEqualTo(7L);
+        assertThat(service.produire(7L, null, DEBUT, FIN).utilisateurId()).isEqualTo(7L);
     }
 
     /**
@@ -235,7 +241,7 @@ class RapportActiviteServiceTest {
     void leDetailEstTenuParLeMemePerimetre() {
         when(currentUserService.getCurrentUser()).thenReturn(personne(7L, "Awa", "Ndiaye", "JURISTE"));
 
-        assertThatThrownBy(() -> service.detailler(9L, TypeActionHistorique.DOSSIER_CREE, DEBUT, FIN,
+        assertThatThrownBy(() -> service.detailler(9L, null, TypeActionHistorique.DOSSIER_CREE, DEBUT, FIN,
                 org.springframework.data.domain.PageRequest.of(0, 20)))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("votre propre activité");
@@ -244,7 +250,7 @@ class RapportActiviteServiceTest {
     @Test
     @DisplayName("on ne détaille pas une nature que la fiche ne compte pas")
     void pasDeDetailSurUneNatureExclue() {
-        assertThatThrownBy(() -> service.detailler(null, TypeActionHistorique.AUDIT_CONSULTE, DEBUT, FIN,
+        assertThatThrownBy(() -> service.detailler(null, null, TypeActionHistorique.AUDIT_CONSULTE, DEBUT, FIN,
                 org.springframework.data.domain.PageRequest.of(0, 20)))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("n'est pas comptée");
@@ -257,8 +263,132 @@ class RapportActiviteServiceTest {
     void compteNonRattache() {
         when(currentUserService.getCurrentUser()).thenReturn(null);
 
-        assertThatThrownBy(() -> service.produire(null, DEBUT, FIN))
+        assertThatThrownBy(() -> service.produire(null, null, DEBUT, FIN))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("rattaché");
+    }
+
+    /**
+     * **Le test qui corrige une affirmation fausse.** J'ai soutenu, en livrant la fiche d'activite,
+     * qu'un avocat n'aurait rien a y lire - « aucune des natures comptees n'est la sienne, sa fiche
+     * serait vide par construction ». C'etait faux : il depose ses demandes de frais, ses comptes
+     * rendus d'audience, ses autres publications, et repond aux demandes d'explication. Les quatre
+     * sont journalisees sous son propre compte.
+     */
+    @Test
+    @DisplayName("un avocat lit sa propre activité, qui n'est pas vide")
+    void unAvocatLitLaSienne() {
+        when(currentUserService.getCurrentUser()).thenReturn(personne(21L, "Me", "Fotso", "AVOCAT"));
+        when(historiqueActionRepository.compterActivitesDe(any(), anyCollection(), any(), any()))
+                .thenReturn(List.of(
+                        activite(TypeActionHistorique.PUBLICATION_CR_DEPOSE, 6),
+                        activite(TypeActionHistorique.FRAIS_DEMANDE_DEPOSEE, 3),
+                        activite(TypeActionHistorique.EXPLICATION_REPONDUE, 1)));
+        when(historiqueActionRepository.delaiMoyenDeSaisieDe(anyLong(), any(), any())).thenReturn(null);
+
+        var rapport = service.produire(null, null, DEBUT, FIN);
+
+        assertThat(rapport.utilisateurId()).isEqualTo(21L);
+        assertThat(rapport.lignes()).hasSize(3);
+        /*
+         * Le delai moyen de saisie reste nul pour lui, et ce n'est pas un oubli : il **depose** un
+         * compte rendu (PUBLICATION_CR_DEPOSE), c'est le juriste qui l'**enregistre** sur l'audience
+         * (AUDIENCE_COMPTE_RENDU_ENREGISTRE). Mesurer le second sous le nom du premier lui
+         * imputerait un delai qui n'est pas le sien.
+         */
+        assertThat(rapport.delaiMoyenSaisieCompteRendu()).isNull();
+    }
+
+    @Test
+    @DisplayName("la direction lit l'activité d'un avocat par son inscription au répertoire")
+    void laDirectionLitCelleDunAvocat() {
+        Avocat avocat = new Avocat();
+        avocat.setId(5L);
+        when(currentUserService.getCurrentUser()).thenReturn(personne(1L, "Jean", "Directeur", "DJ"));
+        when(avocatRepository.findById(5L)).thenReturn(Optional.of(avocat));
+        when(compteAvocatService.utilisateurDe(avocat))
+                .thenReturn(Optional.of(personne(21L, "Me", "Fotso", "AVOCAT")));
+        when(historiqueActionRepository.compterActivitesDe(any(), anyCollection(), any(), any()))
+                .thenReturn(List.of(activite(TypeActionHistorique.PUBLICATION_CR_DEPOSE, 2)));
+        lenient().when(historiqueActionRepository.delaiMoyenDeSaisieDe(anyLong(), any(), any())).thenReturn(null);
+
+        var rapport = service.produire(null, 5L, DEBUT, FIN);
+
+        assertThat(rapport.utilisateurId()).isEqualTo(21L);
+        assertThat(rapport.nom()).isEqualTo("Me Fotso");
+    }
+
+    /**
+     * Le point sensible de cette ouverture. Un avocat connait les identifiants du repertoire - ils
+     * circulent dans ses propres ecrans. Si `avocatId` ouvrait une seconde porte, il suffirait d'en
+     * changer le chiffre pour lire l'activite d'un confrere. Le parametre est donc traduit en compte,
+     * puis soumis a la **meme** regle que tout le reste.
+     */
+    @Test
+    @DisplayName("un avocat ne lit pas l'activité d'un confrère, même par son inscription")
+    void unAvocatNeLitPasCelleDunConfrere() {
+        Avocat confrere = new Avocat();
+        confrere.setId(7L);
+        when(currentUserService.getCurrentUser()).thenReturn(personne(21L, "Me", "Fotso", "AVOCAT"));
+        when(avocatRepository.findById(7L)).thenReturn(Optional.of(confrere));
+        when(compteAvocatService.estLeCompteDe(any(), eq(confrere))).thenReturn(false);
+
+        assertThatThrownBy(() -> service.produire(null, 7L, DEBUT, FIN))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("votre propre activité");
+        verify(historiqueActionRepository, never()).compterActivitesDe(any(), anyCollection(), any(), any());
+        /*
+         * Le compte du confrère n'est **pas** lu. C'est l'ordre qui le garantit, et il importe : le
+         * lire d'abord aurait fait dire au refus, par sa nature, si ce confrère s'était déjà
+         * connecté - une information que personne n'a demandée et qui n'est pas la sienne.
+         */
+        verify(compteAvocatService, never()).utilisateurDe(any());
+    }
+
+    /** Se demander par sa propre inscription est permis : c'est bien sa propre activité. */
+    @Test
+    @DisplayName("un avocat se demande par sa propre inscription")
+    void unAvocatSeDemandeParSonInscription() {
+        Avocat lui = new Avocat();
+        lui.setId(5L);
+        when(currentUserService.getCurrentUser()).thenReturn(personne(21L, "Me", "Fotso", "AVOCAT"));
+        when(avocatRepository.findById(5L)).thenReturn(Optional.of(lui));
+        when(compteAvocatService.estLeCompteDe(any(), eq(lui))).thenReturn(true);
+        when(compteAvocatService.utilisateurDe(lui))
+                .thenReturn(Optional.of(personne(21L, "Me", "Fotso", "AVOCAT")));
+        when(historiqueActionRepository.compterActivitesDe(any(), anyCollection(), any(), any()))
+                .thenReturn(List.of(activite(TypeActionHistorique.PUBLICATION_CR_DEPOSE, 1)));
+        when(historiqueActionRepository.delaiMoyenDeSaisieDe(anyLong(), any(), any())).thenReturn(null);
+
+        assertThat(service.produire(null, 5L, DEBUT, FIN).utilisateurId()).isEqualTo(21L);
+    }
+
+    /**
+     * Un avocat inscrit au repertoire mais jamais connecte n'a pas de compte, donc pas une seule
+     * ligne d'historique. Rendre une fiche vide laisserait croire qu'il n'a rien fait ; le dire
+     * distingue « rien fait » de « jamais venu ». Meme distinction qu'en QF-45.
+     */
+    @Test
+    @DisplayName("un avocat jamais connecté est nommé comme tel, pas rendu vide")
+    void unAvocatJamaisConnecte() {
+        Avocat avocat = new Avocat();
+        avocat.setId(9L);
+        when(currentUserService.getCurrentUser()).thenReturn(personne(1L, "Jean", "Directeur", "DJ"));
+        when(avocatRepository.findById(9L)).thenReturn(Optional.of(avocat));
+        when(compteAvocatService.utilisateurDe(avocat)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.produire(null, 9L, DEBUT, FIN))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("jamais connect");
+    }
+
+    @Test
+    @DisplayName("les deux désignations à la fois sont refusées, plutôt qu'une des deux ignorée")
+    void pasLesDeuxDesignations() {
+        assertThatThrownBy(() -> service.produire(3L, 5L, DEBUT, FIN))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("pas les deux");
+        // Le refus tombe avant toute lecture : inutile de savoir qui demande pour repondre non.
+        verify(currentUserService, never()).getCurrentUser();
     }
 }

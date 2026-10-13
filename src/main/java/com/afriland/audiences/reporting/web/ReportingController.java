@@ -15,6 +15,7 @@ import com.afriland.audiences.common.web.PageResponse;
 import com.afriland.audiences.reporting.web.dto.ActionDetailleeResponse;
 import com.afriland.audiences.reporting.web.dto.AudienceDuJourResponse;
 import com.afriland.audiences.reporting.web.dto.RapportActiviteResponse;
+import com.afriland.audiences.reporting.web.dto.RapportAvocatsResponse;
 import com.afriland.audiences.reporting.web.dto.CompteRenduAttenduResponse;
 import com.afriland.audiences.reporting.web.dto.FormatRapport;
 import com.afriland.audiences.reporting.web.dto.RapportNominatifResponse;
@@ -149,13 +150,39 @@ public class ReportingController {
     }
 
     /**
+     * L'activité des avocats sur une période (Q-136) - le pendant du tableau précédent.
+     *
+     * <p><b>Pourquoi un second endpoint.</b> Signalé par le porteur du projet le 2026-10-13 :
+     * {@code /rapports/nominatif} ne montrait que les profils internes. C'était exact, et ce n'était
+     * pas réparable en y ajoutant les avocats - ce tableau compte six natures de production interne
+     * dont un avocat n'accomplit aucune. Il <b>dépose</b> ; c'est le juriste qui enregistre. L'y
+     * faire figurer n'aurait affiché qu'une ligne de zéros, soit ce que la conception refuse.
+     *
+     * <p>Mêmes habilitations que le tableau interne, et pour la même raison : il nomme des
+     * personnes, et {@code ROLE_JURISTE} est composite (Q-81).
+     */
+    @GetMapping("${api.prefix}/rapports/nominatif/avocats")
+    @PreAuthorize("hasAnyRole('DJ', 'DJA')")
+    public ResponseEntity<RapportAvocatsResponse> rapportAvocats(@RequestParam LocalDate dateDebut,
+                                                                  @RequestParam LocalDate dateFin) {
+        RapportAvocatsResponse rapport = rapportNominatifService.produireAvocats(dateDebut, dateFin);
+        return rapport.estVide() ? ResponseEntity.noContent().build() : ResponseEntity.ok(rapport);
+    }
+
+    /**
      * La fiche d'activité d'une personne (Q-133) : <b>chacun sur lui-même</b>, le DJ et la DJA sur
      * quiconque.
      *
-     * <p><b>Pourquoi {@code ROLE_CONSULTATION} et non une liste de profils.</b> Les cinq profils
-     * internes le portent tous ; l'avocat, lui, ne le porte pas (QF-01), et aucune des natures
-     * comptées n'est la sienne - sa fiche serait vide par construction. Le rôle transverse exprime
-     * donc exactement le périmètre voulu, sans énumérer des profils qu'il faudrait maintenir.
+     * <p><b>Ouvert aussi à l'avocat depuis le 2026-10-13 (Q-135), et j'avais écrit l'inverse.</b>
+     * J'ai soutenu qu'« aucune des natures comptées n'est la sienne - sa fiche serait vide par
+     * construction ». C'était <b>faux</b> : il dépose ses demandes de frais, ses comptes rendus
+     * d'audience, ses autres publications, et répond aux demandes d'explication - quatre natures,
+     * toutes journalisées sous son propre compte. Le métier a demandé qu'il voie et télécharge son
+     * activité, et que la direction puisse la lire.
+     *
+     * <p>{@code ROLE_CONSULTATION} couvre les cinq profils internes ; {@code ROLE_AVOCAT} s'y
+     * ajoute, l'avocat ne portant pas le premier (QF-01). Deux rôles nommés plutôt que sept
+     * profils : ce qui est énuméré ici doit rester court, ou il vieillira.
      *
      * <p><b>C'est le service qui décide sur qui.</b> L'annotation dit seulement qui peut toucher à
      * la fonction : {@code utilisateurId} n'est servi qu'à la direction, ou à la personne qui se
@@ -164,11 +191,13 @@ public class ReportingController {
      * <p>204 quand la personne n'a rien fait sur la période : un état vide, pas une erreur.
      */
     @GetMapping("${api.prefix}/rapports/activite")
-    @PreAuthorize("hasRole('CONSULTATION')")
+    @PreAuthorize("hasAnyRole('CONSULTATION', 'AVOCAT')")
     public ResponseEntity<RapportActiviteResponse> activite(@RequestParam LocalDate dateDebut,
                                                             @RequestParam LocalDate dateFin,
-                                                            @RequestParam(required = false) Long utilisateurId) {
-        RapportActiviteResponse rapport = rapportActiviteService.produire(utilisateurId, dateDebut, dateFin);
+                                                            @RequestParam(required = false) Long utilisateurId,
+                                                            @RequestParam(required = false) Long avocatId) {
+        RapportActiviteResponse rapport =
+                rapportActiviteService.produire(utilisateurId, avocatId, dateDebut, dateFin);
         return rapport.estVide() ? ResponseEntity.noContent().build() : ResponseEntity.ok(rapport);
     }
 
@@ -185,12 +214,14 @@ public class ReportingController {
      * ici obligerait à choisir entre deux chemins pour la même chose.
      */
     @GetMapping("${api.prefix}/rapports/activite/export")
-    @PreAuthorize("hasRole('CONSULTATION')")
+    @PreAuthorize("hasAnyRole('CONSULTATION', 'AVOCAT')")
     public ResponseEntity<byte[]> activiteExport(@RequestParam LocalDate dateDebut,
                                                   @RequestParam LocalDate dateFin,
                                                   @RequestParam(required = false) Long utilisateurId,
+                                                  @RequestParam(required = false) Long avocatId,
                                                   @RequestParam FormatRapport format) {
-        RapportActiviteResponse rapport = rapportActiviteService.produire(utilisateurId, dateDebut, dateFin);
+        RapportActiviteResponse rapport =
+                rapportActiviteService.produire(utilisateurId, avocatId, dateDebut, dateFin);
         if (rapport.estVide()) {
             return ResponseEntity.noContent().build();
         }
@@ -220,15 +251,16 @@ public class ReportingController {
      * porte dérobée vers l'activité d'un collègue que le décompte, lui, protège.
      */
     @GetMapping("${api.prefix}/rapports/activite/details")
-    @PreAuthorize("hasRole('CONSULTATION')")
+    @PreAuthorize("hasAnyRole('CONSULTATION', 'AVOCAT')")
     public PageResponse<ActionDetailleeResponse> activiteDetails(@RequestParam LocalDate dateDebut,
                                                                   @RequestParam LocalDate dateFin,
                                                                   @RequestParam TypeActionHistorique code,
                                                                   @RequestParam(required = false) Long utilisateurId,
+                                                                  @RequestParam(required = false) Long avocatId,
                                                                   @RequestParam(defaultValue = "0") int page,
                                                                   @RequestParam(defaultValue = "20") int size) {
         return PageResponse.of(rapportActiviteService.detailler(
-                utilisateurId, code, dateDebut, dateFin, PageRequest.of(page, size)));
+                utilisateurId, avocatId, code, dateDebut, dateFin, PageRequest.of(page, size)));
     }
 
     /** Un document à télécharger : même en-tête pour les trois formats, pour qu'ils ne divergent pas. */

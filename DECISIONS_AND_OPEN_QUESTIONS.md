@@ -2168,6 +2168,104 @@ sont unifiées.
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
 
+### Q-136 ✅ Les avocats absents du tableau nominatif — corrigé (2026-10-13)
+
+**Signalé par le porteur du projet** : connecté en DJ, « Activité par personne » montrait tous les
+utilisateurs internes, **mais pas les avocats**.
+
+**Le constat était juste, et ce n'était pas un oubli d'habilitation.** Le tableau de Q-132 compte
+six natures de **production interne** : ouvrir un dossier, planifier une audience, enregistrer un
+compte rendu, enregistrer un délibéré, rédiger une lettre, contrôler des frais. Un avocat n'en
+accomplit **aucune**. Il **dépose** - un compte rendu, une demande de frais, une publication - et
+c'est le juriste qui enregistre. La requête ne ramenait donc aucune ligne pour lui, et c'était
+mécaniquement correct.
+
+**Pourquoi l'y ajouter aurait été pire.** Faire figurer les avocats dans ce tableau n'aurait affiché
+que des **lignes de zéros** sur ses six colonnes : exactement ce que Q-132 refuse, et ce qui ferait
+lire « cet avocat n'a rien fait » là où il a peut-être déposé trente comptes rendus.
+
+**Deux populations, deux jeux d'indicateurs, une même règle.** Un second tableau,
+`GET /rapports/nominatif/avocats`, avec les quatre natures qu'un avocat accomplit réellement :
+comptes rendus déposés, demandes de frais déposées, autres publications, explications fournies. Ni
+note, ni classement par volume, ni total - les lignes suivent l'ordre des **noms**, comme pour les
+internes. Un avocat chargé n'est pas un avocat méritant : c'est la banque qui lui confie ses
+dossiers.
+
+**Les quatre natures comptées sont exclusives à l'avocat.** Les trois dépôts et la réponse à une
+demande d'explication sont tous `hasRole('AVOCAT')` : grouper sur elles ne ramène que des avocats,
+**sans condition sur le profil**. Une condition de moins à garder d'accord avec les habilitations -
+et si l'une d'elles s'ouvrait un jour à un profil interne, c'est l'habilitation qui dirait la vérité,
+pas une liste recopiée dans le service.
+
+**Le nom vient du répertoire, pas du compte** : c'est sous celui-là que la direction connaît
+l'avocat, et c'est lui qui figure sur les lettres de constitution. Les inscriptions sont lues **en
+une seule requête** (`findByCompteKeycloakIn`), le pont passant par `compte_keycloak` qui porte
+tantôt l'identifiant de connexion, tantôt l'identifiant technique selon l'époque de l'inscription -
+les deux sont donc demandés, comme le fait déjà `CompteAvocatService` pour une personne seule.
+
+**Une inscription retirée du répertoire ne fait pas disparaître ses dépôts.** `avocatId` vaut alors
+`null`, le nom vient du compte, et l'écran ouvre sa fiche par le compte faute d'inscription à
+désigner. C'est une information, pas un trou.
+
+**Un défaut d'accessibilité introduit et corrigé dans le même jalon.** Les deux tableaux portaient un
+bouton « Afficher » identique sur le même écran : Playwright l'a signalé comme ambigu, mais le
+problème est d'abord qu'un lecteur d'écran annonçait deux fois « Afficher » sans dire lequel.
+Le texte visible reste court, à côté de son titre de section ; c'est le **nom accessible** qui porte
+la précision (« Afficher l'activité par personne », « Afficher l'activité des avocats »).
+
+### Q-135 ✅ L'avocat lit son activité, la direction aussi ; et j'avais écrit l'inverse (2026-10-13)
+
+**Ce que le métier a demandé.** Que le DJ et la DJA puissent lire « ce même compte rendu pour les
+avocats également », et que chaque avocat puisse voir et télécharger le sien.
+
+**Une affirmation fausse, à corriger d'abord.** En livrant la fiche d'activité (Q-133), j'ai exclu
+l'avocat en écrivant qu'« aucune des natures comptées n'est la sienne - sa fiche serait vide par
+construction ». C'était **faux**, et vérifiable en quatre lignes de code :
+
+| Nature | Où elle est tracée |
+|---|---|
+| `FRAIS_DEMANDE_DEPOSEE` | `FraisService:106` — il dépose ses demandes de frais |
+| `PUBLICATION_CR_DEPOSE` | `PublicationService:132` — il dépose ses comptes rendus d'audience |
+| `PUBLICATION_AUTRE_DEPOSEE` | `PublicationService:169` — il dépose ses autres publications |
+| `EXPLICATION_REPONDUE` | `DemandeExplicationService:141` — il répond aux demandes d'explication |
+
+Les quatre passent par `historiqueActionService.enregistrer`, qui attribue l'action à
+**l'utilisateur authentifié** : elles sont donc journalisées sous le compte de l'avocat, et l'étaient
+déjà. L'affirmation est corrigée partout où je l'avais écrite - ici, dans `lib/rbac.ts`, dans
+`SCREEN_MAP.md` et dans le plan des observations.
+
+**Ce qui change.** Les trois endpoints passent de `hasRole('CONSULTATION')` à
+`hasAnyRole('CONSULTATION','AVOCAT')`. Deux rôles nommés plutôt que sept profils : ce qui est
+énuméré là doit rester court, ou il vieillira.
+
+**Un avocat se désigne par son inscription au répertoire, non par un compte.** Un paramètre
+`avocatId` s'ajoute aux trois endpoints : la direction connaît l'avocat par le répertoire, où
+l'identifiant d'utilisateur ne figure pas. Le pont entre les deux existait déjà -
+`CompteAvocatService.utilisateurDe`, celui qui restreint les lectures de l'avocat lui-même (QF-45).
+Les deux désignations ensemble sont **refusées** : servir l'une en ignorant l'autre laisserait croire
+qu'on a lu l'activité demandée.
+
+**L'ordre de la vérification a été corrigé en cours de route, et Mockito l'a révélé.** Une stubbing
+signalée inutile a montré que le refus de droits tombait **après** la résolution du compte visé : un
+avocat passant l'inscription d'un confrère obtenait bien un refus, mais apprenait au passage, par la
+nature de ce refus, si ce confrère s'était déjà connecté. `estLeCompteDe` répond à la seule question
+utile - est-ce la sienne ? - sans rien lire du compte visé. Le droit se vérifie désormais **avant**
+le compte, et un test l'affirme (`verify(compteAvocatService, never()).utilisateurDe(any())`).
+
+**Un avocat jamais connecté est nommé comme tel**, et non rendu avec une fiche vide : pas de compte,
+donc pas une ligne d'historique. Le dire distingue « n'a rien fait » de « n'est jamais venu » - et
+c'est la première lecture qui ferait accuser à tort. Même distinction qu'en QF-45.
+
+**Ce que l'avocat ne voit pas, et ne doit pas voir.** Ses lignes de détail portent la **référence du
+dossier sans lien** : il n'a aucun écran de fiche dossier (QF-01), et lui en proposer un l'aurait
+mené à un refus de droits. La référence lui suffit - c'est ainsi qu'il nomme ses affaires dans ses
+échanges avec la banque.
+
+**Son délai moyen de saisie reste nul, et ce n'est pas un oubli.** Il **dépose** un compte rendu
+(`PUBLICATION_CR_DEPOSE`) ; c'est le juriste qui l'**enregistre** sur l'audience
+(`AUDIENCE_COMPTE_RENDU_ENREGISTRE`), et c'est ce second geste que le délai mesure. L'imputer à
+l'avocat lui prêterait un retard qui n'est pas le sien.
+
 ### Q-133 ✅ Chacun télécharge son activité, et chaque décompte mène à sa tâche — tranché (2026-10-13)
 
 **A — Ce que le métier demande.** Deux phrases du 2026-10-13 : « chaque utilisateur doit être
@@ -2199,9 +2297,10 @@ depuis « Mon compte ».
 (PDF, Excel, CSV) et `/rapports/activite/details` (les actions derrière un décompte, paginées).
 
 **`hasRole('CONSULTATION')` plutôt qu'une liste de profils.** Les cinq profils internes le portent ;
-l'avocat ne le porte pas (QF-01), et aucune des natures comptées n'est la sienne - sa fiche serait
-vide par construction. Le rôle transverse exprime exactement le périmètre, sans énumérer des profils
-qu'il faudrait maintenir.
+l'avocat ne le porte pas (QF-01). ~~Et aucune des natures comptées n'est la sienne - sa fiche serait
+vide par construction.~~ **Cette seconde raison était fausse**, et l'endpoint est ouvert à
+`ROLE_AVOCAT` depuis Q-135 : l'avocat dépose ses demandes de frais, ses comptes rendus d'audience,
+ses autres publications, et répond aux demandes d'explication. La première raison, elle, tient.
 
 **C'est le service qui dit *sur qui*, pas l'annotation.** `utilisateurId` absent signifie « moi » ;
 renseigné, il n'est servi qu'au DJ, à la DJA, ou à la personne qui se demande elle-même. Un
