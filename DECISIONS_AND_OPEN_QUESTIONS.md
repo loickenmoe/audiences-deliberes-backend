@@ -2168,6 +2168,80 @@ sont unifiées.
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
 
+### Q-133 ✅ Chacun télécharge son activité, et chaque décompte mène à sa tâche — tranché (2026-10-13)
+
+**A — Ce que le métier demande.** Deux phrases du 2026-10-13 : « chaque utilisateur doit être
+capable de télécharger ses propres rapports, dépendamment de la période choisie » et « après
+l'affichage, il doit être capable de cliquer sur un élément de son rapport et cela devrait
+directement le renvoyer aux détails de la dite tâche ».
+
+**Et une correction de Q-132**, le même jour, qui a changé la conception : « le SH et l'Assistante
+sont à la base des juristes et en plus de cela ont leurs activités propres. Ce rapport devrait
+refléter fidèlement ce que l'utilisateur a effectué. » J'avais recommandé **une seule liste de six
+indicateurs** pour que la direction et chacun lisent la même chose ; c'est cette recommandation qui
+a été renversée.
+
+**B — Pourquoi la fidélité et la comparaison ne tiennent pas dans un même tableau.** Quarante-neuf
+des cinquante-trois codes de `TypeActionHistorique` sont l'activité d'une personne. Un tableau à
+quarante-neuf colonnes n'est pas lisible ; un tableau à six colonnes montre l'Assistante et le SH
+presque vides, puisque leur métier n'est pas d'ouvrir des dossiers. **Deux niveaux, une seule
+source** :
+
+| Niveau | Qui | Contenu |
+|---|---|---|
+| Le tableau nominatif de Q-132 | DJ, DJA | six colonnes de production, **comparables** entre personnes. Inchangé |
+| La fiche d'activité (celui-ci) | **chacun sur lui-même** ; DJ et DJA sur quiconque | **tout** ce que la personne a fait, une ligne par nature accomplie, téléchargeable, cliquable |
+
+La direction atteint le niveau 2 en cliquant un **nom** dans le tableau. Chacun atteint le sien
+depuis « Mon compte ».
+
+**C — Trois endpoints.** `GET /rapports/activite` (la fiche), `/rapports/activite/export`
+(PDF, Excel, CSV) et `/rapports/activite/details` (les actions derrière un décompte, paginées).
+
+**`hasRole('CONSULTATION')` plutôt qu'une liste de profils.** Les cinq profils internes le portent ;
+l'avocat ne le porte pas (QF-01), et aucune des natures comptées n'est la sienne - sa fiche serait
+vide par construction. Le rôle transverse exprime exactement le périmètre, sans énumérer des profils
+qu'il faudrait maintenir.
+
+**C'est le service qui dit *sur qui*, pas l'annotation.** `utilisateurId` absent signifie « moi » ;
+renseigné, il n'est servi qu'au DJ, à la DJA, ou à la personne qui se demande elle-même. Un
+`@PreAuthorize` ne sait pas comparer un paramètre à l'appelant. Le **détail applique la même règle** :
+sans cela, il suffirait de connaître un identifiant pour lire ce que le décompte protège.
+
+**La liste des natures comptées est prise en creux**, comme le complément de quatre exclusions. Ce
+n'est pas un détail d'écriture : énumérer les quarante-neuf autres aurait reproduit **exactement le
+défaut de Q-131** - un référentiel fermé qui se tait quand on oublie de l'alimenter, et ne se tait
+qu'en production. Un code nouveau entre donc dans la fiche sans qu'on y pense.
+
+Les quatre exclusions, et leur raison : `AUDIT_CONSULTE` et `ARCHIVE_TELECHARGEE` parce que **lire
+n'est pas produire** - les compter ferait monter l'activité de qui consulte beaucoup ;
+`ETAPE_OUVERTE_AUTOMATIQUEMENT` parce que l'application l'a fait et que **personne** ne l'a fait ;
+`NON_CLASSEE` parce que ce n'est pas une nature mais l'absence de nature. `AUDIT_EXPORTE` **est**
+compté : une extraction scellée est un document produit.
+
+**Ce que le clic rend possible, et ce qui le permettait déjà.** La colonne `dossier_id` de
+`historique_action` est renseignée par toutes les natures utiles : chaque action porte donc le
+dossier qu'elle a touché, et l'écran ouvre sa fiche sur l'onglet correspondant. Une action **hors
+dossier** - configuration, référentiel - reste affichée sans lien : la masquer ferait disparaître de
+l'activité réelle, et le décompte ne tomberait plus sur le nombre de lignes.
+
+**Un défaut trouvé en chemin, de la famille de Q-131.** `historique.actions` portait **51 libellés
+pour 53 codes** : `EXPLICATION_DEMANDEE` et `EXPLICATION_REPONDUE`, livrés avec Q-130 le
+2026-10-07, y manquaient. L'écran d'audit les affichait donc **en code brut** au Directeur Juridique
+depuis six jours, et la fiche d'activité aurait fait de même. Les deux gardes existantes ne
+pouvaient pas le voir : l'une tire sa liste de `types/enums.ts`, où les natures d'action ne figurent
+pas, l'autre ne regarde qu'un autre bloc. Le nouveau garde-fou lit l'énumération dans
+`contracts/openapi.json` - la source est dans le dépôt frontend, et elle ne peut pas vieillir sans
+que le contrat vieillisse aussi. Vérifié en le faisant échouer volontairement.
+
+**Documents en français.** Comme tous les PDF du projet : il n'existe qu'un
+`pdf/libelles.properties`, et le libellé d'une nature d'action n'a d'existence que française dans
+l'énumération (QF-24). L'écran, lui, est bilingue.
+
+**Ce qui reste hors périmètre, et validé comme tel** : le **rapport périodique** ne devient pas
+cliquable - ses lignes agrègent des dossiers, des audiences et des frais du service entier, pas des
+actions d'une personne, et leur détail n'est pas dans `historique_action` mais dans chaque module.
+
 ### Q-132 ✅ Le rapport d'activité par personne : des indicateurs, pas une note — tranché (2026-10-09)
 
 **A — Ce que le métier demande.** L'observation 14 du 03/10 réclame « des rapports nominatifs ».

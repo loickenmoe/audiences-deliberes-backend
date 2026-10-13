@@ -420,7 +420,18 @@ coup. Réponses réduites à ce que l'usage exige.
 | 48 | PUT | `/configurations/{cle}` | `ROLE_DJ` | CONF01-07 | 📋 | ✅ M5 · **validé par clé M17** (Q-91) |
 | 49 | GET | `/rapports` | `ROLE_JURISTE` | FR-REP-01 / US 8.4 | 📋 | ✅ |
 | 50 | GET | `/tableau-de-bord` | `ROLE_DJ` **et `ROLE_DJA`** | FR-REP-02 / US 8.5 | 📋 | ✅ · **élargi M18** (Q-95) |
+| — | GET | `/rapports/activite?dateDebut&dateFin&utilisateurId` 🆕 Q-133 | `ROLE_CONSULTATION` — les cinq profils internes | observation 14 du 03/10 | 💡 | ✅ 2026-10-13 |
+| — | GET | `/rapports/activite/export?…&format=PDF\|EXCEL\|CSV` 🆕 Q-133 | `ROLE_CONSULTATION` | métier, 2026-10-13 | 💡 | ✅ 2026-10-13 |
+| — | GET | `/rapports/activite/details?…&code&page&size` 🆕 Q-133 | `ROLE_CONSULTATION` | métier, 2026-10-13 | 💡 | ✅ 2026-10-13 |
 | — | GET | `/rapports/nominatif?dateDebut&dateFin` 🆕 Q-132 | `ROLE_DJ` **et `ROLE_DJA`** | observation 14 du 03/10 | 💡 | ✅ 2026-10-09 |
+
+> **Les trois `/rapports/activite`** : la fiche d'une personne, son export et le détail d'un
+> décompte (Q-133). `utilisateurId` **absent signifie « moi »** ; renseigné, il n'est servi qu'au DJ,
+> à la DJA, ou à la personne elle-même — c'est le **service** qui le vérifie, une annotation ne
+> sachant pas comparer un paramètre à l'appelant. `ROLE_CONSULTATION` plutôt qu'une liste de
+> profils : les cinq profils internes le portent, l'avocat non (QF-01). **204** si la personne n'a
+> rien fait. Le détail porte le `dossierId` de chaque action, ce qui rend le décompte cliquable
+> jusqu'à la fiche du dossier.
 
 > **`/rapports/nominatif`** : six décomptes par personne agrégés depuis `historique_action`, plus le
 > délai moyen de saisie d'un compte rendu ; **204** si la période ne porte aucune activité ; lignes

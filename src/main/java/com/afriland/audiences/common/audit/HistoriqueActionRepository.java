@@ -82,6 +82,77 @@ public interface HistoriqueActionRepository extends JpaRepository<HistoriqueActi
     List<DelaiSaisieParPersonne> delaiMoyenDeSaisieParPersonne(@Param("debut") LocalDateTime debut,
                                                                @Param("fin") LocalDateTime fin);
 
+    /**
+     * L'activité d'<b>une</b> personne, comptée par nature d'action.
+     *
+     * <p><b>Pourquoi une requête distincte de {@link #compterActivitesParPersonne}.</b> Celle-là
+     * sert le tableau comparatif de la direction, qui tient sur six natures choisies ; celle-ci
+     * sert la fiche d'une personne, qui doit refléter <b>fidèlement</b> ce qu'elle a fait - décision
+     * du métier du 2026-10-09. Les deux listes de codes n'ont donc pas la même taille, et confondre
+     * les deux usages dans une seule requête obligerait l'appelant à filtrer ce qu'il vient de
+     * demander.
+     *
+     * <p>Les natures <b>sans aucune action</b> sur la période ne ressortent pas : une fiche
+     * d'activité n'est pas une liste de zéros, et quarante-huit lignes vides diraient moins que
+     * cinq lignes pleines.
+     */
+    @Query("select h.code as code, count(h) as total "
+            + "from HistoriqueAction h "
+            + "where h.utilisateur.id = :utilisateurId and h.code in :codes "
+            + "and h.dateAction >= :debut and h.dateAction < :fin "
+            + "group by h.code")
+    List<ActiviteParCode> compterActivitesDe(@Param("utilisateurId") Long utilisateurId,
+                                             @Param("codes") Collection<TypeActionHistorique> codes,
+                                             @Param("debut") LocalDateTime debut,
+                                             @Param("fin") LocalDateTime fin);
+
+    /**
+     * Les actions elles-mêmes, derrière un décompte : de quoi ouvrir le dossier concerné.
+     *
+     * <p>C'est ce que rend possible la colonne {@code dossier_id} de l'historique - un décompte sans
+     * ce lien ne mènerait nulle part, et il faudrait relire le {@code jsonb} des détails, qui ne
+     * porte pas toujours la même clé selon la nature de l'action.
+     *
+     * <p>Ordre décroissant : la plus récente d'abord, c'est celle qu'on cherche en cliquant.
+     */
+    @Query("select h from HistoriqueAction h "
+            + "where h.utilisateur.id = :utilisateurId and h.code = :code "
+            + "and h.dateAction >= :debut and h.dateAction < :fin "
+            + "order by h.dateAction desc")
+    Page<HistoriqueAction> listerActionsDe(@Param("utilisateurId") Long utilisateurId,
+                                           @Param("code") TypeActionHistorique code,
+                                           @Param("debut") LocalDateTime debut,
+                                           @Param("fin") LocalDateTime fin,
+                                           Pageable pageable);
+
+    /**
+     * Le délai moyen de saisie d'<b>une</b> personne, en jours. {@code null} si elle n'a saisi aucun
+     * compte rendu - jamais zéro, qui se lirait comme une saisie le jour même.
+     *
+     * <p>Mêmes contraintes que {@link #delaiMoyenDeSaisieParPersonne} : requête native pour lire le
+     * {@code jsonb}, et {@code jsonb_exists} plutôt que l'opérateur {@code ?}, que JDBC prendrait
+     * pour un paramètre positionnel.
+     */
+    @Query(value = """
+            SELECT AVG(h.date_action::date - a.date_planifiee)
+            FROM historique_action h
+            JOIN audience a ON a.id = (h.details ->> 'audienceId')::bigint
+            WHERE h.code = 'AUDIENCE_COMPTE_RENDU_ENREGISTRE'
+              AND h.utilisateur_id = :utilisateurId
+              AND jsonb_exists(h.details, 'audienceId')
+              AND h.date_action >= :debut AND h.date_action < :fin
+            """, nativeQuery = true)
+    Double delaiMoyenDeSaisieDe(@Param("utilisateurId") Long utilisateurId,
+                                @Param("debut") LocalDateTime debut,
+                                @Param("fin") LocalDateTime fin);
+
+    /** Une nature d'action et son décompte, pour la fiche d'une personne. */
+    interface ActiviteParCode {
+        TypeActionHistorique getCode();
+
+        long getTotal();
+    }
+
     /** Une personne, une nature d'action, un décompte. */
     interface ActiviteParPersonne {
         Long getUtilisateurId();
