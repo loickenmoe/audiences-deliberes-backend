@@ -59,6 +59,15 @@ public interface AlerteRepository extends JpaRepository<Alerte, Long> {
     long countByTypeAndStatut(TypeAlerte type, StatutAlerte statut);
 
     /**
+     * Les alertes que {@link #countByTypeAndStatut} compte (Q-137), la plus récente d'abord.
+     *
+     * <p><b>Une ligne par alerte, et non par dossier.</b> C'est ce que le compteur compte : une
+     * prorogation prévenant plusieurs destinataires produit plusieurs alertes. Regrouper
+     * donnerait une liste plus courte que le nombre affiché.
+     */
+    Page<Alerte> findByTypeAndStatutOrderByIdDesc(TypeAlerte type, StatutAlerte statut, Pageable pageable);
+
+    /**
      * Supervision du canal applicatif (Q-109, NF-ALR-02) : nombre d'alertes d'une issue donnée sur
      * une fenêtre. Un décompte par issue plutôt qu'un {@code GROUP BY} : trois requêtes servies par
      * le même index partiel, contre un agrégat dont il faudrait ensuite combler les issues absentes

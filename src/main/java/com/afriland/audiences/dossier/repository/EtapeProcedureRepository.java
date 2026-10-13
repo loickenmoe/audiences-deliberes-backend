@@ -1,5 +1,9 @@
 package com.afriland.audiences.dossier.repository;
 
+import com.afriland.audiences.dossier.domain.Dossier;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 import com.afriland.audiences.dossier.domain.EtapeProcedure;
 import com.afriland.audiences.dossier.domain.StatutCycleVie;
 import com.afriland.audiences.dossier.domain.TypeEtape;
@@ -69,4 +73,26 @@ public interface EtapeProcedureRepository extends JpaRepository<EtapeProcedure, 
                                   AND autre.statutCycleVie NOT IN :statutsFermes)
             """)
     long countDossiersSansEtapeEnCours(@Param("statutsFermes") List<StatutCycleVie> statutsFermes);
+
+    /**
+     * Les dossiers que {@link #countDistinctDossierIdByStatutCycleVieNotIn} compte (Q-137).
+     *
+     * <p><b>Même prédicat, et c'est tout l'enjeu.</b> Le détail d'un bloc du tableau de bord doit
+     * rendre exactement ce que son compteur compte : la moindre divergence ferait douter des deux
+     * chiffres. {@code DISTINCT} sur le dossier, comme le compte, un dossier portant plusieurs
+     * étapes en cours ne devant paraître qu'une fois.
+     */
+    @Query("SELECT DISTINCT e.dossier FROM EtapeProcedure e WHERE e.statutCycleVie NOT IN :statutsFermes")
+    Page<Dossier> listerDossiersAvecEtapeEnCours(@Param("statutsFermes") List<StatutCycleVie> statutsFermes,
+                                                 Pageable pageable);
+
+    /** Les dossiers que {@link #countDossiersSansEtapeEnCours} compte - même sous-requête (Q-137). */
+    @Query("""
+            SELECT DISTINCT e.dossier FROM EtapeProcedure e
+             WHERE NOT EXISTS (SELECT 1 FROM EtapeProcedure autre
+                                WHERE autre.dossier = e.dossier
+                                  AND autre.statutCycleVie NOT IN :statutsFermes)
+            """)
+    Page<Dossier> listerDossiersSansEtapeEnCours(@Param("statutsFermes") List<StatutCycleVie> statutsFermes,
+                                                 Pageable pageable);
 }

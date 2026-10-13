@@ -1,5 +1,9 @@
 package com.afriland.audiences.delibere.repository;
 
+import com.afriland.audiences.delibere.domain.ResultatDelibere;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 import com.afriland.audiences.delibere.domain.Delibere;
 import com.afriland.audiences.dossier.domain.StatutCycleVie;
 import org.springframework.data.jpa.repository.Query;
@@ -57,6 +61,22 @@ public interface DelibereRepository extends JpaRepository<Delibere, Long> {
             + "WHERE d.dossier.categorie = com.afriland.audiences.referentiel.domain.CategorieDossier.RECOUVREMENT "
             + "AND d.resultat IS NOT NULL")
     PerformanceGlobale calculerTauxSuccesRecouvrement();
+
+    /**
+     * Les délibérés que {@link #calculerTauxSuccesRecouvrement} compte, pour un résultat donné
+     * (Q-137).
+     *
+     * <p><b>Les deux restrictions du compteur sont reprises telles quelles</b> : catégorie
+     * {@code RECOUVREMENT} et résultat renseigné. La première surprendra peut-être - l'écran dit
+     * « Litiges gagnés » sans la mentionner -, mais le détail doit rendre ce que le compteur compte,
+     * pas ce que son libellé laisse croire. L'écart entre les deux est signalé pour arbitrage,
+     * il ne se corrige pas ici en silence.
+     */
+    @Query("SELECT d FROM Delibere d "
+            + "WHERE d.dossier.categorie = com.afriland.audiences.referentiel.domain.CategorieDossier.RECOUVREMENT "
+            + "AND d.resultat = :resultat "
+            + "ORDER BY d.dateDeliberee DESC, d.id DESC")
+    Page<Delibere> listerParResultatEnRecouvrement(@Param("resultat") ResultatDelibere resultat, Pageable pageable);
 
     /** FR-REP-01 (rapport périodique, M13) : mêmes indicateurs, restreints aux délibérés rendus dans la période. */
     @Query("SELECT SUM(CASE WHEN d.resultat = com.afriland.audiences.delibere.domain.ResultatDelibere.FAVORABLE THEN 1L ELSE 0L END) AS favorables, "

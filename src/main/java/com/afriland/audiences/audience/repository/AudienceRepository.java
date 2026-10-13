@@ -64,6 +64,9 @@ public interface AudienceRepository extends JpaRepository<Audience, Long> {
     /** FR-REP-02 (tableau de bord, M13) : audiences encore à venir, tous dossiers confondus. */
     long countByStatut(StatutAudience statut);
 
+    /** Les audiences que {@link #countByStatut} compte (Q-137) - la plus proche d'abord. */
+    Page<Audience> findByStatutOrderByDatePlanifieeAsc(StatutAudience statut, Pageable pageable);
+
     /** FR-REP-01 (rapport périodique, M13) : audiences tenues dans la période. */
     long countByStatutAndDateTenueBetween(StatutAudience statut, LocalDate debut, LocalDate fin);
 

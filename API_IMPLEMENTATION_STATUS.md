@@ -420,6 +420,15 @@ coup. Réponses réduites à ce que l'usage exige.
 | 48 | PUT | `/configurations/{cle}` | `ROLE_DJ` | CONF01-07 | 📋 | ✅ M5 · **validé par clé M17** (Q-91) |
 | 49 | GET | `/rapports` | `ROLE_JURISTE` | FR-REP-01 / US 8.4 | 📋 | ✅ |
 | 50 | GET | `/tableau-de-bord` | `ROLE_DJ` **et `ROLE_DJA`** | FR-REP-02 / US 8.5 | 📋 | ✅ · **élargi M18** (Q-95) |
+| — | GET | `/tableau-de-bord/details?indicateur&page&size` 🆕 Q-137 | `ROLE_DJ` **et `ROLE_DJA`** | métier, 2026-10-13 | 💡 | ✅ 2026-10-13 |
+
+> **`/tableau-de-bord/details`** : la liste de ce qu'un bloc compte (Q-137). **Le détail rend
+> exactement ce que le compteur compte**, prédicat pour prédicat - un test d'intégration confronte
+> les deux requêtes sur la même base, pour les neuf indicateurs. Une seule forme de ligne pour
+> les neuf, les objets comptés étant de natures différentes mais le bloc d'où l'on vient disant
+> déjà ce qu'on regarde. Trois pièges traités : le `DISTINCT` des dossiers, **une ligne par
+> alerte** et non par dossier pour les prorogations, et un invariant de **somme** - non de
+> nombre de lignes - pour les provisions reprises.
 | — | GET | `/rapports/activite?dateDebut&dateFin&utilisateurId&avocatId` 🆕 Q-133, élargi Q-135 | `ROLE_CONSULTATION` **et `ROLE_AVOCAT`** | observation 14 du 03/10 | 💡 | ✅ 2026-10-13 |
 | — | GET | `/rapports/activite/export?…&format=PDF\|EXCEL\|CSV` 🆕 Q-133, élargi Q-135 | `ROLE_CONSULTATION` **et `ROLE_AVOCAT`** | métier, 2026-10-13 | 💡 | ✅ 2026-10-13 |
 | — | GET | `/rapports/activite/details?…&code&page&size` 🆕 Q-133, élargi Q-135 | `ROLE_CONSULTATION` **et `ROLE_AVOCAT`** | métier, 2026-10-13 | 💡 | ✅ 2026-10-13 |

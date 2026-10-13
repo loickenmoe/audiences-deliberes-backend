@@ -2168,6 +2168,57 @@ sont unifiées.
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
 
+### Q-137 ✅ Chaque bloc du tableau de bord s'ouvre sur son détail — tranché (2026-10-13)
+
+**Ce que le métier a demandé** : appliquer au tableau de bord le principe de la fiche d'activité -
+« si le DJ/DJA clique sur un élément (bloc) du tableau de bord, il a la possibilité de voir les
+détails ».
+
+**Même geste, mécanique sans rapport.** Sur la fiche d'activité (Q-133), tout venait d'une seule
+table, `historique_action`. Ici, chacun des neuf indicateurs a sa propre source : des étapes de
+procédure, des audiences, des demandes de frais, des alertes, des délibérés, des adjudications.
+C'est ce que j'avais annoncé comme « un chantier distinct, pas une variante ».
+
+**La seule propriété qui compte vraiment : le détail rend exactement ce que le compteur compte.**
+Chaque liste reprend le prédicat de son compteur, mot pour mot. Afficher « 12 » puis lister neuf
+lignes ferait douter des deux chiffres, et c'est un doute qu'on ne rattrape pas. Un test
+d'intégration Testcontainers confronte les deux requêtes **sur la même base**, pour les neuf
+indicateurs : un test à mocks n'aurait rien pu en dire.
+
+**Un seul endpoint, une seule forme de ligne.** `GET /tableau-de-bord/details?indicateur&page&size`,
+`hasAnyRole('DJ','DJA')` - cet endpoint n'ouvre rien que l'écran n'affiche déjà. Les objets comptés
+sont de natures différentes, mais neuf formes de réponse auraient donné neuf tableaux à l'écran,
+chacun avec ses colonnes et ses défauts. Le bloc d'où l'on vient dit déjà ce qu'on regarde.
+
+**Trois points où la liste et le compte pouvaient diverger**, et qui sont traités :
+
+1. **Dossiers actifs et affaires vidées** se comptent avec un `DISTINCT` sur le dossier - un dossier
+   portant plusieurs étapes en cours ne doit paraître qu'une fois. La liste le reprend.
+2. **Les alertes de prorogation** comptent une ligne **par alerte**, non par dossier : une
+   prorogation prévenant plusieurs destinataires en produit plusieurs. Regrouper par dossier aurait
+   donné une liste plus courte que le nombre affiché. L'écran le dit.
+3. **Les provisions reprises** sont une **somme d'argent**, non un décompte. L'invariant n'est donc
+   pas le nombre de lignes mais la somme des montants listés, et c'est ce que le test vérifie.
+
+**Les constantes `ETAPES_FERMEES` et `FRAIS_SOLDES` sont déclarées deux fois**, dans
+`ReportingService` (privées) et dans `DetailTableauDeBordService`. Élargir leur visibilité n'était
+pas souhaitable ; la duplication est donc assumée, mais un test les confronte terme à terme - une
+dérive silencieuse ferait rendre au détail autre chose que ce qui est compté.
+
+**⚠ Un écart signalé pour arbitrage, et non corrigé en silence.** Les trois indicateurs
+« Litiges gagnés », « Litiges perdus » et « Décisions mixtes » ne comptent que les dossiers de
+**catégorie recouvrement** : ils descendent du taux de succès du recouvrement, qui ne portait que
+sur eux. Leurs libellés, eux, ne le disent pas - et depuis que le taux a été remplacé par trois
+décomptes bruts (Q-132), la restriction est devenue invisible. Le détail la rend visible, en une
+phrase sous le titre de la modale. **Je n'ai pas touché aux chiffres** : les élargir changerait des
+nombres que la Direction lit depuis une semaine, et c'est son arbitrage, pas le mien.
+
+**Un défaut d'accessibilité évité.** Le bloc entier n'est pas rendu cliquable : un `<div>` qui réagit
+au clic au milieu d'une liste de définitions n'est ni atteignable au clavier ni annoncé comme une
+action, et un nombre cliquable s'annoncerait « 12 » sans dire ce qu'il ouvre. Un bouton nommé, dont
+le **nom accessible porte l'indicateur** - neuf boutons « Voir le détail » sur un même écran ne se
+distinguent pas autrement.
+
 ### Q-136 ✅ Les avocats absents du tableau nominatif — corrigé (2026-10-13)
 
 **Signalé par le porteur du projet** : connecté en DJ, « Activité par personne » montrait tous les

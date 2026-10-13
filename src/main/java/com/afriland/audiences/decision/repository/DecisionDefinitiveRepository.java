@@ -1,5 +1,8 @@
 package com.afriland.audiences.decision.repository;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 import com.afriland.audiences.decision.domain.Adjudication;
 import com.afriland.audiences.decision.domain.CondamnationPecuniaire;
 import com.afriland.audiences.decision.domain.DecisionDefinitive;
@@ -24,6 +27,17 @@ public interface DecisionDefinitiveRepository extends JpaRepository<DecisionDefi
      */
     @Query("SELECT COALESCE(SUM(a.reliquat), 0) FROM Adjudication a WHERE a.repriseProvision = true")
     Double sommeProvisionsReprises();
+
+    /**
+     * Les adjudications que {@link #sommeProvisionsReprises} additionne (Q-137).
+     *
+     * <p><b>L'invariant n'est pas le même que pour les autres blocs.</b> Celui-ci affiche une somme
+     * d'argent, non un décompte : ce qui doit tomber juste, c'est la <b>somme des montants listés</b>
+     * face au montant affiché, et non le nombre de lignes.
+     */
+    @Query("SELECT a FROM Adjudication a WHERE a.repriseProvision = true "
+            + "ORDER BY a.dateDecision DESC, a.id DESC")
+    Page<Adjudication> listerProvisionsReprises(Pageable pageable);
 
     /** FR-REP-01 (rapport périodique, M13) : même indicateur, restreint aux adjudications décidées dans la période. */
     @Query("SELECT COALESCE(SUM(a.reliquat), 0) FROM Adjudication a WHERE a.repriseProvision = true AND a.dateDecision BETWEEN :debut AND :fin")

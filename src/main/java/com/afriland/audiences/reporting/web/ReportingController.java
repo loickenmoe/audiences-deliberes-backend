@@ -4,7 +4,9 @@ import com.afriland.audiences.common.audit.TypeActionHistorique;
 import com.afriland.audiences.common.error.ApiException;
 import com.afriland.audiences.common.error.ErrorCodes;
 import com.afriland.audiences.common.security.CurrentUserService;
+import com.afriland.audiences.reporting.domain.IndicateurTableauDeBord;
 import com.afriland.audiences.reporting.domain.TypeRapport;
+import com.afriland.audiences.reporting.service.DetailTableauDeBordService;
 import com.afriland.audiences.reporting.service.JournalAudiencesService;
 import com.afriland.audiences.reporting.service.RapportActiviteExportService;
 import com.afriland.audiences.reporting.service.RapportActiviteService;
@@ -14,6 +16,7 @@ import com.afriland.audiences.reporting.service.ReportingService;
 import com.afriland.audiences.common.web.PageResponse;
 import com.afriland.audiences.reporting.web.dto.ActionDetailleeResponse;
 import com.afriland.audiences.reporting.web.dto.AudienceDuJourResponse;
+import com.afriland.audiences.reporting.web.dto.DetailIndicateurResponse;
 import com.afriland.audiences.reporting.web.dto.RapportActiviteResponse;
 import com.afriland.audiences.reporting.web.dto.RapportAvocatsResponse;
 import com.afriland.audiences.reporting.web.dto.CompteRenduAttenduResponse;
@@ -49,6 +52,7 @@ public class ReportingController {
     private final RapportExportService rapportExportService;
     private final RapportNominatifService rapportNominatifService;
     private final RapportActiviteService rapportActiviteService;
+    private final DetailTableauDeBordService detailTableauDeBordService;
     private final RapportActiviteExportService rapportActiviteExportService;
     private final JournalAudiencesService journalAudiencesService;
     /** Pour attribuer l'export dans le pied de page : un document dit qui l'a demandé (A2). */
@@ -147,6 +151,26 @@ public class ReportingController {
                                                                      @RequestParam LocalDate dateFin) {
         RapportNominatifResponse rapport = rapportNominatifService.produire(dateDebut, dateFin);
         return rapport.estVide() ? ResponseEntity.noContent().build() : ResponseEntity.ok(rapport);
+    }
+
+    /**
+     * Le détail d'un bloc du tableau de bord (Q-137).
+     *
+     * <p>Demandé par le métier le 2026-10-13 : qu'un clic sur un bloc ouvre la liste de ce qu'il
+     * compte. Mêmes habilitations que le tableau de bord lui-même - cet endpoint n'ouvre rien que
+     * l'écran n'affiche déjà, il le détaille.
+     *
+     * <p><b>Le détail rend exactement ce que le compteur compte</b>, prédicat pour prédicat : c'est
+     * la seule propriété qui compte vraiment, et un test d'intégration la vérifie sur base réelle.
+     * Afficher « 12 » puis lister neuf lignes ferait douter des deux chiffres.
+     */
+    @GetMapping("${api.prefix}/tableau-de-bord/details")
+    @PreAuthorize("hasAnyRole('DJ', 'DJA')")
+    public PageResponse<DetailIndicateurResponse> detailTableauDeBord(
+            @RequestParam IndicateurTableauDeBord indicateur,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return PageResponse.of(detailTableauDeBordService.detailler(indicateur, PageRequest.of(page, size)));
     }
 
     /**

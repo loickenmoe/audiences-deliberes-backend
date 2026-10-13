@@ -38,6 +38,13 @@ public interface DemandeFraisRepository extends JpaRepository<DemandeFrais, Long
     long countByStatutCircuitNotIn(List<StatutCircuitFrais> statuts);
 
     /**
+     * Les demandes que {@link #countByStatutCircuitNotIn} compte (Q-137) - la plus ancienne
+     * d'abord, qui est l'ordre de traitement.
+     */
+    Page<DemandeFrais> findByStatutCircuitNotInOrderByCreatedAtAsc(List<StatutCircuitFrais> statuts,
+                                                                   Pageable pageable);
+
+    /**
      * Condition d archivage (2026-09-29) : les demandes d un dossier qui ne sont ni payées ni
      * rejetées. Rendues et non comptées : le refus les nomme, celui qui archive n ayant pas la main
      * sur le circuit des frais et devant savoir auprès de qui aller.
