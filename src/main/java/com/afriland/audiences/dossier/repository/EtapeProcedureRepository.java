@@ -1,5 +1,7 @@
 package com.afriland.audiences.dossier.repository;
 
+import com.afriland.audiences.referentiel.domain.CategorieDossier;
+
 import com.afriland.audiences.dossier.domain.Dossier;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -40,8 +42,10 @@ public interface EtapeProcedureRepository extends JpaRepository<EtapeProcedure, 
     boolean existsByDossierIdAndStatutCycleVieNotIn(Long dossierId, List<StatutCycleVie> statuts);
 
     /** FR-REP-02 (tableau de bord, M13) : dossiers portant au moins une étape hors {@code statutsFermes} — même définition qu'au Q-53. */
-    @Query("SELECT COUNT(DISTINCT e.dossier.id) FROM EtapeProcedure e WHERE e.statutCycleVie NOT IN :statutsFermes")
-    long countDistinctDossierIdByStatutCycleVieNotIn(@Param("statutsFermes") List<StatutCycleVie> statutsFermes);
+    @Query("SELECT COUNT(DISTINCT e.dossier.id) FROM EtapeProcedure e "
+            + "WHERE e.statutCycleVie NOT IN :statutsFermes AND e.dossier.categorie IN :categories")
+    long countDistinctDossierIdByStatutCycleVieNotIn(@Param("statutsFermes") List<StatutCycleVie> statutsFermes,
+                                                     @Param("categories") List<CategorieDossier> categories);
 
     /**
      * Les <b>affaires vidées</b> : les dossiers dont <b>plus aucune étape n'est en cours</b>
@@ -68,11 +72,13 @@ public interface EtapeProcedureRepository extends JpaRepository<EtapeProcedure, 
      */
     @Query("""
             SELECT COUNT(DISTINCT e.dossier.id) FROM EtapeProcedure e
-             WHERE NOT EXISTS (SELECT 1 FROM EtapeProcedure autre
+             WHERE e.dossier.categorie IN :categories
+               AND NOT EXISTS (SELECT 1 FROM EtapeProcedure autre
                                 WHERE autre.dossier = e.dossier
                                   AND autre.statutCycleVie NOT IN :statutsFermes)
             """)
-    long countDossiersSansEtapeEnCours(@Param("statutsFermes") List<StatutCycleVie> statutsFermes);
+    long countDossiersSansEtapeEnCours(@Param("statutsFermes") List<StatutCycleVie> statutsFermes,
+                                       @Param("categories") List<CategorieDossier> categories);
 
     /**
      * Les dossiers que {@link #countDistinctDossierIdByStatutCycleVieNotIn} compte (Q-137).
@@ -82,17 +88,21 @@ public interface EtapeProcedureRepository extends JpaRepository<EtapeProcedure, 
      * chiffres. {@code DISTINCT} sur le dossier, comme le compte, un dossier portant plusieurs
      * étapes en cours ne devant paraître qu'une fois.
      */
-    @Query("SELECT DISTINCT e.dossier FROM EtapeProcedure e WHERE e.statutCycleVie NOT IN :statutsFermes")
+    @Query("SELECT DISTINCT e.dossier FROM EtapeProcedure e "
+            + "WHERE e.statutCycleVie NOT IN :statutsFermes AND e.dossier.categorie IN :categories")
     Page<Dossier> listerDossiersAvecEtapeEnCours(@Param("statutsFermes") List<StatutCycleVie> statutsFermes,
+                                                 @Param("categories") List<CategorieDossier> categories,
                                                  Pageable pageable);
 
     /** Les dossiers que {@link #countDossiersSansEtapeEnCours} compte - même sous-requête (Q-137). */
     @Query("""
             SELECT DISTINCT e.dossier FROM EtapeProcedure e
-             WHERE NOT EXISTS (SELECT 1 FROM EtapeProcedure autre
+             WHERE e.dossier.categorie IN :categories
+               AND NOT EXISTS (SELECT 1 FROM EtapeProcedure autre
                                 WHERE autre.dossier = e.dossier
                                   AND autre.statutCycleVie NOT IN :statutsFermes)
             """)
     Page<Dossier> listerDossiersSansEtapeEnCours(@Param("statutsFermes") List<StatutCycleVie> statutsFermes,
+                                                 @Param("categories") List<CategorieDossier> categories,
                                                  Pageable pageable);
 }

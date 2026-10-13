@@ -2168,6 +2168,71 @@ sont unifiées.
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
 
+### Q-138 ✅ Le tableau de bord se recadre par catégorie — tranché (2026-10-13)
+
+**Ce qui a déclenché l'arbitrage.** En livrant Q-137, j'ai signalé que « Litiges gagnés », « perdus »
+et « Décisions mixtes » ne comptaient que les dossiers de **recouvrement**, héritage du taux de
+succès qu'ils ont remplacé le 2026-10-06. Le porteur du projet a demandé l'état exact : **six des
+neuf indicateurs portaient sur les deux catégories, trois sur une seule**, sans que l'écran le
+distingue. Puis il a tranché : pas un renommage, un vrai suivi des deux catégories.
+
+**La conséquence que ce diagnostic a rendue visible, et qui est le vrai coût de l'état précédent** :
+un dossier de « Litiges d'exploitation » jugé ne faisait bouger **aucun** compteur de résultat. Son
+délibéré existait, était enregistré, apparaissait dans l'audit et dans l'activité du juriste - mais
+nulle part dans l'application on ne l'aurait vu compté.
+
+**Un sélecteur de périmètre, et le même tableau de bord trois fois.** Toutes catégories (défaut,
+choisi par le porteur du projet), Recouvrement, Litiges d'exploitation. Les **neuf** indicateurs le
+respectent, et les neuf détails de Q-137 aussi.
+
+**Pourquoi une liste des deux valeurs plutôt qu'un filtre optionnel.** `dossier.categorie` est
+`NOT NULL` avec une contrainte `CHECK` sur ces deux valeurs exactement (V1) : « toutes catégories »
+est donc littéralement leur **union**, et l'invariant
+**Recouvrement + Litiges d'exploitation = Toutes** repose sur la base, non sur mon code. Un filtre
+optionnel aurait demandé un `:categorie IS NULL OR …` dans seize requêtes, et laissé la porte
+ouverte à un appel non scopé. Il n'existe donc **aucune variante sans périmètre** : chaque compteur
+en prend un.
+
+**L'invariant est tenu par deux tests, à deux niveaux.** Un test d'intégration Testcontainers
+l'additionne requête par requête sur PostgreSQL - c'est la seule façon de savoir qu'aucune n'a oublié
+sa jointure sur le dossier. Et un parcours Playwright le vérifie **à travers l'écran**, en lisant les
+neuf blocs sous les trois périmètres : c'est là qu'un sous-total faux se verrait. Un tableau de bord
+dont les sous-totaux ne s'additionnent pas, personne ne le regarde deux fois.
+
+**La garantie faite au porteur du projet : son chiffre d'hier reste reproductible.** Les trois
+compteurs de litiges perdent leur filtre figé et deviennent recadrables comme les autres - si bien
+que « Litiges gagnés » en périmètre **Recouvrement** donne exactement ce qu'il lisait avant. Rien
+n'a été changé en silence ; le périmètre a reçu un nom. Un test l'affirme.
+
+**Le rapport périodique suit, et il le fallait.** Il portait la même asymétrie - quatre indicateurs
+sur les deux catégories, trois sur le recouvrement. N'en scoper que trois aurait reproduit le défaut
+qu'on retire ; et sans sélecteur sur cet écran, ses trois nombres auraient changé **en silence** dès
+que le backend a cessé de les figer. Son périmètre figure jusque dans le **nom du fichier exporté** :
+un rapport de recouvrement et un rapport toutes catégories portent des chiffres différents sur la
+même période, et deux fichiers nommés pareil se confondraient dans un dossier.
+
+**Quatre compteurs sont des variantes et non des remplacements** :
+`dossierRepository.countByCreatedAtBetween` sert aussi au rapport journalier de la GED, qui n'a pas
+de notion de catégorie. Les deux coexistent donc.
+
+**Le taux de succès suit désormais le périmètre, et son nom est devenu historique.** Sous « toutes
+catégories » il ne mesure plus le seul recouvrement. Aucun écran ne l'affiche depuis le 2026-10-06 ;
+le laisser figé aurait fait, dans la même réponse, un champ qui ignore le périmètre que tous les
+autres respectent.
+
+**Une note a disparu de l'écran, et c'est le signe que le problème est réglé à la source.** Le détail
+portait « ce décompte ne porte que sur les dossiers de recouvrement » : le sélecteur le dit
+désormais, et une note n'a plus à rattraper un libellé. Celle sur les alertes reste - elle ne parle
+pas de périmètre mais de ce qu'une ligne représente.
+
+**Le périmètre vit dans l'URL** (`?categorie=…`) : un lien vers « le tableau de bord du
+recouvrement » se partage, et un rechargement ne ramène pas l'utilisateur sur « toutes catégories »
+sans qu'il l'ait demandé.
+
+**Ce que je n'ai pas fait, et qui attend un mot.** Aucun **seuil ni alerte par catégorie** : les
+seuils sont aujourd'hui globaux, et les décliner par catégorie inventerait une règle métier que
+personne n'a posée.
+
 ### Q-137 ✅ Chaque bloc du tableau de bord s'ouvre sur son détail — tranché (2026-10-13)
 
 **Ce que le métier a demandé** : appliquer au tableau de bord le principe de la fiche d'activité -

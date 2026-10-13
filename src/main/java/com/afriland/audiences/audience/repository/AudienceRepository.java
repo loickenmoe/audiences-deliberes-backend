@@ -1,5 +1,10 @@
 package com.afriland.audiences.audience.repository;
 
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import com.afriland.audiences.referentiel.domain.CategorieDossier;
+
 import com.afriland.audiences.audience.domain.Audience;
 import com.afriland.audiences.audience.domain.StatutAudience;
 import org.springframework.data.domain.Page;
@@ -62,13 +67,29 @@ public interface AudienceRepository extends JpaRepository<Audience, Long> {
             StatutAudience statut, LocalDate debut, LocalDate fin, Pageable pageable);
 
     /** FR-REP-02 (tableau de bord, M13) : audiences encore à venir, tous dossiers confondus. */
-    long countByStatut(StatutAudience statut);
+    @Query("SELECT COUNT(a) FROM Audience a "
+            + "WHERE a.statut = :statut AND a.dossier.categorie IN :categories")
+    long compterParStatut(@Param("statut") StatutAudience statut,
+                          @Param("categories") List<CategorieDossier> categories);
 
     /** Les audiences que {@link #countByStatut} compte (Q-137) - la plus proche d'abord. */
-    Page<Audience> findByStatutOrderByDatePlanifieeAsc(StatutAudience statut, Pageable pageable);
+    @Query("SELECT a FROM Audience a "
+            + "WHERE a.statut = :statut AND a.dossier.categorie IN :categories "
+            + "ORDER BY a.datePlanifiee ASC")
+    Page<Audience> listerParStatut(@Param("statut") StatutAudience statut,
+                                   @Param("categories") List<CategorieDossier> categories,
+                                   Pageable pageable);
 
     /** FR-REP-01 (rapport périodique, M13) : audiences tenues dans la période. */
     long countByStatutAndDateTenueBetween(StatutAudience statut, LocalDate debut, LocalDate fin);
+
+    /** FR-REP-01, recadré par catégorie (Q-138). */
+    @Query("SELECT COUNT(a) FROM Audience a WHERE a.statut = :statut "
+            + "AND a.dateTenue BETWEEN :debut AND :fin AND a.dossier.categorie IN :categories")
+    long compterTenuesEntre(@Param("statut") StatutAudience statut,
+                            @Param("debut") LocalDate debut,
+                            @Param("fin") LocalDate fin,
+                            @Param("categories") List<CategorieDossier> categories);
 
     /** M15 : onglet « Audiences » de la fiche dossier (Q-68), plus récente d'abord. */
     Page<Audience> findByDossierIdOrderByDatePlanifieeDesc(Long dossierId, Pageable pageable);

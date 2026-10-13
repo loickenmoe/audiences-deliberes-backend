@@ -1,5 +1,7 @@
 package com.afriland.audiences.reporting.service;
 
+import com.afriland.audiences.referentiel.domain.CategorieDossier;
+
 import com.afriland.audiences.alerte.domain.StatutAlerte;
 import com.afriland.audiences.alerte.domain.TypeAlerte;
 import com.afriland.audiences.alerte.repository.AlerteRepository;
@@ -33,6 +35,23 @@ import java.util.List;
 public class ReportingService {
 
     private static final List<StatutCycleVie> ETAPES_FERMEES = List.of(StatutCycleVie.CLOTURE, StatutCycleVie.ARCHIVE);
+
+    /**
+     * Le périmètre par défaut : <b>les deux catégories</b> (Q-138).
+     *
+     * <p><b>Pourquoi une liste des deux valeurs et non un filtre optionnel.</b> {@code categorie}
+     * est {@code NOT NULL} en base, avec une contrainte {@code CHECK} sur ces deux valeurs exactement
+     * (V1) : « toutes catégories » est donc littéralement leur union, et l'invariant
+     * <b>Recouvrement + Litiges d'exploitation = Toutes</b> repose sur la base, non sur ce code. Un
+     * filtre optionnel aurait demandé un {@code :categorie IS NULL OR …} dans seize requêtes, et
+     * laissé la porte ouverte à un appel non scopé.
+     */
+    static final List<CategorieDossier> TOUTES_CATEGORIES = List.of(CategorieDossier.values());
+
+    /** Le périmètre demandé, ou les deux catégories à défaut. */
+    static List<CategorieDossier> perimetre(CategorieDossier categorie) {
+        return categorie == null ? TOUTES_CATEGORIES : List.of(categorie);
+    }
     private static final List<StatutCircuitFrais> FRAIS_SOLDES = List.of(StatutCircuitFrais.PAYEE, StatutCircuitFrais.REJETEE);
 
     private final EtapeProcedureRepository etapeProcedureRepository;
@@ -45,17 +64,26 @@ public class ReportingService {
 
     /** FR-REP-02/RG-REP-03 : indicateurs temps réel, tous dossiers confondus. */
     @Transactional(readOnly = true)
-    public TableauDeBordResponse tableauDeBord() {
-        long nbDossiersActifs = etapeProcedureRepository.countDistinctDossierIdByStatutCycleVieNotIn(ETAPES_FERMEES);
+    public TableauDeBordResponse tableauDeBord(CategorieDossier categorie) {
+        /*
+         * Les neuf indicateurs suivent le même périmètre, et c'est tout l'objet de Q-138 : six
+         * d'entre eux portaient sur les deux catégories, trois sur le recouvrement seul, sans que
+         * l'écran le distingue. Un dossier d'exploitation jugé ne faisait donc bouger aucun des
+         * compteurs de résultat - son délibéré existait sans être compté nulle part.
+         */
+        List<CategorieDossier> categories = perimetre(categorie);
+        long nbDossiersActifs = etapeProcedureRepository
+                .countDistinctDossierIdByStatutCycleVieNotIn(ETAPES_FERMEES, categories);
         // Les affaires vidées : plus aucune étape en cours (métier, 2026-10-06). Le complément
         // exact du compteur ci-dessus, et la même notion qu'au Q-53.
-        long nbAffairesVidees = etapeProcedureRepository.countDossiersSansEtapeEnCours(ETAPES_FERMEES);
-        long nbAudiencesPlanifiees = audienceRepository.countByStatut(StatutAudience.PLANIFIEE);
-        long nbDemandesFraisEnAttente = demandeFraisRepository.countByStatutCircuitNotIn(FRAIS_SOLDES);
-        long nbProrogationsAlerte = alerteRepository.countByTypeAndStatut(TypeAlerte.PROROGATION, StatutAlerte.DECLENCHEE);
-        DelibereRepository.PerformanceGlobale performance = delibereRepository.calculerTauxSuccesRecouvrement();
+        long nbAffairesVidees = etapeProcedureRepository.countDossiersSansEtapeEnCours(ETAPES_FERMEES, categories);
+        long nbAudiencesPlanifiees = audienceRepository.compterParStatut(StatutAudience.PLANIFIEE, categories);
+        long nbDemandesFraisEnAttente = demandeFraisRepository.compterNonSoldees(FRAIS_SOLDES, categories);
+        long nbProrogationsAlerte = alerteRepository.compterParTypeEtStatut(
+                TypeAlerte.PROROGATION, StatutAlerte.DECLENCHEE, categories);
+        DelibereRepository.PerformanceGlobale performance = delibereRepository.calculerResultats(categories);
         double tauxSuccesRecouvrement = tauxSucces(performance.getFavorables(), performance.getTotal());
-        double provisionsReprises = valeurOuZero(decisionDefinitiveRepository.sommeProvisionsReprises());
+        double provisionsReprises = valeurOuZero(decisionDefinitiveRepository.sommeProvisionsReprises(categories));
 
         return new TableauDeBordResponse(nbDossiersActifs, nbAudiencesPlanifiees, nbDemandesFraisEnAttente,
                 nbProrogationsAlerte, tauxSuccesRecouvrement,
@@ -69,18 +97,34 @@ public class ReportingService {
      * explicitement fournies par l'appelant (Q-63).
      */
     @Transactional(readOnly = true)
-    public RapportResponse genererRapport(TypeRapport type, LocalDate dateDebut, LocalDate dateFin) {
+    public RapportResponse genererRapport(TypeRapport type, LocalDate dateDebut, LocalDate dateFin,
+                                          CategorieDossier categorie) {
         LocalDateTime debutJour = dateDebut.atStartOfDay();
         LocalDateTime finJour = dateFin.atTime(23, 59, 59);
+        /*
+         * Le rapport suit le même périmètre que le tableau de bord (Q-138). Il portait la même
+         * asymétrie : quatre indicateurs sur les deux catégories, trois sur le recouvrement seul.
+         * Ne scoper que les trois aurait reproduit le défaut qu'on retire.
+         */
+        List<CategorieDossier> categories = perimetre(categorie);
 
-        long nbNouveauxDossiers = dossierRepository.countByCreatedAtBetween(debutJour, finJour);
-        long nbAudiencesTenues = audienceRepository.countByStatutAndDateTenueBetween(StatutAudience.TENUE, dateDebut, dateFin);
-        long nbDemandesFraisDeposees = demandeFraisRepository.countByCreatedAtBetween(debutJour, finJour);
+        long nbNouveauxDossiers = dossierRepository.compterCreesEntre(debutJour, finJour, categories);
+        long nbAudiencesTenues = audienceRepository.compterTenuesEntre(
+                StatutAudience.TENUE, dateDebut, dateFin, categories);
+        long nbDemandesFraisDeposees = demandeFraisRepository.compterDeposeesEntre(debutJour, finJour, categories);
         // Délibérés rendus dans la période : une mise en délibéré sans résultat n'en est pas un (Q-78).
-        long nbDeliberesEnregistres = delibereRepository.countByDateDelibereeBetweenAndResultatIsNotNull(dateDebut, dateFin);
-        DelibereRepository.PerformanceGlobale performance = delibereRepository.calculerTauxSuccesRecouvrementPeriode(dateDebut, dateFin);
+        long nbDeliberesEnregistres = delibereRepository.compterRendusEntre(dateDebut, dateFin, categories);
+        DelibereRepository.PerformanceGlobale performance =
+                delibereRepository.calculerResultatsPeriode(dateDebut, dateFin, categories);
+        /*
+         * Le taux suit désormais le périmètre, et son nom est devenu historique : sous « toutes
+         * catégories » il ne mesure plus le seul recouvrement. Aucun écran ne l'affiche depuis le
+         * 2026-10-06 ; le laisser figé au recouvrement aurait fait, dans la même réponse, un champ
+         * qui ignore le périmètre que tous les autres respectent.
+         */
         double tauxSuccesRecouvrement = tauxSucces(performance.getFavorables(), performance.getTotal());
-        double provisionsReprises = valeurOuZero(decisionDefinitiveRepository.sommeProvisionsReprisesPeriode(dateDebut, dateFin));
+        double provisionsReprises = valeurOuZero(
+                decisionDefinitiveRepository.sommeProvisionsReprisesPeriode(dateDebut, dateFin, categories));
 
         return new RapportResponse(type, dateDebut, dateFin, nbNouveauxDossiers, nbAudiencesTenues,
                 nbDemandesFraisDeposees, nbDeliberesEnregistres, tauxSuccesRecouvrement,

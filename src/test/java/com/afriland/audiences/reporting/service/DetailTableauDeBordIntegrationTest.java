@@ -10,6 +10,7 @@ import com.afriland.audiences.delibere.domain.ResultatDelibere;
 import com.afriland.audiences.delibere.repository.DelibereRepository;
 import com.afriland.audiences.dossier.repository.EtapeProcedureRepository;
 import com.afriland.audiences.frais.repository.DemandeFraisRepository;
+import com.afriland.audiences.referentiel.domain.CategorieDossier;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -71,9 +72,9 @@ class DetailTableauDeBordIntegrationTest {
     @DisplayName("dossiers actifs : autant de lignes que le compteur annonce")
     void dossiersActifs() {
         long compte = etapes.countDistinctDossierIdByStatutCycleVieNotIn(
-                DetailTableauDeBordService.ETAPES_FERMEES);
+                DetailTableauDeBordService.ETAPES_FERMEES, TOUTES);
         long listees = etapes.listerDossiersAvecEtapeEnCours(
-                DetailTableauDeBordService.ETAPES_FERMEES, PREMIERE_PAGE).getTotalElements();
+                DetailTableauDeBordService.ETAPES_FERMEES, TOUTES, PREMIERE_PAGE).getTotalElements();
 
         assertThat(listees).isEqualTo(compte);
     }
@@ -81,9 +82,9 @@ class DetailTableauDeBordIntegrationTest {
     @Test
     @DisplayName("affaires vidées : autant de lignes que le compteur annonce")
     void affairesVidees() {
-        long compte = etapes.countDossiersSansEtapeEnCours(DetailTableauDeBordService.ETAPES_FERMEES);
+        long compte = etapes.countDossiersSansEtapeEnCours(DetailTableauDeBordService.ETAPES_FERMEES, TOUTES);
         long listees = etapes.listerDossiersSansEtapeEnCours(
-                DetailTableauDeBordService.ETAPES_FERMEES, PREMIERE_PAGE).getTotalElements();
+                DetailTableauDeBordService.ETAPES_FERMEES, TOUTES, PREMIERE_PAGE).getTotalElements();
 
         assertThat(listees).isEqualTo(compte);
     }
@@ -91,9 +92,9 @@ class DetailTableauDeBordIntegrationTest {
     @Test
     @DisplayName("audiences planifiées : autant de lignes que le compteur annonce")
     void audiencesPlanifiees() {
-        long compte = audiences.countByStatut(StatutAudience.PLANIFIEE);
-        long listees = audiences.findByStatutOrderByDatePlanifieeAsc(
-                StatutAudience.PLANIFIEE, PREMIERE_PAGE).getTotalElements();
+        long compte = audiences.compterParStatut(StatutAudience.PLANIFIEE, TOUTES);
+        long listees = audiences.listerParStatut(
+                StatutAudience.PLANIFIEE, TOUTES, PREMIERE_PAGE).getTotalElements();
 
         assertThat(listees).isEqualTo(compte);
     }
@@ -101,9 +102,9 @@ class DetailTableauDeBordIntegrationTest {
     @Test
     @DisplayName("frais en attente : autant de lignes que le compteur annonce")
     void fraisEnAttente() {
-        long compte = frais.countByStatutCircuitNotIn(DetailTableauDeBordService.FRAIS_SOLDES);
-        long listees = frais.findByStatutCircuitNotInOrderByCreatedAtAsc(
-                DetailTableauDeBordService.FRAIS_SOLDES, PREMIERE_PAGE).getTotalElements();
+        long compte = frais.compterNonSoldees(DetailTableauDeBordService.FRAIS_SOLDES, TOUTES);
+        long listees = frais.listerNonSoldees(
+                DetailTableauDeBordService.FRAIS_SOLDES, TOUTES, PREMIERE_PAGE).getTotalElements();
 
         assertThat(listees).isEqualTo(compte);
     }
@@ -111,9 +112,9 @@ class DetailTableauDeBordIntegrationTest {
     @Test
     @DisplayName("alertes de prorogation : autant de lignes que le compteur annonce")
     void prorogations() {
-        long compte = alertes.countByTypeAndStatut(TypeAlerte.PROROGATION, StatutAlerte.DECLENCHEE);
-        long listees = alertes.findByTypeAndStatutOrderByIdDesc(
-                TypeAlerte.PROROGATION, StatutAlerte.DECLENCHEE, PREMIERE_PAGE).getTotalElements();
+        long compte = alertes.compterParTypeEtStatut(TypeAlerte.PROROGATION, StatutAlerte.DECLENCHEE, TOUTES);
+        long listees = alertes.listerParTypeEtStatut(
+                TypeAlerte.PROROGATION, StatutAlerte.DECLENCHEE, TOUTES, PREMIERE_PAGE).getTotalElements();
 
         assertThat(listees).isEqualTo(compte);
     }
@@ -127,13 +128,13 @@ class DetailTableauDeBordIntegrationTest {
     @Test
     @DisplayName("litiges gagnés, perdus et mixtes : chaque liste tombe sur son décompte")
     void deliberesParResultat() {
-        var performance = deliberes.calculerTauxSuccesRecouvrement();
+        var performance = deliberes.calculerResultats(TOUTES);
 
-        assertThat(deliberes.listerParResultatEnRecouvrement(ResultatDelibere.FAVORABLE, PREMIERE_PAGE)
+        assertThat(deliberes.listerParResultat(ResultatDelibere.FAVORABLE, TOUTES, PREMIERE_PAGE)
                 .getTotalElements()).isEqualTo(nombre(performance.getFavorables()));
-        assertThat(deliberes.listerParResultatEnRecouvrement(ResultatDelibere.DEFAVORABLE, PREMIERE_PAGE)
+        assertThat(deliberes.listerParResultat(ResultatDelibere.DEFAVORABLE, TOUTES, PREMIERE_PAGE)
                 .getTotalElements()).isEqualTo(nombre(performance.getDefavorables()));
-        assertThat(deliberes.listerParResultatEnRecouvrement(ResultatDelibere.MIXTE, PREMIERE_PAGE)
+        assertThat(deliberes.listerParResultat(ResultatDelibere.MIXTE, TOUTES, PREMIERE_PAGE)
                 .getTotalElements()).isEqualTo(nombre(performance.getMixtes()));
     }
 
@@ -148,10 +149,10 @@ class DetailTableauDeBordIntegrationTest {
     @Test
     @DisplayName("provisions reprises : la somme des montants listés fait le montant affiché")
     void provisionsReprises() {
-        double somme = decisions.sommeProvisionsReprises() == null
+        double somme = decisions.sommeProvisionsReprises(TOUTES) == null
                 ? 0d
-                : decisions.sommeProvisionsReprises();
-        double sommeDesLignes = decisions.listerProvisionsReprises(PageRequest.of(0, 1_000))
+                : decisions.sommeProvisionsReprises(TOUTES);
+        double sommeDesLignes = decisions.listerProvisionsReprises(TOUTES, PageRequest.of(0, 1_000))
                 .getContent().stream()
                 .mapToDouble(adjudication -> adjudication.getReliquat() == null ? 0d : adjudication.getReliquat())
                 .sum();
@@ -177,5 +178,147 @@ class DetailTableauDeBordIntegrationTest {
 
     private static long nombre(Long valeur) {
         return valeur == null ? 0L : valeur;
+    }
+
+    private static final java.util.List<CategorieDossier> TOUTES =
+            java.util.List.of(CategorieDossier.values());
+    private static final java.util.List<CategorieDossier> RECOUVREMENT =
+            java.util.List.of(CategorieDossier.RECOUVREMENT);
+    private static final java.util.List<CategorieDossier> EXPLOITATION =
+            java.util.List.of(CategorieDossier.EXPLOITATION_LITIGES);
+
+    /**
+     * <b>L'invariant qui rend le tableau de bord recadrable crédible</b> (Q-138) :
+     * Recouvrement + Litiges d'exploitation = Toutes catégories, pour chacun des neuf indicateurs.
+     *
+     * <p>Il ne repose pas sur mon code mais sur la base : {@code dossier.categorie} est
+     * {@code NOT NULL} avec une contrainte {@code CHECK} sur ces deux valeurs exactement (V1). Les
+     * deux périmètres partitionnent donc l'ensemble, et ce test le prouve requête par requête -
+     * c'est la seule façon de savoir qu'aucune n'a oublié sa jointure sur le dossier, ce qui se
+     * verrait sinon comme un sous-total qui ne tombe pas juste.
+     *
+     * <p>Un tableau de bord dont les sous-totaux ne s'additionnent pas, personne ne le regarde deux
+     * fois.
+     */
+    @Test
+    @DisplayName("les deux catégories s'additionnent pour faire le total, sur les neuf indicateurs")
+    void lesDeuxCategoriesFontLeTotal() {
+        assertThat(etapes.countDistinctDossierIdByStatutCycleVieNotIn(
+                DetailTableauDeBordService.ETAPES_FERMEES, RECOUVREMENT)
+                + etapes.countDistinctDossierIdByStatutCycleVieNotIn(
+                        DetailTableauDeBordService.ETAPES_FERMEES, EXPLOITATION))
+                .as("dossiers actifs")
+                .isEqualTo(etapes.countDistinctDossierIdByStatutCycleVieNotIn(
+                        DetailTableauDeBordService.ETAPES_FERMEES, TOUTES));
+
+        assertThat(etapes.countDossiersSansEtapeEnCours(DetailTableauDeBordService.ETAPES_FERMEES, RECOUVREMENT)
+                + etapes.countDossiersSansEtapeEnCours(DetailTableauDeBordService.ETAPES_FERMEES, EXPLOITATION))
+                .as("affaires vidées")
+                .isEqualTo(etapes.countDossiersSansEtapeEnCours(
+                        DetailTableauDeBordService.ETAPES_FERMEES, TOUTES));
+
+        assertThat(audiences.compterParStatut(StatutAudience.PLANIFIEE, RECOUVREMENT)
+                + audiences.compterParStatut(StatutAudience.PLANIFIEE, EXPLOITATION))
+                .as("audiences planifiées")
+                .isEqualTo(audiences.compterParStatut(StatutAudience.PLANIFIEE, TOUTES));
+
+        assertThat(frais.compterNonSoldees(DetailTableauDeBordService.FRAIS_SOLDES, RECOUVREMENT)
+                + frais.compterNonSoldees(DetailTableauDeBordService.FRAIS_SOLDES, EXPLOITATION))
+                .as("frais en attente")
+                .isEqualTo(frais.compterNonSoldees(DetailTableauDeBordService.FRAIS_SOLDES, TOUTES));
+
+        assertThat(alertes.compterParTypeEtStatut(TypeAlerte.PROROGATION, StatutAlerte.DECLENCHEE, RECOUVREMENT)
+                + alertes.compterParTypeEtStatut(TypeAlerte.PROROGATION, StatutAlerte.DECLENCHEE, EXPLOITATION))
+                .as("alertes de prorogation")
+                .isEqualTo(alertes.compterParTypeEtStatut(
+                        TypeAlerte.PROROGATION, StatutAlerte.DECLENCHEE, TOUTES));
+
+        for (ResultatDelibere resultat : ResultatDelibere.values()) {
+            assertThat(deliberes.listerParResultat(resultat, RECOUVREMENT, PREMIERE_PAGE).getTotalElements()
+                    + deliberes.listerParResultat(resultat, EXPLOITATION, PREMIERE_PAGE).getTotalElements())
+                    .as("délibérés %s", resultat)
+                    .isEqualTo(deliberes.listerParResultat(resultat, TOUTES, PREMIERE_PAGE).getTotalElements());
+        }
+
+        // Le neuvième est une somme d'argent : c'est elle qui doit s'additionner, pas un décompte.
+        assertThat(somme(decisions.sommeProvisionsReprises(RECOUVREMENT))
+                + somme(decisions.sommeProvisionsReprises(EXPLOITATION)))
+                .as("provisions reprises")
+                .isEqualTo(somme(decisions.sommeProvisionsReprises(TOUTES)));
+    }
+
+    /**
+     * La concordance liste/compteur doit tenir <b>sous chaque périmètre</b>, et pas seulement sur le
+     * total : c'est sous un périmètre restreint qu'une jointure oubliée se verrait.
+     */
+    @Test
+    @DisplayName("sous chaque périmètre, chaque liste tombe encore sur son compteur")
+    void concordanceSousChaquePerimetre() {
+        for (var categories : java.util.List.of(TOUTES, RECOUVREMENT, EXPLOITATION)) {
+            assertThat(etapes.listerDossiersAvecEtapeEnCours(
+                    DetailTableauDeBordService.ETAPES_FERMEES, categories, PREMIERE_PAGE).getTotalElements())
+                    .as("dossiers actifs, périmètre %s", categories)
+                    .isEqualTo(etapes.countDistinctDossierIdByStatutCycleVieNotIn(
+                            DetailTableauDeBordService.ETAPES_FERMEES, categories));
+
+            assertThat(etapes.listerDossiersSansEtapeEnCours(
+                    DetailTableauDeBordService.ETAPES_FERMEES, categories, PREMIERE_PAGE).getTotalElements())
+                    .as("affaires vidées, périmètre %s", categories)
+                    .isEqualTo(etapes.countDossiersSansEtapeEnCours(
+                            DetailTableauDeBordService.ETAPES_FERMEES, categories));
+
+            assertThat(audiences.listerParStatut(StatutAudience.PLANIFIEE, categories, PREMIERE_PAGE)
+                    .getTotalElements())
+                    .as("audiences planifiées, périmètre %s", categories)
+                    .isEqualTo(audiences.compterParStatut(StatutAudience.PLANIFIEE, categories));
+
+            assertThat(frais.listerNonSoldees(DetailTableauDeBordService.FRAIS_SOLDES, categories, PREMIERE_PAGE)
+                    .getTotalElements())
+                    .as("frais en attente, périmètre %s", categories)
+                    .isEqualTo(frais.compterNonSoldees(DetailTableauDeBordService.FRAIS_SOLDES, categories));
+
+            assertThat(alertes.listerParTypeEtStatut(
+                    TypeAlerte.PROROGATION, StatutAlerte.DECLENCHEE, categories, PREMIERE_PAGE)
+                    .getTotalElements())
+                    .as("alertes de prorogation, périmètre %s", categories)
+                    .isEqualTo(alertes.compterParTypeEtStatut(
+                            TypeAlerte.PROROGATION, StatutAlerte.DECLENCHEE, categories));
+
+            var performance = deliberes.calculerResultats(categories);
+            assertThat(deliberes.listerParResultat(ResultatDelibere.FAVORABLE, categories, PREMIERE_PAGE)
+                    .getTotalElements())
+                    .as("litiges gagnés, périmètre %s", categories)
+                    .isEqualTo(nombre(performance.getFavorables()));
+            assertThat(deliberes.listerParResultat(ResultatDelibere.DEFAVORABLE, categories, PREMIERE_PAGE)
+                    .getTotalElements())
+                    .as("litiges perdus, périmètre %s", categories)
+                    .isEqualTo(nombre(performance.getDefavorables()));
+            assertThat(deliberes.listerParResultat(ResultatDelibere.MIXTE, categories, PREMIERE_PAGE)
+                    .getTotalElements())
+                    .as("décisions mixtes, périmètre %s", categories)
+                    .isEqualTo(nombre(performance.getMixtes()));
+        }
+    }
+
+    /**
+     * Les trois compteurs de litiges <b>ne sont plus figés sur le recouvrement</b> (Q-138). La
+     * garantie que je dois au porteur du projet : son chiffre d'hier reste reproductible, sous le
+     * périmètre « Recouvrement ». Rien n'a été changé en silence - le périmètre a reçu un nom.
+     */
+    @Test
+    @DisplayName("le périmètre Recouvrement reproduit exactement l'ancien comptage des litiges")
+    void lAncienComptageResteReproductible() {
+        var recouvrement = deliberes.calculerResultats(RECOUVREMENT);
+        long gagnesEnRecouvrement = deliberes
+                .listerParResultat(ResultatDelibere.FAVORABLE, RECOUVREMENT, PREMIERE_PAGE).getTotalElements();
+
+        assertThat(nombre(recouvrement.getFavorables())).isEqualTo(gagnesEnRecouvrement);
+        // Et le total toutes catégories ne peut pas être inférieur : il contient celui-là.
+        assertThat(nombre(deliberes.calculerResultats(TOUTES).getFavorables()))
+                .isGreaterThanOrEqualTo(nombre(recouvrement.getFavorables()));
+    }
+
+    private static double somme(Double valeur) {
+        return valeur == null ? 0d : valeur;
     }
 }

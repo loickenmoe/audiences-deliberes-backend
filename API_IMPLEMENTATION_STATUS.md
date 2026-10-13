@@ -418,10 +418,18 @@ coup. Réponses réduites à ce que l'usage exige.
 | 46 | PATCH | `/alertes/{id}/traiter` | destinataire | US 7.4 | 💡 | ✅ M5 |
 | 47 | GET | `/configurations` | `ROLE_CONSULTATION` | CONF01-07 | 📋 | ✅ M5 · **enrichi M17** (Q-91) |
 | 48 | PUT | `/configurations/{cle}` | `ROLE_DJ` | CONF01-07 | 📋 | ✅ M5 · **validé par clé M17** (Q-91) |
-| 49 | GET | `/rapports` | `ROLE_JURISTE` | FR-REP-01 / US 8.4 | 📋 | ✅ |
-| 50 | GET | `/tableau-de-bord` | `ROLE_DJ` **et `ROLE_DJA`** | FR-REP-02 / US 8.5 | 📋 | ✅ · **élargi M18** (Q-95) |
+| 49 | GET | `/rapports?…&categorie` | `ROLE_JURISTE` | FR-REP-01 / US 8.4 | 📋 | ✅ · **recadrable Q-138** |
+| 50 | GET | `/tableau-de-bord?categorie` | `ROLE_DJ` **et `ROLE_DJA`** | FR-REP-02 / US 8.5 | 📋 | ✅ · **élargi M18** (Q-95) · **recadrable Q-138** |
 | — | GET | `/tableau-de-bord/details?indicateur&page&size` 🆕 Q-137 | `ROLE_DJ` **et `ROLE_DJA`** | métier, 2026-10-13 | 💡 | ✅ 2026-10-13 |
 
+> **`categorie` (Q-138)** : optionnel sur `#49`, `#50` et `/tableau-de-bord/details`. **Absent =
+> les deux catégories**, et il n'existe aucune variante sans périmètre - chacun des neuf
+> compteurs en prend un. L'invariant **Recouvrement + Litiges d'exploitation = Toutes** repose
+> sur la contrainte `CHECK` de `dossier.categorie` (V1), non sur le code, et un test
+> d'intégration l'additionne requête par requête. Les trois compteurs de litiges ne sont plus
+> figés sur le recouvrement : le périmètre **Recouvrement** reproduit exactement leur ancien
+> comptage. Le taux de succès suit le périmètre, et son nom est devenu historique.
+>
 > **`/tableau-de-bord/details`** : la liste de ce qu'un bloc compte (Q-137). **Le détail rend
 > exactement ce que le compteur compte**, prédicat pour prédicat - un test d'intégration confronte
 > les deux requêtes sur la même base, pour les neuf indicateurs. Une seule forme de ligne pour

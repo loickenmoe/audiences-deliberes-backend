@@ -4,6 +4,7 @@ import com.afriland.audiences.common.audit.TypeActionHistorique;
 import com.afriland.audiences.common.error.ApiException;
 import com.afriland.audiences.common.error.ErrorCodes;
 import com.afriland.audiences.common.security.CurrentUserService;
+import com.afriland.audiences.referentiel.domain.CategorieDossier;
 import com.afriland.audiences.reporting.domain.IndicateurTableauDeBord;
 import com.afriland.audiences.reporting.domain.TypeRapport;
 import com.afriland.audiences.reporting.service.DetailTableauDeBordService;
@@ -67,8 +68,8 @@ public class ReportingController {
      */
     @GetMapping("${api.prefix}/tableau-de-bord")
     @PreAuthorize("hasAnyRole('DJ', 'DJA')")
-    public TableauDeBordResponse tableauDeBord() {
-        return reportingService.tableauDeBord();
+    public TableauDeBordResponse tableauDeBord(@RequestParam(required = false) CategorieDossier categorie) {
+        return reportingService.tableauDeBord(categorie);
     }
 
     /**
@@ -112,8 +113,9 @@ public class ReportingController {
     public ResponseEntity<?> rapports(@RequestParam TypeRapport type,
                                         @RequestParam LocalDate dateDebut,
                                         @RequestParam LocalDate dateFin,
+                                        @RequestParam(required = false) CategorieDossier categorie,
                                         @RequestParam(defaultValue = "JSON") FormatRapport format) {
-        RapportResponse rapport = reportingService.genererRapport(type, dateDebut, dateFin);
+        RapportResponse rapport = reportingService.genererRapport(type, dateDebut, dateFin, categorie);
         if (rapport.estVide()) {
             return ResponseEntity.noContent().build();
         }
@@ -168,9 +170,11 @@ public class ReportingController {
     @PreAuthorize("hasAnyRole('DJ', 'DJA')")
     public PageResponse<DetailIndicateurResponse> detailTableauDeBord(
             @RequestParam IndicateurTableauDeBord indicateur,
+            @RequestParam(required = false) CategorieDossier categorie,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return PageResponse.of(detailTableauDeBordService.detailler(indicateur, PageRequest.of(page, size)));
+        return PageResponse.of(
+                detailTableauDeBordService.detailler(indicateur, categorie, PageRequest.of(page, size)));
     }
 
     /**

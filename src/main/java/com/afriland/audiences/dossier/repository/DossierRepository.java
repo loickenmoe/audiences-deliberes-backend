@@ -1,5 +1,7 @@
 package com.afriland.audiences.dossier.repository;
 
+import com.afriland.audiences.referentiel.domain.CategorieDossier;
+
 import com.afriland.audiences.dossier.domain.Dossier;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -28,6 +30,19 @@ public interface DossierRepository extends JpaRepository<Dossier, Long>, JpaSpec
 
     /** FR-GED-04 (rapport journalier) : dossiers ouverts (affaires nouvelles) à une date donnée. */
     long countByCreatedAtBetween(LocalDateTime debut, LocalDateTime fin);
+
+    /**
+     * FR-REP-01, recadré par catégorie (Q-138).
+     *
+     * <p><b>Une variante et non un remplacement</b> : {@link #countByCreatedAtBetween} sert aussi au
+     * rapport journalier de la GED, qui n'a pas de notion de catégorie. Les deux coexistent donc,
+     * et celle-ci ne sert qu'au rapport d'activité.
+     */
+    @Query("SELECT COUNT(d) FROM Dossier d "
+            + "WHERE d.createdAt BETWEEN :debut AND :fin AND d.categorie IN :categories")
+    long compterCreesEntre(@Param("debut") LocalDateTime debut,
+                           @Param("fin") LocalDateTime fin,
+                           @Param("categories") List<CategorieDossier> categories);
 
     /**
      * Portail avocat (Q-96) : les dossiers auxquels un avocat est affecté, et eux seuls. La

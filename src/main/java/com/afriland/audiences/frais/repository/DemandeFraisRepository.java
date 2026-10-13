@@ -1,5 +1,7 @@
 package com.afriland.audiences.frais.repository;
 
+import com.afriland.audiences.referentiel.domain.CategorieDossier;
+
 import com.afriland.audiences.frais.domain.DemandeFrais;
 import com.afriland.audiences.frais.domain.StatutCircuitFrais;
 import org.springframework.data.domain.Page;
@@ -35,14 +37,21 @@ public interface DemandeFraisRepository extends JpaRepository<DemandeFrais, Long
     List<DemandeFrais> findAllByStatutCircuit(StatutCircuitFrais statut);
 
     /** FR-REP-02 (tableau de bord, M13) : demandes non encore soldées (ni payées, ni rejetées). */
-    long countByStatutCircuitNotIn(List<StatutCircuitFrais> statuts);
+    @Query("SELECT COUNT(d) FROM DemandeFrais d "
+            + "WHERE d.statutCircuit NOT IN :statuts AND d.dossier.categorie IN :categories")
+    long compterNonSoldees(@Param("statuts") List<StatutCircuitFrais> statuts,
+                           @Param("categories") List<CategorieDossier> categories);
 
     /**
      * Les demandes que {@link #countByStatutCircuitNotIn} compte (Q-137) - la plus ancienne
      * d'abord, qui est l'ordre de traitement.
      */
-    Page<DemandeFrais> findByStatutCircuitNotInOrderByCreatedAtAsc(List<StatutCircuitFrais> statuts,
-                                                                   Pageable pageable);
+    @Query("SELECT d FROM DemandeFrais d "
+            + "WHERE d.statutCircuit NOT IN :statuts AND d.dossier.categorie IN :categories "
+            + "ORDER BY d.createdAt ASC")
+    Page<DemandeFrais> listerNonSoldees(@Param("statuts") List<StatutCircuitFrais> statuts,
+                                        @Param("categories") List<CategorieDossier> categories,
+                                        Pageable pageable);
 
     /**
      * Condition d archivage (2026-09-29) : les demandes d un dossier qui ne sont ni payées ni
@@ -53,5 +62,12 @@ public interface DemandeFraisRepository extends JpaRepository<DemandeFrais, Long
 
     /** FR-REP-01 (rapport périodique, M13) : demandes déposées dans la période. */
     long countByCreatedAtBetween(LocalDateTime debut, LocalDateTime fin);
+
+    /** FR-REP-01, recadré par catégorie (Q-138). */
+    @Query("SELECT COUNT(d) FROM DemandeFrais d "
+            + "WHERE d.createdAt BETWEEN :debut AND :fin AND d.dossier.categorie IN :categories")
+    long compterDeposeesEntre(@Param("debut") LocalDateTime debut,
+                              @Param("fin") LocalDateTime fin,
+                              @Param("categories") List<CategorieDossier> categories);
 
 }

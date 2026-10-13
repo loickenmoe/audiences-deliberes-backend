@@ -14,6 +14,7 @@ import com.afriland.audiences.dossier.repository.DossierRepository;
 import com.afriland.audiences.dossier.repository.EtapeProcedureRepository;
 import com.afriland.audiences.frais.domain.StatutCircuitFrais;
 import com.afriland.audiences.frais.repository.DemandeFraisRepository;
+import com.afriland.audiences.referentiel.domain.CategorieDossier;
 import com.afriland.audiences.reporting.domain.IndicateurTableauDeBord;
 import com.afriland.audiences.reporting.web.dto.DetailIndicateurResponse;
 import lombok.RequiredArgsConstructor;
@@ -67,16 +68,24 @@ public class DetailTableauDeBordService {
     private final DossierRepository dossierRepository;
 
     @Transactional(readOnly = true)
-    public Page<DetailIndicateurResponse> detailler(IndicateurTableauDeBord indicateur, Pageable pageable) {
+    public Page<DetailIndicateurResponse> detailler(IndicateurTableauDeBord indicateur,
+                                                    CategorieDossier categorie,
+                                                    Pageable pageable) {
+        /*
+         * Le même périmètre que le compteur, et c'est non négociable : un détail scopé autrement que
+         * le nombre d'où l'on vient ferait douter des deux. `ReportingService.perimetre` est la
+         * seule source de cette traduction - « rien demandé » devient les deux catégories.
+         */
+        List<CategorieDossier> categories = ReportingService.perimetre(categorie);
         return switch (indicateur) {
             case DOSSIERS_ACTIFS -> etapeProcedureRepository
-                    .listerDossiersAvecEtapeEnCours(ETAPES_FERMEES, pageable)
+                    .listerDossiersAvecEtapeEnCours(ETAPES_FERMEES, categories, pageable)
                     .map(DetailTableauDeBordService::versLigneDossier);
             case AFFAIRES_VIDEES -> etapeProcedureRepository
-                    .listerDossiersSansEtapeEnCours(ETAPES_FERMEES, pageable)
+                    .listerDossiersSansEtapeEnCours(ETAPES_FERMEES, categories, pageable)
                     .map(DetailTableauDeBordService::versLigneDossier);
             case AUDIENCES_PLANIFIEES -> audienceRepository
-                    .findByStatutOrderByDatePlanifieeAsc(StatutAudience.PLANIFIEE, pageable)
+                    .listerParStatut(StatutAudience.PLANIFIEE, categories, pageable)
                     .map(audience -> new DetailIndicateurResponse(
                             audience.getId(),
                             audience.getDossier() == null ? null : audience.getDossier().getId(),
@@ -86,7 +95,7 @@ public class DetailTableauDeBordService {
                             audience.getDatePlanifiee(),
                             null));
             case FRAIS_EN_ATTENTE -> demandeFraisRepository
-                    .findByStatutCircuitNotInOrderByCreatedAtAsc(FRAIS_SOLDES, pageable)
+                    .listerNonSoldees(FRAIS_SOLDES, categories, pageable)
                     .map(demande -> new DetailIndicateurResponse(
                             demande.getId(),
                             demande.getDossier() == null ? null : demande.getDossier().getId(),
@@ -95,11 +104,11 @@ public class DetailTableauDeBordService {
                             demande.getAvocat() == null ? null : demande.getAvocat().getNom(),
                             demande.getCreatedAt() == null ? null : demande.getCreatedAt().toLocalDate(),
                             demande.getMontant()));
-            case PROROGATIONS_ALERTE -> versLignesAlertes(pageable);
-            case LITIGES_GAGNES -> versLignesDeliberes(ResultatDelibere.FAVORABLE, pageable);
-            case LITIGES_PERDUS -> versLignesDeliberes(ResultatDelibere.DEFAVORABLE, pageable);
-            case DECISIONS_MIXTES -> versLignesDeliberes(ResultatDelibere.MIXTE, pageable);
-            case PROVISIONS_REPRISES -> decisionDefinitiveRepository.listerProvisionsReprises(pageable)
+            case PROROGATIONS_ALERTE -> versLignesAlertes(categories, pageable);
+            case LITIGES_GAGNES -> versLignesDeliberes(ResultatDelibere.FAVORABLE, categories, pageable);
+            case LITIGES_PERDUS -> versLignesDeliberes(ResultatDelibere.DEFAVORABLE, categories, pageable);
+            case DECISIONS_MIXTES -> versLignesDeliberes(ResultatDelibere.MIXTE, categories, pageable);
+            case PROVISIONS_REPRISES -> decisionDefinitiveRepository.listerProvisionsReprises(categories, pageable)
                     .map(adjudication -> new DetailIndicateurResponse(
                             adjudication.getId(),
                             adjudication.getDossier() == null ? null : adjudication.getDossier().getId(),
@@ -111,8 +120,10 @@ public class DetailTableauDeBordService {
         };
     }
 
-    private Page<DetailIndicateurResponse> versLignesDeliberes(ResultatDelibere resultat, Pageable pageable) {
-        return delibereRepository.listerParResultatEnRecouvrement(resultat, pageable)
+    private Page<DetailIndicateurResponse> versLignesDeliberes(ResultatDelibere resultat,
+                                                               List<CategorieDossier> categories,
+                                                               Pageable pageable) {
+        return delibereRepository.listerParResultat(resultat, categories, pageable)
                 .map(delibere -> new DetailIndicateurResponse(
                         delibere.getId(),
                         delibere.getDossier() == null ? null : delibere.getDossier().getId(),
@@ -130,9 +141,10 @@ public class DetailTableauDeBordService {
      * donc en une seconde requête, groupée pour la page entière. Une lecture par ligne ferait dix
      * requêtes pour une page qui pointe souvent vers le même dossier.
      */
-    private Page<DetailIndicateurResponse> versLignesAlertes(Pageable pageable) {
-        var alertes = alerteRepository.findByTypeAndStatutOrderByIdDesc(
-                TypeAlerte.PROROGATION, StatutAlerte.DECLENCHEE, pageable);
+    private Page<DetailIndicateurResponse> versLignesAlertes(List<CategorieDossier> categories,
+                                                             Pageable pageable) {
+        var alertes = alerteRepository.listerParTypeEtStatut(
+                TypeAlerte.PROROGATION, StatutAlerte.DECLENCHEE, categories, pageable);
         List<Long> dossiers = alertes.getContent().stream()
                 .map(alerte -> alerte.getDossierId())
                 .filter(java.util.Objects::nonNull)
