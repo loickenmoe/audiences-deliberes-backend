@@ -408,6 +408,13 @@ coup. Réponses réduites à ce que l'usage exige.
 > **Périmètre à confirmer** : `mes-publications` et `mes-constitutions` ne répondent à aucune
 > exigence écrite (US 5.4 vise le juriste) — livrées sur arbitrage du 2026-09-14, au motif qu'un
 > avocat notifié d'un rejet ne pouvait pas relire ce qui avait été rejeté.
+>
+> **`mes-publications` porte la correspondance depuis QF-58** (2026-10-14), à titre d'exception à la
+> règle « ni URL, ni commentaires, ni correspondance sur une liste » : c'est le seul écran où l'avocat
+> peut lire ce que le DJ/DJA lui a transmis, et il en recevait la notification sans qu'aucune page ne
+> l'affiche. Les correspondances d'une page sont lues en **une** requête (`findByPublicationIdIn`).
+> **`commentaires` reste `null` pour l'avocat en toute circonstance** : la délibération entre le
+> juriste et le DJ/DJA ne lui est jamais adressée (US 5.5, RG-INT-07, Q-20).
 
 ## 9. Alertes, configurations, reporting
 

@@ -17,8 +17,11 @@ import com.afriland.audiences.portail.web.dto.AudienceAvocatResponse;
 import com.afriland.audiences.portail.web.dto.DossierAvocatResponse;
 import com.afriland.audiences.portail.web.dto.PieceJustificativeResponse;
 import com.afriland.audiences.publication.mapper.PublicationMapper;
+import com.afriland.audiences.publication.domain.Publication;
 import com.afriland.audiences.publication.domain.StatutPublication;
+import com.afriland.audiences.publication.repository.CorrespondanceAvocatRepository;
 import com.afriland.audiences.publication.repository.PublicationRepository;
+import com.afriland.audiences.publication.web.dto.CorrespondanceResponse;
 import com.afriland.audiences.publication.web.dto.PublicationResponse;
 import com.afriland.audiences.referentiel.domain.Avocat;
 import com.afriland.audiences.referentiel.service.CompteAvocatService;
@@ -29,7 +32,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Lectures du portail Avocat (Q-96, QF-01 du frontend).
@@ -59,6 +64,7 @@ public class PortailAvocatService {
     private final DossierAvocatRepository dossierAvocatRepository;
     private final AudienceRepository audienceRepository;
     private final PublicationRepository publicationRepository;
+    private final CorrespondanceAvocatRepository correspondanceAvocatRepository;
     private final PublicationMapper publicationMapper;
     private final DemandeConstitutionRepository demandeConstitutionRepository;
     private final DemandeConstitutionMapper demandeConstitutionMapper;
@@ -139,7 +145,37 @@ public class PortailAvocatService {
         var page = statut == null
                 ? publicationRepository.findByAvocatId(avocat.getId(), pageable)
                 : publicationRepository.findByAvocatIdAndStatutValidation(avocat.getId(), statut, pageable);
-        return PageResponse.of(page, publicationMapper::toResponse);
+
+        /*
+         * **La correspondance accompagne chaque publication** (QF-58). Elle en était absente : la
+         * forme à un seul argument du mapper délègue à `toResponse(publication, null, null, null)`,
+         * si bien que l'avocat recevait la notification d'une correspondance transmise sans qu'aucun
+         * écran puisse la lui montrer.
+         *
+         * <p><b>Les commentaires restent absents, et c'est une règle, pas un oubli.</b> Le juriste ne
+         * s'adresse jamais directement à l'avocat (Q-20, US 5.5, RG-INT-07) : il commente pour le
+         * DJ/DJA, qui transmet **une** correspondance. Les joindre ici ouvrirait la délibération
+         * interne à celui dont elle discute.
+         */
+        Map<Long, CorrespondanceResponse> correspondances = correspondancesDe(page.getContent().stream()
+                .map(Publication::getId)
+                .toList());
+
+        return PageResponse.of(page, publication -> publicationMapper.toResponse(
+                publication, null, null, correspondances.get(publication.getId())));
+    }
+
+    /** Les correspondances d'une page, en une lecture ; vide si la page l'est (QF-58). */
+    private Map<Long, CorrespondanceResponse> correspondancesDe(List<Long> publicationIds) {
+        if (publicationIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, CorrespondanceResponse> parPublication = new HashMap<>();
+        for (var correspondance : correspondanceAvocatRepository.findByPublicationIdIn(publicationIds)) {
+            Long publicationId = correspondance.getPublication().getId();
+            parPublication.put(publicationId, PublicationMapper.versReponse(publicationId, correspondance));
+        }
+        return parPublication;
     }
 
     /** Périmètre ajouté : les lettres de constitution qui le désignent. */

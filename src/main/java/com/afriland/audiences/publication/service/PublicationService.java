@@ -305,7 +305,7 @@ public class PublicationService {
                 .map(commentaire -> versReponse(id, commentaire))
                 .toList();
         CorrespondanceResponse correspondance = correspondanceAvocatRepository.findByPublicationId(id)
-                .map(c -> versReponse(id, c))
+                .map(c -> PublicationMapper.versReponse(id, c))
                 .orElse(null);
         return publicationMapper.toResponse(publication, url, commentaires, correspondance);
     }
@@ -355,7 +355,7 @@ public class PublicationService {
         notificationPrestataireService.notifier(EvenementPrestataire.CORRESPONDANCE_TRANSMISE, publication.getAvocat(),
                 publication.getDossier().getId(), "correspondance-" + correspondance.getId());
 
-        return versReponse(id, correspondance);
+        return PublicationMapper.versReponse(id, correspondance);
     }
 
     /**
@@ -423,12 +423,6 @@ public class PublicationService {
         Utilisateur auteur = commentaire.getAuteur();
         return new CommentaireResponse(commentaire.getId(), publicationId, auteur != null ? auteur.getId() : null,
                 PublicationMapper.nomComplet(auteur), commentaire.getContenu(), commentaire.getCreatedAt());
-    }
-
-    private static CorrespondanceResponse versReponse(Long publicationId, CorrespondanceAvocat correspondance) {
-        Utilisateur auteur = correspondance.getAuteur();
-        return new CorrespondanceResponse(correspondance.getId(), publicationId, auteur != null ? auteur.getId() : null,
-                PublicationMapper.nomComplet(auteur), correspondance.getContenu(), correspondance.getCreatedAt());
     }
 
     private Utilisateur resoudreRestrictionAcces(Long utilisateurId) {
