@@ -2168,6 +2168,19 @@ sont unifiées.
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
 
+### Q-141 ✅ Une condamnation ne se suit que sur une étape clôturée — tranché (2026-10-15)
+
+**Remplace Q-59.** Q-59 avait laissé la condamnation sans précondition d'étape, faute de texte
+fonctionnel, et rendu {@code etapeId} facultatif. Le porteur du projet a tranché le 2026-10-15 :
+une condamnation ne se suit que lorsque le dossier est à l'étape **Clôturée**.
+
+La règle reprend à l'identique celle de l'adjudication, sa voisine dans
+`DecisionDefinitiveService` (RG-DEF-01) : `etapeId` est **obligatoire**, et l'étape doit être
+`CLOTURE`. Les condamnations déjà enregistrées ne sont pas touchées.
+
+La jurisprudence n'est pas modifiée : sa garde existait déjà (plus aucune étape ouverte, métier du
+2026-09-29). Seul l'écran ne la reflétait pas - c'est QF-66 côté front.
+
 ### Q-140 ✅ Le SH et l'Assistante partagent ; l'état de constitution se lit — tranché (2026-10-15)
 
 **Amende Q-139 sur deux points**, à la demande du porteur du projet.

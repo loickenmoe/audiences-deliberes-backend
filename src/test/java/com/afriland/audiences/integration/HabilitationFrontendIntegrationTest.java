@@ -1257,10 +1257,13 @@ class HabilitationFrontendIntegrationTest {
         RequestPostProcessor juriste = role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_CONSULTATION");
         RequestPostProcessor assistante = role("kc-assistante-m15", "ROLE_ASSISTANTE", "ROLE_CONSULTATION");
 
+        // QF-66 : une condamnation se suit sur une étape clôturée, comme l'adjudication.
+        cloreLesEtapes(dossierId);
+        long etapeId = etapeProcedureRepository.findByDossierIdOrderByTypeAsc(dossierId).get(0).getId();
         long condamnationId = extraireId(mockMvc.perform(post(api("/dossiers/" + dossierId + "/condamnations"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("sens", "TIERS_REDEVABLE", "naturePaiement", "Dommages et intérêts",
-                                "dateDecision", LocalDate.now().toString())))
+                                "dateDecision", LocalDate.now().toString(), "etapeId", etapeId)))
                         .with(juriste))
                 .andExpect(status().isCreated())
                 .andReturn());
