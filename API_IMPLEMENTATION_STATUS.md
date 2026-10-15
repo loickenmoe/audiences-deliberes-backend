@@ -359,8 +359,9 @@ notifiant le demandeur, décision déjà prise refusée (409). 11 tests automati
 | 39 | GET | `/ged/documents/{id}` | `ROLE_CONSULTATION` | FR-GED-02 / US 6.3 | 📋 | ✅ M8 |
 | 40 | DELETE | `/ged/documents/{id}` | `ROLE_JURISTE` (202) / `ROLE_DJ`,`ROLE_DJA` (200) | FR-GED-03 / US 6.4, 6.5 | 📋 | ✅ M8 |
 | 41 | PUT | `/ged/documents/{id}/approbation-suppression` | `ROLE_DJ`, `ROLE_DJA` | FR-GED-03 / US 6.4 | 💡 | ✅ M8 |
-| — | PUT | `/ged/documents/{id}/partage-avocat` 🆕 QF-64 | `ROLE_JURISTE` | — | 💡 | ✅ |
-| — | DELETE | `/ged/documents/{id}/partage-avocat` 🆕 QF-64 | `ROLE_JURISTE` | — | 💡 | ✅ |
+| — | PUT | `/ged/documents/{id}/partage-avocat` 🆕 QF-64 | `ROLE_JURISTE`, `ROLE_SH`, `ROLE_ASSISTANTE` (Q-140) | — | 💡 | ✅ |
+| — | DELETE | `/ged/documents/{id}/partage-avocat` 🆕 QF-64 | `ROLE_JURISTE`, `ROLE_SH`, `ROLE_ASSISTANTE` (Q-140) | — | 💡 | ✅ |
+| — | GET | `/dossiers/{id}/partage-avocat` 🆕 Q-140 | `ROLE_CONSULTATION` | — | 💡 | ✅ |
 | — | PUT | `/ged/documents/{id}/partage-avocat/arbitrage` 🆕 QF-64 | `ROLE_DJ`, `ROLE_DJA` | — | 💡 | ✅ |
 | — | GET | `/ged/partages-avocat` 🆕 QF-64 | `ROLE_DJ`, `ROLE_DJA` | — | 💡 | ✅ |
 | 42 | GET | `/ged/rapport-journalier` | `ROLE_JURISTE`, `ROLE_DJ`, `ROLE_DJA`, `ROLE_ASSISTANTE` (Q-80) | FR-GED-04 / US 6.6 | 📋 | ✅ M8 |

@@ -11,7 +11,11 @@ import com.afriland.audiences.ged.domain.Document;
 import com.afriland.audiences.ged.domain.StatutPartageAvocat;
 import com.afriland.audiences.ged.repository.DocumentRepository;
 import com.afriland.audiences.ged.web.dto.ArbitragePartageRequest;
+import com.afriland.audiences.ged.web.dto.EtatPartageDossierResponse;
 import com.afriland.audiences.ged.web.dto.PartageAvocatResponse;
+import com.afriland.audiences.dossier.repository.DossierAvocatRepository;
+import com.afriland.audiences.intervenant.domain.StatutConstitution;
+import com.afriland.audiences.intervenant.repository.DemandeConstitutionRepository;
 import com.afriland.audiences.referentiel.domain.Utilisateur;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -31,10 +35,13 @@ import java.util.stream.Stream;
  *
  * <p><b>Les règles, arbitrées par le porteur du projet le 2026-10-15.</b>
  * <ol>
- *   <li>Tout juriste partage une pièce, sans validation du DJ.</li>
- *   <li>Sur un dossier <b>sensible</b>, le partage est réservé au DJ et à la DJA : le juriste le
- *       <b>propose</b>, et rien n'est visible de l'avocat avant leur validation. Le DJ ou la DJA qui
- *       partage lui-même n'a pas à se valider.</li>
+ *   <li>Tout juriste partage une pièce, sans validation du DJ - <b>le SH et l'Assistante aussi</b>
+ *       depuis QF-65, « ils sont à la base des juristes ».</li>
+ *   <li>Sur un dossier <b>sensible</b>, le partage est réservé au DJ et à la DJA : le juriste, le SH
+ *       ou l'Assistante le <b>propose</b>, et rien n'est visible de l'avocat avant leur validation. Le
+ *       DJ ou la DJA qui partage lui-même n'a pas à se valider. La règle se lit sur le profil
+ *       ({@link #DIRECTION}), si bien que l'ouverture aux deux nouveaux profils n'a rien demandé
+ *       ici : ils proposent, comme tout profil qui n'est pas la direction.</li>
  *   <li>L'avocat ne voit une pièce partagée que s'il est affecté au dossier <b>et constitué</b> :
  *       c'est {@code PortailAvocatService} qui le vérifie, à chaque lecture.</li>
  * </ol>
@@ -57,6 +64,23 @@ public class PartageDocumentService {
     private final DocumentRepository documentRepository;
     private final CurrentUserService currentUserService;
     private final HistoriqueActionService historiqueActionService;
+    private final DossierAvocatRepository dossierAvocatRepository;
+    private final DemandeConstitutionRepository demandeConstitutionRepository;
+
+    /**
+     * Un avocat affecté au dossier y est-il constitué ? (QF-65)
+     *
+     * <p>La règle même qui ouvre les pièces à l'avocat (Q-139), évaluée ici pour celui qui
+     * partage : sans elle, il lit « Partagé » quand l'avocat ne voit rien. Un dossier compte peu
+     * d'avocats : une lecture par avocat affecté reste négligeable.
+     */
+    @Transactional(readOnly = true)
+    public EtatPartageDossierResponse etat(Long dossierId) {
+        boolean constitue = dossierAvocatRepository.findByDossierId(dossierId).stream()
+                .anyMatch(affectation -> demandeConstitutionRepository.existsByDossierIdAndPrestataireIdAndStatut(
+                        dossierId, affectation.getAvocat().getId(), StatutConstitution.VALIDEE));
+        return new EtatPartageDossierResponse(constitue);
+    }
 
     /**
      * Partage une pièce - ou, sur un dossier sensible, propose de la partager.

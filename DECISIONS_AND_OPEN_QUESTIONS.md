@@ -2168,6 +2168,23 @@ sont unifiées.
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
 
+### Q-140 ✅ Le SH et l'Assistante partagent ; l'état de constitution se lit — tranché (2026-10-15)
+
+**Amende Q-139 sur deux points**, à la demande du porteur du projet.
+
+1. **Le SH et l'Assistante partagent les pièces**, « ils sont à la base des juristes ». Le
+   `@PreAuthorize` du partage et du retrait passe à `hasAnyRole('JURISTE', 'SH', 'ASSISTANTE')`.
+   Sur un dossier sensible, leur geste est une **proposition**, comme celui du juriste : le service
+   lisait déjà la règle sur le profil (seuls DJ et DJA partagent directement), il n'a pas changé.
+   La note à l'avocat reste au seul juriste.
+2. **`GET /dossiers/{id}/partage-avocat`** dit si un avocat affecté au dossier y est constitué,
+   avec la règle même qui ouvre les pièces à l'avocat. Signalé en recette sur DOS-2026-1303 : les
+   pièces étaient partagées, l'avocat affecté, et rien ne disait à celui qui partageait que
+   l'absence de constitution les retenait.
+
+Lecture dédiée plutôt que champ de `DossierResponse` : la réponse du dossier compte trente-sept
+champs et plusieurs constructeurs ; un champ calculé y aurait touché tous les écrans du dossier.
+
 ### Q-139 ✅ L'avocat constitué accède aux pièces partagées et à une note par audience — tranché (2026-10-15)
 
 **La demande** : donner à l'avocat externe l'accès à certains documents du dossier et aux audiences

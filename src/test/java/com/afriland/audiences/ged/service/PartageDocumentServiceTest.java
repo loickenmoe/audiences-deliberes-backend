@@ -49,6 +49,8 @@ class PartageDocumentServiceTest {
     @Mock private DocumentRepository documentRepository;
     @Mock private CurrentUserService currentUserService;
     @Mock private HistoriqueActionService historiqueActionService;
+    @Mock private com.afriland.audiences.dossier.repository.DossierAvocatRepository dossierAvocatRepository;
+    @Mock private com.afriland.audiences.intervenant.repository.DemandeConstitutionRepository demandeConstitutionRepository;
 
     private PartageDocumentService service;
 
@@ -57,7 +59,8 @@ class PartageDocumentServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new PartageDocumentService(documentRepository, currentUserService, historiqueActionService);
+        service = new PartageDocumentService(documentRepository, currentUserService, historiqueActionService,
+                dossierAvocatRepository, demandeConstitutionRepository);
         when(documentRepository.save(any(Document.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
@@ -126,6 +129,53 @@ class PartageDocumentServiceTest {
         assertThat(reponse.partageAvocat()).isEqualTo(StatutPartageAvocat.PARTAGE);
         assertThat(document.getPartageValidePar()).isEqualTo(dj);
         assertThat(document.getPartageValideLe()).isNotNull();
+    }
+
+    /**
+     * <b>QF-65 : le SH et l'Assistante partagent</b>, « ils sont à la base des juristes ». Sur un
+     * dossier ordinaire leur geste partage ; sur un dossier sensible, il propose, comme celui du
+     * juriste - seule la direction partage directement.
+     */
+    @Test
+    @DisplayName("le SH et l'Assistante partagent un dossier ordinaire, et proposent un dossier sensible")
+    void partager_shEtAssistante() {
+        for (String profil : java.util.List.of("SH", "ASSISTANTE")) {
+            when(currentUserService.getCurrentUser()).thenReturn(utilisateur(30L, profil));
+
+            Document ordinaire = document(false, StatutPartageAvocat.NON);
+            assertThat(service.partager(7L).partageAvocat()).as(profil).isEqualTo(StatutPartageAvocat.PARTAGE);
+            assertThat(ordinaire.getPartageValidePar()).isNull();
+
+            document(true, StatutPartageAvocat.NON);
+            assertThat(service.partager(7L).partageAvocat()).as(profil).isEqualTo(StatutPartageAvocat.PROPOSE);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────── l'etat
+
+    /** La règle même qui ouvre les pièces : un avocat affecté ET constitué. */
+    @Test
+    @DisplayName("l'état dit si un avocat affecté est constitué")
+    void etat_constitution() {
+        var avocat = com.afriland.audiences.referentiel.domain.Avocat.builder().id(1L).build();
+        var affectation = new com.afriland.audiences.dossier.domain.DossierAvocat();
+        affectation.setAvocat(avocat);
+        when(dossierAvocatRepository.findByDossierId(3L)).thenReturn(java.util.List.of(affectation));
+
+        when(demandeConstitutionRepository.existsByDossierIdAndPrestataireIdAndStatut(3L, 1L,
+                com.afriland.audiences.intervenant.domain.StatutConstitution.VALIDEE)).thenReturn(false);
+        assertThat(service.etat(3L).avocatConstitue()).isFalse();
+
+        when(demandeConstitutionRepository.existsByDossierIdAndPrestataireIdAndStatut(3L, 1L,
+                com.afriland.audiences.intervenant.domain.StatutConstitution.VALIDEE)).thenReturn(true);
+        assertThat(service.etat(3L).avocatConstitue()).isTrue();
+    }
+
+    /** Un dossier sans avocat affecté n'en a aucun de constitué. */
+    @Test
+    void etat_sansAvocat() {
+        when(dossierAvocatRepository.findByDossierId(3L)).thenReturn(java.util.List.of());
+        assertThat(service.etat(3L).avocatConstitue()).isFalse();
     }
 
     @Test
