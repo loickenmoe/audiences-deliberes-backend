@@ -280,6 +280,6 @@ public class GedService {
     private DocumentResponse toResponse(Document d, String url) {
         return new DocumentResponse(d.getId(), d.getDossier().getId(), d.getNomFichier(), d.getTypeDocument(),
                 d.getFormat(), d.getPoids(), d.getAuteurChargement().getId(), d.getDateChargement(),
-                Boolean.TRUE.equals(d.getEstSupprime()), url);
+                Boolean.TRUE.equals(d.getEstSupprime()), url, d.getPartageAvocat());
     }
 }

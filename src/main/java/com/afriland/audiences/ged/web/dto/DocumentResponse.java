@@ -15,5 +15,7 @@ public record DocumentResponse(
         Long auteurChargementId,
         LocalDateTime dateChargement,
         boolean estSupprime,
-        String urlTelechargement) {
+        String urlTelechargement,
+        /** Partagé avec l'avocat, proposé, ou réservé aux profils internes (QF-64). */
+        com.afriland.audiences.ged.domain.StatutPartageAvocat partageAvocat) {
 }

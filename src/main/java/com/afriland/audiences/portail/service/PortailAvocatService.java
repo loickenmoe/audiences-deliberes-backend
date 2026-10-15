@@ -15,7 +15,16 @@ import com.afriland.audiences.intervenant.repository.DemandeConstitutionReposito
 import com.afriland.audiences.intervenant.web.dto.DemandeConstitutionResponse;
 import com.afriland.audiences.portail.web.dto.AudienceAvocatResponse;
 import com.afriland.audiences.portail.web.dto.DossierAvocatResponse;
+import com.afriland.audiences.portail.web.dto.PieceAvocatResponse;
 import com.afriland.audiences.portail.web.dto.PieceJustificativeResponse;
+import com.afriland.audiences.portail.web.dto.PieceTelechargementResponse;
+import com.afriland.audiences.portail.web.dto.PiecesDossierAvocatResponse;
+import com.afriland.audiences.common.audit.HistoriqueActionService;
+import com.afriland.audiences.common.audit.TypeActionHistorique;
+import com.afriland.audiences.ged.domain.Document;
+import com.afriland.audiences.ged.domain.StatutPartageAvocat;
+import com.afriland.audiences.ged.repository.DocumentRepository;
+import com.afriland.audiences.intervenant.domain.StatutConstitution;
 import com.afriland.audiences.publication.mapper.PublicationMapper;
 import com.afriland.audiences.publication.domain.Publication;
 import com.afriland.audiences.publication.domain.StatutPublication;
@@ -70,6 +79,8 @@ public class PortailAvocatService {
     private final DemandeConstitutionMapper demandeConstitutionMapper;
     private final MinioStorageService minioStorageService;
     private final ValidationFichierService validationFichierService;
+    private final DocumentRepository documentRepository;
+    private final HistoriqueActionService historiqueActionService;
 
     /** US 4.1, US 5.1 : de quoi désigner son dossier. Identification seule. */
     @Transactional(readOnly = true)
@@ -101,10 +112,10 @@ public class PortailAvocatService {
     @Transactional(readOnly = true)
     public List<AudienceAvocatResponse> audiencesDeMonDossier(Long dossierId) {
         Avocat avocat = avocatCourant();
-        if (!dossierAvocatRepository.existsByDossierIdAndAvocatId(dossierId, avocat.getId())) {
-            throw ApiException.forbidden(ErrorCodes.DROITS_INSUFFISANTS,
-                    "Vous n'êtes pas affecté à ce dossier");
-        }
+        verifierAffectation(dossierId, avocat);
+        // La note n'est lue que par l'avocat constitué (QF-64) : c'est le mandat qui ouvre la
+        // communication, pas l'affectation. Lue une fois pour toute la liste.
+        boolean constitue = estConstitue(dossierId, avocat);
         /*
          * `unpaged` volontairement : cette liste alimente le **sélecteur d'audience** du formulaire
          * de dépôt (écran 33), pas un tableau. La paginer amputerait silencieusement le choix de
@@ -113,8 +124,83 @@ public class PortailAvocatService {
          */
         return audienceRepository.findByDossierIdOrderByDatePlanifieeDesc(dossierId, Pageable.unpaged()).stream()
                 .map(audience -> new AudienceAvocatResponse(audience.getId(), audience.getDatePlanifiee(),
-                        audience.getDateTenue(), audience.getJuridiction(), audience.getStatut()))
+                        audience.getDateTenue(), audience.getJuridiction(), audience.getStatut(),
+                        constitue ? audience.getNoteAvocat() : null))
                 .toList();
+    }
+
+    /**
+     * Les pièces de son dossier que la banque lui partage (QF-64).
+     *
+     * <p><b>Affecté, sinon 403</b> - comme les audiences : le dossier existe, c'est l'accès qui est
+     * refusé. <b>Affecté sans être constitué, une liste vide et {@code constitue = false}</b> : la
+     * pièce attend un mandat qui viendra, et l'écran doit pouvoir le dire plutôt qu'afficher
+     * « aucune pièce » comme si la banque ne lui avait rien transmis.
+     *
+     * <p>La restriction est <b>dans la requête</b> : seules les pièces partagées de ce dossier sont
+     * lues. Un changement d'avocat retire donc l'accès sur-le-champ, sans rien à révoquer.
+     */
+    @Transactional(readOnly = true)
+    public PiecesDossierAvocatResponse piecesDeMonDossier(Long dossierId) {
+        Avocat avocat = avocatCourant();
+        verifierAffectation(dossierId, avocat);
+        if (!estConstitue(dossierId, avocat)) {
+            return new PiecesDossierAvocatResponse(false, List.of());
+        }
+        List<PieceAvocatResponse> pieces = documentRepository
+                .findByDossierIdAndPartageAvocatAndEstSupprimeFalseOrderByDateChargementDesc(
+                        dossierId, StatutPartageAvocat.PARTAGE)
+                .stream()
+                .map(document -> new PieceAvocatResponse(document.getId(), document.getNomFichier(),
+                        document.getTypeDocument(), document.getFormat(), document.getPoids(),
+                        document.getPartageLe()))
+                .toList();
+        return new PiecesDossierAvocatResponse(true, pieces);
+    }
+
+    /**
+     * Ouvre une pièce partagée : l'URL pré-signée, et la trace de la lecture (QF-64).
+     *
+     * <p><b>404 et non 403</b> pour une pièce non partagée ou d'un autre dossier : répondre 403
+     * confirmerait qu'elle existe, et l'avocat pourrait sonder la GED de la banque en essayant des
+     * identifiants. Même raisonnement que l'ordre des vérifications de Q-133.
+     *
+     * <p><b>La lecture est tracée</b> : une pièce partagée l'est pour être lue, et le jour où la
+     * question se pose, il faut pouvoir dire si l'avocat l'avait vue avant l'audience.
+     */
+    @Transactional
+    public PieceTelechargementResponse pieceDeMonDossier(Long dossierId, Long documentId) {
+        Avocat avocat = avocatCourant();
+        verifierAffectation(dossierId, avocat);
+        if (!estConstitue(dossierId, avocat)) {
+            throw ApiException.forbidden(ErrorCodes.DROITS_INSUFFISANTS,
+                    "Les pièces du dossier vous seront accessibles une fois votre constitution signée");
+        }
+        Document document = documentRepository
+                .findByIdAndDossierIdAndPartageAvocatAndEstSupprimeFalse(documentId, dossierId, StatutPartageAvocat.PARTAGE)
+                .orElseThrow(() -> ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE,
+                        "Pièce introuvable : " + documentId));
+        historiqueActionService.enregistrer(dossierId, TypeActionHistorique.DOCUMENT_CONSULTE_PAR_AVOCAT,
+                Map.of("documentId", document.getId(), "avocatId", avocat.getId()));
+        return new PieceTelechargementResponse(document.getId(), document.getNomFichier(),
+                minioStorageService.urlTelechargement(document.getCheminStockage()));
+    }
+
+    /** Affecté au dossier, sinon 403 : le dossier existe, c'est l'accès qui est refusé. */
+    private void verifierAffectation(Long dossierId, Avocat avocat) {
+        if (!dossierAvocatRepository.existsByDossierIdAndAvocatId(dossierId, avocat.getId())) {
+            throw ApiException.forbidden(ErrorCodes.DROITS_INSUFFISANTS,
+                    "Vous n'êtes pas affecté à ce dossier");
+        }
+    }
+
+    /**
+     * Constitué sur ce dossier : une lettre de constitution <b>signée</b> par le SH (QF-64).
+     * L'affectation ne fait pas le mandat.
+     */
+    private boolean estConstitue(Long dossierId, Avocat avocat) {
+        return demandeConstitutionRepository.existsByDossierIdAndPrestataireIdAndStatut(
+                dossierId, avocat.getId(), StatutConstitution.VALIDEE);
     }
 
     /**

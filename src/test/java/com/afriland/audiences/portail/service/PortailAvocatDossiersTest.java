@@ -69,6 +69,8 @@ class PortailAvocatDossiersTest {
     @Mock private DemandeConstitutionMapper demandeConstitutionMapper;
     @Mock private MinioStorageService minioStorageService;
     @Mock private ValidationFichierService validationFichierService;
+    @Mock private com.afriland.audiences.ged.repository.DocumentRepository documentRepository;
+    @Mock private com.afriland.audiences.common.audit.HistoriqueActionService historiqueActionService;
 
     private static final Pageable PAGE = PageRequest.of(0, 100);
 
@@ -79,7 +81,8 @@ class PortailAvocatDossiersTest {
         service = new PortailAvocatService(currentUserService, compteAvocatService, dossierRepository,
                 dossierAvocatRepository, audienceRepository, publicationRepository,
                 correspondanceAvocatRepository, publicationMapper, demandeConstitutionRepository,
-                demandeConstitutionMapper, minioStorageService, validationFichierService);
+                demandeConstitutionMapper, minioStorageService, validationFichierService,
+                documentRepository, historiqueActionService);
         Utilisateur compte = Utilisateur.builder().id(30L).nom("Kenmoe").prenom("Loïc").build();
         Avocat avocat = Avocat.builder().id(1L).nom("Loïc Kenmoe").compteKeycloak("avocat.test").build();
         when(currentUserService.getCurrentUser()).thenReturn(compte);

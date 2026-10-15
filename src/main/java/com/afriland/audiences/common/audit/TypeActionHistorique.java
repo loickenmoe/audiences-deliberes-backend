@@ -159,6 +159,47 @@ public enum TypeActionHistorique {
      * se voit, là où un nul se serait glissé silencieusement hors de chaque requête. Aucune écriture
      * nouvelle ne l'emploie.
      */
+    /**
+     * Une pièce partagée avec l'avocat du dossier (QF-64) - directement, ou par le DJ/DJA sur un
+     * dossier sensible. {@code details} porte {@code documentId}.
+     *
+     * <p>Une pièce qui sort de la banque doit pouvoir dire qui l'a laissée sortir, et quand.
+     */
+    DOCUMENT_PARTAGE_AVOCAT("Document partagé avec l'avocat"),
+
+    /**
+     * Dossier sensible : un juriste propose le partage, que le DJ ou la DJA validera (QF-64).
+     * {@code details} porte {@code documentId}.
+     */
+    DOCUMENT_PARTAGE_PROPOSE("Partage d'un document proposé"),
+
+    /**
+     * Le DJ ou la DJA tranche un partage proposé (QF-64). {@code details} porte {@code documentId},
+     * {@code decision} et, sur un rejet, {@code motif}.
+     */
+    DOCUMENT_PARTAGE_ARBITRE("Partage d'un document arbitré"),
+
+    /**
+     * Un partage retiré, ou une proposition annulée (QF-64). {@code details} porte
+     * {@code documentId} et {@code ancienStatut}.
+     */
+    DOCUMENT_PARTAGE_RETIRE("Partage d'un document retiré"),
+
+    /**
+     * L'avocat ouvre ou télécharge une pièce partagée (QF-64). {@code details} porte
+     * {@code documentId} et {@code avocatId}.
+     *
+     * <p>Une pièce partagée l'est pour qu'il la lise : tracer la lecture permet de dire, le jour où
+     * la question se pose, s'il l'avait vue avant l'audience.
+     */
+    DOCUMENT_CONSULTE_PAR_AVOCAT("Document consulté par l'avocat"),
+
+    /**
+     * La note à l'avocat d'une audience, écrite, modifiée ou effacée (QF-64). {@code details}
+     * porte {@code audienceId}.
+     */
+    AUDIENCE_NOTE_AVOCAT_MODIFIEE("Note à l'avocat modifiée"),
+
     NON_CLASSEE("Action non classée");
 
     private final String libelle;

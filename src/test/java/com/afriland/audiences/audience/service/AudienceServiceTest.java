@@ -64,7 +64,7 @@ class AudienceServiceTest {
             audience.getEtape() != null ? audience.getEtape().getId() : null,
             audience.getDatePlanifiee(), audience.getDateTenue(), audience.getJuridiction(),
             audience.getCompteRendu(), audience.getStatut(), audience.getCreatedAt(),
-            audience.getMotifAnnulation(), audience.getDateAnnulation());
+            audience.getMotifAnnulation(), audience.getDateAnnulation(), audience.getNoteAvocat());
 
     private AudienceService service;
     private Dossier dossier;
@@ -377,5 +377,44 @@ class AudienceServiceTest {
                 debut, PeriodeCalendrier.HEBDOMADAIRE.dateFin(debut), StatutAudience.ANNULEE)).thenReturn(List.of());
 
         assertThat(service.calendrier(PeriodeCalendrier.HEBDOMADAIRE, debut)).isEmpty();
+    }
+
+    // ─────────────────────────────────────────────────────────────── QF-64
+
+    /**
+     * La note à l'avocat est **distincte du compte rendu** (QF-64) : l'écrire ne touche pas au
+     * compte rendu interne, et ne change pas le statut de l'audience. Elle s'écrit même avant
+     * l'audience - « apportez l'original de l'acte » se dit avant, pas après.
+     */
+    @Test
+    void modifierNoteAvocat_neToucheNiAuCompteRenduNiAuStatut() {
+        Audience audience = Audience.builder().id(11L).dossier(dossier).etape(etapeEnCours)
+                .datePlanifiee(LocalDate.now().plusDays(5)).statut(StatutAudience.PLANIFIEE)
+                .compteRendu(null).build();
+        when(audienceRepository.findById(11L)).thenReturn(Optional.of(audience));
+        when(audienceRepository.save(any(Audience.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var reponse = service.modifierNoteAvocat(11L,
+                new com.afriland.audiences.audience.web.dto.NoteAvocatRequest("  Apportez l'original de l'acte  "));
+
+        assertThat(reponse.noteAvocat()).isEqualTo("Apportez l'original de l'acte");
+        assertThat(audience.getCompteRendu()).isNull();
+        assertThat(audience.getStatut()).isEqualTo(StatutAudience.PLANIFIEE);
+        verify(historiqueActionService).enregistrer(1L, TypeActionHistorique.AUDIENCE_NOTE_AVOCAT_MODIFIEE,
+                java.util.Map.of("audienceId", 11L));
+    }
+
+    /** Vide, la note est effacée : c'est ainsi qu'on retire une note devenue sans objet. */
+    @Test
+    void modifierNoteAvocat_videLEfface() {
+        Audience audience = Audience.builder().id(11L).dossier(dossier).etape(etapeEnCours)
+                .datePlanifiee(LocalDate.now()).statut(StatutAudience.PLANIFIEE)
+                .noteAvocat("Ancienne note").build();
+        when(audienceRepository.findById(11L)).thenReturn(Optional.of(audience));
+        when(audienceRepository.save(any(Audience.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.modifierNoteAvocat(11L, new com.afriland.audiences.audience.web.dto.NoteAvocatRequest("   "));
+
+        assertThat(audience.getNoteAvocat()).isNull();
     }
 }

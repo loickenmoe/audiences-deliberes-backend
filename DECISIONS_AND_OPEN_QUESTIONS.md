@@ -2168,6 +2168,59 @@ sont unifiées.
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
 
+### Q-139 ✅ L'avocat constitué accède aux pièces partagées et à une note par audience — tranché (2026-10-15)
+
+**La demande** : donner à l'avocat externe l'accès à certains documents du dossier et aux audiences
+tenues, pour mieux assurer la défense. Jusqu'ici il recevait ses pièces hors de l'application, par
+courriel ou sur papier, **sans aucune trace** : les faire passer par ici est un gain de sécurité, à
+condition de poser la règle.
+
+**Les quatre arbitrages du porteur du projet** (2026-10-15), sur proposition :
+
+| Question | Arbitrage |
+|---|---|
+| Déclencheur | Affecté **et constitué** - l'affectation ne fait pas le mandat (Q-28), c’est la lettre signée par le SH qui le donne |
+| Qui partage | Tout juriste, sans validation du DJ |
+| Dossier sensible | Le juriste **propose**, le DJ ou la DJA **valide** avant que rien ne soit visible |
+| Audiences | Une **note à l'avocat**, distincte du compte rendu, qui reste interne (RG-INT-07) |
+
+La demande disait d'abord « l'avocat peut proposer le partage » ; l'avocat ne voyant pas la GED,
+il ne peut désigner une pièce qu'il ne voit pas. Le porteur du projet a confirmé : **le juriste
+propose**.
+
+**Le modèle (V47).** Cinq colonnes sur `document` - l'état `NON`/`PROPOSE`/`PARTAGE`, qui a
+partagé et quand, qui a validé et quand - et non une table de partages par avocat. Une pièce est
+partagée avec **les avocats constitués du dossier**, règle évaluée à chaque lecture : un changement
+d'avocat retire l'accès sur-le-champ, sans rien à révoquer. Une table par avocat aurait demandé de
+révoquer ligne à ligne, et une révocation oubliée laisse une pièce chez un avocat qui n'en est plus
+un. Trois contraintes en base : l'état est l'un des trois ; `NON` ne garde ni auteur ni date ; une
+validation ne s'écrit que sur une pièce partagée.
+
+**Un dossier sensible se lit sur `estSensible`**, une proposition de sensibilité en attente
+comprise - un rejet le repasse à faux. C'est le côté prudent : une pièce partagée à tort ne se
+reprend pas. *À confirmer si le métier voulait réserver la règle aux seules sensibilités validées.*
+
+**Trois choix de sécurité.**
+- Affecté sans être constitué, la liste répond `constitue: false` : « aucune pièce » et « pas
+  encore constitué » sont deux situations que l'avocat doit distinguer.
+- Une pièce non partagée répond **404, pas 403** : 403 confirmerait qu'elle existe, et l'avocat
+  pourrait sonder la GED par tâtonnement sur les identifiants.
+- Chaque ouverture par l'avocat est **tracée** (`DOCUMENT_CONSULTE_PAR_AVOCAT`) : le jour où la
+  question se pose, il faut pouvoir dire s'il avait vu la pièce avant l'audience.
+
+**La note à l'avocat** s'écrit à tout moment, y compris avant l'audience - « apportez l'original de
+l'acte » se dit avant, pas après - et ne s'ouvre qu'à l'avocat constitué, comme les pièces. Vide,
+elle est effacée.
+
+**Un piège évité au passage.** La méthode de la note s'insère juste avant `enregistrerCompteRendu`,
+qui porte `@Transactional` sur la ligne précédente. Une insertion naïve aurait glissé la nouvelle
+méthode entre l'annotation et la méthode existante : celle-ci aurait **perdu sa transaction**, sans
+qu'aucune compilation ni aucun test ne le signale. Vérifié avant l'écriture.
+
+**Hors périmètre, à décider.** Aucune notification n'est émise : le DJ découvre une proposition
+dans sa file, l'avocat une pièce dans son espace. Ajouter un type d'alerte touche la contrainte
+`chk_alerte_type`, les grilles de diffusion et les écrans de réglage - il mérite d'être demandé.
+
 ### Q-138 ✅ Le tableau de bord se recadre par catégorie — tranché (2026-10-13)
 
 **Ce qui a déclenché l'arbitrage.** En livrant Q-137, j'ai signalé que « Litiges gagnés », « perdus »

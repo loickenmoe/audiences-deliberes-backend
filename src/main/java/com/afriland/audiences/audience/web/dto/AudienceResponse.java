@@ -17,5 +17,7 @@ public record AudienceResponse(
         StatutAudience statut,
         LocalDateTime createdAt,
         String motifAnnulation,
-        LocalDateTime dateAnnulation) {
+        LocalDateTime dateAnnulation,
+        /** La note destinée à l'avocat constitué, distincte du compte rendu interne (QF-64). */
+        String noteAvocat) {
 }

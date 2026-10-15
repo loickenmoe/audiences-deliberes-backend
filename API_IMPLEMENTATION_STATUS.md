@@ -128,6 +128,7 @@ Q-10, Q-11, Q-12, Q-26, Q-34, Q-35 pour le détail des arbitrages pris pendant l
 |---|---|---|---|---|---|---|
 | 13 | POST | `/dossiers/{id}/audiences` | `ROLE_JURISTE` | FR-AUD-01 / US 2.1, 2.6 | 📋 | ✅ M6 |
 | 14 | PUT | `/audiences/{id}/compte-rendu` | `ROLE_JURISTE` | FR-AUD-02 / US 2.2 | 📋 | ✅ M6 |
+| — | PUT | `/audiences/{id}/note-avocat` 🆕 QF-64 | `ROLE_JURISTE` | — | 💡 | ✅ |
 | 15 | GET | `/audiences/calendrier` | `ROLE_JURISTE`, `ROLE_DJ` | FR-AUD-05 / US 2.5 | 📋 | ✅ M6 |
 | 16 | POST | `/dossiers/{id}/alarmes` | `ROLE_JURISTE` | FR-AUD-03 / US 2.3 | **📄** | ✅ M6 |
 | 17 | PUT | `/alarmes/{id}/reprogrammer` | `ROLE_JURISTE` | FR-AUD-04 / US 2.4 | **📄** | ✅ M6 |
@@ -358,6 +359,10 @@ notifiant le demandeur, décision déjà prise refusée (409). 11 tests automati
 | 39 | GET | `/ged/documents/{id}` | `ROLE_CONSULTATION` | FR-GED-02 / US 6.3 | 📋 | ✅ M8 |
 | 40 | DELETE | `/ged/documents/{id}` | `ROLE_JURISTE` (202) / `ROLE_DJ`,`ROLE_DJA` (200) | FR-GED-03 / US 6.4, 6.5 | 📋 | ✅ M8 |
 | 41 | PUT | `/ged/documents/{id}/approbation-suppression` | `ROLE_DJ`, `ROLE_DJA` | FR-GED-03 / US 6.4 | 💡 | ✅ M8 |
+| — | PUT | `/ged/documents/{id}/partage-avocat` 🆕 QF-64 | `ROLE_JURISTE` | — | 💡 | ✅ |
+| — | DELETE | `/ged/documents/{id}/partage-avocat` 🆕 QF-64 | `ROLE_JURISTE` | — | 💡 | ✅ |
+| — | PUT | `/ged/documents/{id}/partage-avocat/arbitrage` 🆕 QF-64 | `ROLE_DJ`, `ROLE_DJA` | — | 💡 | ✅ |
+| — | GET | `/ged/partages-avocat` 🆕 QF-64 | `ROLE_DJ`, `ROLE_DJA` | — | 💡 | ✅ |
 | 42 | GET | `/ged/rapport-journalier` | `ROLE_JURISTE`, `ROLE_DJ`, `ROLE_DJA`, `ROLE_ASSISTANTE` (Q-80) | FR-GED-04 / US 6.6 | 📋 | ✅ M8 |
 | 43 | GET | `/dossiers/{id}/documents` | `ROLE_CONSULTATION` | UC-GED-02 | 🆕 | ✅ M8 |
 | 63 | GET | `/ged/demandes-suppression?statut&page&size` *(paginé M22)* | `ROLE_DJ`, `ROLE_DJA` | UC-GED-04 (« demandes en attente ») | 🆕 | ✅ M15 |
@@ -400,6 +405,19 @@ coup. Réponses réduites à ce que l'usage exige.
 | — | GET | `/avocat/mes-publications` 🆕 Q-96 | `ROLE_AVOCAT` | — | 💡 | ✅ M19 |
 | — | GET | `/avocat/mes-constitutions` 🆕 Q-96 | `ROLE_AVOCAT` | — | 💡 | ✅ M19 |
 | — | POST | `/avocat/pieces-justificatives` *(multipart)* 🆕 Q-97 | `ROLE_AVOCAT` | UC-INT-01 ét. 4 | 💡 | ✅ M19 |
+| — | GET | `/avocat/mes-dossiers/{id}/pieces` 🆕 QF-64 | `ROLE_AVOCAT` | — | 💡 | ✅ |
+| — | GET | `/avocat/mes-dossiers/{id}/pieces/{documentId}` 🆕 QF-64 | `ROLE_AVOCAT` | — | 💡 | ✅ |
+
+> **Les pièces et la note de l'avocat (QF-64, arbitré le 2026-10-15).** L'avocat voit une pièce
+> partagée s'il est **affecté au dossier et constitué** (lettre signée par le SH) : l'affectation ne
+> fait pas le mandat. Vérifié **dans la requête**, à chaque lecture - un changement d'avocat retire
+> l'accès sur-le-champ. Affecté sans être constitué, la liste répond `constitue: false` plutôt
+> qu'une liste vide muette. Une pièce non partagée répond **404**, pas 403 : 403 confirmerait
+> qu'elle existe. Chaque ouverture est tracée (`DOCUMENT_CONSULTE_PAR_AVOCAT`).
+>
+> Tout juriste partage sans validation ; sur un **dossier sensible**, il propose et le DJ ou la DJA
+> valide avant que rien ne soit visible. La `noteAvocat` d'une audience, distincte du compte rendu
+> interne (RG-INT-07), n'est lue que par l'avocat constitué.
 
 > **Un dossier ne montre que son identification** — référence, nature, juridiction saisie. Ni client,
 > ni risque encouru, ni sensibilité, ni juristes affectés. **Les audiences d'un dossier qui n'est pas

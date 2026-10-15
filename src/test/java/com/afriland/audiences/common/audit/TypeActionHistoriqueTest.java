@@ -58,7 +58,12 @@ class TypeActionHistoriqueTest {
         // + EXPLICATION_DEMANDEE et EXPLICATION_REPONDUE (N7 temps 2, 2026-10-07) : la direction
         // demande à un avocat de s'expliquer, l'avocat répond, et l'échange reste. `V46` étend
         // la contrainte - le même lien, la troisième fois.
-        assertThat(TypeActionHistorique.values()).hasSize(53);
+        //
+        // + six codes du partage avec l'avocat (QF-64, Q-139, 2026-10-15) : partagé, proposé,
+        // arbitré, retiré, consulté par l'avocat, et la note à l'avocat d'une audience. `V47`
+        // étend la contrainte, et un garde-fou du script de migration a vérifié que l'énumération
+        // et la liste en base sont exactement les mêmes.
+        assertThat(TypeActionHistorique.values()).hasSize(59);
         assertThat(TypeActionHistorique.NON_CLASSEE.libelle()).isEqualTo("Action non classée");
     }
 }

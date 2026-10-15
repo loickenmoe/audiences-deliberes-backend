@@ -12,6 +12,7 @@ import com.afriland.audiences.audience.web.dto.AnnulerAudienceRequest;
 import com.afriland.audiences.audience.web.dto.AudienceResponse;
 import com.afriland.audiences.audience.web.dto.CalendrierEntreeResponse;
 import com.afriland.audiences.audience.web.dto.EnregistrerCompteRenduRequest;
+import com.afriland.audiences.audience.web.dto.NoteAvocatRequest;
 import com.afriland.audiences.audience.web.dto.PlanifierAudienceRequest;
 import com.afriland.audiences.common.audit.HistoriqueActionService;
 import com.afriland.audiences.common.error.ApiException;
@@ -119,6 +120,27 @@ public class AudienceService {
                 dossier.getId(), dj, declencheur));
         historiqueActionService.enregistrer(dossier.getId(), TypeActionHistorique.AUDIENCE_DOUBLON_CONFIRME,
                 Map.of("audienceId", audience.getId()));
+    }
+
+    /**
+     * La note d'une audience destinée à l'avocat constitué (QF-64).
+     *
+     * <p>**Distincte du compte rendu.** Celui-ci reste interne : il peut juger la stratégie, voire
+     * le travail de l'avocat lui-même, et le lui montrer rouvrirait ce que RG-INT-07 ferme pour les
+     * commentaires. La note, elle, lui est écrite.
+     *
+     * <p>Elle s'écrit à tout moment, y compris avant l'audience : « apportez l'original de l'acte »
+     * se dit avant, pas après. Vide, elle est effacée.
+     */
+    @Transactional
+    public AudienceResponse modifierNoteAvocat(Long audienceId, NoteAvocatRequest request) {
+        Audience audience = getAudienceOrThrow(audienceId);
+        String note = request.note() == null || request.note().isBlank() ? null : request.note().trim();
+        audience.setNoteAvocat(note);
+        audience = audienceRepository.save(audience);
+        historiqueActionService.enregistrer(audience.getDossier().getId(),
+                TypeActionHistorique.AUDIENCE_NOTE_AVOCAT_MODIFIEE, Map.of("audienceId", audience.getId()));
+        return audienceMapper.toResponse(audience);
     }
 
     @Transactional
