@@ -1,14 +1,28 @@
 package com.afriland.audiences.reporting.web;
 
+import com.afriland.audiences.common.audit.TypeActionHistorique;
+import com.afriland.audiences.common.error.ApiException;
+import com.afriland.audiences.common.error.ErrorCodes;
 import com.afriland.audiences.common.security.CurrentUserService;
+import com.afriland.audiences.referentiel.domain.CategorieDossier;
+import com.afriland.audiences.reporting.domain.IndicateurTableauDeBord;
 import com.afriland.audiences.reporting.domain.TypeRapport;
+import com.afriland.audiences.reporting.service.DetailTableauDeBordService;
 import com.afriland.audiences.reporting.service.JournalAudiencesService;
+import com.afriland.audiences.reporting.service.RapportActiviteExportService;
+import com.afriland.audiences.reporting.service.RapportActiviteService;
 import com.afriland.audiences.reporting.service.RapportExportService;
+import com.afriland.audiences.reporting.service.RapportNominatifService;
 import com.afriland.audiences.reporting.service.ReportingService;
 import com.afriland.audiences.common.web.PageResponse;
+import com.afriland.audiences.reporting.web.dto.ActionDetailleeResponse;
 import com.afriland.audiences.reporting.web.dto.AudienceDuJourResponse;
+import com.afriland.audiences.reporting.web.dto.DetailIndicateurResponse;
+import com.afriland.audiences.reporting.web.dto.RapportActiviteResponse;
+import com.afriland.audiences.reporting.web.dto.RapportAvocatsResponse;
 import com.afriland.audiences.reporting.web.dto.CompteRenduAttenduResponse;
 import com.afriland.audiences.reporting.web.dto.FormatRapport;
+import com.afriland.audiences.reporting.web.dto.RapportNominatifResponse;
 import com.afriland.audiences.reporting.web.dto.RapportResponse;
 import com.afriland.audiences.reporting.web.dto.TableauDeBordResponse;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +51,10 @@ public class ReportingController {
 
     private final ReportingService reportingService;
     private final RapportExportService rapportExportService;
+    private final RapportNominatifService rapportNominatifService;
+    private final RapportActiviteService rapportActiviteService;
+    private final DetailTableauDeBordService detailTableauDeBordService;
+    private final RapportActiviteExportService rapportActiviteExportService;
     private final JournalAudiencesService journalAudiencesService;
     /** Pour attribuer l'export dans le pied de page : un document dit qui l'a demandé (A2). */
     private final CurrentUserService currentUserService;
@@ -50,8 +68,8 @@ public class ReportingController {
      */
     @GetMapping("${api.prefix}/tableau-de-bord")
     @PreAuthorize("hasAnyRole('DJ', 'DJA')")
-    public TableauDeBordResponse tableauDeBord() {
-        return reportingService.tableauDeBord();
+    public TableauDeBordResponse tableauDeBord(@RequestParam(required = false) CategorieDossier categorie) {
+        return reportingService.tableauDeBord(categorie);
     }
 
     /**
@@ -95,8 +113,9 @@ public class ReportingController {
     public ResponseEntity<?> rapports(@RequestParam TypeRapport type,
                                         @RequestParam LocalDate dateDebut,
                                         @RequestParam LocalDate dateFin,
+                                        @RequestParam(required = false) CategorieDossier categorie,
                                         @RequestParam(defaultValue = "JSON") FormatRapport format) {
-        RapportResponse rapport = reportingService.genererRapport(type, dateDebut, dateFin);
+        RapportResponse rapport = reportingService.genererRapport(type, dateDebut, dateFin, categorie);
         if (rapport.estVide()) {
             return ResponseEntity.noContent().build();
         }
@@ -115,6 +134,169 @@ public class ReportingController {
                     .contentType(MediaType.parseMediaType("text/csv"))
                     .body(rapportExportService.exportCsv(rapport));
         };
+    }
+
+    /**
+     * L'activité de chacun sur une période (observation 14, N6).
+     *
+     * <p><b>Réservé au DJ et à la DJA</b>, et lu sur leurs rôles propres : ce rapport nomme des
+     * personnes, et {@code ROLE_JURISTE} étant composite (Q-81), l'ouvrir par lui le donnerait à
+     * tous les juristes - chacun lirait l'activité de ses collègues. C'est la même discipline que
+     * Q-126.
+     *
+     * <p>204 quand la période est vide, comme le rapport périodique : une page de zéros laisserait
+     * croire que personne n'a rien fait, alors que la période n'a rien à dire.
+     */
+    @GetMapping("${api.prefix}/rapports/nominatif")
+    @PreAuthorize("hasAnyRole('DJ', 'DJA')")
+    public ResponseEntity<RapportNominatifResponse> rapportNominatif(@RequestParam LocalDate dateDebut,
+                                                                     @RequestParam LocalDate dateFin) {
+        RapportNominatifResponse rapport = rapportNominatifService.produire(dateDebut, dateFin);
+        return rapport.estVide() ? ResponseEntity.noContent().build() : ResponseEntity.ok(rapport);
+    }
+
+    /**
+     * Le détail d'un bloc du tableau de bord (Q-137).
+     *
+     * <p>Demandé par le métier le 2026-10-13 : qu'un clic sur un bloc ouvre la liste de ce qu'il
+     * compte. Mêmes habilitations que le tableau de bord lui-même - cet endpoint n'ouvre rien que
+     * l'écran n'affiche déjà, il le détaille.
+     *
+     * <p><b>Le détail rend exactement ce que le compteur compte</b>, prédicat pour prédicat : c'est
+     * la seule propriété qui compte vraiment, et un test d'intégration la vérifie sur base réelle.
+     * Afficher « 12 » puis lister neuf lignes ferait douter des deux chiffres.
+     */
+    @GetMapping("${api.prefix}/tableau-de-bord/details")
+    @PreAuthorize("hasAnyRole('DJ', 'DJA')")
+    public PageResponse<DetailIndicateurResponse> detailTableauDeBord(
+            @RequestParam IndicateurTableauDeBord indicateur,
+            @RequestParam(required = false) CategorieDossier categorie,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return PageResponse.of(
+                detailTableauDeBordService.detailler(indicateur, categorie, PageRequest.of(page, size)));
+    }
+
+    /**
+     * L'activité des avocats sur une période (Q-136) - le pendant du tableau précédent.
+     *
+     * <p><b>Pourquoi un second endpoint.</b> Signalé par le porteur du projet le 2026-10-13 :
+     * {@code /rapports/nominatif} ne montrait que les profils internes. C'était exact, et ce n'était
+     * pas réparable en y ajoutant les avocats - ce tableau compte six natures de production interne
+     * dont un avocat n'accomplit aucune. Il <b>dépose</b> ; c'est le juriste qui enregistre. L'y
+     * faire figurer n'aurait affiché qu'une ligne de zéros, soit ce que la conception refuse.
+     *
+     * <p>Mêmes habilitations que le tableau interne, et pour la même raison : il nomme des
+     * personnes, et {@code ROLE_JURISTE} est composite (Q-81).
+     */
+    @GetMapping("${api.prefix}/rapports/nominatif/avocats")
+    @PreAuthorize("hasAnyRole('DJ', 'DJA')")
+    public ResponseEntity<RapportAvocatsResponse> rapportAvocats(@RequestParam LocalDate dateDebut,
+                                                                  @RequestParam LocalDate dateFin) {
+        RapportAvocatsResponse rapport = rapportNominatifService.produireAvocats(dateDebut, dateFin);
+        return rapport.estVide() ? ResponseEntity.noContent().build() : ResponseEntity.ok(rapport);
+    }
+
+    /**
+     * La fiche d'activité d'une personne (Q-133) : <b>chacun sur lui-même</b>, le DJ et la DJA sur
+     * quiconque.
+     *
+     * <p><b>Ouvert aussi à l'avocat depuis le 2026-10-13 (Q-135), et j'avais écrit l'inverse.</b>
+     * J'ai soutenu qu'« aucune des natures comptées n'est la sienne - sa fiche serait vide par
+     * construction ». C'était <b>faux</b> : il dépose ses demandes de frais, ses comptes rendus
+     * d'audience, ses autres publications, et répond aux demandes d'explication - quatre natures,
+     * toutes journalisées sous son propre compte. Le métier a demandé qu'il voie et télécharge son
+     * activité, et que la direction puisse la lire.
+     *
+     * <p>{@code ROLE_CONSULTATION} couvre les cinq profils internes ; {@code ROLE_AVOCAT} s'y
+     * ajoute, l'avocat ne portant pas le premier (QF-01). Deux rôles nommés plutôt que sept
+     * profils : ce qui est énuméré ici doit rester court, ou il vieillira.
+     *
+     * <p><b>C'est le service qui décide sur qui.</b> L'annotation dit seulement qui peut toucher à
+     * la fonction : {@code utilisateurId} n'est servi qu'à la direction, ou à la personne qui se
+     * demande elle-même. Un {@code @PreAuthorize} ne sait pas comparer un paramètre à l'appelant.
+     *
+     * <p>204 quand la personne n'a rien fait sur la période : un état vide, pas une erreur.
+     */
+    @GetMapping("${api.prefix}/rapports/activite")
+    @PreAuthorize("hasAnyRole('CONSULTATION', 'AVOCAT')")
+    public ResponseEntity<RapportActiviteResponse> activite(@RequestParam LocalDate dateDebut,
+                                                            @RequestParam LocalDate dateFin,
+                                                            @RequestParam(required = false) Long utilisateurId,
+                                                            @RequestParam(required = false) Long avocatId) {
+        RapportActiviteResponse rapport =
+                rapportActiviteService.produire(utilisateurId, avocatId, dateDebut, dateFin);
+        return rapport.estVide() ? ResponseEntity.noContent().build() : ResponseEntity.ok(rapport);
+    }
+
+    /**
+     * La même fiche, en document : « chaque utilisateur doit être capable de télécharger ses propres
+     * rapports » (métier, 2026-10-09).
+     *
+     * <p>Le nom du fichier porte la personne et la période - une direction qui télécharge cinq
+     * fiches le même jour doit les distinguer sans les ouvrir. Il est construit ici parce que
+     * l'en-tête {@code Content-Disposition} n'est pas exposé en CORS : le frontend ne peut pas le
+     * lire, et devrait le reconstruire de son côté, où il divergerait.
+     *
+     * <p>Pas de {@code JSON} dans les formats admis : c'est l'endpoint précédent. Un format de plus
+     * ici obligerait à choisir entre deux chemins pour la même chose.
+     */
+    @GetMapping("${api.prefix}/rapports/activite/export")
+    @PreAuthorize("hasAnyRole('CONSULTATION', 'AVOCAT')")
+    public ResponseEntity<byte[]> activiteExport(@RequestParam LocalDate dateDebut,
+                                                  @RequestParam LocalDate dateFin,
+                                                  @RequestParam(required = false) Long utilisateurId,
+                                                  @RequestParam(required = false) Long avocatId,
+                                                  @RequestParam FormatRapport format) {
+        RapportActiviteResponse rapport =
+                rapportActiviteService.produire(utilisateurId, avocatId, dateDebut, dateFin);
+        if (rapport.estVide()) {
+            return ResponseEntity.noContent().build();
+        }
+        return switch (format) {
+            case JSON -> throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
+                    "Le format JSON se lit sur /rapports/activite, non sur son export.");
+            case PDF -> fichier(rapportActiviteExportService.exportPdf(rapport),
+                    rapportActiviteExportService.nomFichier(rapport, "pdf"), MediaType.APPLICATION_PDF);
+            case EXCEL -> fichier(rapportActiviteExportService.exportExcel(rapport),
+                    rapportActiviteExportService.nomFichier(rapport, "xlsx"),
+                    MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+            case CSV -> fichier(rapportActiviteExportService.exportCsv(rapport),
+                    rapportActiviteExportService.nomFichier(rapport, "csv"),
+                    MediaType.parseMediaType("text/csv"));
+        };
+    }
+
+    /**
+     * Les actions derrière un décompte de la fiche (Q-133) : « cliquer sur un élément doit renvoyer
+     * aux détails de la dite tâche » (métier, 2026-10-09).
+     *
+     * <p>Chaque ligne porte son {@code dossierId} et la référence lisible du dossier : c'est ce qui
+     * permet à l'écran d'ouvrir la fiche du dossier concerné. Un décompte à quatre ne mène nulle
+     * part ; les quatre actions, si.
+     *
+     * <p>Même périmètre que la fiche, tenu par le même service : sans cela, le détail serait une
+     * porte dérobée vers l'activité d'un collègue que le décompte, lui, protège.
+     */
+    @GetMapping("${api.prefix}/rapports/activite/details")
+    @PreAuthorize("hasAnyRole('CONSULTATION', 'AVOCAT')")
+    public PageResponse<ActionDetailleeResponse> activiteDetails(@RequestParam LocalDate dateDebut,
+                                                                  @RequestParam LocalDate dateFin,
+                                                                  @RequestParam TypeActionHistorique code,
+                                                                  @RequestParam(required = false) Long utilisateurId,
+                                                                  @RequestParam(required = false) Long avocatId,
+                                                                  @RequestParam(defaultValue = "0") int page,
+                                                                  @RequestParam(defaultValue = "20") int size) {
+        return PageResponse.of(rapportActiviteService.detailler(
+                utilisateurId, avocatId, code, dateDebut, dateFin, PageRequest.of(page, size)));
+    }
+
+    /** Un document à télécharger : même en-tête pour les trois formats, pour qu'ils ne divergent pas. */
+    private static ResponseEntity<byte[]> fichier(byte[] contenu, String nom, MediaType type) {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + nom + "\"")
+                .contentType(type)
+                .body(contenu);
     }
 
     /**

@@ -1,5 +1,6 @@
 package com.afriland.audiences.referentiel.domain;
 
+import jakarta.persistence.Basic;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -78,6 +79,29 @@ public class Utilisateur {
 
     @Builder.Default
     private Boolean actif = true;
+
+    /**
+     * Image de la signature manuscrite, déposée par son <b>seul titulaire</b> (métier, 2026-10-06).
+     *
+     * <p><b>Confort de présentation, non valeur probante.</b> La lettre de constitution part avec
+     * l'image au lieu d'un nom à signer à la main. Ce qui fait preuve reste la trace horodatée de
+     * qui a signé - {@code demande_constitution.valide_par} et l'historique - et non cette image :
+     * l'effacer ne retirerait rien à la preuve, la falsifier n'en créerait aucune.
+     *
+     * <p>{@code LAZY} : quelques dizaines de kilo-octets qu'aucune liste d'utilisateurs n'a besoin
+     * de charger. Sans cela, l'annuaire les transérerait tous à chaque appel.
+     */
+    @Basic(fetch = FetchType.LAZY)
+    @Column(name = "signature")
+    private byte[] signature;
+
+    /** {@code image/png} ou {@code image/jpeg} : les seuls types que le PDF sait apposer. */
+    @Size(max = 50)
+    @Column(name = "signature_type", length = 50)
+    private String signatureType;
+
+    @Column(name = "signature_deposee_le")
+    private LocalDateTime signatureDeposeeLe;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

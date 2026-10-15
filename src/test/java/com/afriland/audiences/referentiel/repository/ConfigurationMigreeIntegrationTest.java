@@ -62,9 +62,18 @@ class ConfigurationMigreeIntegrationTest {
 
         for (RegleConfiguration regle : RegleConfiguration.values()) {
             if (regle.name().startsWith("GRILLE_NOTIFICATION_")) {
+                /*
+                 * **Sans l'ordre, mais sans rien lâcher.** Ce qui est éprouvé est la *couverture* :
+                 * aucun événement oublié, aucun inconnu en trop - et l'égalité des ensembles le dit
+                 * entièrement. L'ordre, lui, ne veut rien dire : la grille est une liste que la
+                 * direction réécrit à sa guise depuis l'écran de configuration, et une valeur
+                 * nouvelle s'y ajoute à la suite (V45, V46) sans avoir à être déclarée en dernier
+                 * dans son énumération. Exiger l'ordre faisait échouer ce test pour une raison
+                 * étrangère à ce qu'il garde.
+                 */
                 assertThat(lignes.get(regle.name()).getValeur().split(","))
                         .as(regle.name())
-                        .containsExactlyElementsOf(regle.valeursPossibles());
+                        .containsExactlyInAnyOrderElementsOf(regle.valeursPossibles());
             }
         }
     }

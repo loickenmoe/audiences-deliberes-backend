@@ -39,6 +39,14 @@ public class LettreConstitutionService {
     public static final String SUFFIXE_PAR_DEFAUT = "First Bank/DAJR/DR/CM/ABN/18";
     public static final String LIEU_PAR_DEFAUT = "Yaoundé";
     public static final String OBJET_PAR_DEFAUT = "Lettre de constitution contenant transmission de pièces.";
+    /**
+     * La hauteur réservée à chaque signature, en points.
+     *
+     * <p>Quarante-deux points, soit un centimètre et demi : la taille d'une signature manuscrite sur
+     * un courrier. Trente-deux, essayés d'abord, donnaient un trait qu'on devinait sans le lire.
+     */
+    private static final float HAUTEUR_SIGNATURE = 42f;
+
     public static final String SIGNATAIRE_PAR_DEFAUT = "La Direction Juridique";
     public static final String QUALITE_PAR_DEFAUT = "Huissier de Justice";
 
@@ -92,7 +100,19 @@ public class LettreConstitutionService {
      * celui qui fait foi.
      */
     public byte[] generer(LettreConstitution lettre) {
-        return generer(lettre, false);
+        return generer(lettre, false, null, null);
+    }
+
+    /**
+     * La même lettre, avec les <b>signatures enregistrées</b> de ceux qui l'engagent (N8, revu le
+     * 2026-10-07).
+     *
+     * <p>Les images arrivent en paramètre : ce service met en page, il ne sait pas où vivent les
+     * signatures et n'a pas à le savoir. Nulles, la lettre part avec les noms seuls, à signer à la
+     * main - c'est le cas de tous ceux qui n'ont rien déposé, et ce n'est pas une erreur.
+     */
+    public byte[] generer(LettreConstitution lettre, Signataire redacteur, Signataire valideur) {
+        return generer(lettre, false, redacteur, valideur);
     }
 
     /**
@@ -109,6 +129,15 @@ public class LettreConstitutionService {
      *                             signataire — est en base.
      */
     public byte[] generer(LettreConstitution lettre, boolean pourPapierPreimprime) {
+        return generer(lettre, pourPapierPreimprime, null, null);
+    }
+
+    /**
+     * @param redacteur celui qui a écrit la lettre, à gauche sous le nom du service.
+     * @param valideur  celui qui l'a validée et l'engage, à droite.
+     */
+    public byte[] generer(LettreConstitution lettre, boolean pourPapierPreimprime,
+                          Signataire redacteur, Signataire valideur) {
         String titre = "Lettre de constitution " + lettre.referenceComplete();
         Utilisateur validateur = lettre.getDemande() == null ? null : lettre.getDemande().getValidePar();
         try (DocumentPdf document = pourPapierPreimprime
@@ -139,9 +168,44 @@ public class LettreConstitutionService {
             document.paragraphe(ou(lettre.getCorps(), corpsParDefaut()), 10f);
             document.espace(26f);
 
+            /*
+             * Le **service** qui écrit - « La Direction Juridique » - puis, en dessous, les deux
+             * personnes qui engagent la banque (métier, 2026-10-07).
+             *
+             * Rien ne se signe au-dessus de cette ligne : elle nomme un service, pas quelqu'un. Une
+             * signature posée là laissait croire que la Direction Juridique signe en personne, ce
+             * qu'aucune direction ne fait. Les signataires viennent dessous, le rédacteur à gauche
+             * et celui qui valide à droite - l'ordre dans lequel la lettre s'est faite.
+             *
+             * Sans image déposée, les noms restent seuls et la lettre s'imprime pour être signée à
+             * la main, exactement comme avant N8.
+             */
             document.centre(ou(lettre.getSignataire(), SIGNATAIRE_PAR_DEFAUT), true, 10f);
+            document.espace(20f);
+            document.deuxSignatures(image(redacteur), nom(redacteur), image(valideur), nom(valideur),
+                    HAUTEUR_SIGNATURE);
             return document.finaliser();
         }
+    }
+
+    /**
+     * Une personne qui signe : son image, et son nom.
+     *
+     * <p>Les deux tiennent ensemble. Une image sans nom ne dit pas qui a signé ; un nom dont
+     * l'image appartiendrait à un autre serait pire - les passer séparément rendait l'erreur
+     * possible, ce record la rend impossible.
+     *
+     * @param image l'image déposée, ou {@code null} : le nom part alors seul, à signer à la main.
+     */
+    public record Signataire(byte[] image, String nom) {
+    }
+
+    private static byte[] image(Signataire signataire) {
+        return signataire == null ? null : signataire.image();
+    }
+
+    private static String nom(Signataire signataire) {
+        return signataire == null ? null : signataire.nom();
     }
 
     /** Le validateur : c'est lui qui engage la banque, pas le juriste qui a sollicité. */

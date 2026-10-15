@@ -42,6 +42,8 @@ import com.afriland.audiences.dossier.web.dto.DossierResponse;
 import com.afriland.audiences.dossier.web.dto.HistoriqueActionResponse;
 import com.afriland.audiences.dossier.web.dto.EtapeProcedureResponse;
 import com.afriland.audiences.dossier.web.dto.ModifierAffectationRequest;
+import com.afriland.audiences.dossier.web.dto.ModifierSensibiliteRequest;
+import com.afriland.audiences.dossier.web.dto.ProposerSensibiliteRequest;
 import com.afriland.audiences.dossier.web.dto.ModifierStatutEtapeRequest;
 import com.afriland.audiences.dossier.web.dto.ValiderDerogationRequest;
 import com.afriland.audiences.dossier.web.dto.ValiderSensibiliteRequest;
@@ -54,6 +56,7 @@ import com.afriland.audiences.referentiel.repository.AvocatRepository;
 import com.afriland.audiences.referentiel.repository.ClientRepository;
 import com.afriland.audiences.referentiel.repository.NatureDossierRepository;
 import com.afriland.audiences.referentiel.repository.TypeClientSensibleRepository;
+import com.afriland.audiences.referentiel.service.AgenceService;
 import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
 import com.afriland.audiences.referentiel.web.dto.VueClientDossiersResponse;
 import lombok.RequiredArgsConstructor;
@@ -97,6 +100,7 @@ public class DossierService {
     private final HistoriqueActionService historiqueActionService;
     private final CurrentUserService currentUserService;
     private final AlerteService alerteService;
+    private final AgenceService agenceService;
     private final GenerateurReference generateurReference;
     /*
      * Les conditions de fait, apportées par les modules qui détiennent les faits (2026-09-29).
@@ -129,6 +133,20 @@ public class DossierService {
         // seulement dans la branche sensible laisserait passer une valeur fantaisiste.
         if (StringUtils.hasText(request.typeClientSensible())) {
             validerTypeClientSensible(request.typeClientSensible());
+        }
+
+        /*
+         * Les deux codes d'agence désignent désormais une agence du référentiel (métier,
+         * 2026-10-03, observation 2). Celui d'origine est obligatoire, celui du contentieux
+         * facultatif — mais s'il est fourni, il doit exister lui aussi : un code inventé dans un
+         * champ facultatif reste un code inventé.
+         *
+         * Le contrôle est ici et non en annotation : il interroge la base, ce qu'une contrainte de
+         * validation ne fait pas.
+         */
+        validerAgence(request.codeAgenceOrigine(), "codeAgenceOrigine");
+        if (StringUtils.hasText(request.codeAgenceContentieuse())) {
+            validerAgence(request.codeAgenceContentieuse(), "codeAgenceContentieuse");
         }
 
         /*
@@ -171,10 +189,10 @@ public class DossierService {
         if (Boolean.TRUE.equals(request.estSensible())) {
             if (request.seuilMontant() == null || !StringUtils.hasText(request.typeClientSensible())) {
                 throw ApiException.badRequest(ErrorCodes.METADONNEES_MANQUANTES,
-                        "seuilMontant et typeClientSensible sont obligatoires pour un dossier sensible");
+                        "seuilMontant et typeClientSensible sont obligatoires pour un dossier à diligence particulière");
             }
             creerPropositionSeuil(dossier, request.seuilMontant(),
-                    "Proposition initiale de sensibilité à la création du dossier");
+                    "Proposition initiale de diligence particulière à la création du dossier");
         }
 
         Utilisateur auteur = currentUserService.getCurrentUser();
@@ -216,10 +234,23 @@ public class DossierService {
         return reference;
     }
 
+    /**
+     * Ce code désigne-t-il une agence ouverte du référentiel ?
+     *
+     * <p>Le message nomme le champ : le formulaire sait alors sous lequel afficher le refus. Il
+     * cite aussi le code reçu, car c'est souvent une saisie d'un autre système, recopiée.
+     */
+    private void validerAgence(String code, String champ) {
+        if (!agenceService.existeEtEstActive(code)) {
+            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
+                    "Aucune agence ouverte ne porte le code « " + code + " » (" + champ + ")");
+        }
+    }
+
     private void validerTypeClientSensible(String code) {
         typeClientSensibleRepository.findByCodeIgnoreCase(code)
                 .orElseThrow(() -> ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
-                        "Type de client sensible inconnu du référentiel : " + code));
+                        "Type de client inconnu du référentiel : " + code));
     }
 
     private CategorieDossier resoudreCategorie(CreerDossierRequest request) {
@@ -573,7 +604,7 @@ public class DossierService {
         Dossier dossier = getDossierOrThrow(dossierId);
         if (!Boolean.TRUE.equals(dossier.getEstSensible()) || dossier.getSensibiliteStatut() != StatutValidation.VALIDEE) {
             throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
-                    "Une dérogation de seuil ne peut être demandée que sur un dossier sensible déjà validé");
+                    "Une dérogation de seuil ne peut être demandée que sur un dossier à diligence particulière déjà validé");
         }
         AuditSeuilDossier audit = creerPropositionSeuil(dossier, request.nouveauSeuil(), request.motif());
         return auditSeuilMapper.toResponse(audit);
@@ -626,7 +657,7 @@ public class DossierService {
          */
         if (dossier.getSensibiliteStatut() != StatutValidation.VALIDEE) {
             throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
-                    "La proposition initiale se tranche par la validation de sensibilité, pas comme une dérogation");
+                    "La proposition initiale se tranche par la validation de la diligence particulière, pas comme une dérogation");
         }
         AuditSeuilDossier audit = auditSeuilDossierRepository.findById(auditId)
                 .filter(a -> a.getDossier().getId().equals(dossierId))
@@ -661,12 +692,175 @@ public class DossierService {
 
     // ------------------------------------------------------------------ Validation de la sensibilité
 
+    /**
+     * Le juriste propose la diligence particulière sur un dossier déjà ouvert (métier, 2026-10-03,
+     * observation 5).
+     *
+     * <p><b>Ce qui manquait.</b> {@code estSensible} ne se posait qu'à la création :
+     * {@link #validerSensibilite} exige une proposition déjà en attente, ce que seule la création
+     * produisait. Un dossier ouvert comme ordinaire ne pouvait donc plus jamais devenir sensible,
+     * alors qu'une affaire se révèle telle en cours de route.
+     *
+     * <p><b>Le circuit est celui de la création</b>, et c'est voulu : proposition {@code EN_ATTENTE},
+     * puis arbitrage du DJ ou de la DJA par le même endpoint. Rien n'est doublé, et le DJ voit les
+     * deux origines dans la même file.
+     *
+     * <p><b>Aucun effet avant la validation</b> (Q-10). Le seuil et son origine ne bougent pas ici :
+     * ils ne changent qu'à l'arbitrage. Une proposition en attente ne déclenche donc pas la double
+     * validation des frais - sans quoi un juriste la déclencherait seul.
+     */
+    @Transactional
+    public DossierResponse proposerSensibilite(Long dossierId, ProposerSensibiliteRequest request) {
+        Dossier dossier = getDossierOrThrow(dossierId);
+
+        if (Boolean.TRUE.equals(dossier.getEstSensible())) {
+            // Deux refus distincts : l'utilisateur doit savoir s'il doit attendre ou s'il n'a rien à faire.
+            String raison = dossier.getSensibiliteStatut() == StatutValidation.EN_ATTENTE
+                    ? "Une proposition de diligence particulière est déjà en attente d'arbitrage sur ce dossier"
+                    : "Ce dossier est déjà suivi en diligence particulière";
+            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE, raison);
+        }
+        validerTypeClientSensible(request.typeClientSensible());
+
+        dossier.setEstSensible(true);
+        dossier.setSensibiliteStatut(StatutValidation.EN_ATTENTE);
+        dossier.setTypeClientSensible(request.typeClientSensible());
+        /*
+         * Les motifs de l'épisode précédent sont effacés : laisser un motif de rejet ou de retrait
+         * sur un dossier dont la diligence est de nouveau en débat ferait lire à l'écran une décision
+         * qui ne porte plus.
+         */
+        dossier.setSensibiliteMotifRejet(null);
+        dossier.setSensibiliteMotifRetrait(null);
+        dossier.setSensibiliteValidePar(null);
+        dossier = dossierRepository.save(dossier);
+
+        // La proposition de seuil suit le même chemin qu'à la création : l'arbitrage la retrouvera.
+        creerPropositionSeuil(dossier, request.seuilMontant(), request.motif());
+
+        Utilisateur auteur = currentUserService.getCurrentUser();
+        historiqueActionService.enregistrerPour(auteur, dossierId, TypeActionHistorique.SENSIBILITE_PROPOSEE,
+                Map.of("seuilMontant", request.seuilMontant(),
+                        "typeClientSensible", request.typeClientSensible(),
+                        "motif", request.motif()));
+
+        return construireReponseComplete(dossier);
+    }
+
+    /**
+     * Le DJ ou la DJA pose ou lève la diligence particulière directement (métier, 2026-10-03,
+     * observation 5 ; les deux sens arrêtés le 2026-10-06).
+     *
+     * <p><b>Sans proposition.</b> Le juriste propose et attend ; eux décident. Les faire passer par
+     * une proposition qu'ils arbitreraient eux-mêmes n'ajouterait qu'une étape sans contrôle.
+     *
+     * <p><b>Le retrait remet le seuil global.</b> Un seuil de dérogation n'existe que pour un
+     * dossier à diligence particulière - {@link #demanderDerogationSeuil} le refuse ailleurs. Le
+     * laisser en place sur un dossier redevenu ordinaire lui donnerait un seuil que rien ne
+     * justifie, et que personne ne pourrait plus réviser.
+     *
+     * <p><b>Le motif est obligatoire au retrait</b>, et seulement là. Poser la diligence est une
+     * précaution, la lever fait sortir le dossier du circuit de double validation des frais :
+     * l'audit demandera pourquoi.
+     */
+    @Transactional
+    public DossierResponse modifierSensibilite(Long dossierId, ModifierSensibiliteRequest request) {
+        Dossier dossier = getDossierOrThrow(dossierId);
+        Utilisateur decideur = currentUserService.getCurrentUser();
+
+        if (Boolean.TRUE.equals(request.estSensible())) {
+            if (request.seuilMontant() == null || !StringUtils.hasText(request.typeClientSensible())) {
+                throw ApiException.badRequest(ErrorCodes.METADONNEES_MANQUANTES,
+                        "seuilMontant et typeClientSensible sont obligatoires pour un dossier à diligence particulière");
+            }
+            validerTypeClientSensible(request.typeClientSensible());
+            if (Boolean.TRUE.equals(dossier.getEstSensible())
+                    && dossier.getSensibiliteStatut() == StatutValidation.VALIDEE) {
+                throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
+                        "Ce dossier est déjà suivi en diligence particulière");
+            }
+
+            /*
+             * Une proposition du juriste peut être en attente : la poser directement la tranche, elle
+             * ne doit pas rester pendante. Le seuil retenu est celui que le DJ indique.
+             */
+            auditSeuilDossierRepository
+                    .findFirstByDossierIdAndStatutOrderByDateActionAsc(dossierId, StatutValidation.EN_ATTENTE)
+                    .ifPresent(audit -> {
+                        audit.setStatut(StatutValidation.VALIDEE);
+                        audit.setValidePar(decideur);
+                        audit.setNouveauSeuil(request.seuilMontant());
+                        auditSeuilDossierRepository.save(audit);
+                    });
+
+            dossier.setEstSensible(true);
+            dossier.setSensibiliteStatut(StatutValidation.VALIDEE);
+            dossier.setSensibiliteValidePar(decideur);
+            dossier.setTypeClientSensible(request.typeClientSensible());
+            dossier.setSeuilMontant(request.seuilMontant());
+            dossier.setSeuilOrigine(SeuilOrigine.DEROGATION);
+            dossier.setSensibiliteMotifRejet(null);
+            dossier.setSensibiliteMotifRetrait(null);
+            dossier = dossierRepository.save(dossier);
+
+            historiqueActionService.enregistrerPour(decideur, dossierId,
+                    TypeActionHistorique.SENSIBILITE_ARBITREE,
+                    Map.of("decision", StatutValidation.VALIDEE.name(),
+                            "origine", "DIRECTE",
+                            "seuilMontant", request.seuilMontant(),
+                            "typeClientSensible", request.typeClientSensible(),
+                            "motif", Optional.ofNullable(request.motif()).orElse("")));
+            return construireReponseComplete(dossier);
+        }
+
+        if (!Boolean.TRUE.equals(dossier.getEstSensible())) {
+            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
+                    "Ce dossier n'est pas suivi en diligence particulière : il n'y a rien à retirer");
+        }
+        if (!StringUtils.hasText(request.motif())) {
+            throw ApiException.badRequest(ErrorCodes.METADONNEES_MANQUANTES,
+                    "Le motif est obligatoire pour retirer la diligence particulière");
+        }
+
+        // Une proposition encore en attente devient sans objet : on la clôt plutôt que de la laisser.
+        auditSeuilDossierRepository
+                .findFirstByDossierIdAndStatutOrderByDateActionAsc(dossierId, StatutValidation.EN_ATTENTE)
+                .ifPresent(audit -> {
+                    audit.setStatut(StatutValidation.REJETEE);
+                    audit.setValidePar(decideur);
+                    auditSeuilDossierRepository.save(audit);
+                });
+
+        dossier.setEstSensible(false);
+        dossier.setSensibiliteStatut(StatutValidation.REJETEE);
+        dossier.setSensibiliteValidePar(decideur);
+        dossier.setSensibiliteMotifRetrait(request.motif());
+        dossier.setSeuilMontant(null);
+        dossier.setSeuilOrigine(SeuilOrigine.GLOBAL);
+        dossier = dossierRepository.save(dossier);
+
+        historiqueActionService.enregistrerPour(decideur, dossierId, TypeActionHistorique.SENSIBILITE_RETIREE,
+                Map.of("motif", request.motif()));
+
+        return construireReponseComplete(dossier);
+    }
+
+    /** La fiche complète du dossier : étapes et affectations relues après écriture. */
+    private DossierResponse construireReponseComplete(Dossier dossier) {
+        List<EtapeProcedure> etapes = etapeProcedureRepository.findByDossierIdOrderByTypeAsc(dossier.getId());
+        List<Long> juristesAffectes = dossierJuristeRepository.findByDossierId(dossier.getId()).stream()
+                .map(dj -> dj.getUtilisateur().getId()).toList();
+        List<Long> avocatsAffectes = dossierAvocatRepository.findByDossierId(dossier.getId()).stream()
+                .map(da -> da.getAvocat().getId()).toList();
+        return construireReponse(dossier, etapes, juristesAffectes, avocatsAffectes, List.of());
+    }
+
     @Transactional
     public DossierResponse validerSensibilite(Long dossierId, ValiderSensibiliteRequest request) {
         Dossier dossier = getDossierOrThrow(dossierId);
         if (!Boolean.TRUE.equals(dossier.getEstSensible()) || dossier.getSensibiliteStatut() != StatutValidation.EN_ATTENTE) {
             throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
-                    "Aucune proposition de sensibilité en attente pour ce dossier");
+                    "Aucune proposition de diligence particulière en attente pour ce dossier");
         }
         if (request.statut() == StatutValidation.REJETEE && !StringUtils.hasText(request.motifRejet())) {
             throw ApiException.badRequest(ErrorCodes.METADONNEES_MANQUANTES, "Le motif est obligatoire en cas de rejet");

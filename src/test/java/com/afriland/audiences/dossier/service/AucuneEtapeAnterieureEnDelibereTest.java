@@ -72,7 +72,7 @@ class AucuneEtapeAnterieureEnDelibereTest {
 
         assertThat(condition.empechement(appel))
                 .hasValueSatisfying(motif -> assertThat(motif)
-                        .contains("Première instance")
+                        .contains("Instance")
                         .contains("en délibéré")
                         .doesNotContain("INSTANCE", "EN_DELIBERE"));
     }

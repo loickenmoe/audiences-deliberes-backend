@@ -74,7 +74,7 @@ public class AucuneEtapeAnterieureEnDelibere implements ConditionTransitionEtape
     /** Le nom que l'utilisateur lit à l'écran, et non la valeur technique de l'énuméré. */
     private static String libelle(TypeEtape type) {
         return switch (type) {
-            case INSTANCE -> "Première instance";
+            case INSTANCE -> "Instance";
             case RECOURS_1 -> "Appel";
             case RECOURS_2 -> "Pourvoi en cassation";
             case RECOURS_2_CCJA -> "Pourvoi CCJA";

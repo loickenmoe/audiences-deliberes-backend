@@ -120,6 +120,14 @@ class ParcoursEndToEndIntegrationTest {
     void p1_ouvertureDossierRecouvrement() throws Exception {
         long dossierId = creerDossierRecouvrement();
 
+        // Observations 1 et 3 (métier, 2026-10-03) : les parties sont obligatoires, et multiples.
+        // Le dossier créé ci-dessus en porte deux côté défendeur ; on vérifie qu'elles ressortent
+        // telles quelles, puis que leur absence est refusée à l'entrée.
+        mockMvc.perform(get(api("/dossiers/" + dossierId)).with(role("kc-juriste", "ROLE_CONSULTATION")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.parties.demandeurs.length()").value(1))
+                .andExpect(jsonPath("$.parties.defendeurs.length()").value(2));
+
         // Chargement d'une pièce en GED par le juriste
         MockMultipartFile fichier = new MockMultipartFile("file", "piece.pdf", "application/pdf", new byte[]{1, 2, 3});
         mockMvc.perform(multipart(api("/ged/documents"))
@@ -209,7 +217,7 @@ class ParcoursEndToEndIntegrationTest {
                         .with(role("kc-avocat", "ROLE_AVOCAT")))
                 .andExpect(status().isBadRequest());
 
-        // Q-86 : l'Assistante lit la publication à valider, nommée ; un juriste, pas encore
+        // Q-86 : l'Assistante lit la publication à valider, nommée.
         mockMvc.perform(get(api("/publications/" + publicationId)).with(role("kc-assistante", "ROLE_CONSULTATION")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statutValidation").value("DEPOSE"))
@@ -218,8 +226,36 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(jsonPath("$.audienceDate").isNotEmpty())
                 // Q-98 : la pièce du compte rendu se lit comme celle d'une autre publication.
                 .andExpect(jsonPath("$.nomFichier").value("plumitif.pdf"));
+
+        // RG-INT-06 amendée (métier du 2026-10-05) : le compte rendu est ouvert à TOUS les
+        // habilités dès son dépôt. Il attendait jusqu'ici la validation de l'Assistante, pendant
+        // que l'avocat, lui, avait déjà rendu compte.
         mockMvc.perform(get(api("/publications/" + publicationId)).with(role("kc-juriste", "ROLE_CONSULTATION")))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statutValidation").value("DEPOSE"));
+
+        // … et il en est prévenu AU DÉPÔT, non à la validation.
+        mockMvc.perform(get(api("/alertes/mes-notifications")).with(role("kc-juriste", "ROLE_JURISTE")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.type == 'NOUVELLE_PUBLICATION')]").isNotEmpty());
+
+        // Le SH n'a aucun régime propre : il lit comme les autres, et dès le dépôt.
+        mockMvc.perform(get(api("/publications/" + publicationId)).with(role("kc-sh", "ROLE_CONSULTATION")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statutValidation").value("DEPOSE"));
+
+        // Et un compte rendu ne se rejette pas : l'Assistante n'en accuse que réception.
+        mockMvc.perform(put(api("/publications/" + publicationId + "/validation"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("statut", "REJETE", "motifRejet", "Récit incomplet")))
+                        .with(role("kc-assistante", "ROLE_ASSISTANTE")))
+                .andExpect(status().isBadRequest());
+
+        // L'onglet du dossier le liste pour le juriste affecté, sans filtre de statut.
+        mockMvc.perform(get(api("/publications")).param("dossierId", String.valueOf(dossierId))
+                        .with(role("kc-juriste", "ROLE_JURISTE")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.id == " + publicationId + ")]").isNotEmpty());
 
         mockMvc.perform(put(api("/publications/" + publicationId + "/validation"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -233,10 +269,7 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.commentaires").isArray());
 
-        // … et le juriste du dossier en est prévenu (Q-86, UC-INT-08 étape 1)
-        mockMvc.perform(get(api("/alertes/mes-notifications")).with(role("kc-juriste", "ROLE_JURISTE")))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content[?(@.type == 'NOUVELLE_PUBLICATION')]").isNotEmpty());
+        // L'accusé de réception n'ajoute aucune alerte : tous pouvaient déjà lire.
     }
 
     // ---------------------------------------------------------------- P3
@@ -618,6 +651,62 @@ class ParcoursEndToEndIntegrationTest {
 
     // ---------------------------------------------------------------- Utilitaires
 
+    /**
+     * Observations 1 et 3 : un dossier contentieux dit qui s'oppose à qui, ou n'est pas créé.
+     *
+     * <p>L'information manquait sur 340 des 341 dossiers de recette, précisément parce que rien ne
+     * l'exigeait. Le refus porte sur le champ, pour que l'écran sache où afficher le message.
+     */
+    @Test
+    void lesPartiesSontObligatoiresALaCreation() throws Exception {
+        int n = COMPTEUR.incrementAndGet();
+        long clientId = extraireId(mockMvc.perform(post(api("/clients"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("nom", "Client parties " + n)))
+                        .with(role("kc-juriste", "ROLE_JURISTE", "ROLE_SAISIE")))
+                .andExpect(status().isCreated())
+                .andReturn());
+        Long juristeId = utilisateurRepository.findByKeycloakId("kc-juriste").orElseThrow().getId();
+
+        Map<String, Object> socle = Map.ofEntries(
+                Map.entry("nature", "Assignation en paiement"),
+                Map.entry("categorie", "RECOUVREMENT"),
+                Map.entry("juridictionSaisie", "TGI Douala"),
+                Map.entry("clientId", clientId),
+                Map.entry("risqueEncouru", 1_000_000),
+                Map.entry("juristesAffectes", List.of(juristeId)),
+                Map.entry("avocatsAffectes", List.of(avocatId)));
+
+        // Sans parties du tout.
+        mockMvc.perform(post(api("/dossiers"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(socle))
+                        .with(role("kc-juriste", "ROLE_JURISTE", "ROLE_SAISIE")))
+                .andExpect(status().isBadRequest());
+
+        // Avec un côté vide : « aucun défendeur » n'est pas un défendeur.
+        Map<String, Object> sansDefendeur = new java.util.HashMap<>(socle);
+        sansDefendeur.put("parties", Map.of(
+                "demandeurs", List.of("AFRILAND FIRST BANK"),
+                "defendeurs", List.of()));
+        mockMvc.perform(post(api("/dossiers"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(sansDefendeur))
+                        .with(role("kc-juriste", "ROLE_JURISTE", "ROLE_SAISIE")))
+                .andExpect(status().isBadRequest());
+
+        // Avec un nom vide : une partie sans nom ne nomme personne.
+        Map<String, Object> nomVide = new java.util.HashMap<>(socle);
+        nomVide.put("parties", Map.of(
+                "demandeurs", List.of("   "),
+                "defendeurs", List.of("Débiteur")));
+        mockMvc.perform(post(api("/dossiers"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(nomVide))
+                        .with(role("kc-juriste", "ROLE_JURISTE", "ROLE_SAISIE")))
+                .andExpect(status().isBadRequest());
+    }
+
     private long creerDossierRecouvrement() throws Exception {
         int n = COMPTEUR.incrementAndGet();
         long clientId = extraireId(mockMvc.perform(post(api("/clients"))
@@ -640,7 +729,14 @@ class ParcoursEndToEndIntegrationTest {
                                 Map.entry("dossierCreditOrigine", "CRD-" + n),
                                 Map.entry("pvTransfert", "PV-" + n),
                                 Map.entry("juristesAffectes", List.of(juristeId)),
-                                Map.entry("avocatsAffectes", List.of(avocatId)))))
+                                Map.entry("avocatsAffectes", List.of(avocatId)),
+                                // Obligatoires depuis le 2026-10-05 (observations 1 et 3) : au
+                                // moins un demandeur et un défendeur, plusieurs étant permis.
+                                Map.entry("parties", Map.of(
+                                        "demandeurs", List.of("AFRILAND FIRST BANK"),
+                                        "defendeurs", List.of("Débiteur " + n, "Caution " + n))),
+                                // Obligatoire depuis le 2026-10-05 (observation 2) : 00002 = Bonanjo.
+                                Map.entry("codeAgenceOrigine", "00002"))))
                         .with(role("kc-juriste", "ROLE_JURISTE", "ROLE_SAISIE")))
                 .andExpect(status().isCreated())
                 .andReturn());

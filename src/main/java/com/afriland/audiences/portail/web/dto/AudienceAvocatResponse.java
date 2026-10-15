@@ -17,5 +17,10 @@ public record AudienceAvocatResponse(
         LocalDate dateTenue,
         /** Là où l'audience se tient : l'avocat s'y rend, il lui faut mieux que la juridiction de saisine. */
         String juridiction,
-        StatutAudience statut) {
+        StatutAudience statut,
+        /**
+         * Ce que le juriste veut lui dire de cette audience (QF-64). Nulle tant que l'avocat n'est
+         * pas constitué : c'est le mandat, et non l'affectation, qui ouvre la communication.
+         */
+        String noteAvocat) {
 }

@@ -61,8 +61,27 @@ public class RedacteurNotification {
         return switch (NiveauDetail.pour(route.reglage())) {
             case COMPLET -> complet(titre, phrase, route.canal(), contexte);
             case MODERE -> modere(titre, phrase, contexte);
-            case MINIMAL -> new ContenuNotification(null, texte("commun.minimal").replace("{0}", titre));
+            case MINIMAL -> new ContenuNotification(null, minimal(evenement, titre));
         };
+    }
+
+    /**
+     * Le message court d'un événement : l'en-tête commun, puis ce que l'événement a à dire.
+     *
+     * <p><b>Pourquoi une phrase par événement.</b> La Direction Juridique rédige ces textes, et elle
+     * les rédige <b>un par un</b> : le 2026-10-07 elle a réécrit celui de la constitution, et lui
+     * seul. Un gabarit unique aurait imposé sa reformulation aux treize autres, qu'elle n'a pas
+     * relus. Faute de phrase propre, l'événement retombe sur le défaut - son nom, et où chercher.
+     *
+     * <p>Le niveau minimal reste ce qu'il est : <b>ni référence de dossier ni lien</b>. Un SMS se lit
+     * sur un écran verrouillé, par-dessus l'épaule de son destinataire.
+     */
+    private String minimal(String evenement, String titre) {
+        String propre = textes.getProperty(evenement + ".minimal");
+        String corps = propre == null || propre.isBlank()
+                ? texte("commun.minimal.defaut").replace("{0}", titre)
+                : propre;
+        return texte("commun.minimal").replace("{0}", corps);
     }
 
     private ContenuNotification complet(String titre, String phrase, CanalEngine canal, Contexte contexte) {

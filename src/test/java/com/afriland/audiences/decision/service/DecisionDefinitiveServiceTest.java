@@ -31,6 +31,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -100,9 +102,15 @@ class DecisionDefinitiveServiceTest {
 
     // --- Condamnation (US 8.2) ---
 
+    /**
+     * QF-66 : la condamnation se suit sur une étape clôturée, comme l'adjudication (RG-DEF-01). Ce
+     * test affirmait l'inverse - « aucune précondition d'étape » (Q-59) - jusqu'à ce que le métier
+     * tranche le 2026-10-15.
+     */
     @Test
-    void creerCondamnation_noEtapePreconditionRequired() {
+    void creerCondamnation_surEtapeCloturee() {
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
+        when(etapeProcedureRepository.findById(1L)).thenReturn(Optional.of(etapeCloturee));
         when(decisionDefinitiveRepository.save(any(CondamnationPecuniaire.class))).thenAnswer(inv -> {
             CondamnationPecuniaire c = inv.getArgument(0);
             c.setId(200L);
@@ -110,10 +118,34 @@ class DecisionDefinitiveServiceTest {
         });
 
         CondamnationResponse result = service.creerCondamnation(1L,
-                new CreerCondamnationRequest(null, SensCondamnation.BANQUE_REDEVABLE, "Dommages-intérêts", LocalDate.now()));
+                new CreerCondamnationRequest(1L, SensCondamnation.BANQUE_REDEVABLE, "Dommages-intérêts", LocalDate.now()));
 
         assertThat(result.sens()).isEqualTo(SensCondamnation.BANQUE_REDEVABLE);
         assertThat(result.statutPaiement()).isEqualTo(StatutPaiementCondamnation.EN_ATTENTE);
+    }
+
+    /** Le cas signalé : un dossier tout juste ouvert, dont l'étape n'est pas clôturée. */
+    @Test
+    void creerCondamnation_refuseeHorsEtapeCloturee() {
+        when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
+        when(etapeProcedureRepository.findById(2L)).thenReturn(Optional.of(etapeEnCours));
+
+        assertThatThrownBy(() -> service.creerCondamnation(1L,
+                new CreerCondamnationRequest(2L, SensCondamnation.BANQUE_REDEVABLE, "Dommages-intérêts", LocalDate.now())))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("CLOTURE");
+        verify(decisionDefinitiveRepository, never()).save(any());
+    }
+
+    /** Sans étape, rien ne dit qu'un juge a statué : la condamnation est refusée. */
+    @Test
+    void creerCondamnation_refuseeSansEtape() {
+        when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
+
+        assertThatThrownBy(() -> service.creerCondamnation(1L,
+                new CreerCondamnationRequest(null, SensCondamnation.BANQUE_REDEVABLE, "Dommages-intérêts", LocalDate.now())))
+                .isInstanceOf(ApiException.class);
+        verify(decisionDefinitiveRepository, never()).save(any());
     }
 
     @Test

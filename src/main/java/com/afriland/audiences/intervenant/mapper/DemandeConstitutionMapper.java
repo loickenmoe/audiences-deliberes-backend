@@ -27,6 +27,8 @@ public interface DemandeConstitutionMapper {
     @Mapping(target = "prestataireType", expression = "java(typeDe(demande.getPrestataire()))")
     @Mapping(target = "demandeurNom", expression = "java(nomComplet(demande.getDemandeur()))")
     @Mapping(target = "valideParNom", expression = "java(nomComplet(demande.getValidePar()))")
+    // Le droit d'écrire dépend de **qui lit**, que le mappeur ignore : le service le pose.
+    @Mapping(target = "redactionPossible", ignore = true)
     DemandeConstitutionResponse toResponse(DemandeConstitution demande);
 
     /**

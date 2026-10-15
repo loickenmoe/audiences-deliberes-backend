@@ -9,6 +9,7 @@ import com.afriland.audiences.dossier.web.dto.PartiesDto;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Assemble {@link DossierResponse} à partir d'un {@link Dossier} et des collections associées
@@ -24,14 +25,33 @@ public class DossierMapper {
         if (parties == null) {
             return null;
         }
-        return new PartiesDto(parties.getDemandeur(), parties.getDefendeur());
+        return new PartiesDto(nettoyer(parties.getDemandeurs()), nettoyer(parties.getDefendeurs()));
     }
 
     public Parties toParties(PartiesDto dto) {
         if (dto == null) {
             return null;
         }
-        return new Parties(dto.demandeur(), dto.defendeur());
+        return new Parties(nettoyer(dto.demandeurs()), nettoyer(dto.defendeurs()));
+    }
+
+    /**
+     * Noms rognés, vides écartés, liste jamais nulle.
+     *
+     * <p>Un nom saisi avec une espace de trop n'est pas le même à la lecture qu'à l'écriture : deux
+     * « Me TAMO » et « Me TAMO  » se retrouveraient côte à côte dans la liste des parties sans que
+     * personne voie la différence. Le nettoyage se fait au passage, à l'aller comme au retour, pour
+     * que les dossiers déjà en base soient relus proprement eux aussi.
+     */
+    private static List<String> nettoyer(List<String> valeurs) {
+        if (valeurs == null) {
+            return List.of();
+        }
+        return valeurs.stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(valeur -> !valeur.isEmpty())
+                .toList();
     }
 
     public DossierResponse toResponse(Dossier dossier, List<EtapeProcedureResponse> etapes,
@@ -62,6 +82,7 @@ public class DossierMapper {
                 dossier.getSeuilOrigine(),
                 dossier.getSensibiliteStatut(),
                 dossier.getSensibiliteMotifRejet(),
+                dossier.getSensibiliteMotifRetrait(),
                 etapes,
                 juristesAffectes,
                 avocatsAffectes,

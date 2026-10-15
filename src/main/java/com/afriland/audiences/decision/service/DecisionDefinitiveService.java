@@ -83,13 +83,26 @@ public class DecisionDefinitiveService {
     }
 
     /**
-     * FR-DEF-02/RG-DEF-03/04 : aucune précondition d'étape n'est spécifiée par le texte fonctionnel
-     * (contrairement à l'adjudication) — {@code etapeId} est donc optionnel (Q-59).
+     * FR-DEF-02/RG-DEF-03/04 : le suivi d'une condamnation pécuniaire.
+     *
+     * <p><b>Sur une étape clôturée seulement, depuis QF-66</b> (porteur du projet, 2026-10-15). Q-59
+     * l'avait laissée sans précondition, faute de texte fonctionnel ; on pouvait donc suivre une
+     * condamnation sur un dossier tout juste ouvert, avant même qu'un juge ait statué. La règle est
+     * désormais celle de l'adjudication, sa voisine (RG-DEF-01) : l'étape est obligatoire, et elle
+     * doit être {@code CLOTURE}.
      */
     @Transactional
     public CondamnationResponse creerCondamnation(Long dossierId, CreerCondamnationRequest request) {
         Dossier dossier = getDossierOrThrow(dossierId);
-        EtapeProcedure etape = request.etapeId() != null ? getEtapeOrThrow(dossierId, request.etapeId()) : null;
+        if (request.etapeId() == null) {
+            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
+                    "Une condamnation se rattache à l'étape clôturée qui l'a prononcée (QF-66)");
+        }
+        EtapeProcedure etape = getEtapeOrThrow(dossierId, request.etapeId());
+        if (etape.getStatutCycleVie() != StatutCycleVie.CLOTURE) {
+            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
+                    "Une condamnation ne peut être suivie que sur une étape CLOTURE (QF-66)");
+        }
 
         CondamnationPecuniaire condamnation = decisionDefinitiveRepository.save(CondamnationPecuniaire.builder()
                 .dossier(dossier)

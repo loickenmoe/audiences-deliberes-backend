@@ -6,6 +6,8 @@ import com.afriland.audiences.portail.service.PortailAvocatService;
 import com.afriland.audiences.portail.web.dto.AudienceAvocatResponse;
 import com.afriland.audiences.portail.web.dto.DossierAvocatResponse;
 import com.afriland.audiences.portail.web.dto.PieceJustificativeResponse;
+import com.afriland.audiences.portail.web.dto.PieceTelechargementResponse;
+import com.afriland.audiences.portail.web.dto.PiecesDossierAvocatResponse;
 import com.afriland.audiences.publication.domain.StatutPublication;
 import com.afriland.audiences.publication.web.dto.PublicationResponse;
 import lombok.RequiredArgsConstructor;
@@ -64,6 +66,21 @@ public class PortailAvocatController {
     @PreAuthorize("hasRole('AVOCAT')")
     public List<AudienceAvocatResponse> audiencesDeMonDossier(@PathVariable Long dossierId) {
         return portailAvocatService.audiencesDeMonDossier(dossierId);
+    }
+
+    /** QF-64 : les pièces partagées de son dossier, s'il y est affecté et constitué. */
+    @GetMapping("/mes-dossiers/{dossierId}/pieces")
+    @PreAuthorize("hasRole('AVOCAT')")
+    public PiecesDossierAvocatResponse piecesDeMonDossier(@PathVariable Long dossierId) {
+        return portailAvocatService.piecesDeMonDossier(dossierId);
+    }
+
+    /** QF-64 : l'URL pré-signée d'une pièce partagée, et la trace de sa lecture. */
+    @GetMapping("/mes-dossiers/{dossierId}/pieces/{documentId}")
+    @PreAuthorize("hasRole('AVOCAT')")
+    public PieceTelechargementResponse pieceDeMonDossier(@PathVariable Long dossierId,
+                                                         @PathVariable Long documentId) {
+        return portailAvocatService.pieceDeMonDossier(dossierId, documentId);
     }
 
     /**

@@ -50,7 +50,20 @@ class TypeActionHistoriqueTest {
         // AUDIT_EXPORTE et ARCHIVE_TELECHARGEE (Q-113), LETTRE_CONSTITUTION_REDIGEE (Q-115 B2),
         // CLIENT_MODIFIE (PUT /clients), INTERVENANT_MODIFIE (PUT /intervenants),
         // et NON_CLASSEE pour la reprise.
-        assertThat(TypeActionHistorique.values()).hasSize(49);
+        //
+        // + SENSIBILITE_PROPOSEE et SENSIBILITE_RETIREE (N4, 2026-10-06) : la diligence
+        // particulière se révise après l'ouverture, dans les deux sens. `V43` étend
+        // `chk_historique_code` en conséquence — c'est exactement le lien que ce test rappelle.
+        //
+        // + EXPLICATION_DEMANDEE et EXPLICATION_REPONDUE (N7 temps 2, 2026-10-07) : la direction
+        // demande à un avocat de s'expliquer, l'avocat répond, et l'échange reste. `V46` étend
+        // la contrainte - le même lien, la troisième fois.
+        //
+        // + six codes du partage avec l'avocat (QF-64, Q-139, 2026-10-15) : partagé, proposé,
+        // arbitré, retiré, consulté par l'avocat, et la note à l'avocat d'une audience. `V47`
+        // étend la contrainte, et un garde-fou du script de migration a vérifié que l'énumération
+        // et la liste en base sont exactement les mêmes.
+        assertThat(TypeActionHistorique.values()).hasSize(59);
         assertThat(TypeActionHistorique.NON_CLASSEE.libelle()).isEqualTo("Action non classée");
     }
 }

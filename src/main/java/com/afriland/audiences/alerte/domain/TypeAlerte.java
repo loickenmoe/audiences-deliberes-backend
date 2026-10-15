@@ -22,5 +22,26 @@ public enum TypeAlerte {
     CONSTITUTION_A_SIGNER,
     CHARGE_MAX_AVOCAT,
     DELIBERE_ATTENDU,
-    DOSSIER_INCOMPLET
+    DOSSIER_INCOMPLET,
+    /**
+     * Deux audiences consecutives sans compte rendu, pour un meme avocat (N7, metier du 2026-10-07).
+     *
+     * <p>Elle va au <b>Directeur Juridique</b>, et a lui seul : c'est lui qui decide d'envoyer une
+     * demande d'explication. L'application constate un manquement, elle ne le sanctionne pas.
+     *
+     * <p>Toute valeur ajoutee ici exige une migration de {@code chk_alerte_type} - voir V45.
+     */
+    MANQUEMENT_COMPTE_RENDU,
+
+    /**
+     * La demande d'explication, et la reponse qui revient (N7 temps 2, metier du 2026-10-07).
+     *
+     * <p><b>Un seul type pour les deux sens.</b> La demande part vers l'avocat, la reponse revient
+     * vers la direction : c'est le meme fil, et le texte de l'alerte dit lequel. Deux types
+     * auraient double la grille de notification pour une distinction que le destinataire fait deja
+     * de lui-meme - il sait s'il a ecrit ou s'il attend.
+     *
+     * <p>Toute valeur ajoutee ici exige une migration de {@code chk_alerte_type} - voir V46.
+     */
+    DEMANDE_EXPLICATION
 }

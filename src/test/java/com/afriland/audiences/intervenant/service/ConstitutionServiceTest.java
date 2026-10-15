@@ -28,6 +28,7 @@ import com.afriland.audiences.referentiel.repository.AvocatRepository;
 import com.afriland.audiences.referentiel.repository.IntervenantRepository;
 import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
 import com.afriland.audiences.referentiel.service.CompteAvocatService;
+import com.afriland.audiences.referentiel.service.SignatureService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.PageRequest;
@@ -42,8 +43,10 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.mockito.ArgumentCaptor;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -59,6 +62,7 @@ class ConstitutionServiceTest {
     @Mock private HistoriqueActionService historiqueActionService;
     @Mock private AlerteService alerteService;
     @Mock private LettreConstitutionService lettreConstitutionService;
+    @Mock private SignatureService signatureService;
     @Mock private LettreConstitutionRepository lettreConstitutionRepository;
     @Mock private MinioStorageService minioStorageService;
     @Mock private DocumentRepository documentRepository;
@@ -72,7 +76,9 @@ class ConstitutionServiceTest {
             demande.getMotifRejet(), demande.getLettreDocument() != null ? demande.getLettreDocument().getId() : null,
             demande.getDateDemande(), demande.getDateDecision(),
             demande.getDossier() != null ? demande.getDossier().getReference() : null,
-            demande.getPrestataire() != null ? demande.getPrestataire().getNom() : null, null, null, null);
+            demande.getPrestataire() != null ? demande.getPrestataire().getNom() : null, null, null, null,
+            // Le mappeur ne connaît pas la session : le service pose le droit d'écrire après lui.
+            false);
 
     private ConstitutionService service;
     private Dossier dossier;
@@ -86,7 +92,7 @@ class ConstitutionServiceTest {
     void setUp() {
         service = new ConstitutionService(demandeConstitutionRepository, dossierRepository, intervenantRepository,
                 utilisateurRepository, currentUserService, historiqueActionService, alerteService,
-                lettreConstitutionService, lettreConstitutionRepository, minioStorageService,
+                lettreConstitutionService, signatureService, lettreConstitutionRepository, minioStorageService,
                 documentRepository, mapper,
                 new CompteAvocatService(avocatRepository, utilisateurRepository), notificationPrestataireService);
 
@@ -151,7 +157,7 @@ class ConstitutionServiceTest {
         assertThat(result.statut()).isEqualTo(StatutConstitution.REJETEE);
         assertThat(result.motifRejet()).isEqualTo("Pas de besoin identifié");
         verify(alerteService).declencher(eq(TypeAlerte.CONSTITUTION_A_SIGNER), eq(1L), eq(juriste), any());
-        verify(lettreConstitutionService, never()).generer(any(LettreConstitution.class));
+        verify(lettreConstitutionService, never()).generer(any(LettreConstitution.class), any(), any());
     }
 
     @Test
@@ -175,7 +181,8 @@ class ConstitutionServiceTest {
         when(lettreConstitutionService.brouillonPour(any(), eq(null)))
                 .thenReturn(LettreConstitution.builder().suffixeNumero("First Bank/DAJR").build());
         when(lettreConstitutionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(lettreConstitutionService.generer(any(LettreConstitution.class))).thenReturn(new byte[]{1, 2, 3});
+        when(lettreConstitutionService.generer(any(LettreConstitution.class), any(), any()))
+                .thenReturn(new byte[]{1, 2, 3});
         when(minioStorageService.deposer(eq(1L), any(), eq("application/pdf"), any())).thenReturn("dossiers/1/lettre.pdf");
         when(documentRepository.save(any(Document.class))).thenAnswer(inv -> {
             Document d = inv.getArgument(0);
@@ -190,6 +197,89 @@ class ConstitutionServiceTest {
         assertThat(result.statut()).isEqualTo(StatutConstitution.VALIDEE);
         assertThat(result.lettreDocumentId()).isEqualTo(200L);
         verify(alerteService).declencher(eq(TypeAlerte.CONSTITUTION_A_SIGNER), eq(1L), eq(utilisateurAvocat), any());
+    }
+
+    /**
+     * La lettre porte <b>deux</b> signatures, et chacune vient du compte de son titulaire (métier,
+     * 2026-10-07).
+     *
+     * <p>Jamais du champ « signataire », qui est du texte libre : apposer une image sur la foi d'un
+     * texte libre permettrait de signer au nom d'autrui.
+     */
+    @Test
+    void valider_apposeLesSignaturesDuRedacteurEtDuValideur() {
+        Avocat avocat = Avocat.builder().id(5L).nom("Me Fotso").build();
+        DemandeConstitution demande = DemandeConstitution.builder().id(100L).dossier(dossier).prestataire(avocat)
+                .statut(StatutConstitution.EN_ATTENTE).demandeur(juriste).motif("Besoin local").build();
+        LettreConstitution lettre = LettreConstitution.builder()
+                .suffixeNumero("First Bank/DAJR").demande(demande).redigePar(juriste).build();
+        preparerSignature(demande, lettre);
+        when(signatureService.pour(10L)).thenReturn(Optional.of(
+                new SignatureService.SignatureDeposee(new byte[]{9}, "image/png", null)));
+        when(signatureService.pour(30L)).thenReturn(Optional.of(
+                new SignatureService.SignatureDeposee(new byte[]{8}, "image/png", null)));
+
+        service.valider(100L, new ValiderConstitutionRequest(StatutConstitution.VALIDEE, null));
+
+        ArgumentCaptor<LettreConstitutionService.Signataire> gauche =
+                ArgumentCaptor.forClass(LettreConstitutionService.Signataire.class);
+        ArgumentCaptor<LettreConstitutionService.Signataire> droite =
+                ArgumentCaptor.forClass(LettreConstitutionService.Signataire.class);
+        verify(lettreConstitutionService).generer(any(LettreConstitution.class), gauche.capture(), droite.capture());
+
+        assertThat(gauche.getValue().nom()).isEqualTo("Test Juriste");
+        assertThat(gauche.getValue().image()).containsExactly(9);
+        assertThat(droite.getValue().nom()).isEqualTo("Hierarchique Sup");
+        assertThat(droite.getValue().image()).containsExactly(8);
+    }
+
+    /**
+     * Le SH qui a corrigé la lettre ne signe pas <b>deux fois</b>.
+     *
+     * <p>Depuis Q-124 il peut récrire avant de signer, et devient alors le dernier rédacteur. Le
+     * prendre tel quel le mettrait des deux côtés de la lettre, ce qui ne dit plus rien : on reprend
+     * le juriste qui a sollicité la constitution. Sa correction reste tracée ailleurs - à l'écran,
+     * et dans l'historique.
+     */
+    @Test
+    void valider_quandLeShACorrigeLaLettre_laGaucheRevientAuJuristeQuiASollicite() {
+        Avocat avocat = Avocat.builder().id(5L).nom("Me Fotso").build();
+        DemandeConstitution demande = DemandeConstitution.builder().id(100L).dossier(dossier).prestataire(avocat)
+                .statut(StatutConstitution.EN_ATTENTE).demandeur(juriste).motif("Besoin local").build();
+        LettreConstitution lettre = LettreConstitution.builder()
+                .suffixeNumero("First Bank/DAJR").demande(demande).redigePar(sh).build();
+        preparerSignature(demande, lettre);
+
+        service.valider(100L, new ValiderConstitutionRequest(StatutConstitution.VALIDEE, null));
+
+        ArgumentCaptor<LettreConstitutionService.Signataire> gauche =
+                ArgumentCaptor.forClass(LettreConstitutionService.Signataire.class);
+        ArgumentCaptor<LettreConstitutionService.Signataire> droite =
+                ArgumentCaptor.forClass(LettreConstitutionService.Signataire.class);
+        verify(lettreConstitutionService).generer(any(LettreConstitution.class), gauche.capture(), droite.capture());
+
+        assertThat(gauche.getValue().nom()).isEqualTo("Test Juriste");
+        assertThat(droite.getValue().nom()).isEqualTo("Hierarchique Sup");
+    }
+
+    /** Le décor commun aux deux parcours de signature : la demande, la lettre, la GED. */
+    private void preparerSignature(DemandeConstitution demande, LettreConstitution lettre) {
+        when(demandeConstitutionRepository.findById(100L)).thenReturn(Optional.of(demande));
+        when(currentUserService.getCurrentUser()).thenReturn(sh);
+        when(lettreConstitutionRepository.findByDemandeId(any())).thenReturn(Optional.of(lettre));
+        when(lettreConstitutionRepository.prochainNumero()).thenReturn(4L);
+        when(lettreConstitutionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(lettreConstitutionService.generer(any(LettreConstitution.class), any(), any()))
+                .thenReturn(new byte[]{1, 2, 3});
+        when(minioStorageService.deposer(eq(1L), any(), eq("application/pdf"), any()))
+                .thenReturn("dossiers/1/lettre.pdf");
+        when(documentRepository.save(any(Document.class))).thenAnswer(inv -> {
+            Document d = inv.getArgument(0);
+            d.setId(200L);
+            return d;
+        });
+        when(demandeConstitutionRepository.save(any(DemandeConstitution.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
     }
 
     @Test
@@ -212,7 +302,8 @@ class ConstitutionServiceTest {
         when(lettreConstitutionService.brouillonPour(any(), eq(null)))
                 .thenReturn(LettreConstitution.builder().suffixeNumero("First Bank/DAJR").build());
         when(lettreConstitutionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(lettreConstitutionService.generer(any(LettreConstitution.class))).thenReturn(new byte[]{1, 2, 3});
+        when(lettreConstitutionService.generer(any(LettreConstitution.class), any(), any()))
+                .thenReturn(new byte[]{1, 2, 3});
         when(minioStorageService.deposer(eq(1L), any(), eq("application/pdf"), any())).thenReturn("dossiers/1/lettre.pdf");
         when(documentRepository.save(any(Document.class))).thenAnswer(inv -> {
             Document d = inv.getArgument(0);
@@ -269,7 +360,10 @@ class ConstitutionServiceTest {
         LettreConstitution lettre = LettreConstitution.builder().id(9L).numero(4).demande(demande).build();
         when(demandeConstitutionRepository.findByLettreDocumentId(77L)).thenReturn(Optional.of(demande));
         when(lettreConstitutionRepository.findByDemandeId(100L)).thenReturn(Optional.of(lettre));
-        when(lettreConstitutionService.generer(lettre, true)).thenReturn("%PDF-preimprime".getBytes(StandardCharsets.UTF_8));
+        // Le tirage préimprimé porte les mêmes signatures que l'exemplaire archivé (N8) : ici la
+        // demande n'a ni rédacteur ni validateur, et la lettre part avec les noms seuls.
+        when(lettreConstitutionService.generer(eq(lettre), eq(true), isNull(), isNull()))
+                .thenReturn("%PDF-preimprime".getBytes(StandardCharsets.UTF_8));
 
         byte[] pdf = service.lettrePourPapierPreimprime(77L);
 

@@ -62,6 +62,7 @@ public enum RegleConfiguration {
     SEUIL_MONTANT_DEFAUT(entier(1L, 999_999_999_999L)),
     SEUIL_PROROGATIONS(entier(1L, Integer.MAX_VALUE)),
     DELAI_VALIDATION_CONJOINTE(entier(1L, Integer.MAX_VALUE)),
+    DELAI_RAPPEL_CR_AVOCAT(entier(1L, Integer.MAX_VALUE)),
     CHARGE_MAX_AVOCAT(entier(1L, Integer.MAX_VALUE)),
     TAILLE_MAX_GED(entier(1L, 10_485_760L)),
     FORMATS_GED(liste(noms(FormatDocument.values()), null)),
