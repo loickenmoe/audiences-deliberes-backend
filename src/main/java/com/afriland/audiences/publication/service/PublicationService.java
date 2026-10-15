@@ -97,6 +97,18 @@ public class PublicationService {
         Avocat avocat = getAvocatCourantOrThrow();
 
         /*
+         * RG-INT-06 amendée (métier du 2026-10-05) : une réserve ne s'applique plus à un compte
+         * rendu, que tous les habilités lisent dès son dépôt. On la refuse plutôt que de l'ignorer :
+         * un avocat qui la poserait croirait avoir restreint sa lecture, et ne saurait jamais que
+         * non. Elle reste disponible sur les autres publications.
+         */
+        if (request.restrictionAcces() != null) {
+            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
+                    "Un compte rendu d'audience ne se réserve pas à un destinataire : il est "
+                            + "consultable par toute la Direction Juridique dès son dépôt.");
+        }
+
+        /*
          * Pièce jointe **facultative** (Q-98) : le récit reste obligatoire, le document l'étaye. Les
          * contrôles de format et de poids sont ceux de la GED — le fichier atterrit dans le même
          * stockage, et le DJ pilote les deux par `FORMATS_GED` et `TAILLE_MAX_GED`.
@@ -114,7 +126,6 @@ public class PublicationService {
                 .contenu(request.contenu())
                 .cheminStockage(cle)
                 .statutValidation(StatutPublication.DEPOSE)
-                .restrictionAcces(resoudreRestrictionAcces(request.restrictionAcces()))
                 .build();
         publication = publicationRepository.save(publication);
 
@@ -123,6 +134,14 @@ public class PublicationService {
                         "pieceJointe", cle != null));
         notifierProfil("ASSISTANTE", dossier.getId(), "Nouveau compte rendu d'audience déposé sur le dossier "
                 + dossier.getReference() + " (RG-INT-09), en attente de validation.");
+
+        // RG-INT-06 amendée (2026-10-05) : les juristes du dossier sont prévenus en même temps que
+        // l'Assistante, et peuvent lire le compte rendu sans attendre la validation. « Arriver
+        // simultanément » n'a de sens que s'ils l'apprennent : la visibilité sans l'alerte les
+        // laisserait découvrir la pièce par hasard.
+        notifierLecteurs(publication, "Nouveau compte rendu d'audience de l'avocat sur le dossier "
+                + dossier.getReference() + ", consultable dès maintenant ; il reste en attente de "
+                + "validation par l'Assistante (RG-INT-06).");
 
         return publicationMapper.toResponse(publication);
     }
@@ -171,8 +190,30 @@ public class PublicationService {
 
         if (request.statut() == StatutPublication.VALIDE) {
             publication.setStatutValidation(StatutPublication.VALIDE);
-            notifierLecteurs(publication);
+            // Un compte rendu a déjà été signalé aux juristes du dossier à son dépôt (RG-INT-06
+            // amendée) : les rappeler sur la même pièce ne leur apprendrait rien et dévaluerait
+            // l'alerte. La validation l'ouvre aux AUTRES habilités, qui n'étaient pas davantage
+            // prévenus auparavant — ce point reste inchangé.
+            if (!(publication instanceof CompteRenduAudience)) {
+                notifierLecteurs(publication, "Nouvelle publication de l'avocat consultable sur le dossier "
+                        + publication.getDossier().getReference() + " (RG-INT-06).");
+            }
         } else if (request.statut() == StatutPublication.REJETE) {
+            /*
+             * RG-INT-06 amendée (métier du 2026-10-05) : un compte rendu ne se rejette pas.
+             *
+             * Il est le récit d'un avocat sur ce qui s'est dit à l'audience, et il est lu de tous
+             * dès son dépôt. L'écarter n'effacerait rien et laisserait croire que l'audience n'a
+             * pas été relatée. Un désaccord sur son contenu se dit par une correspondance
+             * (RG-INT-07), seule voie officielle vers l'avocat.
+             *
+             * Le rejet demeure pour les autres publications, dont la conformité se contrôle.
+             */
+            if (publication instanceof CompteRenduAudience) {
+                throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
+                        "Un compte rendu d'audience ne se rejette pas : l'Assistante en accuse "
+                                + "réception. Un désaccord se transmet par une correspondance.");
+            }
             if (!StringUtils.hasText(request.motifRejet())) {
                 throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE, "Le motif de rejet est obligatoire");
             }
@@ -187,10 +228,20 @@ public class PublicationService {
         }
         publicationRepository.save(publication);
 
-        // Canaux externes (Q-118) : l'avocat est prévenu de l'arbitrage, validation comme rejet ; le
-        // motif d'un rejet, lui, reste dans l'application (D18).
-        notificationPrestataireService.notifier(EvenementPrestataire.PUBLICATION_ARBITREE, publication.getAvocat(),
-                publication.getDossier().getId(), "publication-" + id + "-arbitrage");
+        /*
+         * Canaux externes (Q-118) : l'avocat est prévenu, et le motif d'un rejet reste dans
+         * l'application (D18).
+         *
+         * Deux événements, parce que deux choses différentes se sont produites. Sur un compte
+         * rendu, l'Assistante n'a rien arbitré : elle a accusé réception (RG-INT-06 amendée).
+         * Lui annoncer une publication « examinée » le ferait attendre un verdict.
+         */
+        boolean compteRendu = publication instanceof CompteRenduAudience;
+        notificationPrestataireService.notifier(
+                compteRendu ? EvenementPrestataire.COMPTE_RENDU_RECU
+                            : EvenementPrestataire.PUBLICATION_ARBITREE,
+                publication.getAvocat(), publication.getDossier().getId(),
+                "publication-" + id + (compteRendu ? "-reception" : "-arbitrage"));
 
         historiqueActionService.enregistrer(publication.getDossier().getId(), TypeActionHistorique.PUBLICATION_ARBITREE,
                 Map.of("publicationId", id, "statut", request.statut().name()));
@@ -211,6 +262,21 @@ public class PublicationService {
         Publication publication = getPublicationOrThrow(id);
         boolean valide = publication.getStatutValidation() == StatutPublication.VALIDE;
         Utilisateur restriction = publication.getRestrictionAcces();
+        /*
+         * RG-INT-06 amendée (métier du 2026-10-05) : un COMPTE RENDU est ouvert à tous les
+         * habilités dès son dépôt. Ni son statut, ni une réserve ne le referment — la seule
+         * barrière qui subsiste est le rôle de consultation, posé par le contrôleur.
+         *
+         * Ce que l'Assistante fait ensuite n'est plus une autorisation mais un accusé de
+         * réception : le métier a tranché que le récit d'un avocat sur ce qui s'est dit à
+         * l'audience n'a pas à attendre un contrôle pour être lu.
+         *
+         * Les « autres publications » gardent l'ancien régime, intact ci-dessous.
+         */
+        if (publication instanceof CompteRenduAudience) {
+            valide = true;
+            restriction = null;
+        }
         if (!valide || restriction != null) {
             Utilisateur utilisateur = currentUserService.getCurrentUser();
             String profil = utilisateur != null && utilisateur.getProfil() != null ? utilisateur.getProfil().getCode() : null;
@@ -239,7 +305,7 @@ public class PublicationService {
                 .map(commentaire -> versReponse(id, commentaire))
                 .toList();
         CorrespondanceResponse correspondance = correspondanceAvocatRepository.findByPublicationId(id)
-                .map(c -> versReponse(id, c))
+                .map(c -> PublicationMapper.versReponse(id, c))
                 .orElse(null);
         return publicationMapper.toResponse(publication, url, commentaires, correspondance);
     }
@@ -289,7 +355,7 @@ public class PublicationService {
         notificationPrestataireService.notifier(EvenementPrestataire.CORRESPONDANCE_TRANSMISE, publication.getAvocat(),
                 publication.getDossier().getId(), "correspondance-" + correspondance.getId());
 
-        return versReponse(id, correspondance);
+        return PublicationMapper.versReponse(id, correspondance);
     }
 
     /**
@@ -302,32 +368,54 @@ public class PublicationService {
      */
     @Transactional(readOnly = true)
     public PageResponse<PublicationResponse> lister(Long dossierId, StatutPublication statut, Pageable pageable) {
-        Page<Publication> page;
-        if (dossierId != null && statut != null) {
-            page = publicationRepository.findByDossierIdAndStatutValidation(dossierId, statut, pageable);
-        } else if (dossierId != null) {
-            page = publicationRepository.findByDossierId(dossierId, pageable);
-        } else if (statut != null) {
-            page = publicationRepository.findByStatutValidation(statut, pageable);
-        } else {
-            page = publicationRepository.findAll(pageable);
+        Utilisateur utilisateur = currentUserService.getCurrentUser();
+        String profil = utilisateur != null && utilisateur.getProfil() != null
+                ? utilisateur.getProfil().getCode() : null;
+
+        /*
+         * RG-INT-06 amendée (2026-10-05) : la liste décide elle-même de ce qu'elle montre.
+         *
+         * Jusqu'ici elle rendait tout, et c'est l'écran qui demandait `statut=VALIDE` pour un
+         * juriste. Une restriction tenue par l'appelant n'en est pas une : il suffisait d'appeler
+         * l'API sans ce filtre. Maintenant que les deux natures de dépôt ne suivent plus le même
+         * sort — le compte rendu ouvert dès le dépôt, l'autre publication fermée jusqu'à sa
+         * validation — la distinction est une règle métier, et elle descend ici.
+         */
+        if (profil != null && PROFILS_INSTRUCTEURS.contains(profil)) {
+            return PageResponse.of(listerSansRestriction(dossierId, statut, pageable),
+                    publicationMapper::toResponse);
         }
-        return PageResponse.of(page, publicationMapper::toResponse);
+        return PageResponse.of(
+                publicationRepository.findVisiblesParLesHabilites(dossierId, statut, pageable),
+                publicationMapper::toResponse);
     }
+
+    /** La file de l'Assistante et le regard du DJ/DJA : aucun filtre de visibilité. */
+    private Page<Publication> listerSansRestriction(Long dossierId, StatutPublication statut, Pageable pageable) {
+        if (dossierId != null && statut != null) {
+            return publicationRepository.findByDossierIdAndStatutValidation(dossierId, statut, pageable);
+        }
+        if (dossierId != null) {
+            return publicationRepository.findByDossierId(dossierId, pageable);
+        }
+        if (statut != null) {
+            return publicationRepository.findByStatutValidation(statut, pageable);
+        }
+        return publicationRepository.findAll(pageable);
+    }
+
 
     /**
      * Q-86 (UC-INT-08 étape 1, alt. 3-a) : une publication validée est signalée aux juristes du
      * dossier — au seul destinataire désigné si l'avocat en a restreint l'accès.
      */
-    private void notifierLecteurs(Publication publication) {
+    private void notifierLecteurs(Publication publication, String declencheur) {
         Dossier dossier = publication.getDossier();
         List<Utilisateur> lecteurs = publication.getRestrictionAcces() != null
                 ? List.of(publication.getRestrictionAcces())
                 : dossierJuristeRepository.findByDossierId(dossier.getId()).stream()
                         .map(DossierJuriste::getUtilisateur)
                         .toList();
-        String declencheur = "Nouvelle publication de l'avocat consultable sur le dossier "
-                + dossier.getReference() + " (RG-INT-06).";
         lecteurs.forEach(lecteur -> alerteService.declencher(TypeAlerte.NOUVELLE_PUBLICATION, dossier.getId(), lecteur, declencheur));
     }
 
@@ -335,12 +423,6 @@ public class PublicationService {
         Utilisateur auteur = commentaire.getAuteur();
         return new CommentaireResponse(commentaire.getId(), publicationId, auteur != null ? auteur.getId() : null,
                 PublicationMapper.nomComplet(auteur), commentaire.getContenu(), commentaire.getCreatedAt());
-    }
-
-    private static CorrespondanceResponse versReponse(Long publicationId, CorrespondanceAvocat correspondance) {
-        Utilisateur auteur = correspondance.getAuteur();
-        return new CorrespondanceResponse(correspondance.getId(), publicationId, auteur != null ? auteur.getId() : null,
-                PublicationMapper.nomComplet(auteur), correspondance.getContenu(), correspondance.getCreatedAt());
     }
 
     private Utilisateur resoudreRestrictionAcces(Long utilisateurId) {

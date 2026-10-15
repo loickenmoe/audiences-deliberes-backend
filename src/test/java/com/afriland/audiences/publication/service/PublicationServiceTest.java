@@ -24,6 +24,7 @@ import com.afriland.audiences.publication.mapper.PublicationMapper;
 import com.afriland.audiences.publication.repository.CommentairePublicationRepository;
 import com.afriland.audiences.publication.repository.CorrespondanceAvocatRepository;
 import com.afriland.audiences.publication.repository.PublicationRepository;
+import com.afriland.audiences.notification.domain.EvenementPrestataire;
 import com.afriland.audiences.notification.service.NotificationPrestataireService;
 import com.afriland.audiences.publication.web.dto.CommentaireRequest;
 import com.afriland.audiences.publication.web.dto.CommentaireResponse;
@@ -42,6 +43,7 @@ import com.afriland.audiences.referentiel.service.ConfigurationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
@@ -52,6 +54,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -241,7 +245,10 @@ class PublicationServiceTest {
 
     @Test
     void valider_rejectionRequiresMotif() {
-        Publication publication = CompteRenduAudience.builder().id(100L).dossier(dossier).avocat(avocat)
+        // Le rejet n'existe plus pour un compte rendu : la règle du motif se vérifie là où le
+        // rejet demeure (RG-INT-06 amendée, 2026-10-05).
+        Publication publication = AutrePublication.builder().id(100L).dossier(dossier).avocat(avocat)
+                .typeDocument(TypeAutrePublication.PIECE)
                 .statutValidation(StatutPublication.DEPOSE).build();
         when(publicationRepository.findById(100L)).thenReturn(Optional.of(publication));
 
@@ -252,7 +259,9 @@ class PublicationServiceTest {
 
     @Test
     void valider_rejectionNotifiesAvocat() {
-        Publication publication = CompteRenduAudience.builder().id(100L).dossier(dossier).avocat(avocat)
+        // Le rejet ne vaut plus pour un compte rendu : la notification s'éprouve là où il demeure.
+        Publication publication = AutrePublication.builder().id(100L).dossier(dossier).avocat(avocat)
+                .typeDocument(TypeAutrePublication.PIECE)
                 .statutValidation(StatutPublication.DEPOSE).build();
         when(publicationRepository.findById(100L)).thenReturn(Optional.of(publication));
         when(publicationRepository.save(any(Publication.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -279,19 +288,27 @@ class PublicationServiceTest {
 
     // --- Consultation (US 5.4) ---
 
+    /**
+     * Une AUTRE publication déposée reste fermée : c'est elle, désormais, qui porte l'ancien
+     * régime. Le compte rendu, lui, s'ouvre à tous (voir plus bas).
+     */
     @Test
-    void obtenir_rejectsNonValideAsNotFound() {
-        Publication publication = CompteRenduAudience.builder().id(100L).dossier(dossier).avocat(avocat)
+    void obtenir_refuseUneAutrePublicationDeposee() {
+        Publication publication = AutrePublication.builder().id(100L).dossier(dossier).avocat(avocat)
+                .typeDocument(TypeAutrePublication.PIECE)
                 .statutValidation(StatutPublication.DEPOSE).build();
+        when(currentUserService.getCurrentUser()).thenReturn(juriste);
         when(publicationRepository.findById(100L)).thenReturn(Optional.of(publication));
 
         assertThatThrownBy(() -> service.obtenir(100L)).isInstanceOf(ApiException.class);
     }
 
     @Test
-    void obtenir_rejectsRejeteAsNotFound() {
-        Publication publication = CompteRenduAudience.builder().id(100L).dossier(dossier).avocat(avocat)
+    void obtenir_refuseUneAutrePublicationRejetee() {
+        Publication publication = AutrePublication.builder().id(100L).dossier(dossier).avocat(avocat)
+                .typeDocument(TypeAutrePublication.PIECE)
                 .statutValidation(StatutPublication.REJETE).build();
+        when(currentUserService.getCurrentUser()).thenReturn(juriste);
         when(publicationRepository.findById(100L)).thenReturn(Optional.of(publication));
 
         assertThatThrownBy(() -> service.obtenir(100L)).isInstanceOf(ApiException.class);
@@ -301,7 +318,9 @@ class PublicationServiceTest {
     void obtenir_rejectsRestrictedAccessForOtherUser() {
         Utilisateur destinataire = Utilisateur.builder().id(60L).build();
         Utilisateur autre = Utilisateur.builder().id(61L).build();
-        Publication publication = CompteRenduAudience.builder().id(100L).dossier(dossier).avocat(avocat)
+        // La réserve ne vaut plus sur un compte rendu : elle s'éprouve sur l'autre nature.
+        Publication publication = AutrePublication.builder().id(100L).dossier(dossier).avocat(avocat)
+                .typeDocument(TypeAutrePublication.PIECE)
                 .statutValidation(StatutPublication.VALIDE).restrictionAcces(destinataire).build();
         when(publicationRepository.findById(100L)).thenReturn(Optional.of(publication));
         when(currentUserService.getCurrentUser()).thenReturn(autre);
@@ -312,7 +331,8 @@ class PublicationServiceTest {
     @Test
     void obtenir_allowsRestrictedAccessForMatchingUser() {
         Utilisateur destinataire = Utilisateur.builder().id(60L).build();
-        Publication publication = CompteRenduAudience.builder().id(100L).dossier(dossier).avocat(avocat)
+        Publication publication = AutrePublication.builder().id(100L).dossier(dossier).avocat(avocat)
+                .typeDocument(TypeAutrePublication.PIECE)
                 .statutValidation(StatutPublication.VALIDE).restrictionAcces(destinataire).build();
         when(publicationRepository.findById(100L)).thenReturn(Optional.of(publication));
         when(currentUserService.getCurrentUser()).thenReturn(destinataire);
@@ -355,7 +375,8 @@ class PublicationServiceTest {
     @Test
     void obtenir_letsTheDjReadARestrictedPublication() {
         Utilisateur destinataire = Utilisateur.builder().id(60L).build();
-        Publication publication = CompteRenduAudience.builder().id(100L).dossier(dossier).avocat(avocat)
+        Publication publication = AutrePublication.builder().id(100L).dossier(dossier).avocat(avocat)
+                .typeDocument(TypeAutrePublication.PIECE)
                 .statutValidation(StatutPublication.VALIDE).restrictionAcces(destinataire).build();
         when(publicationRepository.findById(100L)).thenReturn(Optional.of(publication));
         when(currentUserService.getCurrentUser()).thenReturn(dj);
@@ -384,23 +405,18 @@ class PublicationServiceTest {
         assertThat(result.correspondance().auteurNom()).isEqualTo("Marie Directrice");
     }
 
+    /**
+     * Le destinataire désigné par l'avocat est seul prévenu, et l'affectation au dossier ne suffit
+     * pas à s'y substituer.
+     *
+     * <p>Cette règle vivait sur le compte rendu jusqu'au 2026-10-05 ; la réserve ne s'y applique
+     * plus. Elle s'éprouve donc sur l'autre nature de publication, où elle demeure entière.
+     */
     @Test
-    void valider_notifiesTheJuristesOfTheDossier() {
-        Publication publication = CompteRenduAudience.builder().id(100L).dossier(dossier).avocat(avocat)
-                .statutValidation(StatutPublication.DEPOSE).build();
-        when(publicationRepository.findById(100L)).thenReturn(Optional.of(publication));
-        when(publicationRepository.save(any(Publication.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(dossierJuristeRepository.findByDossierId(1L)).thenReturn(List.of(DossierJuriste.builder().utilisateur(juriste).build()));
-
-        service.valider(100L, new ValiderPublicationRequest(StatutPublication.VALIDE, null));
-
-        verify(alerteService).declencher(eq(TypeAlerte.NOUVELLE_PUBLICATION), eq(1L), eq(juriste), any());
-    }
-
-    @Test
-    void valider_notifiesOnlyTheDesignatedReaderOfARestrictedPublication() {
+    void valider_neProvientQueLeDestinataireDesigne() {
         Utilisateur destinataire = Utilisateur.builder().id(60L).build();
-        Publication publication = CompteRenduAudience.builder().id(100L).dossier(dossier).avocat(avocat)
+        Publication publication = AutrePublication.builder().id(100L).dossier(dossier).avocat(avocat)
+                .typeDocument(TypeAutrePublication.PIECE)
                 .statutValidation(StatutPublication.DEPOSE).restrictionAcces(destinataire).build();
         when(publicationRepository.findById(100L)).thenReturn(Optional.of(publication));
         when(publicationRepository.save(any(Publication.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -468,6 +484,8 @@ class PublicationServiceTest {
     /** Les quatre combinaisons de filtres aiguillent vers quatre requêtes distinctes. */
     @Test
     void lister_aiguilleSelonLesFiltres() {
+        // L'Assistante instruit : aucune restriction de visibilité ne s'applique à elle.
+        when(currentUserService.getCurrentUser()).thenReturn(assistante);
         var pageable = org.springframework.data.domain.PageRequest.of(0, 20);
         var page = new org.springframework.data.domain.PageImpl<Publication>(
                 List.of(CompteRenduAudience.builder().id(100L).dossier(dossier).avocat(avocat)
@@ -485,5 +503,219 @@ class PublicationServiceTest {
 
         when(publicationRepository.findAll(pageable)).thenReturn(page);
         assertThat(service.lister(null, null, pageable).content()).hasSize(1);
+    }
+
+    // --- RG-INT-06 amendée (métier du 2026-10-05) : le compte rendu ouvert à tous ---
+
+    /** Déposé, non encore reçu par l'Assistante : n'importe quel habilité le lit déjà. */
+    @Test
+    void obtenir_ouvreUnCompteRenduDeposeATousLesHabilites() {
+        Publication publication = CompteRenduAudience.builder().id(100L).dossier(dossier).avocat(avocat)
+                .statutValidation(StatutPublication.DEPOSE).build();
+        when(publicationRepository.findById(100L)).thenReturn(Optional.of(publication));
+
+        assertThat(service.obtenir(100L).statutValidation()).isEqualTo(StatutPublication.DEPOSE);
+        // Aucune identité n'est consultée : la règle ne dépend plus de qui regarde.
+        verify(dossierJuristeRepository, never()).existsByDossierIdAndUtilisateurId(anyLong(), anyLong());
+    }
+
+    /**
+     * Une réserve posée avant le 2026-10-05 ne referme plus un compte rendu.
+     *
+     * <p>Le dépôt la refuse désormais (voir {@code deposerCompteRendu_refuseUneReserve}), mais les
+     * comptes rendus déjà en base peuvent en porter une : elle ne doit plus écarter personne.
+     */
+    @Test
+    void obtenir_ignoreUneReserveAncienneSurUnCompteRendu() {
+        Utilisateur designe = Utilisateur.builder().id(11L)
+                .profil(Profil.builder().code("JURISTE").build()).build();
+        Publication publication = CompteRenduAudience.builder().id(100L).dossier(dossier).avocat(avocat)
+                .statutValidation(StatutPublication.DEPOSE).restrictionAcces(designe).build();
+        when(publicationRepository.findById(100L)).thenReturn(Optional.of(publication));
+
+        assertThat(service.obtenir(100L).id()).isEqualTo(100L);
+    }
+
+    /** La réserve, elle, continue d'écarter sur une autre publication. */
+    @Test
+    void obtenir_laReserveEcarteEncoreSurUneAutrePublication() {
+        Utilisateur designe = Utilisateur.builder().id(11L)
+                .profil(Profil.builder().code("JURISTE").build()).build();
+        Publication publication = AutrePublication.builder().id(100L).dossier(dossier).avocat(avocat)
+                .typeDocument(TypeAutrePublication.PIECE)
+                .statutValidation(StatutPublication.VALIDE).restrictionAcces(designe).build();
+        when(publicationRepository.findById(100L)).thenReturn(Optional.of(publication));
+        when(currentUserService.getCurrentUser()).thenReturn(juriste);
+
+        assertThatThrownBy(() -> service.obtenir(100L))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("restreinte");
+    }
+
+    /** Une réserve sur un compte rendu est refusée au dépôt, et non ignorée en silence. */
+    @Test
+    void deposerCompteRendu_refuseUneReserve() {
+        Audience audience = Audience.builder().id(7L).dossier(dossier).build();
+        when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
+        when(audienceRepository.findById(7L)).thenReturn(Optional.of(audience));
+        when(currentUserService.getCurrentUser()).thenReturn(utilisateurAvocat);
+        when(avocatRepository.findByCompteKeycloak("kc-avocat")).thenReturn(Optional.of(avocat));
+
+        assertThatThrownBy(() -> service.deposerCompteRendu(
+                new DeposerCompteRenduRequest(1L, 7L, "Contenu", 60L), null))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("ne se réserve pas");
+        verify(publicationRepository, never()).save(any(Publication.class));
+    }
+
+    /** Le dépôt prévient les juristes du dossier : l'accès est ouvert à tous, l'alerte reste ciblée. */
+    @Test
+    void deposerCompteRendu_alerteLesJuristesDuDossier() {
+        Audience audience = Audience.builder().id(7L).dossier(dossier).build();
+        when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
+        when(audienceRepository.findById(7L)).thenReturn(Optional.of(audience));
+        when(currentUserService.getCurrentUser()).thenReturn(utilisateurAvocat);
+        when(avocatRepository.findByCompteKeycloak("kc-avocat")).thenReturn(Optional.of(avocat));
+        when(publicationRepository.save(any(Publication.class))).thenAnswer(inv -> {
+            CompteRenduAudience p = inv.getArgument(0);
+            p.setId(100L);
+            return p;
+        });
+        when(dossierJuristeRepository.findByDossierId(1L)).thenReturn(
+                List.of(DossierJuriste.builder().dossier(dossier).utilisateur(juriste).build()));
+
+        service.deposerCompteRendu(new DeposerCompteRenduRequest(1L, 7L, "Contenu", null), null);
+
+        ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
+        verify(alerteService).declencher(eq(TypeAlerte.NOUVELLE_PUBLICATION), eq(1L), eq(juriste),
+                message.capture());
+        assertThat(message.getValue()).contains("consultable dès maintenant");
+    }
+
+    /** Un compte rendu ne se rejette pas : l'Assistante en accuse réception, ou rien. */
+    @Test
+    void valider_refuseLeRejetDUnCompteRendu() {
+        Publication publication = CompteRenduAudience.builder().id(100L).dossier(dossier).avocat(avocat)
+                .statutValidation(StatutPublication.DEPOSE).build();
+        when(publicationRepository.findById(100L)).thenReturn(Optional.of(publication));
+
+        assertThatThrownBy(() -> service.valider(100L,
+                new ValiderPublicationRequest(StatutPublication.REJETE, "Récit incomplet")))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("ne se rejette pas");
+        verify(publicationRepository, never()).save(any(Publication.class));
+    }
+
+    /**
+     * L'avocat est prévenu d'un accusé de réception, et par un événement qui le dit.
+     *
+     * <p>{@code PUBLICATION_ARBITREE} annonce une décision prise sur la pièce. Sur un compte rendu
+     * il n'y en a plus : l'envoyer ferait attendre à l'avocat un verdict qui ne viendra pas.
+     */
+    @Test
+    void valider_previentLAvocatDeLAccuseDeReceptionSurUnCompteRendu() {
+        Publication publication = CompteRenduAudience.builder().id(100L).dossier(dossier).avocat(avocat)
+                .statutValidation(StatutPublication.DEPOSE).build();
+        when(publicationRepository.findById(100L)).thenReturn(Optional.of(publication));
+        when(publicationRepository.save(any(Publication.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.valider(100L, new ValiderPublicationRequest(StatutPublication.VALIDE, null));
+
+        verify(notificationPrestataireService).notifier(
+                eq(EvenementPrestataire.COMPTE_RENDU_RECU), eq(avocat), eq(1L),
+                eq("publication-100-reception"));
+    }
+
+    /** Une autre publication, elle, est bien arbitrée : l'ancien événement demeure. */
+    @Test
+    void valider_previentLAvocatDUnArbitrageSurUneAutrePublication() {
+        Publication publication = AutrePublication.builder().id(100L).dossier(dossier).avocat(avocat)
+                .typeDocument(TypeAutrePublication.PIECE)
+                .statutValidation(StatutPublication.DEPOSE).build();
+        when(publicationRepository.findById(100L)).thenReturn(Optional.of(publication));
+        when(publicationRepository.save(any(Publication.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(dossierJuristeRepository.findByDossierId(1L)).thenReturn(List.of());
+
+        service.valider(100L, new ValiderPublicationRequest(StatutPublication.VALIDE, null));
+
+        verify(notificationPrestataireService).notifier(
+                eq(EvenementPrestataire.PUBLICATION_ARBITREE), eq(avocat), eq(1L),
+                eq("publication-100-arbitrage"));
+    }
+
+    /** Le rejet demeure sur une autre publication, dont la conformité se contrôle. */
+    @Test
+    void valider_accepteLeRejetDUneAutrePublication() {
+        Publication publication = AutrePublication.builder().id(100L).dossier(dossier).avocat(avocat)
+                .typeDocument(TypeAutrePublication.PIECE)
+                .statutValidation(StatutPublication.DEPOSE).build();
+        when(publicationRepository.findById(100L)).thenReturn(Optional.of(publication));
+        when(publicationRepository.save(any(Publication.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.valider(100L, new ValiderPublicationRequest(StatutPublication.REJETE, "Pièce illisible"));
+
+        assertThat(publication.getStatutValidation()).isEqualTo(StatutPublication.REJETE);
+        assertThat(publication.getMotifRejet()).isEqualTo("Pièce illisible");
+    }
+
+    /**
+     * L'accusé de réception ne réalerte pas : les juristes du dossier ont été prévenus au dépôt, et
+     * tous les autres pouvaient lire depuis ce moment-là.
+     */
+    @Test
+    void valider_neRealertePasSurUnCompteRendu() {
+        Publication publication = CompteRenduAudience.builder().id(100L).dossier(dossier).avocat(avocat)
+                .statutValidation(StatutPublication.DEPOSE).build();
+        when(publicationRepository.findById(100L)).thenReturn(Optional.of(publication));
+        when(publicationRepository.save(any(Publication.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.valider(100L, new ValiderPublicationRequest(StatutPublication.VALIDE, null));
+
+        verify(alerteService, never()).declencher(any(), anyLong(), any(), anyString());
+        verify(dossierJuristeRepository, never()).findByDossierId(anyLong());
+    }
+
+    /** Une autre publication, elle, continue d'être signalée à sa validation. */
+    @Test
+    void valider_alerteEncoreLesJuristesSurUneAutrePublication() {
+        Publication publication = AutrePublication.builder().id(100L).dossier(dossier).avocat(avocat)
+                .typeDocument(TypeAutrePublication.PIECE)
+                .statutValidation(StatutPublication.DEPOSE).build();
+        when(publicationRepository.findById(100L)).thenReturn(Optional.of(publication));
+        when(publicationRepository.save(any(Publication.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(dossierJuristeRepository.findByDossierId(1L)).thenReturn(
+                List.of(DossierJuriste.builder().dossier(dossier).utilisateur(juriste).build()));
+
+        service.valider(100L, new ValiderPublicationRequest(StatutPublication.VALIDE, null));
+
+        verify(alerteService).declencher(eq(TypeAlerte.NOUVELLE_PUBLICATION), eq(1L), eq(juriste), anyString());
+    }
+
+    /** Pour un non-instructeur, la liste passe par la requête de visibilité. */
+    @Test
+    void lister_appliqueLaVisibiliteAuxHabilites() {
+        var pageable = org.springframework.data.domain.PageRequest.of(0, 20);
+        var page = new org.springframework.data.domain.PageImpl<Publication>(List.of(), pageable, 0);
+        when(currentUserService.getCurrentUser()).thenReturn(juriste);
+        when(publicationRepository.findVisiblesParLesHabilites(1L, null, pageable)).thenReturn(page);
+
+        service.lister(1L, null, pageable);
+
+        verify(publicationRepository).findVisiblesParLesHabilites(1L, null, pageable);
+        verify(publicationRepository, never()).findByDossierId(anyLong(), any());
+    }
+
+    /** Le DJ instruit : il voit la file comme l'Assistante. */
+    @Test
+    void lister_neRestreintPasLeDj() {
+        var pageable = org.springframework.data.domain.PageRequest.of(0, 20);
+        var page = new org.springframework.data.domain.PageImpl<Publication>(List.of(), pageable, 0);
+        when(currentUserService.getCurrentUser()).thenReturn(dj);
+        when(publicationRepository.findByDossierId(1L, pageable)).thenReturn(page);
+
+        service.lister(1L, null, pageable);
+
+        verify(publicationRepository).findByDossierId(1L, pageable);
+        verify(publicationRepository, never()).findVisiblesParLesHabilites(any(), any(), any());
     }
 }

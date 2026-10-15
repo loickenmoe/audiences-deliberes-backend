@@ -86,4 +86,31 @@ public class Document {
     @NotBlank
     @Column(name = "chemin_stockage", nullable = false)
     private String cheminStockage;
+
+    /**
+     * Le partage avec l'avocat du dossier (QF-64). {@code NON} par défaut : la GED contient le
+     * dossier crédit d'origine, le PV de transfert et des pièces financières du client - du secret
+     * bancaire. Une pièce ne part chez l'avocat que si quelqu'un l'a décidé.
+     */
+    @NotNull
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "partage_avocat", length = 20, nullable = false)
+    private StatutPartageAvocat partageAvocat = StatutPartageAvocat.NON;
+
+    /** Qui a partagé la pièce, ou proposé de la partager sur un dossier sensible. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "partage_par")
+    private Utilisateur partagePar;
+
+    @Column(name = "partage_le")
+    private LocalDateTime partageLe;
+
+    /** Le DJ ou la DJA qui a rendu la pièce visible sur un dossier sensible. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "partage_valide_par")
+    private Utilisateur partageValidePar;
+
+    @Column(name = "partage_valide_le")
+    private LocalDateTime partageValideLe;
 }

@@ -18,10 +18,12 @@ import com.afriland.audiences.notification.service.NotificationPrestataireServic
 import com.afriland.audiences.intervenant.repository.LettreConstitutionRepository;
 import com.afriland.audiences.intervenant.web.dto.RedigerLettreRequest;
 import com.afriland.audiences.referentiel.domain.Avocat;
+import com.afriland.audiences.referentiel.domain.Profil;
 import com.afriland.audiences.referentiel.domain.Utilisateur;
 import com.afriland.audiences.referentiel.repository.IntervenantRepository;
 import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
 import com.afriland.audiences.referentiel.service.CompteAvocatService;
+import com.afriland.audiences.referentiel.service.SignatureService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -77,23 +79,36 @@ class RedactionLettreTest {
     @Mock
     private NotificationPrestataireService notificationPrestataireService;
 
+    /** Celui qui a sollicité la constitution : la lettre est la sienne (Q-126). */
+    private Utilisateur auteur;
+
     @BeforeEach
     void setUp() {
         service = new ConstitutionService(demandeConstitutionRepository, dossierRepository, intervenantRepository,
                 utilisateurRepository, currentUserService, historiqueActionService, alerteService,
-                new LettreConstitutionService(), lettreConstitutionRepository, minioStorageService,
+                new LettreConstitutionService(),
+                // Aucune signature déposée dans ce parcours : la lettre part avec le nom seul, comme
+                // avant N8. C'est le cas de tous ceux qui n'ont rien déposé.
+                new SignatureService(utilisateurRepository, currentUserService),
+                lettreConstitutionRepository, minioStorageService,
                 documentRepository, mapper,
                 new CompteAvocatService(avocatRepository, utilisateurRepository), notificationPrestataireService);
 
+        /*
+         * La demande porte son demandeur, comme en base : la colonne est `nullable = false`, et une
+         * demande sans demandeur n'existe pas. Depuis Q-126 elle lui appartient, et c'est lui qui
+         * écrit la lettre - le décor doit donc le nommer.
+         */
+        auteur = Utilisateur.builder().id(10L).nom("Juriste").prenom("Jean").build();
         demande = DemandeConstitution.builder()
                 .id(100L)
                 .dossier(Dossier.builder().id(1L).reference("DOS-2026-001").build())
                 .prestataire(Avocat.builder().id(5L).nom("Me Fotso").build())
+                .demandeur(auteur)
                 .statut(StatutConstitution.EN_ATTENTE)
                 .build();
 
-        when(currentUserService.getCurrentUser())
-                .thenReturn(Utilisateur.builder().id(10L).nom("Juriste").prenom("Jean").build());
+        when(currentUserService.getCurrentUser()).thenReturn(auteur);
         when(lettreConstitutionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
     }
 
@@ -120,6 +135,50 @@ class RedactionLettreTest {
         // La lettre engage la banque : savoir qui l'a rédigée fait partie de la pièce.
         verify(historiqueActionService).enregistrerPour(any(), eq(1L),
                 eq(TypeActionHistorique.LETTRE_CONSTITUTION_REDIGEE), any());
+    }
+
+    /**
+     * Un autre juriste ne récrit pas la lettre de celui-ci (métier, 2026-10-07).
+     *
+     * <p>C'était possible jusqu'au 2026-10-07 : le droit tenait au rôle, et {@code ROLE_JURISTE}
+     * étant composite (Q-81), tout juriste, le DJ et la DJA passaient. Une lettre engage la banque
+     * sous le nom de celui qui l'a écrite - nul ne doit pouvoir écrire sous le nom d'un autre.
+     */
+    @Test
+    @DisplayName("un autre juriste ne récrit pas la lettre d'un collègue")
+    void unAutreJuristeEstRefuse() {
+        when(lettreConstitutionRepository.findByDemandeId(100L)).thenReturn(Optional.of(brouillon()));
+        when(currentUserService.getCurrentUser())
+                .thenReturn(Utilisateur.builder().id(77L).nom("Autre").prenom("Juriste")
+                        .profil(Profil.builder().code("JURISTE").build()).build());
+
+        assertThatThrownBy(() -> service.redigerLettre(100L, requete(null)))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("appartient au demandeur");
+        // Le refus est total : rien n'est enregistré, rien n'est historisé.
+        verify(lettreConstitutionRepository, never()).save(any());
+        verify(historiqueActionService, never()).enregistrerPour(any(), any(), any(), any());
+    }
+
+    /**
+     * Le supérieur hiérarchique, lui, passe (Q-124).
+     *
+     * <p>Il corrige au lieu de renvoyer la lettre : c'est la contrepartie de la plume retirée aux
+     * autres. Le droit se lit sur son <b>profil</b>, non sur un rôle - un rôle composite rouvrirait
+     * la porte au DJ et à la DJA.
+     */
+    @Test
+    @DisplayName("le supérieur hiérarchique corrige la lettre d'un autre")
+    void leShPasse() {
+        when(lettreConstitutionRepository.findByDemandeId(100L)).thenReturn(Optional.of(brouillon()));
+        when(currentUserService.getCurrentUser())
+                .thenReturn(Utilisateur.builder().id(30L).nom("Sup").prenom("Hierarchique")
+                        .profil(Profil.builder().code("SH").build()).build());
+
+        var reponse = service.redigerLettre(100L, requete(null));
+
+        assertThat(reponse.objet()).isEqualTo("Saisie-attribution");
+        verify(lettreConstitutionRepository).save(any());
     }
 
     @Test

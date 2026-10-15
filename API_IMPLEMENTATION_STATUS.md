@@ -67,7 +67,7 @@ qu'après une décision d'ajout — traité comme tel dès M4.
   `PUT /deliberes/{id}/resultat` et `GET /deliberes/{id}/prorogations` (Q-78),
   `GET /frais/demandes/{id}` (Q-82), `GET /dossiers/{id}/decisions` (Q-88).
 
-Soit **74 endpoints HTTP exposés au total** : les 66 numérotés, `POST /dossiers/{id}/etapes` et les
+Soit **85 endpoints HTTP exposés au total** : les 77 numérotés, `POST /dossiers/{id}/etapes` et les
 sept ajouts de M16 — décompte des annotations de mapping du code, le 2026-09-11 (le « 66 » inscrit
 ici jusqu'au 2026-09-10 n'avait pas suivi les ajouts non numérotés).
 
@@ -128,6 +128,7 @@ Q-10, Q-11, Q-12, Q-26, Q-34, Q-35 pour le détail des arbitrages pris pendant l
 |---|---|---|---|---|---|---|
 | 13 | POST | `/dossiers/{id}/audiences` | `ROLE_JURISTE` | FR-AUD-01 / US 2.1, 2.6 | 📋 | ✅ M6 |
 | 14 | PUT | `/audiences/{id}/compte-rendu` | `ROLE_JURISTE` | FR-AUD-02 / US 2.2 | 📋 | ✅ M6 |
+| — | PUT | `/audiences/{id}/note-avocat` 🆕 QF-64 | `ROLE_JURISTE` | — | 💡 | ✅ |
 | 15 | GET | `/audiences/calendrier` | `ROLE_JURISTE`, `ROLE_DJ` | FR-AUD-05 / US 2.5 | 📋 | ✅ M6 |
 | 16 | POST | `/dossiers/{id}/alarmes` | `ROLE_JURISTE` | FR-AUD-03 / US 2.3 | **📄** | ✅ M6 |
 | 17 | PUT | `/alarmes/{id}/reprogrammer` | `ROLE_JURISTE` | FR-AUD-04 / US 2.4 | **📄** | ✅ M6 |
@@ -295,7 +296,7 @@ automatisés dédiés. Voir `DECISIONS_AND_OPEN_QUESTIONS.md` Q-20, Q-25, Q-55, 
 
 | # | Méthode | Endpoint | Rôle requis | FR / US | Src | Statut |
 |---|---|---|---|---|---|---|
-| 35 | POST | `/constitutions/prestataires` | `ROLE_JURISTE` | FR-INT-06 / US 5.6 | 💡 | ✅ M9 |
+| 35 | POST | `/constitutions/prestataires` | `ROLE_JURISTE`, `ROLE_ASSISTANTE` | FR-INT-06 / US 5.6 | 💡 | ✅ M9 |
 | 36 | PUT | `/constitutions/prestataires/{id}/validation` | `ROLE_SH` | FR-INT-07 / US 5.7 | 💡 | ✅ M9 |
 | 37 | GET | `/repertoire/avocats?nom&page&size` | `ROLE_JURISTE`, `ROLE_ASSISTANTE` | FR-INT-08 / US 5.8 | 💡 | ✅ M9 |
 | 60 | GET | `/constitutions/prestataires?statut&page&size` *(paginé M22)* | `ROLE_SH`, `ROLE_JURISTE` | UC-INT-07 (« constitutions à signer ») | 🆕 | ✅ M15 |
@@ -314,6 +315,25 @@ automatisés dédiés. Voir `DECISIONS_AND_OPEN_QUESTIONS.md` Q-20, Q-25, Q-55, 
 > aucune (pas de compte, pas d'infrastructure email — même limite que Q-37). **#37** :
 > `indicateurCharge`/`indicateurPerformance` calculés à la demande (Q-53), triés par charge
 > croissante, recherche par `?nom=`.
+>
+> **La demande d'explication** (N7 temps 2, Q-130) : `POST /demandes-explication` (DJ, DJA), `PUT
+> /demandes-explication/{id}/reponse` (AVOCAT, la sienne seule), `GET /demandes-explication` -
+> une seule route de lecture pour deux publics, le **périmètre étant décidé par le serveur** sur
+> l'identité de qui appelle : un paramètre d'écran suffirait à un avocat pour demander la liste
+> entière. V46 crée la table et traverse les **trois référentiels fermés** d'un coup - codes
+> d'historique, types d'alerte, grilles de notification.
+>
+> **La lettre appartient à son demandeur** (Q-126, métier du 2026-10-07). `PUT
+> /constitutions/prestataires/{id}/lettre` n'est plus gardé par le seul rôle : `ROLE_JURISTE` est
+> composite (Q-81), si bien que **tout juriste, le DJ et la DJA pouvaient récrire la lettre d'un
+> autre** et la signer de son nom. Le service vérifie désormais la **personne** : le demandeur de la
+> constitution, ou le supérieur hiérarchique qui corrige avant de signer (Q-124). Tout autre reçoit
+> **403**. Le gel après signature ne bouge pas : 409 pour tous.
+>
+> `DemandeConstitutionResponse.redactionPossible` et `LettreConstitutionResponse.modifiable` disent
+> « **par moi** » : l'écran ne saurait pas les calculer, et un bouton déduit d'un rôle ouvrirait sur
+> un 403. **L'Assistante** sollicite et rédige comme un juriste depuis la même décision ; elle ne
+> signe pas.
 >
 > **#60 (M15, Q-68)** : dernier volet de Q-24 pour les constitutions — `statut=EN_ATTENTE` alimente
 > la file de travail du SH ; sans filtre, l'historique complet (plus récentes d'abord).
@@ -339,6 +359,11 @@ notifiant le demandeur, décision déjà prise refusée (409). 11 tests automati
 | 39 | GET | `/ged/documents/{id}` | `ROLE_CONSULTATION` | FR-GED-02 / US 6.3 | 📋 | ✅ M8 |
 | 40 | DELETE | `/ged/documents/{id}` | `ROLE_JURISTE` (202) / `ROLE_DJ`,`ROLE_DJA` (200) | FR-GED-03 / US 6.4, 6.5 | 📋 | ✅ M8 |
 | 41 | PUT | `/ged/documents/{id}/approbation-suppression` | `ROLE_DJ`, `ROLE_DJA` | FR-GED-03 / US 6.4 | 💡 | ✅ M8 |
+| — | PUT | `/ged/documents/{id}/partage-avocat` 🆕 QF-64 | `ROLE_JURISTE`, `ROLE_SH`, `ROLE_ASSISTANTE` (Q-140) | — | 💡 | ✅ |
+| — | DELETE | `/ged/documents/{id}/partage-avocat` 🆕 QF-64 | `ROLE_JURISTE`, `ROLE_SH`, `ROLE_ASSISTANTE` (Q-140) | — | 💡 | ✅ |
+| — | GET | `/dossiers/{id}/partage-avocat` 🆕 Q-140 | `ROLE_CONSULTATION` | — | 💡 | ✅ |
+| — | PUT | `/ged/documents/{id}/partage-avocat/arbitrage` 🆕 QF-64 | `ROLE_DJ`, `ROLE_DJA` | — | 💡 | ✅ |
+| — | GET | `/ged/partages-avocat` 🆕 QF-64 | `ROLE_DJ`, `ROLE_DJA` | — | 💡 | ✅ |
 | 42 | GET | `/ged/rapport-journalier` | `ROLE_JURISTE`, `ROLE_DJ`, `ROLE_DJA`, `ROLE_ASSISTANTE` (Q-80) | FR-GED-04 / US 6.6 | 📋 | ✅ M8 |
 | 43 | GET | `/dossiers/{id}/documents` | `ROLE_CONSULTATION` | UC-GED-02 | 🆕 | ✅ M8 |
 | 63 | GET | `/ged/demandes-suppression?statut&page&size` *(paginé M22)* | `ROLE_DJ`, `ROLE_DJA` | UC-GED-04 (« demandes en attente ») | 🆕 | ✅ M15 |
@@ -381,6 +406,19 @@ coup. Réponses réduites à ce que l'usage exige.
 | — | GET | `/avocat/mes-publications` 🆕 Q-96 | `ROLE_AVOCAT` | — | 💡 | ✅ M19 |
 | — | GET | `/avocat/mes-constitutions` 🆕 Q-96 | `ROLE_AVOCAT` | — | 💡 | ✅ M19 |
 | — | POST | `/avocat/pieces-justificatives` *(multipart)* 🆕 Q-97 | `ROLE_AVOCAT` | UC-INT-01 ét. 4 | 💡 | ✅ M19 |
+| — | GET | `/avocat/mes-dossiers/{id}/pieces` 🆕 QF-64 | `ROLE_AVOCAT` | — | 💡 | ✅ |
+| — | GET | `/avocat/mes-dossiers/{id}/pieces/{documentId}` 🆕 QF-64 | `ROLE_AVOCAT` | — | 💡 | ✅ |
+
+> **Les pièces et la note de l'avocat (QF-64, arbitré le 2026-10-15).** L'avocat voit une pièce
+> partagée s'il est **affecté au dossier et constitué** (lettre signée par le SH) : l'affectation ne
+> fait pas le mandat. Vérifié **dans la requête**, à chaque lecture - un changement d'avocat retire
+> l'accès sur-le-champ. Affecté sans être constitué, la liste répond `constitue: false` plutôt
+> qu'une liste vide muette. Une pièce non partagée répond **404**, pas 403 : 403 confirmerait
+> qu'elle existe. Chaque ouverture est tracée (`DOCUMENT_CONSULTE_PAR_AVOCAT`).
+>
+> Tout juriste partage sans validation ; sur un **dossier sensible**, il propose et le DJ ou la DJA
+> valide avant que rien ne soit visible. La `noteAvocat` d'une audience, distincte du compte rendu
+> interne (RG-INT-07), n'est lue que par l'avocat constitué.
 
 > **Un dossier ne montre que son identification** — référence, nature, juridiction saisie. Ni client,
 > ni risque encouru, ni sensibilité, ni juristes affectés. **Les audiences d'un dossier qui n'est pas
@@ -389,6 +427,13 @@ coup. Réponses réduites à ce que l'usage exige.
 > **Périmètre à confirmer** : `mes-publications` et `mes-constitutions` ne répondent à aucune
 > exigence écrite (US 5.4 vise le juriste) — livrées sur arbitrage du 2026-09-14, au motif qu'un
 > avocat notifié d'un rejet ne pouvait pas relire ce qui avait été rejeté.
+>
+> **`mes-publications` porte la correspondance depuis QF-58** (2026-10-14), à titre d'exception à la
+> règle « ni URL, ni commentaires, ni correspondance sur une liste » : c'est le seul écran où l'avocat
+> peut lire ce que le DJ/DJA lui a transmis, et il en recevait la notification sans qu'aucune page ne
+> l'affiche. Les correspondances d'une page sont lues en **une** requête (`findByPublicationIdIn`).
+> **`commentaires` reste `null` pour l'avocat en toute circonstance** : la délibération entre le
+> juriste et le DJ/DJA ne lui est jamais adressée (US 5.5, RG-INT-07, Q-20).
 
 ## 9. Alertes, configurations, reporting
 
@@ -399,8 +444,56 @@ coup. Réponses réduites à ce que l'usage exige.
 | 46 | PATCH | `/alertes/{id}/traiter` | destinataire | US 7.4 | 💡 | ✅ M5 |
 | 47 | GET | `/configurations` | `ROLE_CONSULTATION` | CONF01-07 | 📋 | ✅ M5 · **enrichi M17** (Q-91) |
 | 48 | PUT | `/configurations/{cle}` | `ROLE_DJ` | CONF01-07 | 📋 | ✅ M5 · **validé par clé M17** (Q-91) |
-| 49 | GET | `/rapports` | `ROLE_JURISTE` | FR-REP-01 / US 8.4 | 📋 | ✅ |
-| 50 | GET | `/tableau-de-bord` | `ROLE_DJ` **et `ROLE_DJA`** | FR-REP-02 / US 8.5 | 📋 | ✅ · **élargi M18** (Q-95) |
+| 49 | GET | `/rapports?…&categorie` | `ROLE_JURISTE` | FR-REP-01 / US 8.4 | 📋 | ✅ · **recadrable Q-138** |
+| 50 | GET | `/tableau-de-bord?categorie` | `ROLE_DJ` **et `ROLE_DJA`** | FR-REP-02 / US 8.5 | 📋 | ✅ · **élargi M18** (Q-95) · **recadrable Q-138** |
+| — | GET | `/tableau-de-bord/details?indicateur&page&size` 🆕 Q-137 | `ROLE_DJ` **et `ROLE_DJA`** | métier, 2026-10-13 | 💡 | ✅ 2026-10-13 |
+
+> **`categorie` (Q-138)** : optionnel sur `#49`, `#50` et `/tableau-de-bord/details`. **Absent =
+> les deux catégories**, et il n'existe aucune variante sans périmètre - chacun des neuf
+> compteurs en prend un. L'invariant **Recouvrement + Litiges d'exploitation = Toutes** repose
+> sur la contrainte `CHECK` de `dossier.categorie` (V1), non sur le code, et un test
+> d'intégration l'additionne requête par requête. Les trois compteurs de litiges ne sont plus
+> figés sur le recouvrement : le périmètre **Recouvrement** reproduit exactement leur ancien
+> comptage. Le taux de succès suit le périmètre, et son nom est devenu historique.
+>
+> **`/tableau-de-bord/details`** : la liste de ce qu'un bloc compte (Q-137). **Le détail rend
+> exactement ce que le compteur compte**, prédicat pour prédicat - un test d'intégration confronte
+> les deux requêtes sur la même base, pour les neuf indicateurs. Une seule forme de ligne pour
+> les neuf, les objets comptés étant de natures différentes mais le bloc d'où l'on vient disant
+> déjà ce qu'on regarde. Trois pièges traités : le `DISTINCT` des dossiers, **une ligne par
+> alerte** et non par dossier pour les prorogations, et un invariant de **somme** - non de
+> nombre de lignes - pour les provisions reprises.
+| — | GET | `/rapports/activite?dateDebut&dateFin&utilisateurId&avocatId` 🆕 Q-133, élargi Q-135 | `ROLE_CONSULTATION` **et `ROLE_AVOCAT`** | observation 14 du 03/10 | 💡 | ✅ 2026-10-13 |
+| — | GET | `/rapports/activite/export?…&format=PDF\|EXCEL\|CSV` 🆕 Q-133, élargi Q-135 | `ROLE_CONSULTATION` **et `ROLE_AVOCAT`** | métier, 2026-10-13 | 💡 | ✅ 2026-10-13 |
+| — | GET | `/rapports/activite/details?…&code&page&size` 🆕 Q-133, élargi Q-135 | `ROLE_CONSULTATION` **et `ROLE_AVOCAT`** | métier, 2026-10-13 | 💡 | ✅ 2026-10-13 |
+| — | GET | `/rapports/nominatif/avocats?dateDebut&dateFin` 🆕 Q-136 | `ROLE_DJ` **et `ROLE_DJA`** | signalé en recette, 2026-10-13 | 💡 | ✅ 2026-10-13 |
+| — | GET | `/rapports/nominatif?dateDebut&dateFin` 🆕 Q-132 | `ROLE_DJ` **et `ROLE_DJA`** | observation 14 du 03/10 | 💡 | ✅ 2026-10-09 |
+
+> **Élargis à l'avocat (Q-135)** : il dépose ses demandes de frais, ses comptes rendus d'audience,
+> ses autres publications et répond aux demandes d'explication - j'avais écrit l'inverse. Un avocat se
+> désigne par `avocatId`, son inscription au répertoire, la direction le connaissant par là ; les deux
+> désignations ensemble sont refusées. **Le droit est vérifié avant le compte** : l'ordre inverse
+> faisait dire au refus, par sa nature, si l'avocat visé s'était déjà connecté.
+>
+> **Les trois `/rapports/activite`** : la fiche d'une personne, son export et le détail d'un
+> décompte (Q-133). `utilisateurId` **absent signifie « moi »** ; renseigné, il n'est servi qu'au DJ,
+> à la DJA, ou à la personne elle-même — c'est le **service** qui le vérifie, une annotation ne
+> sachant pas comparer un paramètre à l'appelant. `ROLE_CONSULTATION` plutôt qu'une liste de
+> profils : les cinq profils internes le portent, l'avocat non (QF-01). **204** si la personne n'a
+> rien fait. Le détail porte le `dossierId` de chaque action, ce qui rend le décompte cliquable
+> jusqu'à la fiche du dossier.
+
+> **`/rapports/nominatif/avocats`** : le pendant du tableau interne, pour l'autre population (Q-136).
+> Un avocat n'accomplit **aucune** des six natures du tableau interne - il dépose, le juriste
+> enregistre -, d'où quatre colonnes propres : comptes rendus déposés, demandes de frais
+> déposées, autres publications, explications fournies. Les quatre natures étant exclusives à
+> `ROLE_AVOCAT`, grouper sur elles suffit : aucune condition sur le profil. **204** si personne
+> n'a rien déposé ; tri par **nom**.
+>
+> **`/rapports/nominatif`** : six décomptes par personne agrégés depuis `historique_action`, plus le
+> délai moyen de saisie d'un compte rendu ; **204** si la période ne porte aucune activité ; lignes
+> triées par **nom**, jamais par volume (Q-132). L'habilitation est **plus étroite que `#49`** à
+> dessein : le rapport nomme des collègues, et `ROLE_JURISTE` est composite depuis Q-81.
 
 > **#44** : `type` doit valoir `CHARGE_MAX_AVOCAT` (400 sinon) — seul type d'alerte du contrat
 > adossé à un seuil configurable (RG-ALR-02) ; délègue à `PUT /configurations/{cle}` en interne.
@@ -457,14 +550,48 @@ stockage dédié sans dossier (Q-58), recherche paginée par mots-clés/nature/j
 transition automatique d'étape vers `ARCHIVE` (Q-60, reste manuelle via l'endpoint générique M4).
 13 tests automatisés dédiés. Voir `DECISIONS_AND_OPEN_QUESTIONS.md` Q-58, Q-59, Q-60, Q-61.
 
-## 11. Référentiels de formulaire et utilisateurs internes (M15)
+## 11. Référentiels de formulaire, agences et utilisateurs internes (M15, N1)
 
 | # | Méthode | Endpoint | Rôle requis | FR / US | Src | Statut |
 |---|---|---|---|---|---|---|
 | 64 | GET | `/referentiels/natures-dossier?categorie=` | `ROLE_CONSULTATION` | RG-DOS-02 / US 1.1 | 🆕 | ✅ M15 |
 | 65 | GET | `/referentiels/types-client-sensible` | `ROLE_CONSULTATION` | RG-DOS-09 / US 1.1 | 🆕 | ✅ M15 |
 | 66 | GET | `/utilisateurs?profil=&inclureInactifs=` | `ROLE_CONSULTATION` | RG-DOS-03 / US 1.1, 1.2 | 🆕 | ✅ M15 |
+| 67 | GET | `/referentiels/agences?recherche=&actifSeulement=` | `ROLE_CONSULTATION` | RG-REF-01 / observation 2 | 🆕 | ✅ N1 |
+| 68 | POST | `/referentiels/agences` | `ROLE_DJ`, `ROLE_DJA` | RG-REF-01 / observation 2 | 🆕 | ✅ N1 |
+| 69 | PUT | `/referentiels/agences/{id}` | `ROLE_DJ`, `ROLE_DJA` | RG-REF-01 / observation 2 | 🆕 | ✅ N1 |
+| 70 | DELETE | `/referentiels/agences/{id}` | `ROLE_DJ`, `ROLE_DJA` | RG-REF-01 / observation 2 | 🆕 | ✅ N1 |
+| 71 | PATCH | `/referentiels/agences/{id}/reactivation` | `ROLE_DJ`, `ROLE_DJA` | RG-REF-01 / métier 2026-10-06 | 🆕 | ✅ N1 |
+| 72 | POST | `/dossiers/{id}/sensibilite/proposition` | `ROLE_SAISIE` | RG-DOS-09 / observation 5 | 🆕 | ✅ N4 |
+| 73 | PUT | `/dossiers/{id}/sensibilite` | `ROLE_DJ`, `ROLE_DJA` | RG-DOS-09 / observation 5 | 🆕 | ✅ N4 |
+| 74 | GET | `/utilisateurs/moi/signature` | authentifié | RG-SIG-01 / observation 10 | 🆕 | ✅ N8 |
+| 75 | GET | `/utilisateurs/moi/signature/image` | authentifié | RG-SIG-01 / observation 10 | 🆕 | ✅ N8 |
+| 76 | PUT | `/utilisateurs/moi/signature` | authentifié | RG-SIG-01 / observation 10 | 🆕 | ✅ N8 |
+| 77 | DELETE | `/utilisateurs/moi/signature` | authentifié | RG-SIG-01 / observation 10 | 🆕 | ✅ N8 |
 
+> **#67 à #70 (N1, métier du 2026-10-03, observation 2)** : les deux codes d'agence d'un dossier
+> étaient du **texte libre** de vingt caractères, sans référentiel ni vérification. Sur les 341
+> dossiers de recette, un seul en portait un - `5466546546` - et il ne désignait aucune agence. La
+> table `agence` (migration `V42`, 82 entrées) ferme la saisie : `codeAgenceOrigine` devient
+> **obligatoire** et vérifié, `codeAgenceContentieuse` est vérifiée si présente.
+>
+> **Ce n'est pas un référentiel en lecture seule**, contrairement à #64/#65 : le métier a demandé
+> que le DJ et la DJA le tiennent depuis l'application. Trois règles en découlent. Le **code est
+> unique** (409) et **ne se modifie pas** (400) : les dossiers le portent en clair, sans clé
+> étrangère, et le changer les détacherait silencieusement. `DELETE` **désactive** : un dossier
+> ouvert sous une agence fermée reste valide, son code doit continuer de désigner quelque chose.
+> La **ville est obligatoire** - deux agences portent le même nom, elle les distingue à la saisie.
+> La recherche est **partielle, insensible à la casse, sur le code et sur le nom**, les jokers
+> étant échappés par le service (même procédé que Q-89).
+>
+> **#71 (métier, 2026-10-06)** : la fermeture est **réversible**. Elle ne l'était pas, et c'était un
+> défaut : une fermeture par erreur de manipulation n'avait qu'une issue - recréer l'agence sous un
+> autre code, c'est-à-dire inventer un code, ce que le référentiel existe pour empêcher. Et une
+> agence réouvre : locaux rendus, travaux terminés. C'est la même agence, elle garde son code.
+> `PATCH` et non `PUT` : on ne remplace pas l'agence, on change son seul état d'ouverture, comme
+> `PATCH /audiences/{id}/annulation`. Rouvrir une agence déjà ouverte est **sans effet et sans
+> refus** : l'état demandé est atteint, et refuser obligerait l'appelant à lire avant d'écrire.
+>
 > **#64/#65 (M15, Q-68)** : le backend **impose** ces référentiels fermés en écriture — `POST
 > /dossiers` rejette en 400 toute nature hors taxonomie (RG-DOS-02) — mais ne les exposait nulle
 > part en lecture : le formulaire de création ne pouvait pas peupler ses listes déroulantes.
@@ -479,6 +606,50 @@ transition automatique d'étape vers `ARCHIVE` (Q-60, reste manuelle via l'endpo
 > authentifié, Keycloak restant la source de vérité des identités (REF-05 §1.3). `keycloakId`
 > **n'est pas exposé** ; comptes actifs seuls par défaut ; `ROLE_CONSULTATION` — porté par les six
 > profils internes mais **pas par `AVOCAT`**, qui ne doit pas énumérer le personnel interne.
+
+
+> **#72 et #73 (N4, métier du 2026-10-03, observation 5)** : `est_sensible` ne se posait qu'**à la
+> création**. `POST /dossiers/{id}/sensibilite/validation` exige une proposition déjà en attente, ce
+> que seule la création produisait : un dossier ouvert comme ordinaire ne pouvait donc plus jamais
+> devenir sensible, alors qu'une affaire se révèle telle en cours de route.
+>
+> **Le partage des rôles est celui de la dérogation de seuil** : `ROLE_SAISIE` propose, DJ et DJA
+> décident. La proposition rejoint le circuit existant - l'arbitrage n'a pas à savoir si elle vient
+> de la création ou d'ici - et **ne produit aucun effet avant la validation** (Q-10).
+>
+> **Le retrait** (arrêté le 2026-10-06) remet le seuil à `GLOBAL` : un seuil dérogatoire n'existe
+> que pour un dossier à diligence particulière, et le laisser en place donnerait au dossier un seuil
+> que rien ne justifie et que `POST /dossiers/{id}/seuil-derogation` refuserait de réviser. Son motif
+> est obligatoire et vit dans sa propre colonne (`V43`), distincte du motif de rejet : le rejet
+> refuse une proposition, le retrait lève une diligence qui avait été acceptée.
+>
+> **`V43` étend aussi `chk_historique_code`**, qui énumère les codes en dur. C'est le piège que V24,
+> V25 et V26 ont documenté : un code ajouté à l'énumération Java sans passer par la migration
+> échoue **à l'écriture seulement**, donc en production, sur la première proposition d'un juriste.
+
+
+> **#74 à #77 (N8, observation 10 ; provenance arrêtée le 2026-10-06 ; disposition arrêtée le
+> 2026-10-07)** : les signatures enregistrées s'apposent sur la lettre de constitution, à la
+> place des noms à signer à la main.
+>
+> **Deux signatures, et sous le nom du service** (Q-125). « La Direction Juridique » nomme un
+> service, pas une personne : rien ne s'y signe. Le rédacteur signe à gauche, celui qui valide à
+> droite, chacun sous son trait et avec son nom. Chacune vient du compte de son titulaire, où
+> elle n'existe qu'une fois.
+>
+> **Ce qu'elle est, et ce qu'elle n'est pas.** Un confort de présentation. Elle n'apporte **aucune
+> valeur probante supplémentaire** : ce qui fait preuve, c'est la trace horodatée de qui a signé, que
+> l'application enregistre déjà. L'écran le dit à l'utilisateur plutôt que de le laisser croire le
+> contraire.
+>
+> **Chacun dépose la sienne, et personne d'autre.** Les quatre endpoints disent « moi » et ne
+> prennent jamais d'identifiant. La lettre appose celle du **SH qui signe**, identifié par sa session
+> et non par le champ « signataire », qui est du texte libre : apposer une image sur la foi d'un
+> texte libre permettrait de signer au nom d'autrui. L'appel est **interne**, l'image ne transitant
+> par aucun écran.
+>
+> **`V44` porte aussi `lettre_constitution.redige_par`** : le SH peut désormais corriger la lettre
+> avant de la signer, là où Q-115 B2 lui rendait un 403. Voir **Q-124**.
 
 ---
 

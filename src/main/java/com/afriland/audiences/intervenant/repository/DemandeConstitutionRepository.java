@@ -27,4 +27,13 @@ public interface DemandeConstitutionRepository extends JpaRepository<DemandeCons
      * jamais la demande qui l'a produite.
      */
     Optional<DemandeConstitution> findByLettreDocumentId(Long documentId);
+
+    /**
+     * Cet avocat est-il **constitué** sur ce dossier ? (QF-64)
+     *
+     * <p>L'affectation ne fait pas le mandat : c'est la lettre signée par le SH qui fait de l'avocat
+     * le représentant de la banque. Les pièces et les notes ne s'ouvrent qu'à ce moment-là.
+     */
+    boolean existsByDossierIdAndPrestataireIdAndStatut(Long dossierId, Long prestataireId,
+                                                      com.afriland.audiences.intervenant.domain.StatutConstitution statut);
 }

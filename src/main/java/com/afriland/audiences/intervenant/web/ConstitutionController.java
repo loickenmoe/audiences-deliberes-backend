@@ -30,15 +30,22 @@ public class ConstitutionController {
 
     private final ConstitutionService constitutionService;
 
+    /**
+     * Sollicite un prestataire.
+     *
+     * <p>Ouvert à l'<b>Assistante</b> depuis le 2026-10-07 : elle sollicite et rédige comme un
+     * juriste. La lettre qui en naît est <b>la sienne</b> (Q-126) - elle seule y écrit, et le
+     * supérieur hiérarchique la corrige avant de la signer.
+     */
     @PostMapping("${api.prefix}/constitutions/prestataires")
-    @PreAuthorize("hasRole('JURISTE')")
+    @PreAuthorize("hasAnyRole('JURISTE', 'ASSISTANTE')")
     public ResponseEntity<DemandeConstitutionResponse> creerDemande(@Valid @RequestBody CreerConstitutionRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(constitutionService.creerDemande(request));
     }
 
     /** M15 (Q-68) : file de travail « constitutions à signer » du SH — endpoint 🆕. */
     @org.springframework.web.bind.annotation.GetMapping("${api.prefix}/constitutions/prestataires")
-    @PreAuthorize("hasAnyRole('SH', 'JURISTE')")
+    @PreAuthorize("hasAnyRole('SH', 'JURISTE', 'ASSISTANTE')")
     public com.afriland.audiences.common.web.PageResponse<DemandeConstitutionResponse> lister(
             @org.springframework.web.bind.annotation.RequestParam(required = false)
             com.afriland.audiences.intervenant.domain.StatutConstitution statut,
@@ -61,7 +68,7 @@ public class ConstitutionController {
      * lui demander de signer sans voir.
      */
     @GetMapping("${api.prefix}/constitutions/prestataires/{id}/lettre")
-    @PreAuthorize("hasAnyRole('SH', 'JURISTE')")
+    @PreAuthorize("hasAnyRole('SH', 'JURISTE', 'ASSISTANTE')")
     public LettreConstitutionResponse lettre(@PathVariable Long id) {
         return constitutionService.lettre(id);
     }
@@ -94,8 +101,24 @@ public class ConstitutionController {
      * seconde signature : celui qui signe n'est pas celui qui a écrit, et son refus renvoie la
      * lettre à son auteur avec un motif.
      */
+    /**
+     * La rédaction, ouverte au juriste <b>et au SH</b> (métier, 2026-10-06, observation 10).
+     *
+     * <p>Q-115 B2 la réservait au juriste et renvoyait un 403 au SH : « lui donner la plume viderait
+     * la seconde signature de son sens ». Le métier a tranché l'inverse - le SH corrige avant de
+     * signer, plutôt que de renvoyer la lettre. Chaque rédaction porte désormais son auteur, rendu
+     * à l'écran : ce que la séparation des rôles garantissait, la traçabilité le garantit.
+     *
+     * <p>Le gel après signature, lui, ne bouge pas : 409 pour tout le monde.
+     *
+     * <p><b>Et la lettre est à son demandeur</b> (Q-126, 2026-10-07). Ce {@code @PreAuthorize} dit
+     * seulement qui peut toucher à la fonction ; il ne peut pas dire qui peut toucher à <b>cette
+     * lettre-là</b>, qui dépend de qui l'a demandée. Le service s'en charge et répond 403 à tout
+     * autre - un droit accordé par rôle s'étendrait au DJ et à la DJA, {@code ROLE_JURISTE} étant
+     * composite (Q-81), et rouvrirait exactement le trou que le métier a demandé de fermer.
+     */
     @PutMapping("${api.prefix}/constitutions/prestataires/{id}/lettre")
-    @PreAuthorize("hasRole('JURISTE')")
+    @PreAuthorize("hasAnyRole('JURISTE', 'SH', 'ASSISTANTE')")
     public LettreConstitutionResponse redigerLettre(@PathVariable Long id,
                                                     @Valid @RequestBody RedigerLettreRequest request) {
         return constitutionService.redigerLettre(id, request);

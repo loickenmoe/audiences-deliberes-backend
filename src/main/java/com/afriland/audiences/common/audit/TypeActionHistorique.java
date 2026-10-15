@@ -33,7 +33,9 @@ public enum TypeActionHistorique {
     /** {@code details} : {@code decision}, {@code auditId}, {@code motif}. */
     DEROGATION_SEUIL_ARBITREE("Décision sur la dérogation de seuil"),
     /** {@code details} : {@code decision}, {@code motifRejet}. */
+    SENSIBILITE_PROPOSEE("Proposition de diligence particulière"),
     SENSIBILITE_ARBITREE("Décision sur la sensibilité du dossier"),
+    SENSIBILITE_RETIREE("Retrait de la diligence particulière"),
 
     // ── Audiences et alarmes ──────────────────────────────────────────────────
     AUDIENCE_PLANIFIEE("Planification d'une audience"),
@@ -105,6 +107,23 @@ public enum TypeActionHistorique {
     INTERVENANT_MODIFIE("Modification d'un intervenant"),
 
     /**
+     * Demande d'explication adressée à un avocat (N7 temps 2, observation 8). {@code details} porte
+     * {@code avocatId} et {@code demandeId}.
+     *
+     * <p>Elle naît d'un constat de l'application - deux audiences sans compte rendu - mais c'est
+     * une décision de la direction : l'historique doit dire qui l'a prise, et quand.
+     */
+    EXPLICATION_DEMANDEE("Demande d'explication adressée à un avocat"),
+
+    /**
+     * Réponse de l'avocat à une demande d'explication. {@code details} porte {@code demandeId}.
+     *
+     * <p>C'est elle qui clôt l'échange, et qui relâche la relance automatique suspendue par la
+     * demande. Sans trace, personne ne saurait dire qui s'est expliqué.
+     */
+    EXPLICATION_REPONDUE("Réponse à une demande d'explication"),
+
+    /**
      * Consultation de l'écran d'audit (Q-112). {@code details} porte les critères employés :
      * {@code perimetre}, et le cas échéant {@code auteurRecherche}, {@code dossierId},
      * {@code codeRecherche}, {@code dateDebut}, {@code dateFin}.
@@ -140,6 +159,47 @@ public enum TypeActionHistorique {
      * se voit, là où un nul se serait glissé silencieusement hors de chaque requête. Aucune écriture
      * nouvelle ne l'emploie.
      */
+    /**
+     * Une pièce partagée avec l'avocat du dossier (QF-64) - directement, ou par le DJ/DJA sur un
+     * dossier sensible. {@code details} porte {@code documentId}.
+     *
+     * <p>Une pièce qui sort de la banque doit pouvoir dire qui l'a laissée sortir, et quand.
+     */
+    DOCUMENT_PARTAGE_AVOCAT("Document partagé avec l'avocat"),
+
+    /**
+     * Dossier sensible : un juriste propose le partage, que le DJ ou la DJA validera (QF-64).
+     * {@code details} porte {@code documentId}.
+     */
+    DOCUMENT_PARTAGE_PROPOSE("Partage d'un document proposé"),
+
+    /**
+     * Le DJ ou la DJA tranche un partage proposé (QF-64). {@code details} porte {@code documentId},
+     * {@code decision} et, sur un rejet, {@code motif}.
+     */
+    DOCUMENT_PARTAGE_ARBITRE("Partage d'un document arbitré"),
+
+    /**
+     * Un partage retiré, ou une proposition annulée (QF-64). {@code details} porte
+     * {@code documentId} et {@code ancienStatut}.
+     */
+    DOCUMENT_PARTAGE_RETIRE("Partage d'un document retiré"),
+
+    /**
+     * L'avocat ouvre ou télécharge une pièce partagée (QF-64). {@code details} porte
+     * {@code documentId} et {@code avocatId}.
+     *
+     * <p>Une pièce partagée l'est pour qu'il la lise : tracer la lecture permet de dire, le jour où
+     * la question se pose, s'il l'avait vue avant l'audience.
+     */
+    DOCUMENT_CONSULTE_PAR_AVOCAT("Document consulté par l'avocat"),
+
+    /**
+     * La note à l'avocat d'une audience, écrite, modifiée ou effacée (QF-64). {@code details}
+     * porte {@code audienceId}.
+     */
+    AUDIENCE_NOTE_AVOCAT_MODIFIEE("Note à l'avocat modifiée"),
+
     NON_CLASSEE("Action non classée");
 
     private final String libelle;

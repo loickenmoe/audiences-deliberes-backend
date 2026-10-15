@@ -14,6 +14,11 @@ import java.time.LocalDateTime;
  * @param modifiable      faux dès que la lettre est générée. Une pièce qu'on peut retoucher en
  *                        silence ne prouve rien : une correction donne une nouvelle lettre
  * @param dateGeneration  l'instant du gel ; nul tant que la lettre est un brouillon
+ * @param redigeParNom    qui a écrit la dernière version. Le SH peut corriger avant de signer
+ *                        (métier, 2026-10-06) : le juriste doit voir que sa lettre a bougé, et par
+ *                        qui. Nul tant que personne n'a rédigé - le brouillon naît avec la demande
+ * @param redigeParProfil le profil du rédacteur, pour que l'écran dise « corrigée par le SH » sans
+ *                        avoir à deviner qui est qui
  */
 public record LettreConstitutionResponse(
         Long id,
@@ -31,5 +36,7 @@ public record LettreConstitutionResponse(
         String signataire,
         boolean modifiable,
         LocalDateTime dateGeneration,
-        LocalDateTime dateModification) {
+        LocalDateTime dateModification,
+        String redigeParNom,
+        String redigeParProfil) {
 }

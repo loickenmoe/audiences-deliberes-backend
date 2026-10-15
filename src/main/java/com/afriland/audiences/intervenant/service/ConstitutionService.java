@@ -32,6 +32,7 @@ import com.afriland.audiences.referentiel.domain.Intervenant;
 import com.afriland.audiences.referentiel.domain.Utilisateur;
 import com.afriland.audiences.referentiel.repository.IntervenantRepository;
 import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
+import com.afriland.audiences.referentiel.service.SignatureService;
 import com.afriland.audiences.referentiel.service.CompteAvocatService;
 import lombok.RequiredArgsConstructor;
 import org.hibernate.Hibernate;
@@ -43,6 +44,7 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /** Épic 5 volet constitutions (RG-INT-08, US 5.6/5.7) — cf. FUNCTIONAL_MAP.md §5, API_IMPLEMENTATION_STATUS.md §7. */
 @Service
@@ -65,6 +67,16 @@ public class ConstitutionService {
     private final HistoriqueActionService historiqueActionService;
     private final AlerteService alerteService;
     private final LettreConstitutionService lettreConstitutionService;
+    /**
+     * Le profil du supérieur hiérarchique, lu tel quel.
+     *
+     * <p>Et non un rôle : {@code ROLE_JURISTE} est composite (Q-81), si bien qu'un droit accordé par
+     * rôle s'étend au DJ et à la DJA sans qu'on l'ait voulu. Le profil ne désigne qu'une personne à
+     * la fois.
+     */
+    private static final String PROFIL_SH = "SH";
+
+    private final SignatureService signatureService;
     private final LettreConstitutionRepository lettreConstitutionRepository;
     private final MinioStorageService minioStorageService;
     private final DocumentRepository documentRepository;
@@ -103,7 +115,7 @@ public class ConstitutionService {
         List<Utilisateur> sh = utilisateurRepository.findByProfilCodeAndActifTrue("SH");
         sh.forEach(u -> alerteService.declencher(TypeAlerte.CONSTITUTION_A_SIGNER, dossier.getId(), u, declencheur));
 
-        return demandeConstitutionMapper.toResponse(demande);
+        return versReponse(demande);
     }
 
     @Transactional
@@ -137,7 +149,7 @@ public class ConstitutionService {
         historiqueActionService.enregistrerPour(sh, demande.getDossier().getId(), TypeActionHistorique.CONSTITUTION_ARBITREE,
                 Map.of("demandeId", demandeId, "decision", request.decision().name()));
 
-        return demandeConstitutionMapper.toResponse(demande);
+        return versReponse(demande);
     }
 
     /**
@@ -149,7 +161,12 @@ public class ConstitutionService {
         var demandes = statut == null
                 ? demandeConstitutionRepository.findByOrderByDateDemandeDesc(pageable)
                 : demandeConstitutionRepository.findByStatutOrderByDateDemandeAsc(statut, pageable);
-        return PageResponse.of(demandes, demandeConstitutionMapper::toResponse);
+        /*
+         * Chaque ligne dit si **celui qui lit** peut écrire sur sa lettre (Q-126). Sans cela,
+         * l'écran proposerait « Rédiger » à qui recevrait ensuite un 403 - une porte qui s'ouvre
+         * sur un mur est pire qu'une porte absente.
+         */
+        return PageResponse.of(demandes, this::versReponse);
     }
 
     /**
@@ -183,19 +200,37 @@ public class ConstitutionService {
         LettreConstitution lettre = lettreConstitutionRepository.findByDemandeId(demande.getId())
                 .orElseThrow(() -> ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE,
                         "Lettre introuvable pour la demande " + demande.getId()));
-        return lettreConstitutionService.generer(lettre, true);
+        /*
+         * Le tirage pour papier préimprimé porte les mêmes signatures que l'exemplaire archivé : ce
+         * sont deux tirages d'une même lettre, et l'un sans signature ferait douter de l'autre.
+         */
+        return lettreConstitutionService.generer(lettre, true,
+                signataire(redacteurDe(lettre)), signataire(demande.getValidePar()));
     }
 
     /**
-     * Enregistre la rédaction du juriste (B2).
+     * Enregistre la rédaction, du juriste <b>ou du SH</b> (B2, amendée le 2026-10-06).
      *
-     * <p><b>Une lettre générée ne se réécrit pas.</b> Elle est partie chez un huissier et figure dans
-     * la GED : la retoucher en silence ferait mentir la pièce. Une correction passe par une nouvelle
-     * demande, donc une nouvelle lettre et un nouveau numéro — et la première reste consultable.
+     * <p><b>Ce qui a changé, et pourquoi.</b> Q-115 B2 réservait la plume au juriste : le SH
+     * consultait sans pouvoir récrire, car « lui donner la plume viderait la seconde signature de
+     * son sens ». Le métier a tranché l'inverse (observation 10) : le SH corrige la lettre avant de
+     * la signer, plutôt que de la renvoyer. La séparation des plumes cède, et la <b>traçabilité</b>
+     * la remplace : chaque rédaction porte son auteur, rendu à l'écran, pour que le juriste voie que
+     * sa lettre a été réécrite et par qui.
+     *
+     * <p><b>Une lettre générée ne se réécrit pas.</b> Cela, en revanche, ne bouge pas. Elle est
+     * partie chez un huissier et figure dans la GED : la retoucher en silence ferait mentir la
+     * pièce. Une correction passe par une nouvelle demande, donc une nouvelle lettre et un nouveau
+     * numéro — et la première reste consultable.
      */
     @Transactional
     public LettreConstitutionResponse redigerLettre(Long demandeId, RedigerLettreRequest requete) {
         LettreConstitution lettre = lettreOuErreur(demandeId);
+        if (!puisJeRediger(lettre.getDemande())) {
+            throw ApiException.forbidden(ErrorCodes.DROITS_INSUFFISANTS,
+                    "Cette lettre appartient au demandeur de la constitution : lui seul l'écrit, "
+                            + "et le supérieur hiérarchique la corrige avant de la signer.");
+        }
         if (lettre.estGelee()) {
             throw ApiException.conflict(ErrorCodes.CONFLIT,
                     "Cette lettre a été signée et versée au dossier : elle ne peut plus être modifiée. "
@@ -217,14 +252,54 @@ public class ConstitutionService {
         lettre.setObjet(requete.objet());
         lettre.setCorps(requete.corps());
         lettre.setSignataire(requete.signataire());
+        Utilisateur redacteur = currentUserService.getCurrentUser();
+        lettre.setRedigePar(redacteur);
         lettre = lettreConstitutionRepository.save(lettre);
 
-        // La lettre engage la banque : savoir qui l'a rédigée, et quand, fait partie de la pièce.
-        historiqueActionService.enregistrerPour(currentUserService.getCurrentUser(),
+        /*
+         * La lettre engage la banque : savoir qui l'a rédigée, et quand, fait partie de la pièce.
+         * Le profil est consigné avec le nom : depuis que le SH peut corriger (2026-10-06), lire
+         * « rédigée par X » sans savoir à quel titre ne dit plus si la séparation a été franchie.
+         */
+        historiqueActionService.enregistrerPour(redacteur,
                 lettre.getDemande().getDossier().getId(), TypeActionHistorique.LETTRE_CONSTITUTION_REDIGEE,
-                Map.of("demandeId", demandeId, "objet", requete.objet()));
+                Map.of("demandeId", demandeId,
+                        // `Map.of` refuse les valeurs nulles : un objet non renseigné est permis
+                        // (Q-115 B2, le gabarit se complète à la main), et un profil peut manquer.
+                        "objet", Optional.ofNullable(requete.objet()).orElse(""),
+                        "profilRedacteur", Optional.ofNullable(profil(redacteur)).orElse("")));
 
         return versReponse(lettre);
+    }
+
+    /**
+     * Puis-je écrire sur la lettre de cette demande (métier, 2026-10-07) ?
+     *
+     * <p><b>La lettre est à celui qui a sollicité la constitution.</b> Jusqu'ici le droit tenait au
+     * rôle, et {@code ROLE_JURISTE} étant composite (Q-81), tout juriste, le DJ et la DJA pouvaient
+     * récrire la lettre d'un autre. C'était un trou : une lettre engage la banque sous le nom de
+     * celui qui l'a écrite, et nul ne doit pouvoir écrire sous le nom d'un autre.
+     *
+     * <p><b>Le supérieur hiérarchique passe après lui, et lui seul.</b> C'est la contrepartie de
+     * Q-124 : il corrige au lieu de renvoyer la lettre. Le droit se lit sur le <b>profil</b>, non
+     * sur un rôle composite - c'est la seule façon de ne pas rouvrir la porte au DJ et à la DJA.
+     */
+    private boolean puisJeRediger(DemandeConstitution demande) {
+        Utilisateur moi = currentUserService.getCurrentUser();
+        if (moi == null) {
+            return false;
+        }
+        return PROFIL_SH.equals(profil(moi)) || estLaMemePersonne(moi, demande.getDemandeur());
+    }
+
+    /** Deux utilisateurs sont la même personne quand ils portent le même identifiant, pas avant. */
+    private static boolean estLaMemePersonne(Utilisateur un, Utilisateur autre) {
+        return un != null && autre != null && un.getId() != null && un.getId().equals(autre.getId());
+    }
+
+    /** La demande telle qu'un écran la lit, avec le droit d'écrire de celui qui la lit. */
+    private DemandeConstitutionResponse versReponse(DemandeConstitution demande) {
+        return demandeConstitutionMapper.toResponse(demande).avecRedactionPossible(puisJeRediger(demande));
     }
 
     private LettreConstitution lettreOuErreur(Long demandeId) {
@@ -239,7 +314,62 @@ public class ConstitutionService {
                 lettre.getNumero(), lettre.getSuffixeNumero(), lettre.getLieu(),
                 lettre.getDestinataireNom(), lettre.getDestinataireQualite(), lettre.getDestinataireVille(),
                 lettre.getConcerne(), lettre.getObjet(), lettre.getCorps(), lettre.getSignataire(),
-                !lettre.estGelee(), lettre.getDateGeneration(), lettre.getDateModification());
+                // `modifiable` dit « par moi », non « en général » : l'écran ouvre ses champs
+                // sur cette seule foi, et un formulaire ouvert qui finit en 403 ment à qui le lit.
+                !lettre.estGelee() && puisJeRediger(lettre.getDemande()),
+                lettre.getDateGeneration(), lettre.getDateModification(),
+                nomDu(lettre.getRedigePar()), profil(lettre.getRedigePar()));
+    }
+
+    /**
+     * Celui dont la plume a écrit la lettre, pour la colonne de gauche.
+     *
+     * <p>C'est <b>le rédacteur enregistré</b>. Il n'y en a qu'un cas où il ne convient pas : quand
+     * le supérieur hiérarchique a corrigé la lettre avant de la signer (Q-124), il devient le
+     * dernier rédacteur et se retrouverait des <b>deux</b> côtés, ce qui ne dit plus rien. On
+     * reprend alors le juriste qui a sollicité la constitution - c'est à lui que la lettre revient,
+     * et sa correction par le SH reste tracée par ailleurs, à l'écran comme dans l'historique.
+     */
+    private static Utilisateur redacteurDe(LettreConstitution lettre) {
+        Utilisateur redacteur = lettre.getRedigePar();
+        Utilisateur valideur = lettre.getDemande() == null ? null : lettre.getDemande().getValidePar();
+        boolean memePersonne = redacteur != null && valideur != null
+                && redacteur.getId() != null && redacteur.getId().equals(valideur.getId());
+        if (redacteur == null || memePersonne) {
+            return lettre.getDemande() == null ? null : lettre.getDemande().getDemandeur();
+        }
+        return redacteur;
+    }
+
+    /** Une personne et sa signature enregistrée - l'image peut manquer, le nom non. */
+    private LettreConstitutionService.Signataire signataire(Utilisateur utilisateur) {
+        if (utilisateur == null) {
+            return null;
+        }
+        byte[] image = signatureService.pour(utilisateur.getId()).map(s -> s.image()).orElse(null);
+        return new LettreConstitutionService.Signataire(image, nomDu(utilisateur));
+    }
+
+    /** L'identifiant, ou rien : une demande non encore validée n'a pas de signataire. */
+    private static Long idDu(Utilisateur utilisateur) {
+        return utilisateur == null ? null : utilisateur.getId();
+    }
+
+    /** Le nom du rédacteur, ou rien : le brouillon naît avec la demande, avant toute rédaction. */
+    private static String nomDu(Utilisateur utilisateur) {
+        if (utilisateur == null) {
+            return null;
+        }
+        String prenom = utilisateur.getPrenom() == null ? "" : utilisateur.getPrenom() + " ";
+        return (prenom + (utilisateur.getNom() == null ? "" : utilisateur.getNom())).trim();
+    }
+
+    /** Le code du profil du rédacteur - `JURISTE`, `SH` - pour que l'écran le nomme lui-même. */
+    private static String profil(Utilisateur utilisateur) {
+        if (utilisateur == null || utilisateur.getProfil() == null) {
+            return null;
+        }
+        return utilisateur.getProfil().getCode();
     }
 
     /**
@@ -263,7 +393,14 @@ public class ConstitutionService {
         lettre.setDateGeneration(LocalDateTime.now());
         lettre = lettreConstitutionRepository.save(lettre);
 
-        byte[] pdf = lettreConstitutionService.generer(lettre);
+        /*
+         * Les signatures apposées sont celles des **deux personnes qui ont fait la lettre**, prises
+         * à leur compte où elles seules les déposent (métier, 2026-10-06 puis 2026-10-07) - jamais
+         * sur la foi du champ « signataire », qui est du texte libre : apposer une image sur un
+         * texte libre permettrait de signer au nom d'autrui.
+         */
+        byte[] pdf = lettreConstitutionService.generer(lettre,
+                signataire(redacteurDe(lettre)), signataire(sh));
         String nomFichier = "lettre-constitution-" + lettre.getNumero() + ".pdf";
         String cle = minioStorageService.deposer(demande.getDossier().getId(), nomFichier, "application/pdf", pdf);
 

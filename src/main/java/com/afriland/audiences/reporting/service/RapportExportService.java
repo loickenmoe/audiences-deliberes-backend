@@ -106,8 +106,17 @@ public class RapportExportService {
                 String.valueOf(rapport.nbDemandesFraisDeposees()));
         indicateurs.put(libelles.texte("rapport.indicateur.deliberesEnregistres"),
                 String.valueOf(rapport.nbDeliberesEnregistres()));
-        indicateurs.put(libelles.texte("rapport.indicateur.tauxRecouvrement"),
-                String.format("%.2f %%", rapport.tauxSuccesRecouvrement() * 100));
+        /*
+         * Des nombres, pas un pourcentage (métier, 2026-10-06). Le taux était la seule ligne du
+         * rapport exporté qui demandait un calcul mental pour être comprise : 71,88 % ne dit pas
+         * sur combien d'affaires il porte. Les trois décomptes le disent.
+         */
+        indicateurs.put(libelles.texte("rapport.indicateur.litigesGagnes"),
+                String.valueOf(rapport.nbLitigesGagnes()));
+        indicateurs.put(libelles.texte("rapport.indicateur.litigesPerdus"),
+                String.valueOf(rapport.nbLitigesPerdus()));
+        indicateurs.put(libelles.texte("rapport.indicateur.decisionsMixtes"),
+                String.valueOf(rapport.nbLitigesMixtes()));
         indicateurs.put(libelles.texte("rapport.indicateur.provisionsReprises"),
                 String.valueOf(rapport.provisionsReprises()));
         return indicateurs;

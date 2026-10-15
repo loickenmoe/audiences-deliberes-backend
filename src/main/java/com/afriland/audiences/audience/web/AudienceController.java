@@ -8,6 +8,7 @@ import com.afriland.audiences.audience.web.dto.AnnulerAudienceRequest;
 import com.afriland.audiences.audience.web.dto.AudienceResponse;
 import com.afriland.audiences.audience.web.dto.CalendrierEntreeResponse;
 import com.afriland.audiences.audience.web.dto.EnregistrerCompteRenduRequest;
+import com.afriland.audiences.audience.web.dto.NoteAvocatRequest;
 import com.afriland.audiences.audience.web.dto.FormatExport;
 import com.afriland.audiences.audience.web.dto.PlanifierAudienceRequest;
 import com.afriland.audiences.common.web.PageResponse;
@@ -52,6 +53,17 @@ public class AudienceController {
                                                                 @Valid @RequestBody PlanifierAudienceRequest request,
                                                                 @RequestParam(defaultValue = "false") boolean forcer) {
         return ResponseEntity.status(HttpStatus.CREATED).body(audienceService.planifierAudience(id, request, forcer));
+    }
+
+    /**
+     * QF-64 : la note destinée à l'avocat constitué, distincte du compte rendu interne. Le DJ et la
+     * DJA l'écrivent aussi, par leur {@code ROLE_JURISTE} composite (Q-81).
+     */
+    @PutMapping("${api.prefix}/audiences/{id}/note-avocat")
+    @PreAuthorize("hasRole('JURISTE')")
+    public AudienceResponse modifierNoteAvocat(@PathVariable Long id,
+                                                @Valid @RequestBody NoteAvocatRequest request) {
+        return audienceService.modifierNoteAvocat(id, request);
     }
 
     @PutMapping("${api.prefix}/audiences/{id}/compte-rendu")

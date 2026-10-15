@@ -2168,6 +2168,816 @@ sont unifiées.
 **Symétrique de QF-16.** Là, un juriste jamais connecté reste inaffectable ; ici, un avocat jamais
 inscrit ne voit rien. Dans les deux cas le système a raison — c'est son explication qui manquait.
 
+### Q-141 ✅ Une condamnation ne se suit que sur une étape clôturée — tranché (2026-10-15)
+
+**Remplace Q-59.** Q-59 avait laissé la condamnation sans précondition d'étape, faute de texte
+fonctionnel, et rendu {@code etapeId} facultatif. Le porteur du projet a tranché le 2026-10-15 :
+une condamnation ne se suit que lorsque le dossier est à l'étape **Clôturée**.
+
+La règle reprend à l'identique celle de l'adjudication, sa voisine dans
+`DecisionDefinitiveService` (RG-DEF-01) : `etapeId` est **obligatoire**, et l'étape doit être
+`CLOTURE`. Les condamnations déjà enregistrées ne sont pas touchées.
+
+La jurisprudence n'est pas modifiée : sa garde existait déjà (plus aucune étape ouverte, métier du
+2026-09-29). Seul l'écran ne la reflétait pas - c'est QF-66 côté front.
+
+### Q-140 ✅ Le SH et l'Assistante partagent ; l'état de constitution se lit — tranché (2026-10-15)
+
+**Amende Q-139 sur deux points**, à la demande du porteur du projet.
+
+1. **Le SH et l'Assistante partagent les pièces**, « ils sont à la base des juristes ». Le
+   `@PreAuthorize` du partage et du retrait passe à `hasAnyRole('JURISTE', 'SH', 'ASSISTANTE')`.
+   Sur un dossier sensible, leur geste est une **proposition**, comme celui du juriste : le service
+   lisait déjà la règle sur le profil (seuls DJ et DJA partagent directement), il n'a pas changé.
+   La note à l'avocat reste au seul juriste.
+2. **`GET /dossiers/{id}/partage-avocat`** dit si un avocat affecté au dossier y est constitué,
+   avec la règle même qui ouvre les pièces à l'avocat. Signalé en recette sur DOS-2026-1303 : les
+   pièces étaient partagées, l'avocat affecté, et rien ne disait à celui qui partageait que
+   l'absence de constitution les retenait.
+
+Lecture dédiée plutôt que champ de `DossierResponse` : la réponse du dossier compte trente-sept
+champs et plusieurs constructeurs ; un champ calculé y aurait touché tous les écrans du dossier.
+
+### Q-139 ✅ L'avocat constitué accède aux pièces partagées et à une note par audience — tranché (2026-10-15)
+
+**La demande** : donner à l'avocat externe l'accès à certains documents du dossier et aux audiences
+tenues, pour mieux assurer la défense. Jusqu'ici il recevait ses pièces hors de l'application, par
+courriel ou sur papier, **sans aucune trace** : les faire passer par ici est un gain de sécurité, à
+condition de poser la règle.
+
+**Les quatre arbitrages du porteur du projet** (2026-10-15), sur proposition :
+
+| Question | Arbitrage |
+|---|---|
+| Déclencheur | Affecté **et constitué** - l'affectation ne fait pas le mandat (Q-28), c’est la lettre signée par le SH qui le donne |
+| Qui partage | Tout juriste, sans validation du DJ |
+| Dossier sensible | Le juriste **propose**, le DJ ou la DJA **valide** avant que rien ne soit visible |
+| Audiences | Une **note à l'avocat**, distincte du compte rendu, qui reste interne (RG-INT-07) |
+
+La demande disait d'abord « l'avocat peut proposer le partage » ; l'avocat ne voyant pas la GED,
+il ne peut désigner une pièce qu'il ne voit pas. Le porteur du projet a confirmé : **le juriste
+propose**.
+
+**Le modèle (V47).** Cinq colonnes sur `document` - l'état `NON`/`PROPOSE`/`PARTAGE`, qui a
+partagé et quand, qui a validé et quand - et non une table de partages par avocat. Une pièce est
+partagée avec **les avocats constitués du dossier**, règle évaluée à chaque lecture : un changement
+d'avocat retire l'accès sur-le-champ, sans rien à révoquer. Une table par avocat aurait demandé de
+révoquer ligne à ligne, et une révocation oubliée laisse une pièce chez un avocat qui n'en est plus
+un. Trois contraintes en base : l'état est l'un des trois ; `NON` ne garde ni auteur ni date ; une
+validation ne s'écrit que sur une pièce partagée.
+
+**Un dossier sensible se lit sur `estSensible`**, une proposition de sensibilité en attente
+comprise - un rejet le repasse à faux. C'est le côté prudent : une pièce partagée à tort ne se
+reprend pas. *À confirmer si le métier voulait réserver la règle aux seules sensibilités validées.*
+
+**Trois choix de sécurité.**
+- Affecté sans être constitué, la liste répond `constitue: false` : « aucune pièce » et « pas
+  encore constitué » sont deux situations que l'avocat doit distinguer.
+- Une pièce non partagée répond **404, pas 403** : 403 confirmerait qu'elle existe, et l'avocat
+  pourrait sonder la GED par tâtonnement sur les identifiants.
+- Chaque ouverture par l'avocat est **tracée** (`DOCUMENT_CONSULTE_PAR_AVOCAT`) : le jour où la
+  question se pose, il faut pouvoir dire s'il avait vu la pièce avant l'audience.
+
+**La note à l'avocat** s'écrit à tout moment, y compris avant l'audience - « apportez l'original de
+l'acte » se dit avant, pas après - et ne s'ouvre qu'à l'avocat constitué, comme les pièces. Vide,
+elle est effacée.
+
+**Un piège évité au passage.** La méthode de la note s'insère juste avant `enregistrerCompteRendu`,
+qui porte `@Transactional` sur la ligne précédente. Une insertion naïve aurait glissé la nouvelle
+méthode entre l'annotation et la méthode existante : celle-ci aurait **perdu sa transaction**, sans
+qu'aucune compilation ni aucun test ne le signale. Vérifié avant l'écriture.
+
+**Hors périmètre, à décider.** Aucune notification n'est émise : le DJ découvre une proposition
+dans sa file, l'avocat une pièce dans son espace. Ajouter un type d'alerte touche la contrainte
+`chk_alerte_type`, les grilles de diffusion et les écrans de réglage - il mérite d'être demandé.
+
+### Q-138 ✅ Le tableau de bord se recadre par catégorie — tranché (2026-10-13)
+
+**Ce qui a déclenché l'arbitrage.** En livrant Q-137, j'ai signalé que « Litiges gagnés », « perdus »
+et « Décisions mixtes » ne comptaient que les dossiers de **recouvrement**, héritage du taux de
+succès qu'ils ont remplacé le 2026-10-06. Le porteur du projet a demandé l'état exact : **six des
+neuf indicateurs portaient sur les deux catégories, trois sur une seule**, sans que l'écran le
+distingue. Puis il a tranché : pas un renommage, un vrai suivi des deux catégories.
+
+**La conséquence que ce diagnostic a rendue visible, et qui est le vrai coût de l'état précédent** :
+un dossier de « Litiges d'exploitation » jugé ne faisait bouger **aucun** compteur de résultat. Son
+délibéré existait, était enregistré, apparaissait dans l'audit et dans l'activité du juriste - mais
+nulle part dans l'application on ne l'aurait vu compté.
+
+**Un sélecteur de périmètre, et le même tableau de bord trois fois.** Toutes catégories (défaut,
+choisi par le porteur du projet), Recouvrement, Litiges d'exploitation. Les **neuf** indicateurs le
+respectent, et les neuf détails de Q-137 aussi.
+
+**Pourquoi une liste des deux valeurs plutôt qu'un filtre optionnel.** `dossier.categorie` est
+`NOT NULL` avec une contrainte `CHECK` sur ces deux valeurs exactement (V1) : « toutes catégories »
+est donc littéralement leur **union**, et l'invariant
+**Recouvrement + Litiges d'exploitation = Toutes** repose sur la base, non sur mon code. Un filtre
+optionnel aurait demandé un `:categorie IS NULL OR …` dans seize requêtes, et laissé la porte
+ouverte à un appel non scopé. Il n'existe donc **aucune variante sans périmètre** : chaque compteur
+en prend un.
+
+**L'invariant est tenu par deux tests, à deux niveaux.** Un test d'intégration Testcontainers
+l'additionne requête par requête sur PostgreSQL - c'est la seule façon de savoir qu'aucune n'a oublié
+sa jointure sur le dossier. Et un parcours Playwright le vérifie **à travers l'écran**, en lisant les
+neuf blocs sous les trois périmètres : c'est là qu'un sous-total faux se verrait. Un tableau de bord
+dont les sous-totaux ne s'additionnent pas, personne ne le regarde deux fois.
+
+**La garantie faite au porteur du projet : son chiffre d'hier reste reproductible.** Les trois
+compteurs de litiges perdent leur filtre figé et deviennent recadrables comme les autres - si bien
+que « Litiges gagnés » en périmètre **Recouvrement** donne exactement ce qu'il lisait avant. Rien
+n'a été changé en silence ; le périmètre a reçu un nom. Un test l'affirme.
+
+**Le rapport périodique suit, et il le fallait.** Il portait la même asymétrie - quatre indicateurs
+sur les deux catégories, trois sur le recouvrement. N'en scoper que trois aurait reproduit le défaut
+qu'on retire ; et sans sélecteur sur cet écran, ses trois nombres auraient changé **en silence** dès
+que le backend a cessé de les figer. Son périmètre figure jusque dans le **nom du fichier exporté** :
+un rapport de recouvrement et un rapport toutes catégories portent des chiffres différents sur la
+même période, et deux fichiers nommés pareil se confondraient dans un dossier.
+
+**Quatre compteurs sont des variantes et non des remplacements** :
+`dossierRepository.countByCreatedAtBetween` sert aussi au rapport journalier de la GED, qui n'a pas
+de notion de catégorie. Les deux coexistent donc.
+
+**Le taux de succès suit désormais le périmètre, et son nom est devenu historique.** Sous « toutes
+catégories » il ne mesure plus le seul recouvrement. Aucun écran ne l'affiche depuis le 2026-10-06 ;
+le laisser figé aurait fait, dans la même réponse, un champ qui ignore le périmètre que tous les
+autres respectent.
+
+**Une note a disparu de l'écran, et c'est le signe que le problème est réglé à la source.** Le détail
+portait « ce décompte ne porte que sur les dossiers de recouvrement » : le sélecteur le dit
+désormais, et une note n'a plus à rattraper un libellé. Celle sur les alertes reste - elle ne parle
+pas de périmètre mais de ce qu'une ligne représente.
+
+**Le périmètre vit dans l'URL** (`?categorie=…`) : un lien vers « le tableau de bord du
+recouvrement » se partage, et un rechargement ne ramène pas l'utilisateur sur « toutes catégories »
+sans qu'il l'ait demandé.
+
+**Ce que je n'ai pas fait, et qui attend un mot.** Aucun **seuil ni alerte par catégorie** : les
+seuils sont aujourd'hui globaux, et les décliner par catégorie inventerait une règle métier que
+personne n'a posée.
+
+### Q-137 ✅ Chaque bloc du tableau de bord s'ouvre sur son détail — tranché (2026-10-13)
+
+**Ce que le métier a demandé** : appliquer au tableau de bord le principe de la fiche d'activité -
+« si le DJ/DJA clique sur un élément (bloc) du tableau de bord, il a la possibilité de voir les
+détails ».
+
+**Même geste, mécanique sans rapport.** Sur la fiche d'activité (Q-133), tout venait d'une seule
+table, `historique_action`. Ici, chacun des neuf indicateurs a sa propre source : des étapes de
+procédure, des audiences, des demandes de frais, des alertes, des délibérés, des adjudications.
+C'est ce que j'avais annoncé comme « un chantier distinct, pas une variante ».
+
+**La seule propriété qui compte vraiment : le détail rend exactement ce que le compteur compte.**
+Chaque liste reprend le prédicat de son compteur, mot pour mot. Afficher « 12 » puis lister neuf
+lignes ferait douter des deux chiffres, et c'est un doute qu'on ne rattrape pas. Un test
+d'intégration Testcontainers confronte les deux requêtes **sur la même base**, pour les neuf
+indicateurs : un test à mocks n'aurait rien pu en dire.
+
+**Un seul endpoint, une seule forme de ligne.** `GET /tableau-de-bord/details?indicateur&page&size`,
+`hasAnyRole('DJ','DJA')` - cet endpoint n'ouvre rien que l'écran n'affiche déjà. Les objets comptés
+sont de natures différentes, mais neuf formes de réponse auraient donné neuf tableaux à l'écran,
+chacun avec ses colonnes et ses défauts. Le bloc d'où l'on vient dit déjà ce qu'on regarde.
+
+**Trois points où la liste et le compte pouvaient diverger**, et qui sont traités :
+
+1. **Dossiers actifs et affaires vidées** se comptent avec un `DISTINCT` sur le dossier - un dossier
+   portant plusieurs étapes en cours ne doit paraître qu'une fois. La liste le reprend.
+2. **Les alertes de prorogation** comptent une ligne **par alerte**, non par dossier : une
+   prorogation prévenant plusieurs destinataires en produit plusieurs. Regrouper par dossier aurait
+   donné une liste plus courte que le nombre affiché. L'écran le dit.
+3. **Les provisions reprises** sont une **somme d'argent**, non un décompte. L'invariant n'est donc
+   pas le nombre de lignes mais la somme des montants listés, et c'est ce que le test vérifie.
+
+**Les constantes `ETAPES_FERMEES` et `FRAIS_SOLDES` sont déclarées deux fois**, dans
+`ReportingService` (privées) et dans `DetailTableauDeBordService`. Élargir leur visibilité n'était
+pas souhaitable ; la duplication est donc assumée, mais un test les confronte terme à terme - une
+dérive silencieuse ferait rendre au détail autre chose que ce qui est compté.
+
+**⚠ Un écart signalé pour arbitrage, et non corrigé en silence.** Les trois indicateurs
+« Litiges gagnés », « Litiges perdus » et « Décisions mixtes » ne comptent que les dossiers de
+**catégorie recouvrement** : ils descendent du taux de succès du recouvrement, qui ne portait que
+sur eux. Leurs libellés, eux, ne le disent pas - et depuis que le taux a été remplacé par trois
+décomptes bruts (Q-132), la restriction est devenue invisible. Le détail la rend visible, en une
+phrase sous le titre de la modale. **Je n'ai pas touché aux chiffres** : les élargir changerait des
+nombres que la Direction lit depuis une semaine, et c'est son arbitrage, pas le mien.
+
+**Un défaut d'accessibilité évité.** Le bloc entier n'est pas rendu cliquable : un `<div>` qui réagit
+au clic au milieu d'une liste de définitions n'est ni atteignable au clavier ni annoncé comme une
+action, et un nombre cliquable s'annoncerait « 12 » sans dire ce qu'il ouvre. Un bouton nommé, dont
+le **nom accessible porte l'indicateur** - neuf boutons « Voir le détail » sur un même écran ne se
+distinguent pas autrement.
+
+### Q-136 ✅ Les avocats absents du tableau nominatif — corrigé (2026-10-13)
+
+**Signalé par le porteur du projet** : connecté en DJ, « Activité par personne » montrait tous les
+utilisateurs internes, **mais pas les avocats**.
+
+**Le constat était juste, et ce n'était pas un oubli d'habilitation.** Le tableau de Q-132 compte
+six natures de **production interne** : ouvrir un dossier, planifier une audience, enregistrer un
+compte rendu, enregistrer un délibéré, rédiger une lettre, contrôler des frais. Un avocat n'en
+accomplit **aucune**. Il **dépose** - un compte rendu, une demande de frais, une publication - et
+c'est le juriste qui enregistre. La requête ne ramenait donc aucune ligne pour lui, et c'était
+mécaniquement correct.
+
+**Pourquoi l'y ajouter aurait été pire.** Faire figurer les avocats dans ce tableau n'aurait affiché
+que des **lignes de zéros** sur ses six colonnes : exactement ce que Q-132 refuse, et ce qui ferait
+lire « cet avocat n'a rien fait » là où il a peut-être déposé trente comptes rendus.
+
+**Deux populations, deux jeux d'indicateurs, une même règle.** Un second tableau,
+`GET /rapports/nominatif/avocats`, avec les quatre natures qu'un avocat accomplit réellement :
+comptes rendus déposés, demandes de frais déposées, autres publications, explications fournies. Ni
+note, ni classement par volume, ni total - les lignes suivent l'ordre des **noms**, comme pour les
+internes. Un avocat chargé n'est pas un avocat méritant : c'est la banque qui lui confie ses
+dossiers.
+
+**Les quatre natures comptées sont exclusives à l'avocat.** Les trois dépôts et la réponse à une
+demande d'explication sont tous `hasRole('AVOCAT')` : grouper sur elles ne ramène que des avocats,
+**sans condition sur le profil**. Une condition de moins à garder d'accord avec les habilitations -
+et si l'une d'elles s'ouvrait un jour à un profil interne, c'est l'habilitation qui dirait la vérité,
+pas une liste recopiée dans le service.
+
+**Le nom vient du répertoire, pas du compte** : c'est sous celui-là que la direction connaît
+l'avocat, et c'est lui qui figure sur les lettres de constitution. Les inscriptions sont lues **en
+une seule requête** (`findByCompteKeycloakIn`), le pont passant par `compte_keycloak` qui porte
+tantôt l'identifiant de connexion, tantôt l'identifiant technique selon l'époque de l'inscription -
+les deux sont donc demandés, comme le fait déjà `CompteAvocatService` pour une personne seule.
+
+**Une inscription retirée du répertoire ne fait pas disparaître ses dépôts.** `avocatId` vaut alors
+`null`, le nom vient du compte, et l'écran ouvre sa fiche par le compte faute d'inscription à
+désigner. C'est une information, pas un trou.
+
+**Un défaut d'accessibilité introduit et corrigé dans le même jalon.** Les deux tableaux portaient un
+bouton « Afficher » identique sur le même écran : Playwright l'a signalé comme ambigu, mais le
+problème est d'abord qu'un lecteur d'écran annonçait deux fois « Afficher » sans dire lequel.
+Le texte visible reste court, à côté de son titre de section ; c'est le **nom accessible** qui porte
+la précision (« Afficher l'activité par personne », « Afficher l'activité des avocats »).
+
+### Q-135 ✅ L'avocat lit son activité, la direction aussi ; et j'avais écrit l'inverse (2026-10-13)
+
+**Ce que le métier a demandé.** Que le DJ et la DJA puissent lire « ce même compte rendu pour les
+avocats également », et que chaque avocat puisse voir et télécharger le sien.
+
+**Une affirmation fausse, à corriger d'abord.** En livrant la fiche d'activité (Q-133), j'ai exclu
+l'avocat en écrivant qu'« aucune des natures comptées n'est la sienne - sa fiche serait vide par
+construction ». C'était **faux**, et vérifiable en quatre lignes de code :
+
+| Nature | Où elle est tracée |
+|---|---|
+| `FRAIS_DEMANDE_DEPOSEE` | `FraisService:106` — il dépose ses demandes de frais |
+| `PUBLICATION_CR_DEPOSE` | `PublicationService:132` — il dépose ses comptes rendus d'audience |
+| `PUBLICATION_AUTRE_DEPOSEE` | `PublicationService:169` — il dépose ses autres publications |
+| `EXPLICATION_REPONDUE` | `DemandeExplicationService:141` — il répond aux demandes d'explication |
+
+Les quatre passent par `historiqueActionService.enregistrer`, qui attribue l'action à
+**l'utilisateur authentifié** : elles sont donc journalisées sous le compte de l'avocat, et l'étaient
+déjà. L'affirmation est corrigée partout où je l'avais écrite - ici, dans `lib/rbac.ts`, dans
+`SCREEN_MAP.md` et dans le plan des observations.
+
+**Ce qui change.** Les trois endpoints passent de `hasRole('CONSULTATION')` à
+`hasAnyRole('CONSULTATION','AVOCAT')`. Deux rôles nommés plutôt que sept profils : ce qui est
+énuméré là doit rester court, ou il vieillira.
+
+**Un avocat se désigne par son inscription au répertoire, non par un compte.** Un paramètre
+`avocatId` s'ajoute aux trois endpoints : la direction connaît l'avocat par le répertoire, où
+l'identifiant d'utilisateur ne figure pas. Le pont entre les deux existait déjà -
+`CompteAvocatService.utilisateurDe`, celui qui restreint les lectures de l'avocat lui-même (QF-45).
+Les deux désignations ensemble sont **refusées** : servir l'une en ignorant l'autre laisserait croire
+qu'on a lu l'activité demandée.
+
+**L'ordre de la vérification a été corrigé en cours de route, et Mockito l'a révélé.** Une stubbing
+signalée inutile a montré que le refus de droits tombait **après** la résolution du compte visé : un
+avocat passant l'inscription d'un confrère obtenait bien un refus, mais apprenait au passage, par la
+nature de ce refus, si ce confrère s'était déjà connecté. `estLeCompteDe` répond à la seule question
+utile - est-ce la sienne ? - sans rien lire du compte visé. Le droit se vérifie désormais **avant**
+le compte, et un test l'affirme (`verify(compteAvocatService, never()).utilisateurDe(any())`).
+
+**Un avocat jamais connecté est nommé comme tel**, et non rendu avec une fiche vide : pas de compte,
+donc pas une ligne d'historique. Le dire distingue « n'a rien fait » de « n'est jamais venu » - et
+c'est la première lecture qui ferait accuser à tort. Même distinction qu'en QF-45.
+
+**Ce que l'avocat ne voit pas, et ne doit pas voir.** Ses lignes de détail portent la **référence du
+dossier sans lien** : il n'a aucun écran de fiche dossier (QF-01), et lui en proposer un l'aurait
+mené à un refus de droits. La référence lui suffit - c'est ainsi qu'il nomme ses affaires dans ses
+échanges avec la banque.
+
+**Son délai moyen de saisie reste nul, et ce n'est pas un oubli.** Il **dépose** un compte rendu
+(`PUBLICATION_CR_DEPOSE`) ; c'est le juriste qui l'**enregistre** sur l'audience
+(`AUDIENCE_COMPTE_RENDU_ENREGISTRE`), et c'est ce second geste que le délai mesure. L'imputer à
+l'avocat lui prêterait un retard qui n'est pas le sien.
+
+### Q-133 ✅ Chacun télécharge son activité, et chaque décompte mène à sa tâche — tranché (2026-10-13)
+
+**A — Ce que le métier demande.** Deux phrases du 2026-10-13 : « chaque utilisateur doit être
+capable de télécharger ses propres rapports, dépendamment de la période choisie » et « après
+l'affichage, il doit être capable de cliquer sur un élément de son rapport et cela devrait
+directement le renvoyer aux détails de la dite tâche ».
+
+**Et une correction de Q-132**, le même jour, qui a changé la conception : « le SH et l'Assistante
+sont à la base des juristes et en plus de cela ont leurs activités propres. Ce rapport devrait
+refléter fidèlement ce que l'utilisateur a effectué. » J'avais recommandé **une seule liste de six
+indicateurs** pour que la direction et chacun lisent la même chose ; c'est cette recommandation qui
+a été renversée.
+
+**B — Pourquoi la fidélité et la comparaison ne tiennent pas dans un même tableau.** Quarante-neuf
+des cinquante-trois codes de `TypeActionHistorique` sont l'activité d'une personne. Un tableau à
+quarante-neuf colonnes n'est pas lisible ; un tableau à six colonnes montre l'Assistante et le SH
+presque vides, puisque leur métier n'est pas d'ouvrir des dossiers. **Deux niveaux, une seule
+source** :
+
+| Niveau | Qui | Contenu |
+|---|---|---|
+| Le tableau nominatif de Q-132 | DJ, DJA | six colonnes de production, **comparables** entre personnes. Inchangé |
+| La fiche d'activité (celui-ci) | **chacun sur lui-même** ; DJ et DJA sur quiconque | **tout** ce que la personne a fait, une ligne par nature accomplie, téléchargeable, cliquable |
+
+La direction atteint le niveau 2 en cliquant un **nom** dans le tableau. Chacun atteint le sien
+depuis « Mon compte ».
+
+**C — Trois endpoints.** `GET /rapports/activite` (la fiche), `/rapports/activite/export`
+(PDF, Excel, CSV) et `/rapports/activite/details` (les actions derrière un décompte, paginées).
+
+**`hasRole('CONSULTATION')` plutôt qu'une liste de profils.** Les cinq profils internes le portent ;
+l'avocat ne le porte pas (QF-01). ~~Et aucune des natures comptées n'est la sienne - sa fiche serait
+vide par construction.~~ **Cette seconde raison était fausse**, et l'endpoint est ouvert à
+`ROLE_AVOCAT` depuis Q-135 : l'avocat dépose ses demandes de frais, ses comptes rendus d'audience,
+ses autres publications, et répond aux demandes d'explication. La première raison, elle, tient.
+
+**C'est le service qui dit *sur qui*, pas l'annotation.** `utilisateurId` absent signifie « moi » ;
+renseigné, il n'est servi qu'au DJ, à la DJA, ou à la personne qui se demande elle-même. Un
+`@PreAuthorize` ne sait pas comparer un paramètre à l'appelant. Le **détail applique la même règle** :
+sans cela, il suffirait de connaître un identifiant pour lire ce que le décompte protège.
+
+**La liste des natures comptées est prise en creux**, comme le complément de quatre exclusions. Ce
+n'est pas un détail d'écriture : énumérer les quarante-neuf autres aurait reproduit **exactement le
+défaut de Q-131** - un référentiel fermé qui se tait quand on oublie de l'alimenter, et ne se tait
+qu'en production. Un code nouveau entre donc dans la fiche sans qu'on y pense.
+
+Les quatre exclusions, et leur raison : `AUDIT_CONSULTE` et `ARCHIVE_TELECHARGEE` parce que **lire
+n'est pas produire** - les compter ferait monter l'activité de qui consulte beaucoup ;
+`ETAPE_OUVERTE_AUTOMATIQUEMENT` parce que l'application l'a fait et que **personne** ne l'a fait ;
+`NON_CLASSEE` parce que ce n'est pas une nature mais l'absence de nature. `AUDIT_EXPORTE` **est**
+compté : une extraction scellée est un document produit.
+
+**Ce que le clic rend possible, et ce qui le permettait déjà.** La colonne `dossier_id` de
+`historique_action` est renseignée par toutes les natures utiles : chaque action porte donc le
+dossier qu'elle a touché, et l'écran ouvre sa fiche sur l'onglet correspondant. Une action **hors
+dossier** - configuration, référentiel - reste affichée sans lien : la masquer ferait disparaître de
+l'activité réelle, et le décompte ne tomberait plus sur le nombre de lignes.
+
+**Un défaut trouvé en chemin, de la famille de Q-131.** `historique.actions` portait **51 libellés
+pour 53 codes** : `EXPLICATION_DEMANDEE` et `EXPLICATION_REPONDUE`, livrés avec Q-130 le
+2026-10-07, y manquaient. L'écran d'audit les affichait donc **en code brut** au Directeur Juridique
+depuis six jours, et la fiche d'activité aurait fait de même. Les deux gardes existantes ne
+pouvaient pas le voir : l'une tire sa liste de `types/enums.ts`, où les natures d'action ne figurent
+pas, l'autre ne regarde qu'un autre bloc. Le nouveau garde-fou lit l'énumération dans
+`contracts/openapi.json` - la source est dans le dépôt frontend, et elle ne peut pas vieillir sans
+que le contrat vieillisse aussi. Vérifié en le faisant échouer volontairement.
+
+**Documents en français.** Comme tous les PDF du projet : il n'existe qu'un
+`pdf/libelles.properties`, et le libellé d'une nature d'action n'a d'existence que française dans
+l'énumération (QF-24). L'écran, lui, est bilingue.
+
+**Ce qui reste hors périmètre, et validé comme tel** : le **rapport périodique** ne devient pas
+cliquable - ses lignes agrègent des dossiers, des audiences et des frais du service entier, pas des
+actions d'une personne, et leur détail n'est pas dans `historique_action` mais dans chaque module.
+
+### Q-132 ✅ Le rapport d'activité par personne : des indicateurs, pas une note — tranché (2026-10-09)
+
+**A — Ce que le métier demande.** L'observation 14 du 03/10 réclame « des rapports nominatifs ».
+L'arbitrage du 2026-10-07 l'a précisée : **sans note**. « Dossiers traités, audiences suivies,
+comptes rendus déposés dans les délais, délais moyens - par personne et par période. Le responsable
+apprécie, l'application compte. » La liste exacte des informations n'est jamais venue.
+
+**B — Ce que le code implémente.** `GET /rapports/nominatif?dateDebut&dateFin`, servi par
+`RapportNominatifService`, agrège `historique_action` : six décomptes par personne — dossiers
+ouverts, audiences planifiées, comptes rendus saisis, délibérés enregistrés, lettres rédigées, frais
+contrôlés — et le **délai moyen** entre une audience et la saisie de son compte rendu. **Rien n'a
+été collecté en plus** : chaque indicateur correspond à un code d'action déjà tracé. C'est ce qui
+permet de livrer sans la liste manquante — je ne déduis aucune information nouvelle, j'expose ce que
+l'historique porte déjà.
+
+**C — Les quatre refus qui donnent sa forme à ce rapport.**
+
+1. **Pas de note, pas de score, pas de total « global ».** Additionner des actions de natures
+   différentes fabriquerait un chiffre de mérite que rien ne justifie — trente dossiers simples ne
+   valent pas deux affaires difficiles, et l'application n'a aucun moyen de le savoir.
+2. **Pas de tri par volume.** Les lignes suivent l'ordre des **noms**. Un tri par activité ferait du
+   rapport un palmarès, où le premier passerait pour le meilleur — c'est la note, réintroduite par
+   la mise en page.
+3. **Pas de « dossiers gagnés par personne ».** L'issue d'un délibéré appartient au **dossier**, pas
+   à celui qui l'a saisi : l'attribuer à une personne serait une règle métier que personne n'a
+   donnée. Plusieurs juristes interviennent sur une même affaire, et c'est le juge qui tranche.
+4. **Pas de « temps passé ».** L'application horodate des **actions**, jamais des durées de travail.
+   En déduire un temps de présence serait une invention, et une invention consultable par la
+   hiérarchie.
+
+**Le délai moyen vaut `null`, jamais zéro**, quand la personne n'a saisi aucun compte rendu. Zéro se
+lirait comme une saisie le jour même, c'est-à-dire comme la **meilleure performance possible** —
+exactement l'inverse de ce que l'absence signifie. L'écran affiche « Sans objet ».
+
+**Qui le lit : `hasAnyRole('DJ','DJA')`, et c'est délibérément plus étroit que `GET /rapports`.** Ce
+rapport **nomme des collègues**. L'adosser à `ROLE_JURISTE`, composite depuis Q-81, l'aurait ouvert
+à chaque juriste — donc à chacun des nommés. Même raisonnement qu'en Q-126 : un droit qui désigne
+des personnes ne se lit pas sur un rôle composite.
+
+**Deux pièges techniques, tous deux vérifiés sur base réelle.** Le délai moyen se calcule en SQL
+natif en rattachant l'action à son audience par `details ->> 'audienceId'` ; l'opérateur
+d'existence JSONB `?` y est **interdit**, JDBC le lisant comme un paramètre positionnel — d'où
+`jsonb_exists(h.details, 'audienceId')`. Et la borne haute est `fin.plusDays(1).atStartOfDay()` :
+comparer un `timestamp` à une `date` de fin exclurait toute la dernière journée.
+
+**Un compte retiré du référentiel garde ses lignes**, nommées « Compte retiré (#id) ». Les masquer
+ferait disparaître de l'activité réelle ; les laisser sans nom les rendrait anonymes, alors que
+c'est précisément le « qui » qui est en jeu.
+
+**Au passage, le dernier pourcentage de l'application disparaît.** Le répertoire des avocats
+affichait un taux de performance ; `AvocatRepertoireResponse` expose désormais
+`deliberesFavorables` et `deliberesTotal`, et l'écran lit « 3 gagnés sur 4 délibérés » — « Aucun
+délibéré » quand il n'y a rien à compter, un 0 % se lisant comme un échec là où rien n'a été jugé.
+Le taux reste dans la réponse, inutilisé : le retirer du contrat serait une rupture sans gain.
+
+**Ce que N11 laisse ouvert.** Le troisième indicateur approuvé le 2026-10-07 — « comptes rendus
+manquants » par avocat, dans le répertoire — n'est **pas** livré ici : il ne partage pas cette
+agrégation, et il comble un trou de N7 (un avocat qui manque une audience sur trois ne déclenche
+jamais l'escalade des séries consécutives).
+
+### Q-131 ✅ Les événements sans libellé de l'écran de configuration — corrigé (2026-10-07)
+
+**Signalé par le porteur du projet** : connecté en DJ, l'écran *Configuration* affichait **cinq
+erreurs** de message manquant. Trois venaient de N7, deux étaient **antérieures**.
+
+**Ce qui manquait.** `DEMANDE_EXPLICATION` n'avait de libellé ni dans `domaine.TypeAlerte`, ni dans
+`domaine.EvenementPrestataire`, ni dans `supervisionNotifications.evenements`. Et ce dernier bloc
+ignorait **`COMPTE_RENDU_ATTENDU` et `COMPTE_RENDU_RECU` depuis le 2026-10-05** : deux événements
+livrés avec RG-INT-11 et RG-INT-06, que la supervision affichait en code brut au DJ sans que
+personne le sache.
+
+**Pourquoi le garde-fou n'a rien vu, alors qu'il existe.** Le test « chaque valeur d'énumération a un
+libellé » parcourt les listes de `types/enums.ts`. `DEMANDE_EXPLICATION` n'y avait pas été ajouté :
+le test n'avait donc **rien à vérifier**. Un garde-fou qui tire sa liste du code qu'il garde ne
+protège que ce qu'on a pensé à y inscrire - c'est sa limite, et elle doit être connue.
+
+**Pourquoi les parcours Playwright ne l'ont pas vu non plus.** Ils tournent sur un build de
+production, où `next-intl` **remplace** un message manquant par le chemin de sa clé au lieu de
+lever. Le sélecteur `/ par SMS$/` du parcours de la grille continuait donc de trouver sa case, dont
+le nom accessible était devenu
+`domaine.EvenementPrestataire.DEMANDE_EXPLICATION par SMS`. En développement, la même absence
+produit une erreur visible - c'est ainsi qu'elle a été trouvée.
+
+**Ce qui ferme la classe de défaut.** Un test nouveau : **chaque alerte interne et chaque événement
+prestataire doit avoir un libellé dans `supervisionNotifications.evenements`**, dans les deux
+langues. Ce bloc n'était couvert par rien, alors qu'il nomme les mêmes événements **ailleurs** que
+`domaine.*` : traduire dans l'un et oublier l'autre ne se voyait pas.
+
+**Ce que cela confirme.** Un événement nouveau traverse désormais **cinq** référentiels, et non
+trois : la contrainte en base, la grille de notification, les textes du moteur, la liste
+d'énumération du frontend, et les deux blocs de libellés. Les cinq se taisent tant que l'événement
+ne se produit pas.
+
+### Q-130 ✅ La demande d'explication, et la réponse de l'avocat — tranché (2026-10-07)
+
+**Ce que le temps 1 laissait en plan.** Q-129 signale à la direction qu'un avocat a manqué deux
+audiences de suite. Ensuite, rien : le DJ écrivait hors de l'application, et plus personne ne savait
+qui s'était expliqué. Deux arbitrages ont ouvert ce temps 2 : la réponse **est** suivie, et la
+relance automatique **se suspend** dès qu'une demande part.
+
+**Pourquoi une table, et non une correspondance.** `correspondance_avocat` pend à une publication,
+par une clé étrangère obligatoire et unique. Or une demande d'explication porte sur une
+**absence** : il n'y a précisément rien de publié à quoi l'accrocher. Elle pend donc à l'avocat,
+et le dossier n'y est que **facultatif** - elle vise une conduite, pas une affaire. Exiger un
+dossier obligerait à en choisir un arbitrairement, et la demande se lirait comme un reproche sur
+celui-là.
+
+**La réponse vit dans la même ligne.** Une table de réponses autoriserait plusieurs réponses à une
+même demande, ce que personne n'a demandé, et obligerait chaque lecture à joindre pour savoir si
+l'on attend encore. Le statut se **déduit** de la date de réponse : une colonne de plus pourrait
+dire le contraire des deux autres, et c'est toujours elle qu'on finirait par croire.
+
+**Quatre refus font de cet échange une pièce, et non une conversation.** Une seule demande en
+attente à la fois - une seconde brouillerait la file : laquelle suspend la relance, à laquelle
+faut-il répondre ? On ne répond pas à la demande d'un autre (403). On ne répond qu'une fois : une
+prise de position datée, que la direction lira peut-être des mois plus tard, ne se récrit pas (409)
+- corriger passe par une nouvelle demande. Et un compte non rattaché au répertoire ne répond pas.
+
+**La relance se tait pendant l'échange.** Un responsable qui écrit en personne doit couvrir la
+machine, pas rivaliser avec elle : continuer les rappels automatiques pendant qu'une demande attend
+affaiblirait les deux - le rappel, qu'on cesse de lire, et la demande, noyée dedans. Elle reprend à
+la réponse : le compte rendu manque toujours, et c'est de nouveau son affaire. La question est posée
+**une fois par passage**, non une fois par audience.
+
+**⚠ Ce qui n'est pas fait, et pourquoi.** Aucune relance de la demande elle-même. « Reprendre si
+rien n'arrive » supposerait un délai que personne n'a fixé, et je n'en invente pas. Une demande sans
+réponse reste **visible** dans la file de la direction, filtrable sur « en attente », qui décide
+d'insister ou non. Le jour où le métier donnera ce délai, il devra devenir un paramètre.
+
+**Un seul type d'alerte pour les deux sens.** La demande part vers l'avocat, la réponse revient vers
+la direction : c'est le même fil, et le texte de l'alerte dit lequel. Deux types auraient doublé la
+grille de notification pour une distinction que le destinataire fait déjà de lui-même.
+
+**V46 traverse les trois référentiels fermés d'un coup** - codes d'historique, types d'alerte,
+grilles de notification. Les trois échouent au même endroit, en écriture et en production, le jour
+où l'événement se produit ; les poser ensemble vaut mieux que de les découvrir l'un après l'autre.
+
+**Un test assoupli, sans être relâché.** `les_grilles_couvrent_initialement_tous_les_evenements`
+comparait l'**ordre** là où il vérifie la **couverture**. L'ordre d'une liste que la direction
+réécrit à sa guise ne veut rien dire, et l'exiger faisait échouer le test parce qu'une valeur
+nouvelle s'ajoute à la suite sans être déclarée en dernier dans son énumération. L'égalité des
+ensembles reste exigée : aucun événement oublié, aucun inconnu en trop.
+
+### Q-129 ✅ Deux audiences sans compte rendu remontent à la direction — tranché (2026-10-07)
+
+**La définition, enfin posée.** L'observation 8 demandait une relance « après deux manquements » et
+une demande d'explication du DJ. Deux choses manquaient : ce que « deux fois successivement »
+voulait dire, et qui déclenche. La seconde avait été tranchée le 05/10 - l'alerte va à la direction,
+qui décide. La première l'est le 2026-10-07 : **deux audiences consécutives dont le même avocat n'a
+pas déposé le compte rendu**, à travers tous ses dossiers. Ce sont les manquements de la personne
+qui comptent, pas ceux d'une affaire.
+
+**Ce que la relance ne savait pas faire.** RG-INT-11, livrée le 05/10, raisonne **par audience** :
+elle relance sur chacune, sans jamais voir qu'un même avocat en a manqué deux. Le nouveau comptage
+raisonne **par avocat**. Les deux vivent dans la même classe, et c'est voulu : ils partagent quatre
+règles - le délai, l'audience échue, l'étape fermée, le compte rendu déposé. Séparés, ils
+dériveraient, et la direction serait alertée sur une audience pour laquelle l'avocat n'a jamais été
+relancé.
+
+**Au DJ et à la DJA** (précision du métier, même jour). L'un des deux peut être absent le jour où un
+avocat décroche, et un signalement qui attend un retour de congé n'en est plus un. Les deux profils
+sont lus **tels quels**, jamais par un rôle : `ROLE_JURISTE` est composite (Q-81) et les porterait
+tous les deux, mais aussi tous les juristes - c'est le trou que Q-126 a fermé ailleurs, et il ne se
+rouvre pas ici.
+
+**Seule la série en cours est regardée**, et pour deux raisons. Un avocat qui a manqué deux audiences
+puis s'est remis à rendre compte n'a plus à être signalé : la série est rompue, et nommer un
+comportement corrigé ferait du bruit. Et au premier passage après la mise en service, regarder tout
+l'historique produirait une alerte par série ancienne - une avalanche le matin de la livraison.
+
+**Une alerte par série, pas une par jour.** « Deux audiences sans compte rendu » est un **état** : il
+reste vrai tant que rien n'arrive. Le marqueur porte donc la première audience de la série, non la
+date : une troisième audience manquée allonge la même série et ne réveille personne. Le métier a dit
+« au deuxième manquement », pas « à chaque manquement ».
+
+**V45 étend `chk_alerte_type`.** C'est une contrainte fermée, posée en V1 : une valeur ajoutée côté
+Java sans migration compile, passe les tests qui ne déclenchent pas cette alerte, et **échoue
+seulement en écriture, en production**. Le défaut s'est produit trois fois avec la contrainte jumelle
+des codes d'historique (V24 à V26, puis V43).
+
+**Ce qui reste à faire - le temps 2.** La **demande d'explication** elle-même : un message de la
+direction à l'avocat, sur le modèle de la correspondance, avec sa **réponse suivie** - l'avocat
+répond depuis son espace, la direction voit qui s'est expliqué. Deux arbitrages déjà pris pour ce
+temps-là (2026-10-07) : la réponse **est** suivie, et la relance automatique **se suspend** dès
+qu'une demande part - un responsable qui écrit en personne doit couvrir la machine, pas rivaliser
+avec elle.
+
+**Le plafond de cinq relances reste une hypothèse**, et le code le dit. Il deviendra sans objet
+quand la suspension du temps 2 sera livrée, puisque l'escalade arrivera toujours avant. On le laisse
+en filet, sans en faire un paramètre tant que personne ne demande à le régler.
+
+### Q-128 ✅ Les placeholders explicatifs, et l'astérisque qui ne se voyait pas — tranché (2026-10-07)
+
+**Les textes, et où ils vont.** Observation 4 : des **placeholders explicatifs** sur le formulaire
+de création. Les textes ont été proposés puis validés le 2026-10-07 - mais posés **sous** les champs
+au lieu d'être mis **dedans**. Le métier l'a repris le jour même : « ces messages sont des
+placeholders dans les champs concernés, pas des textes en dessous ». L'observation le disait, je
+l'avais lue comme une aide à la saisie.
+
+**Trois champs étaient déjà servis**, et ce sont eux le modèle : les deux sélecteurs d'agence
+portaient « Code, nom ou ville de l'agence… » depuis N1, et le choix du client son « Choisissez un
+client ». Restaient **dix** champs libres, qui portent désormais le leur.
+
+**Les textes ont été raccourcis en changeant de place.** Une phrase qui tient sous un champ ne tient
+pas dedans : « L'agence d'où vient le dossier. Cherchez par code ou par nom ; la ville et l'adresse
+distinguent les agences homonymes » est devenue superflue, le sélecteur disant déjà quoi taper.
+**Un placeholder disparaît dès qu'on écrit** : c'est le revers de la forme demandée, et il vaut
+pour les quatre références de pièces, dont le texte rappelle la règle que l'on inverse le plus
+souvent. Chacun redit une
+règle déjà posée plutôt que d'en inventer une : la référence du client est attribuée par le système
+(arbitrage du 29/09), plusieurs demandeurs sont possibles (observations 1 et 3), l'agence vient du
+référentiel (observation 2), et les quatre références de pièces sont **facultatives** - c'est la
+pièce jointe qui est exigée (arbitrage du 29/09).
+
+**Trois d'entre eux étaient des suppositions**, signalées comme telles avant validation : risque
+encouru, recours exercés, motif de renvoi. Aucune règle ne les définissait. Le métier les a retenus ;
+ils sont donc désormais la règle, et non plus mon hypothèse.
+
+**La répétition des trois références est voulue.** Elles disent toutes « Référence facultative :
+c'est le fichier qui est exigé », parce que c'est exactement la règle que les utilisateurs
+inversent. La redite est ici une sécurité.
+
+**Un défaut trouvé en posant les textes : l'astérisque du sélecteur cherchable.** Le métier l'a vue
+noire sur « Agence d'origine » là où tous les autres champs la portent en rouge. Elle avait en
+réalité **deux** défauts, et le second ne se voyait pas :
+
+- elle n'avait pas la classe `text-danger`, donc héritait la couleur du libellé ;
+- elle vivait **à l'intérieur du `<label>`**, ce que `Champ` évite explicitement depuis toujours. Le
+  nom accessible du champ valait « Agence d'origine * » et non « Agence d'origine » : une recherche
+  par libellé exact ne le trouvait pas. Deux parcours y échappaient en employant une expression
+  régulière - un contournement, non une solution.
+
+Les deux sont corrigés, et trois tests les tiennent : couleur, absence quand le champ est
+facultatif, et nom accessible réduit au libellé seul.
+
+**Le changement est entièrement frontend** ; il est consigné ici parce que c’est ce journal qui porte la suite continue des décisions métier.
+
+**`ListeParties` a reçu la propriété manquante** : ses champs ne portaient aucun placeholder, et
+chaque partie ajoutée porte désormais le même.
+
+**Le rattachement de `Champ` reste**, bien qu'il ait été découvert par un chemin abandonné : il sert
+les messages d'**erreur** des 128 champs, et les aides qui subsistent ailleurs - l'accueil et le
+formulaire des agences. Seul l'usage sur le formulaire de création a disparu.
+
+### Q-127 ✅ Le message court de la constitution, dicté par la Direction Juridique — tranché (2026-10-07)
+
+**Le texte.** Le SMS et le message WhatsApp envoyés au prestataire à la validation d'une constitution
+disaient : « Afriland First Bank, Direction Juridique : Constitution validée. Détails par courriel ou
+auprès de la Direction Juridique. » La Direction Juridique les a réécrits :
+
+> Afriland First Bank, Direction Juridique : Vous avez été notifié(e) d'une lettre de constitution.
+> Veuillez consulter votre boîte mail.
+
+**Ce message-là, et lui seul.** Treize autres événements empruntaient le même gabarit - frais
+rejetés, paiement effectué, rappel d'audience, compte rendu attendu... La Direction Juridique n'a
+relu qu'un texte ; emporter les autres au passage aurait changé, **sous le nom de la banque**, des
+formulations que personne n'a validées. Chaque événement peut donc porter sa **propre phrase courte**
+(`prestataire.X.minimal`), et ceux qui n'en ont pas retombent sur le défaut, inchangé.
+
+**Le niveau minimal reste ce qu'il est** (D18) : 160 caractères au plus, **ni référence de dossier ni
+lien**. Un SMS se lit sur un écran verrouillé, par-dessus l'épaule de son destinataire. Le nouveau
+texte en fait 134 et ne nomme aucun dossier - il dit moins que l'ancien, qui annonçait que la
+constitution était *validée*.
+
+**Deux tests le tiennent, au mot près.** Un texte dicté par le métier n'est pas une formulation du
+projet : c'est une parole qu'on nous a confiée, et qui part sous le nom de la banque. Un test de
+forme générale aurait laissé passer une reformulation involontaire. Un second test vérifie l'autre
+moitié - que les treize autres messages n'ont pas bougé.
+
+**Le garde-fou des textes orphelins a été étendu, non relâché.** Il tenait deux choses : aucun
+événement sans texte, aucun texte que personne ne lit. Les deux restent vraies ; une phrase courte
+est facultative, mais doit porter le nom d'un événement connu.
+
+### Q-126 ✅ La lettre appartient à son demandeur ; seul le SH y passe après lui — tranché (2026-10-07)
+
+**Le trou que cette décision ferme.** Le droit d'écrire sur une lettre de constitution tenait au
+**rôle** : `hasAnyRole('JURISTE', 'SH')`. Or `ROLE_JURISTE` est composite depuis Q-81 - le DJ et la
+DJA le portent aussi. Conséquence : **n'importe quel juriste, le DJ et la DJA pouvaient récrire la
+lettre d'un autre**, et la signer de son nom sans qu'il le sache. Une lettre engage la banque sous le
+nom de celui qui l'a écrite ; nul ne doit pouvoir écrire sous le nom d'un autre. Le métier l'a
+demandé le 2026-10-07 ; le défaut était là depuis Q-115 B2.
+
+**La règle.** La lettre est à **celui qui a sollicité la constitution**. Lui seul l'écrit, et le
+**supérieur hiérarchique** la corrige avant de la signer (contrepartie de Q-124 : il corrige au lieu
+de renvoyer). Tout autre - juriste, DJ, DJA - reçoit un **403**. Il lit la lettre, il ne la touche
+pas. L'auteur garde sa plume jusqu'à la signature : lui refuser la correction de sa propre coquille
+imposerait un aller-retour avec le SH pour une virgule, et la lettre n'est encore partie nulle part.
+
+**Le droit se lit sur le profil, jamais sur un rôle.** C'est le point technique qui décide de tout :
+un droit accordé par `hasRole` s'étend aux rôles composites et rouvrirait la porte au DJ et à la DJA.
+`@PreAuthorize` dit donc seulement **qui peut toucher à la fonction** ; c'est le service qui dit qui
+peut toucher à **cette lettre-là**, parce que lui seul sait qui l'a demandée.
+
+**L'écran ne redouble pas la règle.** `DemandeConstitutionResponse.redactionPossible` et
+`LettreConstitutionResponse.modifiable` disent tous deux « **par moi** », calculés par le serveur.
+L'écran ne pourrait pas les calculer - il connaît les rôles de qui regarde, pas l'identifiant interne
+du demandeur - et un bouton « Rédiger » déduit d'un rôle ouvrirait sur un 403. Une porte qui donne
+sur un mur est pire qu'une porte absente.
+
+**L'Assistante entre dans le circuit** (même décision). Elle sollicite une constitution et rédige sa
+lettre, comme un juriste : `POST /constitutions/prestataires` et le `PUT .../lettre` lui sont
+ouverts, ainsi que la file des constitutions. La lettre qu'elle fait naître est **la sienne**, et la
+règle ci-dessus vaut pour elle comme pour les autres.
+
+**Ce qui ne bouge pas.** Le gel après signature : 409 pour tout le monde, SH compris (Q-115 B2, puis
+Q-124). La porte ouverte au SH l'est **avant** la signature, et là seulement.
+
+**Un décor de test qui mentait.** `RedactionLettreTest` construisait une demande **sans demandeur**,
+alors que la colonne est `nullable = false` : une telle demande n'existe pas en base. Le défaut ne
+se voyait pas tant que le droit tenait au rôle ; la nouvelle garde l'a mis au jour.
+
+### Q-125 ✅ La lettre porte deux signatures, sous le nom du service — tranché (2026-10-07)
+
+**Ce qui était faux.** N8 apposait la signature du SH juste au-dessus de « La Direction Juridique ».
+Mis entre les mains du métier, le résultat a été rejeté aussitôt, et avec raison : cette ligne nomme
+un **service**, pas une personne. Une signature posée là laisse croire que la Direction Juridique
+signe en propre, ce qu'aucune direction ne fait. L'erreur était la mienne : j'ai pris le champ
+`signataire` pour un nom de signataire alors qu'il porte le service émetteur, et sa valeur par
+défaut - `SIGNATAIRE_PAR_DEFAUT = "La Direction Juridique"` - le disait depuis le début.
+
+**Ce que le métier demande.** La ligne du service reste **telle quelle, sans signature**. En
+dessous, **deux** blocs : à gauche la signature du rédacteur et son nom, à droite celle du chef de
+département et son nom. C'est la disposition d'un courrier qui engage deux personnes, et elle rend
+visible ce que la lettre dit déjà : quelqu'un l'a écrite, quelqu'un d'autre l'a validée.
+
+**Une signature par compte, et une seule.** Rien ne change ici : l'image vit sur `utilisateur`, son
+titulaire seul la dépose, et la lettre y puise à la volée. Ce n'est pas une pièce qu'on recopie dans
+chaque lettre - la dupliquer la rendrait impossible à corriger après coup, et ferait circuler autant
+d'exemplaires que de courriers.
+
+**Les deux noms restent alignés même sans image.** La bande réservée à chaque signature a la même
+hauteur des deux côtés, remplie ou non. Sans cela, le nom de celui qui n'a rien déposé remonterait
+et la lettre paraîtrait bancale - alors que ne rien avoir déposé est un cas normal, pas un défaut.
+
+**Qui occupe la gauche quand le SH a corrigé la lettre — tranché le 2026-10-07.** Depuis Q-124 il
+peut récrire avant de signer, et `redige_par` désigne alors **lui** : le prendre tel quel le mettrait
+des **deux** côtés de la lettre, ce qui ne dirait plus rien. La gauche revient donc au **juriste qui
+a sollicité la constitution** (`demande.demandeur`) - c'est à lui que la lettre revient, et la
+correction du SH reste tracée à l'écran et dans l'historique. Proposé comme repli, **confirmé par le
+métier** : c'est la règle.
+
+### Q-124 ✅ Le SH corrige la lettre, et sa signature s'y appose — tranché (2026-10-06)
+
+**Cette décision en renverse une autre, et il faut le dire.** Q-115 B2, tranchée le 2026-09-18,
+réservait la plume au juriste : « le supérieur hiérarchique **consulte** avant de signer, sans
+pouvoir récrire [...] lui donner la plume viderait la seconde signature de son sens ». Le serveur
+renvoyait un **403** au SH qui tentait d'écrire. L'observation 10 de la Direction Juridique demande
+l'inverse, et la demande a été confirmée : **le SH corrige la lettre avant de la signer**.
+
+**Ce qui remplaçait la séparation des rôles doit être remplacé à son tour.** La garantie de Q-115 B2
+était structurelle : celui qui signe ne peut pas avoir écrit. En la levant, on perd cette garantie,
+et il fallait en mettre une autre à la place plutôt que de laisser un trou. C'est la **traçabilité**
+qui s'en charge : `lettre_constitution.redige_par` porte l'auteur de la dernière rédaction, l'écran
+l'affiche à l'ouverture de la lettre, et la correction du SH y est **nommée comme telle** - c'est le
+seul cas où la séparation a été franchie, et le juriste doit le voir sans aller fouiller
+l'historique. L'historisation consigne aussi le **profil** du rédacteur : lire « rédigée par X »
+sans savoir à quel titre ne dirait plus rien.
+
+**Le gel après signature ne bouge pas.** Une lettre générée est partie chez un huissier et figure
+dans la GED : 409 pour tout le monde, juriste comme SH. La porte s'ouvre **avant** la signature, et
+seulement là.
+
+**La signature enregistrée est un confort, et l'application le dit.** L'image s'appose sur la lettre
+à la place du nom à signer à la main. Elle **n'apporte aucune valeur probante supplémentaire** :
+ce qui fait preuve, c'est la trace horodatée de qui a signé - `valide_par` et l'historique. L'effacer
+ne retirerait rien à la preuve, la falsifier n'en créerait aucune. L'écran « Mon compte » l'écrit à
+l'utilisateur, plutôt que de le laisser croire le contraire : quelqu'un qui penserait tenir là une
+garantie juridique s'appuierait sur du vide.
+
+**Chacun dépose la sienne, et personne d'autre.** Les trois endpoints disent « moi » et ne prennent
+jamais d'identifiant : {@code GET/PUT/DELETE /utilisateurs/moi/signature}. Aucun endpoint ne rend la
+signature d'autrui - la lettre appose celle du signataire par un appel **interne**, l'image ne
+transitant par aucun écran. C'est la seule forme où une signature garde un sens : celle qu'un tiers
+détient ne vaut déjà plus rien. Et l'image apposée est celle du **SH qui signe**, identifié par sa
+session, non celle du nom écrit dans le champ « signataire », qui est du texte libre : apposer une
+image sur la foi d'un texte libre permettrait de signer au nom d'autrui.
+
+**En base, et non dans la GED.** Une signature n'est pas une pièce de dossier : la déposer dans
+MinIO la ferait apparaître dans des listes de documents et ferait circuler son chemin. PNG ou JPEG,
+200 Ko au plus - les deux formats que PDFBox sait apposer, et une borne qui distingue une signature
+d'une photographie. Cette borne n'est **pas** un réglage de `configuration_systeme` : ce n'est pas un
+paramètre d'exploitation.
+
+**Un défaut trouvé en vérifiant sur la pile réelle.** Les décodeurs d'image de PDFBox ne lèvent pas
+seulement des `IOException` sur une entrée mal formée : un PNG tronqué produit un
+`ArrayIndexOutOfBoundsException`. Le filet posé autour de l'apposition était trop étroit, et la
+**lettre entière tombait en 500** - une pièce officielle perdue pour une vignette. Le filet couvre
+désormais les exceptions non vérifiées, et deux tests le tiennent.
+
+**Chaîne vérifiée sur la pile réelle** : dépôt d'un PDF (**400**) → dépôt d'un PNG (200) → lecture
+de l'image (200) → la signature d'un autre utilisateur reste invisible → **rédaction par le SH
+(200, là où Q-115 B2 rendait 403)**, tracée « Henri Huissier / SH » → signature → lettre produite
+**avec** image (1734 octets) → signature retirée → lettre produite **sans** image (1248 octets).
+
+### Q-123 ✅ Référentiel des agences : le code ne se modifie pas, la fermeture se défait — tranché (2026-10-03, complété le 2026-10-06)
+
+**Le point de départ.** Les deux codes d'agence d'un dossier — celle d'origine, celle du contentieux
+— étaient du **texte libre** de vingt caractères, sans référentiel ni vérification. Sur les 341
+dossiers de la base de recette, **un seul** portait un code : `5466546546`, qui ne désigne aucune
+agence. La Direction Juridique a demandé une liste déroulante cherchable, tenue par le DJ et la DJA.
+
+**Trois règles ont été tranchées, et chacune a une raison qui survit à son implémentation.**
+
+**1. Le code n'est pas la clé primaire, et il ne se modifie pas.** Une agence se renomme, se
+déplace, ferme ; un identifiant technique stable survit à cela. Mais le dossier porte le **code en
+clair**, sans clé étrangère — c'est lui que la banque emploie dans ses propres états. Le modifier
+détacherait silencieusement les dossiers de leur agence, et personne ne le verrait avant un rapport
+annuel. Une agence qui change de code est **une autre agence** : on la crée, on désactive l'ancienne.
+`PUT` refuse donc un code différent de celui enregistré (400), et le champ est inactif à l'écran.
+
+**2. On désactive, on ne supprime pas — et la fermeture se défait** (complément du 2026-10-06). Un
+dossier ouvert sous une agence fermée reste un dossier valide, et son code doit continuer de
+désigner quelque chose : l'audit pose des questions des années après. `DELETE` désactive donc, sans
+rien effacer. **La réouverture a été ajoutée trois jours plus tard**, et son absence était un
+défaut, non un choix : une fermeture par erreur de manipulation n'avait qu'une issue — recréer
+l'agence sous un autre code, c'est-à-dire **inventer un code**, précisément ce que le référentiel
+existe pour empêcher. Et une agence réouvre : locaux rendus, travaux terminés. C'est la même agence,
+elle garde son code. D'où `PATCH /referentiels/agences/{id}/reactivation` — `PATCH` et non `PUT`,
+parce qu'on ne remplace pas l'agence, on change son seul état d'ouverture. Rouvrir une agence déjà
+ouverte est **sans effet et sans refus** : l'état demandé est atteint, et refuser obligerait
+l'appelant à lire avant d'écrire pour rien.
+
+**3. La ville est obligatoire.** Deux agences du référentiel portent le même nom — les deux
+« MBALLA II », codes `00108` et `108` — et sans ville la liste de saisie les présenterait à
+l'identique. La liste affiche donc `code · Agence nom · ville`, l'adresse venant en seconde ligne
+pour les cas où la ville ne suffit pas — les deux MBALLA II sont toutes deux à Yaoundé. Le mot
+« Agence » devant le nom est une demande du 2026-10-06 : les noms sont des toponymes, et
+« 00001 HIPPODROME » pouvait se lire comme un lieu plutôt que comme une agence. Il est traduit
+(« Branch » en anglais), non écrit en dur.
+
+**Ce qui reste à relire par le métier.** Le PDF fourni est un **scan sans couche de texte** : les 82
+agences ont été transcrites à la main. La liste porte des doublons de nom assumés, des codes de
+longueurs hétérogènes (`101` et `108` côtoient `00002`), et **une inférence signalée comme telle**
+dans l'en-tête de `V42` : `101 MEIGANGA` n'avait ni ville ni adresse lisible, la ville a été posée
+à « Meiganga ». « /// BAFOUSSAM III » a été écartée sur indication du porteur du projet : ce n'est
+pas une agence. **Aucun test, nulle part, ne nomme un code d'agence en dur** — pour que cette
+relecture ne casse pas les suites.
+
 ### Q-122 ✅ WhatsApp ne délivrait pas faute de facturation, et la priorité reste STANDARD — tranché (2026-09-23)
 
 **WhatsApp : ni gabarit, ni numéro, ni configuration applicative.** Les journaux du moteur, consultés
@@ -2428,7 +3238,9 @@ Un champ facultatif vidé est enregistré comme absent (`null`), et non comme un
 changement ; un champ vidé devient absent ; 404) et un parcours d'intégration sur PostgreSQL neuf —
 403 pour l'avocat, référence ignorée, 400 pour un nom vide, trace lue dans l'audit. 459 tests.
 
-### Q-115 · B2 ✅ Le juriste rédige la lettre, le SH la consulte — tranché (2026-09-18)
+### Q-115 · B2 ⚠ Le juriste rédige la lettre, le SH la consulte — tranché (2026-09-18), **amendé le 2026-10-06 (Q-124)**
+
+> **Ce qui suit n'est plus la règle en vigueur sur un point.** Le SH **peut désormais récrire** la lettre avant de la signer (métier, observation 10) : le 403 est devenu un 200, et c'est la traçabilité de l'auteur qui remplace la séparation des plumes. Voir **Q-124**. Le reste de cette fiche — le brouillon sans numéro, le gel après signature, le numéro modifiable mais unique — tient toujours.
 
 **La répartition des rôles est tout le jalon.** Le juriste rédige — c'est lui qui tient le dossier,
 connaît le débiteur, le montant et le tiers saisi. Le supérieur hiérarchique **consulte** avant de
@@ -3082,6 +3894,9 @@ une formation des utilisateurs clés a été réalisée ; les données historiqu
 
 | Date | Réf. | Décision | Impact |
 |---|---|---|---|
+| 2026-10-05 | RG-INT-06 amendée | **Le compte rendu de l'avocat est lu de tous les habilités dès son dépôt.** L'Assistante n'en **accuse que réception** : elle ne l'autorise pas et ne peut plus le rejeter. Le SH n'a aucun rôle propre, il consulte comme les juristes. La **réserve** à un destinataire ne s'applique plus à cette nature et est refusée au dépôt. Les « autres publications » gardent l'ancien régime, validation et rejet compris | Demandé par la Direction Juridique en présentation, précisé le même jour. Renverse `REC-NEG-017` et la règle « invisible avant validation ». `PublicationService`, `findVisiblesParLesHabilites` |
+| 2026-10-05 | RG-INT-11 | **Relance de l'avocat dont le compte rendu manque.** Une audience passée, non annulée, sur une étape non close et sans compte rendu `DEPOSE` ni `VALIDE` relance l'avocat affecté par ses canaux externes. Cadence et premier délai : `DELAI_RAPPEL_CR_AVOCAT` (défaut 2 jours). Un compte rendu rejeté ne vaut pas dépôt : la relance reprend | Demandé par la Direction Juridique en présentation. `CompteRenduAttenduScheduler`, V38 |
+| 2026-10-05 | RG-INT-11 | **Hypothèse non arbitrée : cinq relances au plus.** Le métier a demandé une relance, pas un nombre. Sans borne, un avocat serait rappelé tous les deux jours des années durant au sujet d'une audience ancienne. La valeur est une constante du code, commentée comme telle, à transformer en paramètre si la Direction Juridique veut la choisir | **À confirmer par le métier** |
 | 2026-09-04 | Q-00 | Ordre de préséance retenu : `US ≻ Contrat API ≻ Dictionnaire ≻ Conception ≻ Analyse ≻ Spécifications`, sauf règle métier où Spécifications/Analyse priment | Sert d'arbitre par défaut pour toute contradiction non listée ici |
 | 2026-09-04 | Q-01 | Création de `dossier_juriste` et `dossier_avocat` (association N:N, historique via `historique_action`) | Prévu au schéma M2 |
 | 2026-09-04 | Q-04 | Création d'une table `alarme` distincte de `alerte` (objet + échéance + étape ; l'alarme génère une `alerte` à échéance) | Prévu au schéma M2, module `audience`/`delibere` M6/M7 |

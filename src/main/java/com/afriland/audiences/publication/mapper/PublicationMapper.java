@@ -3,6 +3,7 @@ package com.afriland.audiences.publication.mapper;
 import com.afriland.audiences.dossier.domain.Dossier;
 import com.afriland.audiences.publication.domain.AutrePublication;
 import com.afriland.audiences.publication.domain.CompteRenduAudience;
+import com.afriland.audiences.publication.domain.CorrespondanceAvocat;
 import com.afriland.audiences.publication.domain.Publication;
 import com.afriland.audiences.publication.domain.TypeAutrePublication;
 import com.afriland.audiences.publication.domain.TypePublication;
@@ -78,6 +79,21 @@ public class PublicationMapper {
                 urlTelechargement,
                 commentaires,
                 correspondance);
+    }
+
+    /**
+     * Une correspondance, telle qu'elle se lit de part et d'autre (QF-58).
+     *
+     * <p>Elle vit ici, et non dans un service, parce que <b>deux</b> appelants la lisent depuis
+     * QF-58 : le juriste sur le détail d'une publication, et l'avocat sur son portail. Écrite deux
+     * fois, elle aurait divergé au premier champ ajouté - la signature de l'auteur, par exemple,
+     * manquerait d'un côté et pas de l'autre.
+     */
+    public static CorrespondanceResponse versReponse(Long publicationId, CorrespondanceAvocat correspondance) {
+        Utilisateur auteur = correspondance.getAuteur();
+        return new CorrespondanceResponse(correspondance.getId(), publicationId,
+                auteur != null ? auteur.getId() : null, nomComplet(auteur),
+                correspondance.getContenu(), correspondance.getCreatedAt());
     }
 
     public static String nomComplet(Utilisateur utilisateur) {

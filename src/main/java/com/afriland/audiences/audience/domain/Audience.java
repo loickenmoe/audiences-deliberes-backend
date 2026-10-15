@@ -65,6 +65,14 @@ public class Audience {
     private String compteRendu;
 
     /**
+     * Ce que le juriste veut dire à l'avocat de cette audience (QF-64). **Distincte du compte
+     * rendu**, qui reste interne : il peut juger la stratégie, voire le travail de l'avocat
+     * lui-même (RG-INT-07). L'avocat ne la lit que s'il est constitué.
+     */
+    @Column(name = "note_avocat")
+    private String noteAvocat;
+
+    /**
      * La juridiction devant laquelle l'audience se tient (V34).
      *
      * <p><b>Distincte de {@code dossier.juridictionSaisie}</b>, qui est celle de la saisine — le

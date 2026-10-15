@@ -1,6 +1,7 @@
 package com.afriland.audiences.dossier.web.dto;
 
 import com.afriland.audiences.referentiel.domain.CategorieDossier;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -40,11 +41,13 @@ public record CreerDossierRequest(
         CategorieDossier categorie,
         @NotBlank @Size(max = 100) String juridictionSaisie,
         @NotNull Long clientId,
-        PartiesDto parties,
+        @NotNull @Valid PartiesDto parties,
         @NotNull @PositiveOrZero Double risqueEncouru,
         String recoursExerces,
         @Size(max = 255) String motifRenvoi,
-        @Size(max = 20) String codeAgenceOrigine,
+        // Obligatoire depuis le 2026-10-05 (observation 2) ; l'existence est vérifiée
+        // par le service, qui seul peut interroger le référentiel.
+        @NotBlank @Size(max = 20) String codeAgenceOrigine,
         @Size(max = 20) String codeAgenceContentieuse,
         @Size(max = 50) String dossierCreditOrigine,
         @Size(max = 255) String pvTransfert,

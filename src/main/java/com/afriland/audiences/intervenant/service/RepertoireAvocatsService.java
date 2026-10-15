@@ -69,9 +69,17 @@ public class RepertoireAvocatsService {
                                                   Map<Long, DelibereRepository.PerformanceAvocat> performances) {
         long charge = charges.getOrDefault(avocat.getId(), 0L);
         DelibereRepository.PerformanceAvocat performance = performances.get(avocat.getId());
-        double taux = performance == null || performance.getTotal() == 0
-                ? 0d
-                : (double) performance.getFavorables() / performance.getTotal();
-        return new AvocatRepertoireResponse(avocat.getId(), avocat.getNom(), avocat.getEmail(), avocat.getTelephone(), charge, taux);
+        /*
+         * Les deux décomptes plutôt que le seul taux (métier, 2026-10-06, appliqué ici le
+         * 2026-10-07). Le taux reste renvoyé - la même requête le produit - mais il n'est plus ce
+         * que l'écran montre : « 3 sur 4 » dit ce que « 75 % » résumait, **et sur combien
+         * d'affaires**. Un taux de 100 % sur un délibéré unique ne vaut pas le même jugement qu'un
+         * taux de 70 % sur trente, et c'est pourtant le premier qui paraissait le meilleur.
+         */
+        long favorables = performance == null ? 0L : performance.getFavorables();
+        long total = performance == null ? 0L : performance.getTotal();
+        double taux = total == 0 ? 0d : (double) favorables / total;
+        return new AvocatRepertoireResponse(avocat.getId(), avocat.getNom(), avocat.getEmail(),
+                avocat.getTelephone(), charge, favorables, total, taux);
     }
 }

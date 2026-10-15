@@ -44,6 +44,13 @@ class RepertoireAvocatsServiceTest {
         assertThat(result).hasSize(1);
         assertThat(result.get(0).indicateurCharge()).isZero();
         assertThat(result.get(0).indicateurPerformance()).isZero();
+        /*
+         * **Zéro sur zéro, et non zéro tout court.** Sans délibéré il n'y a rien à mesurer ; c'est
+         * le total qui le dit, et qui permet à l'écran d'écrire « aucun délibéré rendu » plutôt
+         * qu'un chiffre qui se lirait comme une contre-performance.
+         */
+        assertThat(result.get(0).deliberesFavorables()).isZero();
+        assertThat(result.get(0).deliberesTotal()).isZero();
     }
 
     @Test
@@ -56,6 +63,13 @@ class RepertoireAvocatsServiceTest {
         List<AvocatRepertoireResponse> result = service.lister(null, PageRequest.of(0, 10)).content();
 
         assertThat(result.get(0).indicateurCharge()).isEqualTo(3L);
+        /*
+         * Les deux décomptes sont ce que l'écran montre depuis le 2026-10-06 : « 3 sur 4 » dit ce
+         * que « 75 % » résumait, **et sur combien d'affaires**. Le taux reste calculé - le contrat
+         * le porte toujours - mais il n'est plus ce qu'on lit.
+         */
+        assertThat(result.get(0).deliberesFavorables()).isEqualTo(3L);
+        assertThat(result.get(0).deliberesTotal()).isEqualTo(4L);
         assertThat(result.get(0).indicateurPerformance()).isEqualTo(0.75d);
     }
 

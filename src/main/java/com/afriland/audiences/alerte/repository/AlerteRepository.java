@@ -1,5 +1,9 @@
 package com.afriland.audiences.alerte.repository;
 
+import com.afriland.audiences.referentiel.domain.CategorieDossier;
+
+import java.util.List;
+
 import com.afriland.audiences.alerte.domain.Alerte;
 import com.afriland.audiences.alerte.domain.StatutAlerte;
 import com.afriland.audiences.alerte.domain.StatutDiffusion;
@@ -56,7 +60,31 @@ public interface AlerteRepository extends JpaRepository<Alerte, Long> {
             TypeAlerte type, Long destinataireId, String marqueur);
 
     /** FR-REP-02 (tableau de bord, M13) : alertes de prorogation encore non traitées, tous destinataires confondus. */
-    long countByTypeAndStatut(TypeAlerte type, StatutAlerte statut);
+    /*
+     * Une alerte porte un `dossierId` libre, sans relation : la categorie se lit donc par
+     * sous-requete. Toute alerte de prorogation en porte un - elle nait du dossier d'un
+     * delibere (`DelibereService`) -, si bien que la partition par categorie est complete.
+     */
+    @Query("SELECT COUNT(a) FROM Alerte a WHERE a.type = :type AND a.statut = :statut "
+            + "AND a.dossierId IN (SELECT d.id FROM Dossier d WHERE d.categorie IN :categories)")
+    long compterParTypeEtStatut(@Param("type") TypeAlerte type,
+                                @Param("statut") StatutAlerte statut,
+                                @Param("categories") List<CategorieDossier> categories);
+
+    /**
+     * Les alertes que {@link #countByTypeAndStatut} compte (Q-137), la plus récente d'abord.
+     *
+     * <p><b>Une ligne par alerte, et non par dossier.</b> C'est ce que le compteur compte : une
+     * prorogation prévenant plusieurs destinataires produit plusieurs alertes. Regrouper
+     * donnerait une liste plus courte que le nombre affiché.
+     */
+    @Query("SELECT a FROM Alerte a WHERE a.type = :type AND a.statut = :statut "
+            + "AND a.dossierId IN (SELECT d.id FROM Dossier d WHERE d.categorie IN :categories) "
+            + "ORDER BY a.id DESC")
+    Page<Alerte> listerParTypeEtStatut(@Param("type") TypeAlerte type,
+                                       @Param("statut") StatutAlerte statut,
+                                       @Param("categories") List<CategorieDossier> categories,
+                                       Pageable pageable);
 
     /**
      * Supervision du canal applicatif (Q-109, NF-ALR-02) : nombre d'alertes d'une issue donnée sur
