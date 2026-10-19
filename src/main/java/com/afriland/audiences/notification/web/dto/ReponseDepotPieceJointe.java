@@ -3,13 +3,13 @@ package com.afriland.audiences.notification.web.dto;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 /**
- * Réponse du moteur à une demande de dépôt (Guide V1 §3 bis, topic
- * {@code attachment-upload-response}). Les noms des champs sont ceux du moteur.
+ * Engine response to an upload request (Guide V1 §3 bis, topic {@code attachment-upload-response}).
+ * Field names are the engine's.
  *
- * @param requestId       la référence que nous avions choisie : l'{@code eventId} de la ligne
- * @param status          {@code READY} ou {@code FAILED}
- * @param storageKey      clé à citer dans la notification, si {@code READY}
- * @param presignedPutUrl adresse à usage unique où déposer le fichier, valable quinze minutes
+ * @param requestId       the reference we chose: the row's {@code eventId}
+ * @param status          {@code READY} or {@code FAILED}
+ * @param storageKey      key to cite in the notification, when {@code READY}
+ * @param presignedPutUrl single-use upload URL, valid for fifteen minutes
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ReponseDepotPieceJointe(

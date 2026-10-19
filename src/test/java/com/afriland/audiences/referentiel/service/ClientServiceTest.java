@@ -36,7 +36,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-/** M14 — `ClientService` (M4) n'avait aucun test unitaire dédié : recherche, unicité, 404. */
+/** M14: `ClientService` unit tests: search, uniqueness, 404. */
 @ExtendWith(MockitoExtension.class)
 class ClientServiceTest {
 
@@ -52,7 +52,7 @@ class ClientServiceTest {
 
         @Override
         public Client toEntity(CreerClientRequest request) {
-            // La référence n'est plus dans la requête : le service l'attribue et la pose ensuite.
+            // The reference is no longer in the request: the service assigns and sets it afterwards.
             return Client.builder().nom(request.nom()).build();
         }
     };
@@ -116,9 +116,8 @@ class ClientServiceTest {
     }
 
     /**
-     * Depuis le 2026-09-29 la référence est attribuée : un doublon ne peut plus venir d'une saisie,
-     * seulement d'un compteur désynchronisé (V36). Le message le dit, et ne nomme <b>aucun champ</b>
-     * puisqu'il n'y en a plus à corriger à l'écran.
+     * The reference is assigned by the system: a duplicate can only come from an out-of-sync counter
+     * (V36). The message says so and names <b>no field</b>, since there is nothing to fix on screen.
      */
     @Test
     void creerClient_signaleUneReferenceAttribueeDejaPortee() {
@@ -144,12 +143,10 @@ class ClientServiceTest {
         ClientResponse result = service.creerClient(new CreerClientRequest("Nouveau client", null, null));
 
         assertThat(result.id()).isEqualTo(2L);
-        // La référence vient du générateur, jamais de la requête.
+        // The reference comes from the generator, never from the request.
         assertThat(result.reference()).isEqualTo("CLI-2026-0001");
         verify(generateurReference).prochaine(FamilleReference.CLIENT);
     }
-
-    // ------------------------------------------------------------------ Modification (PUT /clients)
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> detailsHistorises() {
@@ -169,7 +166,7 @@ class ClientServiceTest {
                 new ModifierClientRequest("Banque Test", "nouveau@banque.cm", "+237 600 000 000"));
 
         assertThat(result.email()).isEqualTo("nouveau@banque.cm");
-        // Seul l'e-mail a changé : le nom et le téléphone, identiques, n'encombrent pas la trace.
+        // Only the email changed: the identical name and phone do not clutter the trace.
         assertThat(detailsHistorises()).containsExactly(
                 Map.entry("reference", "CLI-001"),
                 Map.entry("ancienEmail", "ancien@banque.cm"),
@@ -191,7 +188,7 @@ class ClientServiceTest {
     void modifierClient_sansAucunChangement_nEcritRien() {
         when(clientRepository.findById(1L)).thenReturn(Optional.of(client));
 
-        // « Banque Test » à l'identique, espaces compris : ce n'est pas une modification.
+        // "Banque Test" identical, spaces included: not a modification.
         service.modifierClient(1L, new ModifierClientRequest("  Banque Test ", "", "   "));
 
         verify(clientRepository, never()).save(any());

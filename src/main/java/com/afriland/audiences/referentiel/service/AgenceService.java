@@ -15,14 +15,14 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Locale;
 
 /**
- * Le référentiel des agences (métier, 2026-10-03, observation 2).
+ * Branch reference list.
  *
- * <p>Lu par tous ceux qui ouvrent un dossier, tenu par le DJ et la DJA. La liste déroulante du
- * formulaire s'y alimente, et la saisie libre a disparu : un code d'agence ne s'invente plus.
+ * <p>Read by everyone who opens a case file, maintained by the DJ and DJA. It feeds the form's
+ * drop-down list, so a branch code can no longer be made up.
  *
- * <p><b>On désactive, on ne supprime pas.</b> Un dossier ouvert sous une agence fermée reste un
- * dossier valide, et son code doit continuer de désigner quelque chose. La suppression effacerait
- * la réponse à une question que l'audit pose encore des années après.
+ * <p><b>Deactivate, never delete.</b> A case file opened under a closed branch remains valid, and
+ * its code must keep designating something; deletion would erase the answer to an audit question
+ * asked years later.
  */
 @Service
 @RequiredArgsConstructor
@@ -57,11 +57,10 @@ public class AgenceService {
     }
 
     /**
-     * Le code <b>ne se modifie pas</b>.
+     * The code <b>cannot be changed</b>.
      *
-     * <p>Les dossiers le portent en clair, et le changer les détacherait silencieusement de leur
-     * agence. Une agence qui change de code est une autre agence : on la crée, et on désactive
-     * l'ancienne.
+     * <p>Case files carry it in clear, and changing it would silently detach them from their branch.
+     * A branch that changes code is a different branch: create it and deactivate the old one.
      */
     @Transactional
     public AgenceResponse modifier(Long id, AgenceRequest request) {
@@ -83,7 +82,7 @@ public class AgenceService {
         return toResponse(agenceRepository.save(agence));
     }
 
-    /** Retire l'agence des listes de choix, sans toucher aux dossiers qui la citent. */
+    /** Removes the branch from selection lists, without touching the case files that cite it. */
     @Transactional
     public AgenceResponse desactiver(Long id) {
         Agence agence = agenceRepository.findById(id)
@@ -94,16 +93,13 @@ public class AgenceService {
     }
 
     /**
-     * Rouvre une agence fermée (métier, 2026-10-06).
+     * Reopens a closed branch.
      *
-     * <p>Symétrique de {@link #desactiver(Long)}, et pour deux raisons. Une fermeture peut être une
-     * <b>erreur de manipulation</b> : sans réouverture, la seule issue était de recréer l'agence sous
-     * un autre code, c'est-à-dire d'inventer un code - exactement ce que le référentiel empêche.
-     * Et une agence <b>réouvre</b> : locaux rendus, travaux terminés. C'est la même agence, elle
-     * garde son code, et les dossiers ouverts sous elle n'ont jamais cessé de le désigner.
+     * <p>Counterpart of {@link #desactiver(Long)}: a closure may be a <b>handling error</b> (otherwise
+     * the only way out would be recreating the branch under a made-up code), and a branch may genuinely
+     * <b>reopen</b>, keeping its code.
      *
-     * <p>Réouvrir une agence déjà ouverte n'est pas une erreur : l'état demandé est atteint, et
-     * refuser obligerait l'appelant à lire avant d'écrire pour rien.
+     * <p>Reopening an already open branch is not an error: the requested state is reached.
      */
     @Transactional
     public AgenceResponse reactiver(Long id) {
@@ -115,10 +111,10 @@ public class AgenceService {
     }
 
     /**
-     * Ce code désigne-t-il une agence ouverte ?
+     * Does this code designate an open branch?
      *
-     * <p>Appelé à la création d'un dossier. On exige {@code actif} : proposer une agence fermée
-     * n'aurait pas de sens, et l'accepter par l'API ferait diverger l'écran et le serveur.
+     * <p>Called when creating a case file. {@code actif} is required: offering a closed branch makes no
+     * sense, and accepting it through the API would make the UI and the server diverge.
      */
     @Transactional(readOnly = true)
     public boolean existeEtEstActive(String code) {
@@ -133,11 +129,10 @@ public class AgenceService {
     }
 
     /**
-     * Le motif de recherche, échappé.
+     * The search pattern, escaped.
      *
-     * <p>Même procédé que la recherche jurisprudentielle : sans échappement, un pourcent saisi par
-     * l'utilisateur ramènerait tout le référentiel, et un souligné n'importe quel caractère. Le
-     * caractère d'échappement est le point d'exclamation, déclaré dans la requête.
+     * <p>Without escaping, a percent typed by the user would return the whole list and an underscore
+     * would match any character. The escape character is the exclamation mark, declared in the query.
      */
     static String motif(String recherche) {
         if (recherche == null || recherche.isBlank()) {

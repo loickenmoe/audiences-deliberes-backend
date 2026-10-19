@@ -24,12 +24,11 @@ import java.util.stream.IntStream;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * La numérotation des références, sur un PostgreSQL réel.
+ * Reference numbering, against a real PostgreSQL.
  *
- * <p><b>Ce qui ne se teste qu'ici.</b> Le format se vérifie sans base ; l'unicité, non. Toute la
- * valeur de V36 tient dans une promesse — deux créations simultanées n'obtiennent jamais le même
- * numéro — et cette promesse repose sur le comportement de {@code ON CONFLICT DO UPDATE} dans
- * PostgreSQL. Un test à mocks ne pourrait que répéter ce que le code prétend faire.
+ * <p>The format can be tested without a database; uniqueness cannot. The guarantee that two
+ * concurrent creations never get the same number relies on PostgreSQL's
+ * {@code ON CONFLICT DO UPDATE} behaviour.
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -68,14 +67,14 @@ class GenerateurReferenceIntegrationTest {
         assertThat(servis).containsExactly(1, 2, 3, 4, 5);
     }
 
-    /** Le compteur est annuel : c'est tout l'écart assumé avec la séquence globale de V21. */
+    /** The counter is yearly, unlike the global sequence of V21. */
     @Test
     void le_numero_repart_a_un_a_chaque_annee() {
         repository.prochainNumero("FAMILLE_ANNEE", 2026);
         repository.prochainNumero("FAMILLE_ANNEE", 2026);
 
         assertThat(repository.prochainNumero("FAMILLE_ANNEE", 2027)).isEqualTo(1);
-        // Et l'année précédente reprend où elle en était, sans avoir été perturbée.
+        // And the previous year resumes where it was, undisturbed.
         assertThat(repository.prochainNumero("FAMILLE_ANNEE", 2026)).isEqualTo(3);
     }
 
@@ -88,9 +87,8 @@ class GenerateurReferenceIntegrationTest {
     }
 
     /**
-     * La promesse de V36, mise à l'épreuve : cinquante demandes concurrentes, cinquante numéros
-     * distincts et contigus. C'est le seul test qui distingue un compteur atomique d'un
-     * « lire puis écrire » — lequel passerait tous les autres.
+     * Fifty concurrent requests, fifty distinct and contiguous numbers: the only test that tells an
+     * atomic counter from a read-then-write, which would pass all the others.
      */
     @Test
     void cinquante_demandes_simultanees_donnent_cinquante_numeros_distincts() throws Exception {
@@ -113,8 +111,8 @@ class GenerateurReferenceIntegrationTest {
     }
 
     /**
-     * La reprise de V36 : un compteur posé à la main sur une référence déjà portée ne resert pas ce
-     * numéro. C'est ce qui protège une base où des références du format attribué existeraient déjà.
+     * A counter set by hand on an already used reference does not reissue that number, which protects
+     * databases where references in the assigned format already exist.
      */
     @Test
     void un_compteur_repris_ne_resert_pas_un_numero_deja_porte() {
@@ -124,7 +122,7 @@ class GenerateurReferenceIntegrationTest {
         assertThat(repository.prochainNumero("FAMILLE_REPRISE", 2026)).isEqualTo(8);
     }
 
-    /** Le générateur met en forme ce que la base lui donne, sur l'année en cours. */
+    /** The generator formats what the database returns, for the current year. */
     @Test
     void le_generateur_rend_une_reference_complete() {
         GenerateurReference generateur = new GenerateurReference(repository);

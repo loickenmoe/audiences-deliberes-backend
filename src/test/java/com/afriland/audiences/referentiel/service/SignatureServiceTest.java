@@ -21,12 +21,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * La signature enregistrée (métier, 2026-10-03, observation 10 ; provenance arrêtée le 2026-10-06).
- *
- * <p>Ce que ces tests tiennent : <b>chacun dépose la sienne, et personne d'autre</b>. Le service ne
- * prend jamais d'identifiant pour écrire - il travaille sur la session. Et il refuse ce que le PDF
- * ne saurait apposer, plutôt que de produire une lettre sans signature dont le défaut ne se verrait
- * qu'à l'impression.
+ * The stored signature: <b>each user uploads their own, and nobody else's</b>. The service never
+ * takes an identifier to write, it works on the session. It refuses what the PDF could not apply,
+ * rather than producing an unsigned letter noticed only when printed.
  */
 @ExtendWith(MockitoExtension.class)
 class SignatureServiceTest {
@@ -37,7 +34,7 @@ class SignatureServiceTest {
     private SignatureService service;
     private Utilisateur moi;
 
-    /** Un PNG minuscule mais valide : ce que le service reçoit, il ne le décode pas. */
+    /** A tiny but valid PNG: the service does not decode what it receives. */
     private static final byte[] PNG = {(byte) 0x89, 'P', 'N', 'G', 13, 10, 26, 10};
 
     @BeforeEach
@@ -65,8 +62,8 @@ class SignatureServiceTest {
     }
 
     /**
-     * PDFBox lit le PNG et le JPEG. Un SVG ou un PDF produirait une lettre <b>sans</b> signature, et
-     * le défaut ne se verrait qu'à l'impression : le refus vaut mieux que le silence.
+     * PDFBox reads PNG and JPEG. An SVG or PDF would produce a letter <b>without</b> signature, noticed
+     * only when printed: refusing beats silence.
      */
     @Test
     void deposer_refuseUnFormatQueLaLettreNeSauraitApposer() {
@@ -78,7 +75,7 @@ class SignatureServiceTest {
         verify(utilisateurRepository, never()).save(any());
     }
 
-    /** Deux cent mille octets : large pour une signature scannée, étroit pour une photographie. */
+    /** Two hundred thousand bytes: ample for a scanned signature, tight for a photograph. */
     @Test
     void deposer_refuseUneImageTropLourde() {
         byte[] tropGros = new byte[200_001];
@@ -99,7 +96,7 @@ class SignatureServiceTest {
                 .hasMessageContaining("Aucun fichier");
     }
 
-    /** Rien n'a été déposé : l'absence n'est pas une erreur, la lettre part avec le nom seul. */
+    /** Nothing uploaded: absence is not an error, the letter goes out with the name only. */
     @Test
     void mienne_estVideTantQueRienNEstDepose() {
         jeSuisConnecte();
@@ -118,8 +115,8 @@ class SignatureServiceTest {
     }
 
     /**
-     * Le retrait n'efface pas les lettres déjà signées : leur PDF est produit et archivé. Et il
-     * n'efface aucune preuve - la preuve n'a jamais été cette image.
+     * Removal does not erase already signed letters: their PDF is generated and archived. Nor does it
+     * erase any proof: the image was never the proof.
      */
     @Test
     void retirer_videLesTroisChamps() {
@@ -137,9 +134,8 @@ class SignatureServiceTest {
     }
 
     /**
-     * {@code pour} sert les appels internes - apposer la signature sur une lettre. Il n'est exposé
-     * par aucun endpoint : rendre la signature d'autrui permettrait de la récupérer pour l'apposer
-     * ailleurs, ce que le dépôt réservé au titulaire cherche précisément à empêcher.
+     * {@code pour} serves internal calls (applying the signature to a letter). No endpoint exposes it:
+     * returning someone else's signature would let it be applied elsewhere.
      */
     @Test
     void pour_litLaSignatureDUnAutreSansPasserParLaSession() {

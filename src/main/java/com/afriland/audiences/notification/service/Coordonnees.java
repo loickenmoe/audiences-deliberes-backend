@@ -4,33 +4,28 @@ import java.util.Optional;
 import java.util.regex.Pattern;
 
 /**
- * Mise en forme des coordonnées au format attendu par le Notification Engine.
+ * Formats contact details as expected by the Notification Engine.
  *
- * <h2>Téléphone</h2>
- * Une seule écriture est enregistrée : <b>le format international</b>, {@code +237650228936}. Le
- * Guide V1 en accepte trois, mais n'en retenir qu'une évite d'avoir la même coordonnée sous deux
- * formes en base, incomparables entre elles.
+ * <h2>Phone</h2>
+ * Only the international format is stored ({@code +237650228936}), so the same number never appears
+ * in two forms.
  * <p>
- * <b>Cameroun</b> — saisi avec {@code +237}, avec {@code 237} ou sans rien, le numéro doit compter
- * <b>exactement neuf chiffres commençant par 6</b>. Ni plus, ni moins : un numéro amputé d'un chiffre
- * partirait vers quelqu'un d'autre. Tous les mobiles du pays commencent par 6, Camtel compris
- * ({@code 620 XX XX XX}) ; les lignes fixes, en 2, ne reçoivent ni SMS ni WhatsApp et sont écartées.
+ * <b>Cameroon</b>: with {@code +237}, {@code 237} or no prefix, the number must have <b>exactly nine
+ * digits starting with 6</b>, since a truncated number would reach someone else. Landlines (starting
+ * with 2) receive neither SMS nor WhatsApp and are rejected.
  * <p>
- * <b>Hors Cameroun</b> — les prestataires étrangers existent, et le moteur délivre au-delà du pays.
- * L'indicatif est alors <b>obligatoire</b> : sans lui, il faudrait le deviner. Le contrôle vérifie la
- * forme internationale (indicatif puis huit à quinze chiffres au total), sans connaître la longueur
- * attendue de chaque pays — cela demanderait une bibliothèque dédiée, que nous n'ajoutons pas tant
- * que la supervision ne montre pas d'échecs sur ces numéros.
+ * <b>Other countries</b>: the country code is <b>mandatory</b>. Only the international shape is
+ * checked (code then eight to fifteen digits in total), not each country's expected length.
  *
- * <h2>Courriel</h2>
- * Contrôle de forme minimal : une partie locale, un arobase, un domaine avec un point.
+ * <h2>E-mail</h2>
+ * Minimal shape check: a local part, an at sign, a domain with a dot.
  */
 public final class Coordonnees {
 
     private static final Pattern SEPARATEURS = Pattern.compile("[\\s.()\\-]");
-    /** Indicatif du Cameroun, écrit ou non ; suit la même règle dans les trois cas. */
+    /** Optional Cameroon country code; the same rule applies in all three cases. */
     private static final Pattern CAMEROUN = Pattern.compile("(?:\\+?237)?(6\\d{8})");
-    /** Forme internationale : indicatif d'un chiffre au moins, huit à quinze chiffres en tout. */
+    /** International form: country code of at least one digit, eight to fifteen digits in total. */
     private static final Pattern INTERNATIONAL = Pattern.compile("\\+[1-9]\\d{7,14}");
     private static final Pattern COURRIEL = Pattern.compile("[^@\\s]+@[^@\\s]+\\.[^@\\s]+");
 
@@ -40,8 +35,7 @@ public final class Coordonnees {
     }
 
     /**
-     * Numéro prêt pour l'Engine, au format international, ou vide s'il est absent ou dans une forme
-     * que l'on refuse de deviner.
+     * Engine-ready number in international format, or empty if missing or ambiguous.
      */
     public static Optional<String> telephone(String saisie) {
         if (saisie == null || saisie.isBlank()) {
@@ -53,8 +47,8 @@ public final class Coordonnees {
         if (camerounais.matches()) {
             return Optional.of(INDICATIF_CAMEROUN + camerounais.group(1));
         }
-        // Un numéro camerounais mal formé ne doit pas être rattrapé par la règle internationale :
-        // « +237650228 » y passerait, alors qu'il lui manque trois chiffres.
+        // A malformed Cameroonian number must not fall back to the international rule: "+237650228"
+        // would pass although three digits are missing.
         if (numero.startsWith("+237") || numero.startsWith("237")) {
             return Optional.empty();
         }

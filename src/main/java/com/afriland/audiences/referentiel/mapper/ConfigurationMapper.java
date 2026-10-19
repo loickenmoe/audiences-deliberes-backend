@@ -11,8 +11,8 @@ import java.util.List;
 public interface ConfigurationMapper {
 
     /**
-     * Écrit à la main : la règle de saisie (Q-91) ne vient pas de l'entité mais de
-     * {@link RegleConfiguration}, MapStruct n'a donc rien à dériver ici.
+     * Hand-written: the input rule comes from {@link RegleConfiguration}, not from the entity, so
+     * MapStruct has nothing to derive here.
      */
     default ConfigurationResponse toResponse(ConfigurationSysteme configuration) {
         RegleConfiguration regle = RegleConfiguration.pour(configuration.getCle()).orElse(null);

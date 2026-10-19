@@ -6,12 +6,11 @@ import com.afriland.audiences.intervenant.domain.TypeIntervenant;
 import java.time.LocalDateTime;
 
 /**
- * Depuis Q-86 : dossier, prestataire (et son type), demandeur et signataire nommés.
+ * Appointment request with the case, provider (and its type), requester and signatory named.
  *
- * @param redactionPossible vrai si <b>celui qui lit</b> peut écrire sur la lettre : son demandeur,
- *                          ou le supérieur hiérarchique (Q-126). L'écran ne saurait pas le calculer
- *                          - il connaît les rôles de qui regarde, pas l'identifiant interne du
- *                          demandeur - et lui confier la règle reviendrait à la dédoubler.
+ * @param redactionPossible true if the current reader may write the letter (its requester or the
+ *                          line manager). Computed server-side since the UI does not know the
+ *                          requester's internal id.
  */
 public record DemandeConstitutionResponse(
         Long id,
@@ -33,11 +32,8 @@ public record DemandeConstitutionResponse(
         boolean redactionPossible) {
 
     /**
-     * La même réponse, avec le droit d'écrire renseigné.
-     *
-     * <p>Le mappeur ne peut pas le calculer : il ne connaît pas la session. Il laisse donc le champ
-     * à faux, et le service - qui sait qui demande - pose la vraie valeur ici. La liste des champs
-     * ne vit qu'à un seul endroit, celui-ci.
+     * Same response with the write permission set. The mapper has no session, so it leaves the
+     * field false and the service sets the real value here.
      */
     public DemandeConstitutionResponse avecRedactionPossible(boolean possible) {
         return new DemandeConstitutionResponse(id, dossierId, prestataireId, demandeurId, motif,

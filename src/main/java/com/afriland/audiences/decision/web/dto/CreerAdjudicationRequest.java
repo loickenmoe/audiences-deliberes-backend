@@ -6,7 +6,7 @@ import jakarta.validation.constraints.PositiveOrZero;
 
 import java.time.LocalDate;
 
-/** FR-DEF-01/US 8.1 : étape {@code CLOTURE} requise (RG-DEF-01). */
+/** FR-DEF-01/US 8.1: requires a {@code CLOTURE} step (RG-DEF-01). */
 public record CreerAdjudicationRequest(
         @NotNull Long etapeId,
         @NotBlank String beneficiaire,

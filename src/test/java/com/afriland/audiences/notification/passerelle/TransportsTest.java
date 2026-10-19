@@ -24,15 +24,15 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 /**
- * Étape 8b : les deux transports réels. On vérifie ce qui part sur le fil — le contrat du Guide — et
- * surtout qu'un échec remonte, pour que le dispatcher retente au lieu de marquer la ligne publiée.
+ * Step 8b: the two real transports. Checks what goes on the wire (the Guide contract) and above all
+ * that a failure propagates, so the dispatcher retries instead of marking the line published.
  */
 class TransportsTest {
 
     private static final MessageEngine MESSAGE = MessageEngine.de("jeton", "audience-deliberer", "STANDARD", CanalEngine.SMS, "+237600000000",
             null, "Audience dans 7 jours.", "alerte-5-SMS", null);
 
-    // ── Sidecar Dapr ──
+    // Dapr sidecar
 
     @Test
     void dapr_publie_sur_le_composant_et_le_topic_configures() {
@@ -48,10 +48,10 @@ class TransportsTest {
                 .andExpect(jsonPath("$.category").value("TRANSACTIONAL"))
                 .andExpect(jsonPath("$.serviceKey").value("audience-deliberer"))
                 .andExpect(jsonPath("$.priority").value("STANDARD"))
-                // Q-121 : ni locale ni metadata, aucun message accepté ne les porte.
+                // Neither locale nor metadata: no accepted message carries them.
                 .andExpect(jsonPath("$.locale").doesNotExist())
                 .andExpect(jsonPath("$.metadata").doesNotExist())
-                // Un SMS n'a pas d'objet : le champ ne doit pas être sérialisé.
+                // An SMS has no subject: the field must not be serialized.
                 .andExpect(jsonPath("$.directSubject").doesNotExist())
                 .andRespond(withSuccess());
 
@@ -75,7 +75,7 @@ class TransportsTest {
                 .hasMessageContaining("Publication Dapr refusée");
     }
 
-    // ── Kafka direct ──
+    // Direct Kafka
 
     @SuppressWarnings("unchecked")
     @Test
@@ -95,8 +95,8 @@ class TransportsTest {
     }
 
     /**
-     * Le moteur consomme ses topics par Dapr : il attend l'enveloppe CloudEvents que le sidecar pose.
-     * Faute de sidecar installable, nous la produisons — c'est ce que vérifie ce test.
+     * The engine consumes its topics through Dapr and expects the CloudEvents envelope the sidecar adds.
+     * With no sidecar available, we produce it ourselves.
      */
     @SuppressWarnings("unchecked")
     @Test
@@ -117,12 +117,12 @@ class TransportsTest {
         assertThat(enveloppe.get("pubsubname").asText()).isEqualTo("kafka-pubsub");
         assertThat(enveloppe.get("source").asText()).isEqualTo("audience-deliberer");
         assertThat(enveloppe.get("id").asText()).isNotBlank();
-        // Le message métier est intact dans data : c'est lui que le moteur lira après déballage.
+        // The business message is intact in data: the engine reads it after unwrapping.
         assertThat(enveloppe.get("data").get("eventId").asText()).isEqualTo("alerte-5-SMS");
         assertThat(enveloppe.get("data").get("recipient").asText()).isEqualTo("+237600000000");
     }
 
-    /** Sans attente de l'accusé, un courtier injoignable passerait pour un succès. */
+    /** Without waiting for the ack, an unreachable broker would pass for a success. */
     @SuppressWarnings("unchecked")
     @Test
     void kafka_en_echec_remonte() {

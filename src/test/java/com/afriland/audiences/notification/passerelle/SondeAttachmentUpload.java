@@ -22,17 +22,15 @@ import java.util.Properties;
 import java.util.UUID;
 
 /**
- * <b>Sonde manuelle</b>, pas un test de non-régression : elle parle au Notification Engine de
- * l'environnement DEV. Elle ne s'exécute que si {@code SONDE_ENGINE} est présent dans l'environnement,
- * et n'envoie <b>aucune notification à personne</b> — elle demande seulement une URL de dépôt de
- * fichier, puis écoute la réponse.
+ * <b>Manual probe</b>, not a regression test: it talks to the DEV Notification Engine. Runs only if
+ * {@code SONDE_ENGINE} is set, and sends <b>no notification to anyone</b>: it only requests a file
+ * upload URL, then listens for the response.
  * <p>
- * <b>Ce qu'elle tranche.</b> Les pièces jointes passent par un aller-retour (Guide V1 §3 bis) :
- * demande sur {@code attachment-upload-request}, réponse sur {@code attachment-upload-response}. Or
- * les topics de sortie du moteur se sont révélés muets (Q-121). Si celui-ci l'est aussi, écrire le
- * mécanisme complet serait vain : il faudra alors joindre le fichier au message lui-même.
+ * Attachments use a round trip (Guide V1 section 3 bis): request on
+ * {@code attachment-upload-request}, response on {@code attachment-upload-response}. If this topic
+ * is silent, the file must be attached to the message itself.
  * <p>
- * Lancement : {@code SONDE_ENGINE=1 ./mvnw test -Dtest=SondeAttachmentUpload}
+ * Run: {@code SONDE_ENGINE=1 ./mvnw test -Dtest=SondeAttachmentUpload}
  */
 @EnabledIfEnvironmentVariable(named = "SONDE_ENGINE", matches = ".+")
 class SondeAttachmentUpload {
@@ -55,8 +53,8 @@ class SondeAttachmentUpload {
                 new NotificationEngineProperties.Transport(NotificationEngineProperties.TypeTransport.KAFKA,
                         TOPIC_DEMANDE, "kafka-pubsub", "http://localhost:3500", 10, true, "attachment-upload-request"), null, "STANDARD", false, java.time.Duration.ofMinutes(5)));
 
-        // Le contenu suit le Guide §3 bis, augmenté du jeton et du code de service — les deux seuls
-        // champs que le moteur exige partout ailleurs.
+        // Content follows Guide section 3 bis, plus the token and service code, the only two fields the
+        // engine requires everywhere else.
         Map<String, Object> demande = Map.of(
                 "requestId", requestId,
                 "fileName", "lettre-constitution.pdf",
@@ -78,7 +76,7 @@ class SondeAttachmentUpload {
         try (KafkaConsumer<String, String> consommateur = consommateur();
              KafkaProducer<String, String> producteur = producteur()) {
             consommateur.subscribe(List.of(TOPIC_REPONSE));
-            consommateur.poll(Duration.ofSeconds(5)); // force l'attribution des partitions avant l'envoi
+            consommateur.poll(Duration.ofSeconds(5)); // forces partition assignment before sending
 
             producteur.send(new ProducerRecord<>(TOPIC_DEMANDE, requestId, enveloppe)).get();
             System.out.println("[sonde] demande publiée : " + requestId);
@@ -110,9 +108,8 @@ class SondeAttachmentUpload {
     }
 
     /**
-     * Dépôt du fichier par l'URL présignée : aucun octet ne passe par le moteur ni par Kafka. C'est
-     * l'étape que la sonde doit valider — le stockage du moteur est-il joignable depuis un poste, et
-     * accepte-t-il notre dépôt ?
+     * File upload via the presigned URL: no byte goes through the engine or Kafka. Checks whether the
+     * engine's storage is reachable from a workstation and accepts our upload.
      */
     private void deposer(String urlPresignee) throws Exception {
         byte[] contenu = ("%PDF-1.4" + (char) 10 + "1 0 obj<</Type/Catalog>>endobj" + (char) 10

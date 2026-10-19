@@ -46,21 +46,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * M14 — tests d'intégration de bout en bout des 9 parcours utilisateurs de FUNCTIONAL_MAP.md §9.
+ * End-to-end integration tests of the 9 main user journeys.
  * <p>
- * Contexte Spring complet (sécurité incluse) + PostgreSQL réel migré par Flyway (Testcontainers),
- * appels HTTP réels via {@link MockMvc}. Deux substitutions assumées, documentées en Q-65 :
+ * Full Spring context (security included), real Flyway-migrated PostgreSQL (Testcontainers), real
+ * HTTP calls via {@link MockMvc}. Two substitutions:
  * <ul>
- *   <li>l'authentification passe par un JWT simulé ({@code spring-security-test}) plutôt qu'un
- *       Keycloak conteneurisé — les claims produits sont identiques à ceux du vrai jeton
- *       ({@code sub}, {@code roles}, {@code given_name}…), seule la vérification cryptographique
- *       est court-circuitée ;</li>
- *   <li>{@link MinioClient} est mocké — le stockage objet lui-même est hors périmètre de ces
- *       tests, il a été vérifié en conditions réelles à chaque jalon (M8 à M12).</li>
+ *   <li>authentication uses a simulated JWT ({@code spring-security-test}) with the same claims as
+ *       the real token; only cryptographic verification is bypassed;</li>
+ *   <li>{@link MinioClient} is mocked; object storage itself is out of scope.</li>
  * </ul>
- * Ces tests valident le <b>câblage complet</b> (routes, sécurité, transactions, interactions
- * inter-modules, persistance réelle), pas les règles métier unitaires — déjà couvertes par les
- * 179 tests de service.
+ * These tests validate the <b>full wiring</b> (routes, security, transactions, cross-module
+ * interactions, persistence), not unit business rules covered by service tests.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -96,10 +92,8 @@ class ParcoursEndToEndIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        // Les utilisateurs sont pré-provisionnés pour que les parcours restent déterministes
-        // (identifiants et profils connus d'avance). R-06 — provisionnement au premier appel
-        // incompatible avec un endpoint @Transactional(readOnly = true) — a été corrigé en M15
-        // (UtilisateurProvisioningService, propagation REQUIRES_NEW) et est couvert par
+        // Users are pre-provisioned so journeys stay deterministic (known identifiers and profiles).
+        // First-call provisioning in a read-only transaction (R-06) is covered by
         // ProvisionnementLectureSeuleIntegrationTest.
         provisionner("kc-juriste", "JURISTE");
         provisionner("kc-dj", "DJ");
@@ -113,22 +107,21 @@ class ParcoursEndToEndIntegrationTest {
                         .nom("Me Test").email("avocat@test.cm").compteKeycloak("kc-avocat").build()).getId());
     }
 
-    // ---------------------------------------------------------------- P1
+    // P1
 
     @Test
     @DisplayName("P1 — Ouverture d'un dossier de recouvrement : création, affectations, pièce GED, étape EN_COURS")
     void p1_ouvertureDossierRecouvrement() throws Exception {
         long dossierId = creerDossierRecouvrement();
 
-        // Observations 1 et 3 (métier, 2026-10-03) : les parties sont obligatoires, et multiples.
-        // Le dossier créé ci-dessus en porte deux côté défendeur ; on vérifie qu'elles ressortent
-        // telles quelles, puis que leur absence est refusée à l'entrée.
+        // Parties are mandatory and may be multiple. The case created above has two defendants; check
+        // they come back as is, then that their absence is refused on input.
         mockMvc.perform(get(api("/dossiers/" + dossierId)).with(role("kc-juriste", "ROLE_CONSULTATION")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.parties.demandeurs.length()").value(1))
                 .andExpect(jsonPath("$.parties.defendeurs.length()").value(2));
 
-        // Chargement d'une pièce en GED par le juriste
+        // The legal officer uploads a document to the GED
         MockMultipartFile fichier = new MockMultipartFile("file", "piece.pdf", "application/pdf", new byte[]{1, 2, 3});
         mockMvc.perform(multipart(api("/ged/documents"))
                         .file(fichier)
@@ -137,7 +130,7 @@ class ParcoursEndToEndIntegrationTest {
                         .with(role("kc-juriste", "ROLE_JURISTE", "ROLE_SAISIE")))
                 .andExpect(status().isCreated());
 
-        // Étape INSTANCE : OUVERTURE → EN_COURS
+        // INSTANCE step: OUVERTURE -> EN_COURS
         long etapeId = premiereEtape(dossierId);
         mockMvc.perform(patch(api("/dossiers/" + dossierId + "/etapes/" + etapeId + "/statut"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -146,10 +139,9 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statutCycleVie").value("EN_COURS"));
 
-        // Le dossier consolidé expose les affectations et l'historique. Le champ `documents` de
-        // `DossierResponse` reste vide **par construction** : le module `dossier` ne peut pas
-        // dépendre de `ged` (inversion de couches) — les pièces sont servies par l'endpoint dédié
-        // `GET /dossiers/{id}/documents` (#43, M8). Cf. Q-67.
+        // The consolidated case exposes assignments and history. The `documents` field of
+        // `DossierResponse` stays empty **by design**: the `dossier` module cannot depend on `ged` (layer
+        // inversion); documents are served by `GET /dossiers/{id}/documents`.
         mockMvc.perform(get(api("/dossiers/" + dossierId)).with(role("kc-juriste", "ROLE_CONSULTATION")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.documents.length()").value(0))
@@ -158,11 +150,11 @@ class ParcoursEndToEndIntegrationTest {
 
         mockMvc.perform(get(api("/dossiers/" + dossierId + "/documents")).with(role("kc-juriste", "ROLE_CONSULTATION")))
                 .andExpect(status().isOk())
-                // Q-100 : l'onglet Documents est paginé — le total vit désormais dans l'enveloppe.
+                // The Documents tab is paginated: the total lives in the envelope.
                 .andExpect(jsonPath("$.totalElements").value(1));
     }
 
-    // ---------------------------------------------------------------- P2
+    // P2
 
     @Test
     @DisplayName("P2 — Cycle d'une audience : planification, compte rendu juriste, CR avocat validé par l'Assistante")
@@ -171,7 +163,7 @@ class ParcoursEndToEndIntegrationTest {
         long etapeId = premiereEtape(dossierId);
         passerEtape(dossierId, etapeId, "EN_COURS");
 
-        // RG-AUD-08 : la date ne peut pas précéder l'ouverture du dossier…
+        // RG-AUD-08: the date cannot precede the case opening...
         long audienceId = extraireId(mockMvc.perform(post(api("/dossiers/" + dossierId + "/audiences"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("etapeId", etapeId, "datePlanifiee", LocalDate.now().plusDays(7).toString())))
@@ -179,15 +171,15 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(status().isCreated())
                 .andReturn());
 
-        // …tandis que RG-AUD-01 exige que l'audience soit passée pour saisir son compte rendu :
-        // le temps est simulé en antidatant la ligne, seul moyen de dérouler le parcours complet
-        // dans un même test (le refus sur audience future est déjà couvert unitairement).
+        // ...while RG-AUD-01 requires the hearing to be past before entering its report: time is
+        // simulated by backdating the row, the only way to run the full journey in one test (the refusal
+        // for a future hearing is unit-tested).
         audienceRepository.findById(audienceId).ifPresent(audience -> {
             audience.setDatePlanifiee(LocalDate.now().minusDays(1));
             audienceRepository.save(audience);
         });
 
-        // Compte rendu interne du juriste (Épic 2)
+        // Internal report by the legal officer (Epic 2)
         mockMvc.perform(put(api("/audiences/" + audienceId + "/compte-rendu"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("compteRendu", "Audience tenue, affaire mise en délibéré")))
@@ -195,8 +187,8 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statut").value("TENUE"));
 
-        // Compte rendu publié par l'avocat (Épic 5), validé par l'Assistante. Q-98 : le récit porte
-        // ici sa pièce, déposée dans le même mouvement — le dépôt est multipart depuis.
+        // Report published by the lawyer (Epic 5), validated by the Assistant. The narrative carries its
+        // attachment, uploaded in the same multipart request.
         MockMultipartFile plumitif =
                 new MockMultipartFile("file", "plumitif.pdf", "application/pdf", new byte[]{4, 5, 6});
         long publicationId = extraireId(mockMvc.perform(multipart(api("/publications/cr-audience"))
@@ -208,8 +200,8 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(status().isCreated())
                 .andReturn());
 
-        // Le récit reste obligatoire : le passage en multipart n'a pas fait perdre la contrainte,
-        // qui doit être refusée à l'entrée (400) et non au flush (500).
+        // The narrative stays mandatory with multipart: it must be refused on input (400), not on
+        // flush (500).
         mockMvc.perform(multipart(api("/publications/cr-audience"))
                         .param("dossierId", String.valueOf(dossierId))
                         .param("audienceId", String.valueOf(audienceId))
@@ -217,41 +209,40 @@ class ParcoursEndToEndIntegrationTest {
                         .with(role("kc-avocat", "ROLE_AVOCAT")))
                 .andExpect(status().isBadRequest());
 
-        // Q-86 : l'Assistante lit la publication à valider, nommée.
+        // The Assistant reads the publication to validate, with names.
         mockMvc.perform(get(api("/publications/" + publicationId)).with(role("kc-assistante", "ROLE_CONSULTATION")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statutValidation").value("DEPOSE"))
                 .andExpect(jsonPath("$.referenceDossier").isNotEmpty())
                 .andExpect(jsonPath("$.avocatNom").isNotEmpty())
                 .andExpect(jsonPath("$.audienceDate").isNotEmpty())
-                // Q-98 : la pièce du compte rendu se lit comme celle d'une autre publication.
+                // The report attachment is read like any other publication's.
                 .andExpect(jsonPath("$.nomFichier").value("plumitif.pdf"));
 
-        // RG-INT-06 amendée (métier du 2026-10-05) : le compte rendu est ouvert à TOUS les
-        // habilités dès son dépôt. Il attendait jusqu'ici la validation de l'Assistante, pendant
-        // que l'avocat, lui, avait déjà rendu compte.
+        // RG-INT-06: the report is open to ALL authorized users as soon as it is uploaded, without
+        // waiting for the Assistant's validation.
         mockMvc.perform(get(api("/publications/" + publicationId)).with(role("kc-juriste", "ROLE_CONSULTATION")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statutValidation").value("DEPOSE"));
 
-        // … et il en est prévenu AU DÉPÔT, non à la validation.
+        // ... and they are notified ON UPLOAD, not on validation.
         mockMvc.perform(get(api("/alertes/mes-notifications")).with(role("kc-juriste", "ROLE_JURISTE")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[?(@.type == 'NOUVELLE_PUBLICATION')]").isNotEmpty());
 
-        // Le SH n'a aucun régime propre : il lit comme les autres, et dès le dépôt.
+        // The SH has no specific regime: reads like the others, from upload.
         mockMvc.perform(get(api("/publications/" + publicationId)).with(role("kc-sh", "ROLE_CONSULTATION")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statutValidation").value("DEPOSE"));
 
-        // Et un compte rendu ne se rejette pas : l'Assistante n'en accuse que réception.
+        // A report cannot be rejected: the Assistant only acknowledges receipt.
         mockMvc.perform(put(api("/publications/" + publicationId + "/validation"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("statut", "REJETE", "motifRejet", "Récit incomplet")))
                         .with(role("kc-assistante", "ROLE_ASSISTANTE")))
                 .andExpect(status().isBadRequest());
 
-        // L'onglet du dossier le liste pour le juriste affecté, sans filtre de statut.
+        // The case tab lists it for the assigned legal officer, without status filter.
         mockMvc.perform(get(api("/publications")).param("dossierId", String.valueOf(dossierId))
                         .with(role("kc-juriste", "ROLE_JURISTE")))
                 .andExpect(status().isOk())
@@ -264,15 +255,15 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statutValidation").value("VALIDE"));
 
-        // Une fois validée, la publication devient consultable, avec ses échanges (Q-86)
+        // Once validated, the publication becomes visible, with its exchanges
         mockMvc.perform(get(api("/publications/" + publicationId)).with(role("kc-juriste", "ROLE_CONSULTATION")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.commentaires").isArray());
 
-        // L'accusé de réception n'ajoute aucune alerte : tous pouvaient déjà lire.
+        // The acknowledgement adds no alert: everyone could already read.
     }
 
-    // ---------------------------------------------------------------- P3
+    // P3
 
     @Test
     @DisplayName("P3 — Cycle d'un délibéré (Q-78) : mise en délibéré, prorogation, rabattement, nouvelle mise en délibéré, vidage")
@@ -280,13 +271,13 @@ class ParcoursEndToEndIntegrationTest {
         long dossierId = creerDossierRecouvrement();
         long etapeId = premiereEtape(dossierId);
         passerEtape(dossierId, etapeId, "EN_COURS");
-        // Une étape ne part en délibéré qu'avec une audience tenue, et aucune en attente (2026-09-29).
+        // A step goes under deliberation only with a held hearing and none pending.
         tenirUneAudience(dossierId, etapeId);
         passerEtape(dossierId, etapeId, "EN_DELIBERE");
         LocalDate annoncee = LocalDate.now().plusDays(7);
         LocalDate prorogee = LocalDate.now().plusDays(14);
 
-        // Mise en délibéré : pas de résultat, l'étape reste EN_DELIBERE.
+        // Put under deliberation: no result, the step stays EN_DELIBERE.
         long premier = extraireId(mockMvc.perform(post(api("/dossiers/" + dossierId + "/deliberes"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("etapeId", etapeId, "dateDeliberee", annoncee.toString())))
@@ -295,14 +286,14 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(jsonPath("$.etat").value("EN_ATTENTE"))
                 .andReturn());
 
-        // Un seul délibéré en attente par étape.
+        // Only one pending deliberation per step.
         mockMvc.perform(post(api("/dossiers/" + dossierId + "/deliberes"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("etapeId", etapeId, "dateDeliberee", annoncee.toString())))
                         .with(role("kc-juriste", "ROLE_JURISTE")))
                 .andExpect(status().isConflict());
 
-        // « DÉLIBÉRÉ PROROGÉ AU [date] » : pendant l'attente, date future, qui devient la date annoncée.
+        // "DELIBERE PROROGE AU [date]": while pending, a future date that becomes the announced date.
         mockMvc.perform(post(api("/deliberes/" + premier + "/prorogations"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("date", prorogee.toString(), "motif", "Juge empêché")))
@@ -316,7 +307,7 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].date").value(prorogee.toString()));
 
-        // « DÉLIBÉRÉ RABATTU LE [date, motif] » : le juge rouvre les débats avant de statuer.
+        // "DELIBERE RABATTU LE [date, reason]": the judge reopens hearings before ruling.
         mockMvc.perform(post(api("/deliberes/" + premier + "/rabattement"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("date", LocalDate.now().toString(), "motif", "Réouverture des débats")))
@@ -324,14 +315,14 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.statutCycleVie").value("EN_COURS"));
 
-        // Un délibéré rabattu ne se proroge plus.
+        // A reopened deliberation can no longer be extended.
         mockMvc.perform(post(api("/deliberes/" + premier + "/prorogations"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("date", prorogee.toString())))
                         .with(role("kc-juriste", "ROLE_JURISTE")))
                 .andExpect(status().isBadRequest());
 
-        // Nouvelle mise en délibéré, puis la décision est rendue : le délibéré est vidé.
+        // New deliberation, then the decision is rendered: the deliberation is closed.
         passerEtape(dossierId, etapeId, "EN_DELIBERE");
         long second = extraireId(mockMvc.perform(post(api("/dossiers/" + dossierId + "/deliberes"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -347,14 +338,14 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(jsonPath("$.etat").value("VIDE"))
                 .andExpect(jsonPath("$.statutExpedition").value("A_LEVER"));
 
-        // Après la décision, ni prorogation ni rabattement.
+        // After the decision, neither extension nor reopening.
         mockMvc.perform(post(api("/deliberes/" + second + "/rabattement"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("date", LocalDate.now().toString(), "motif", "Trop tard")))
                         .with(role("kc-juriste", "ROLE_JURISTE")))
                 .andExpect(status().isBadRequest());
 
-        // L'onglet du dossier retrace les deux passages : le vidé, puis le rabattu avec son motif.
+        // The case tab shows both passes: the closed one, then the reopened one with its reason.
         mockMvc.perform(get(api("/dossiers/" + dossierId + "/deliberes")).with(role("kc-juriste", "ROLE_CONSULTATION")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].etat").value("VIDE"))
@@ -363,7 +354,7 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(jsonPath("$[1].nombreProrogations").value(1));
     }
 
-    // ---------------------------------------------------------------- P4
+    // P4
 
     @Test
     @DisplayName("P4 — Voie de recours : délibéré défavorable, échéance de recours consultable, clôture")
@@ -371,7 +362,7 @@ class ParcoursEndToEndIntegrationTest {
         long dossierId = creerDossierRecouvrement();
         long etapeId = premiereEtape(dossierId);
         passerEtape(dossierId, etapeId, "EN_COURS");
-        // Une étape ne part en délibéré qu'avec une audience tenue, et aucune en attente (2026-09-29).
+        // A step goes under deliberation only with a held hearing and none pending.
         tenirUneAudience(dossierId, etapeId);
         passerEtape(dossierId, etapeId, "EN_DELIBERE");
 
@@ -389,11 +380,11 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(jsonPath("$.recoursExerce").value(false))
                 .andExpect(jsonPath("$.delaiExpire").value(false));
 
-        // Délai non exercé → clôture manuelle de l'étape
+        // Deadline not exercised -> manual closing of the step
         passerEtape(dossierId, etapeId, "CLOTURE");
     }
 
-    // ---------------------------------------------------------------- P5
+    // P5
 
     @Test
     @DisplayName("P5 — Décision devenue définitive : adjudication sur étape CLOTURE puis archivage jurisprudentiel")
@@ -401,7 +392,7 @@ class ParcoursEndToEndIntegrationTest {
         long dossierId = creerDossierRecouvrement();
         long etapeId = premiereEtape(dossierId);
         passerEtape(dossierId, etapeId, "EN_COURS");
-        // Une étape ne part en délibéré qu'avec une audience tenue, et aucune en attente (2026-09-29).
+        // A step goes under deliberation only with a held hearing and none pending.
         tenirUneAudience(dossierId, etapeId);
         passerEtape(dossierId, etapeId, "EN_DELIBERE");
         mockMvc.perform(post(api("/dossiers/" + dossierId + "/deliberes"))
@@ -439,11 +430,11 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(1));
 
-        // L'étape peut alors être archivée (aucune transition automatique — Q-60)
+        // The step can then be archived (no automatic transition)
         passerEtape(dossierId, etapeId, "ARCHIVE");
     }
 
-    // ---------------------------------------------------------------- P6
+    // P6
 
     @Test
     @DisplayName("P6 — Demande de frais : dépôt avocat → conformité → opportunité → paiement")
@@ -460,7 +451,7 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(jsonPath("$.statutCircuit").value("DEPOSEE"))
                 .andReturn());
 
-        // Anti-doublon de facture (ERR-006)
+        // Duplicate invoice check (ERR-006)
         mockMvc.perform(post(api("/frais/demandes"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("dossierId", dossierId, "montant", 500_000,
@@ -468,8 +459,8 @@ class ParcoursEndToEndIntegrationTest {
                         .with(role("kc-avocat", "ROLE_AVOCAT")))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("ERR-006"))
-                // Le corps nomme le champ fautif : c'est ce qui permet au client de le signaler sur
-                // le bon champ plutôt que dans un bandeau générique (QF-21 du frontend).
+                // The body names the faulty field, so the client can flag it on the right field rather than in a
+                // generic banner.
                 .andExpect(jsonPath("$.champ").value("referenceFacture"));
 
         mockMvc.perform(put(api("/frais/demandes/" + demandeId + "/conformite"))
@@ -479,7 +470,7 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statutCircuit").value("CONFORMITE"));
 
-        // Montant sous le seuil et dossier non sensible → le DJA valide seul
+        // Amount under the threshold and non-sensitive case -> the DJA validates alone
         mockMvc.perform(put(api("/frais/demandes/" + demandeId + "/opportunite"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("accord", true)))
@@ -492,7 +483,7 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statutPaiement").value("PAYEE"));
 
-        // Détail (Q-82) : dossier et avocat nommés, décisions du circuit dans l'ordre
+        // Detail: case and lawyer named, workflow decisions in order
         mockMvc.perform(get(api("/frais/demandes/" + demandeId)).with(role("kc-assistante", "ROLE_ASSISTANTE")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.referenceDossier").isNotEmpty())
@@ -502,19 +493,19 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(jsonPath("$.validations[0].etape").value("CONFORMITE"))
                 .andExpect(jsonPath("$.validations[1].etape").value("OPPORTUNITE"));
 
-        // L'avocat lit sa demande, jamais celle d'un confrère
+        // The lawyer reads their own request, never a colleague's
         mockMvc.perform(get(api("/frais/demandes/" + demandeId)).with(role("kc-avocat", "ROLE_AVOCAT")))
                 .andExpect(status().isOk());
         mockMvc.perform(get(api("/frais/demandes/" + demandeId)).with(role("kc-avocat-etranger", "ROLE_AVOCAT")))
                 .andExpect(status().isForbidden());
 
-        // L'avocat retrouve sa demande dans sa file de travail (Q-24)
+        // The lawyer finds the request in their work queue
         mockMvc.perform(get(api("/frais/demandes")).with(role("kc-avocat", "ROLE_AVOCAT")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(1));
     }
 
-    // ---------------------------------------------------------------- P7
+    // P7
 
     @Test
     @DisplayName("P7 — Constitution d'un prestataire : demande juriste → signature SH → lettre en GED")
@@ -537,24 +528,24 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statut").value("VALIDEE"))
                 .andExpect(jsonPath("$.lettreDocumentId").isNotEmpty())
-                // Q-86 : la demande est nommée ; Q-87 : un avocat chargé à la demande reste un avocat
+                // The request is named; an on-demand lawyer remains a lawyer
                 .andExpect(jsonPath("$.referenceDossier").isNotEmpty())
                 .andExpect(jsonPath("$.prestataireNom").value("Me Test"))
                 .andExpect(jsonPath("$.prestataireType").value("AVOCAT"));
 
-        // Q-87 : l'avocat constitué est bien notifié (le proxy du prestataire l'en privait)
+        // The retained lawyer is notified
         mockMvc.perform(get(api("/alertes/mes-notifications")).with(role("kc-avocat", "ROLE_AVOCAT")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[?(@.type == 'CONSTITUTION_A_SIGNER')]").isNotEmpty());
 
-        // La lettre générée est bien un document du dossier (interaction intervenant → ged)
+        // The generated letter is a case document (intervenant -> ged interaction)
         mockMvc.perform(get(api("/dossiers/" + dossierId + "/documents")).with(role("kc-juriste", "ROLE_CONSULTATION")))
                 .andExpect(status().isOk())
-                // Q-100 : l'onglet Documents est paginé — le total vit désormais dans l'enveloppe.
+                // The Documents tab is paginated: the total lives in the envelope.
                 .andExpect(jsonPath("$.totalElements").value(1));
     }
 
-    // ---------------------------------------------------------------- P8
+    // P8
 
     @Test
     @DisplayName("P8 — Suppression d'un document : demande du juriste auteur → approbation DJ → suppression logique")
@@ -570,7 +561,7 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(status().isCreated())
                 .andReturn());
 
-        // Le juriste auteur ne peut que demander la suppression (202, document intact)
+        // The authoring legal officer can only request deletion (202, document intact)
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
                         .delete(api("/ged/documents/" + documentId))
                         .with(role("kc-juriste", "ROLE_JURISTE")))
@@ -579,7 +570,7 @@ class ParcoursEndToEndIntegrationTest {
         mockMvc.perform(get(api("/ged/documents/" + documentId)).with(role("kc-juriste", "ROLE_CONSULTATION")))
                 .andExpect(status().isOk());
 
-        // Le DJ approuve → suppression logique effective (404 ensuite)
+        // The DJ approves -> effective soft delete (404 afterwards)
         mockMvc.perform(put(api("/ged/documents/" + documentId + "/approbation-suppression"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("decision", "APPROUVEE")))
@@ -590,7 +581,7 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
-    // ---------------------------------------------------------------- P9
+    // P9
 
     @Test
     @DisplayName("P9 — Pilotage : tableau de bord temps réel, rapport périodique, vue consolidée client")
@@ -610,7 +601,7 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.nbNouveauxDossiers").isNumber());
 
-        // Période sans aucune activité → 204 (RG-REP-02)
+        // Period without any activity -> 204 (RG-REP-02)
         mockMvc.perform(get(api("/rapports"))
                         .param("type", "JOURNALIER")
                         .param("dateDebut", "2000-01-01")
@@ -627,19 +618,17 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(jsonPath("$.recouvrement.length()").value(1))
                 .andExpect(jsonPath("$.exploitationLitiges.length()").value(0));
 
-        // La DJA y accède aussi (Q-95) : elle valide conjointement et instruit les mêmes dossiers.
+        // The DJA has access too: she co-validates and instructs the same cases.
         mockMvc.perform(get(api("/tableau-de-bord")).with(role("kc-dja", "ROLE_DJA")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.nbDossiersActifs").isNumber());
 
-        // Il reste interdit aux autres profils (RG-REP-03).
+        // Still forbidden to other profiles (RG-REP-03).
         mockMvc.perform(get(api("/tableau-de-bord")).with(role("kc-juriste", "ROLE_JURISTE")))
                 .andExpect(status().isForbidden());
         mockMvc.perform(get(api("/tableau-de-bord")).with(role("kc-assistante", "ROLE_ASSISTANTE")))
                 .andExpect(status().isForbidden());
     }
-
-    // ---------------------------------------------------------------- Sécurité transverse
 
     @Test
     @DisplayName("Sécurité — un endpoint métier sans jeton renvoie 401 au format du contrat")
@@ -649,13 +638,9 @@ class ParcoursEndToEndIntegrationTest {
                 .andExpect(jsonPath("$.code").value("ERR-UNAUTHENTICATED"));
     }
 
-    // ---------------------------------------------------------------- Utilitaires
-
     /**
-     * Observations 1 et 3 : un dossier contentieux dit qui s'oppose à qui, ou n'est pas créé.
-     *
-     * <p>L'information manquait sur 340 des 341 dossiers de recette, précisément parce que rien ne
-     * l'exigeait. Le refus porte sur le champ, pour que l'écran sache où afficher le message.
+     * A litigation case states who opposes whom, or is not created. The refusal targets the field so
+     * the screen knows where to show the message.
      */
     @Test
     void lesPartiesSontObligatoiresALaCreation() throws Exception {
@@ -677,14 +662,14 @@ class ParcoursEndToEndIntegrationTest {
                 Map.entry("juristesAffectes", List.of(juristeId)),
                 Map.entry("avocatsAffectes", List.of(avocatId)));
 
-        // Sans parties du tout.
+        // No parties at all.
         mockMvc.perform(post(api("/dossiers"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(socle))
                         .with(role("kc-juriste", "ROLE_JURISTE", "ROLE_SAISIE")))
                 .andExpect(status().isBadRequest());
 
-        // Avec un côté vide : « aucun défendeur » n'est pas un défendeur.
+        // One empty side: "no defendant" is not a defendant.
         Map<String, Object> sansDefendeur = new java.util.HashMap<>(socle);
         sansDefendeur.put("parties", Map.of(
                 "demandeurs", List.of("AFRILAND FIRST BANK"),
@@ -695,7 +680,7 @@ class ParcoursEndToEndIntegrationTest {
                         .with(role("kc-juriste", "ROLE_JURISTE", "ROLE_SAISIE")))
                 .andExpect(status().isBadRequest());
 
-        // Avec un nom vide : une partie sans nom ne nomme personne.
+        // An empty name: a party without a name names nobody.
         Map<String, Object> nomVide = new java.util.HashMap<>(socle);
         nomVide.put("parties", Map.of(
                 "demandeurs", List.of("   "),
@@ -730,12 +715,11 @@ class ParcoursEndToEndIntegrationTest {
                                 Map.entry("pvTransfert", "PV-" + n),
                                 Map.entry("juristesAffectes", List.of(juristeId)),
                                 Map.entry("avocatsAffectes", List.of(avocatId)),
-                                // Obligatoires depuis le 2026-10-05 (observations 1 et 3) : au
-                                // moins un demandeur et un défendeur, plusieurs étant permis.
+                                // Mandatory: at least one claimant and one defendant, several allowed.
                                 Map.entry("parties", Map.of(
                                         "demandeurs", List.of("AFRILAND FIRST BANK"),
                                         "defendeurs", List.of("Débiteur " + n, "Caution " + n))),
-                                // Obligatoire depuis le 2026-10-05 (observation 2) : 00002 = Bonanjo.
+                                // Mandatory: 00002 = Bonanjo.
                                 Map.entry("codeAgenceOrigine", "00002"))))
                         .with(role("kc-juriste", "ROLE_JURISTE", "ROLE_SAISIE")))
                 .andExpect(status().isCreated())
@@ -749,15 +733,11 @@ class ParcoursEndToEndIntegrationTest {
     }
 
     /**
-     * Tient une audience sur l'étape : planification, antidatage, compte rendu.
+     * Holds a hearing on the step: scheduling, backdating, report.
      *
-     * <p>Depuis le 2026-09-29, une étape ne part en délibéré que si une audience s'y est <b>tenue</b>
-     * — c'est-à-dire rapportée, le statut {@code TENUE} n'étant posé qu'à la saisie du compte rendu
-     * — et qu'aucune audience n'y reste planifiée. Les parcours qui mettent en délibéré passent
-     * donc par ici.
-     *
-     * <p>L'antidatage reprend celui de P2 : RG-AUD-01 exige une audience passée pour saisir son
-     * compte rendu, et le refus sur audience future est déjà couvert unitairement.
+     * <p>A step goes under deliberation only if a hearing was <b>held</b> there (reported: the
+     * {@code TENUE} status is set when the report is entered) and none remains scheduled. Backdating is
+     * needed because RG-AUD-01 requires a past hearing to enter its report.
      */
     private void tenirUneAudience(long dossierId, long etapeId) throws Exception {
         long audienceId = extraireId(mockMvc.perform(post(api("/dossiers/" + dossierId + "/audiences"))
@@ -804,11 +784,10 @@ class ParcoursEndToEndIntegrationTest {
     }
 
     /**
-     * Le post-processeur {@code jwt()} de {@code spring-security-test} n'exécute pas le
+     * The {@code jwt()} post-processor of {@code spring-security-test} does not run the application's
      * {@link org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter}
-     * de l'application (il dérive ses propres autorités du claim {@code scope}) : les autorités
-     * sont donc fournies explicitement, à l'identique de ce que le convertisseur produirait à
-     * partir du claim {@code roles} (préfixe vide, cf. `SecurityConfig`).
+     * (it derives authorities from the {@code scope} claim), so authorities are provided explicitly,
+     * as the converter would produce them from the {@code roles} claim (empty prefix, see `SecurityConfig`).
      */
     private RequestPostProcessor role(String keycloakId, String... roles) {
         return SecurityMockMvcRequestPostProcessors.jwt()

@@ -11,25 +11,15 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * On n'ouvre pas les débats d'un degré tant que le précédent attend son jugement (2026-09-29).
- *
- * <p><b>Pourquoi cette forme, et pas « l'étape précédente doit être close ».</b> C'est la règle que
- * le métier avait validée, et elle s'est révélée <b>impossible</b> : l'exercice d'un recours fait
- * passer l'étape courante à {@code EN_COURS} — elle se rouvre — avant de créer la suivante en
- * {@code OUVERTURE} (RG-DOS-04). Exiger que l'antécédent soit clos aurait donc bloqué le parcours
- * normal juste après le recours, l'instance n'étant jamais close à ce moment-là.
- *
- * <p>Ce qui reste vrai, et que celle-ci retient : <b>on ne fait pas appel avant que le juge ait
- * statué</b>. Une étape antérieure {@code EN_DELIBERE} et un degré supérieur {@code EN_COURS}
- * décrivent un dossier simultanément en attente de jugement et déjà porté plus haut — un état qui
- * n'existe pas en procédure. Le cas s'atteint par positionnement direct : créer un appel sur un
- * dossier dont l'instance est en délibéré, puis en ouvrir les débats.
- *
- * <p><b>Les deux cassations sont concurrentes</b> : le pourvoi CCJA a pour antécédents l'instance et
- * l'appel, <b>jamais</b> la Cour Suprême. Un pourvoi national en délibéré n'empêche donc pas
- * d'ouvrir les débats devant la CCJA, et réciproquement. La table est celle de
- * {@code etapesPrecedentes}, écrite ici plutôt que déduite d'un rang — un calcul par ordre aurait
- * fait de RECOURS_2 un antécédent de RECOURS_2_CCJA.
+ * A level's hearings cannot be opened while the previous level awaits judgment.
+ * <p>"The previous step must be closed" would be unworkable: lodging an appeal moves the current
+ * step back to {@code EN_COURS} before creating the next one in {@code OUVERTURE} (RG-DOS-04).
+ * <p>What holds is that <b>one does not appeal before the judge has ruled</b>: an earlier step
+ * {@code EN_DELIBERE} with a higher level {@code EN_COURS} is an impossible state, reachable
+ * through direct positioning.
+ * <p><b>The two cassation appeals are concurrent</b>: the CCJA appeal's predecessors are Instance
+ * and Appeal, <b>never</b> the Supreme Court. The table mirrors {@code etapesPrecedentes} rather
+ * than being derived from rank.
  */
 @Component
 @RequiredArgsConstructor
@@ -39,8 +29,8 @@ public class AucuneEtapeAnterieureEnDelibere implements ConditionTransitionEtape
 
     @Override
     public boolean concerne(StatutCycleVie de, StatutCycleVie vers) {
-        // Seule l'ouverture des débats est visée. La reprise après recours part de DELIBERE_VIDE et
-        // porte sur l'étape elle-même : la soumettre à cette règle n'aurait aucun sens.
+        // Only opening the hearings is concerned. Resuming after an appeal starts from
+        // DELIBERE_VIDE on the step itself.
         return de == StatutCycleVie.OUVERTURE && vers == StatutCycleVie.EN_COURS;
     }
 
@@ -62,7 +52,7 @@ public class AucuneEtapeAnterieureEnDelibere implements ConditionTransitionEtape
                         + "son jugement doit être rendu avant d'ouvrir les débats à ce degré.");
     }
 
-    /** Miroir de {@code DossierService.etapesPrecedentes} : les degrés qui précèdent celui-ci. */
+    /** Mirror of {@code DossierService.etapesPrecedentes}: the levels preceding this one. */
     private static List<TypeEtape> antecedents(TypeEtape type) {
         return switch (type) {
             case INSTANCE -> List.of();
@@ -71,7 +61,7 @@ public class AucuneEtapeAnterieureEnDelibere implements ConditionTransitionEtape
         };
     }
 
-    /** Le nom que l'utilisateur lit à l'écran, et non la valeur technique de l'énuméré. */
+    /** The name the user reads on screen, not the enum value. */
     private static String libelle(TypeEtape type) {
         return switch (type) {
             case INSTANCE -> "Instance";

@@ -29,21 +29,12 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * Le journal des audiences et les comptes rendus attendus (observation métier du 2026-09-25).
+ * Hearing journal and expected reports: what happened on a given day, and what has still not been
+ * reported.
  *
- * <p><b>Le besoin.</b> « Avoir les comptes rendus de toutes les audiences tenues un jour précis,
- * pour une vue d'ensemble, et établir les responsabilités. » Deux questions, en réalité : ce qui
- * s'est passé tel jour, et ce qui n'a toujours pas été rapporté. Elles ne se regardent pas au même
- * rythme — l'une chaque matin, l'autre de loin en loin — d'où deux lectures distinctes.
- *
- * <p><b>Rien n'a été ajouté au modèle.</b> Le statut {@code TENUE} n'étant posé qu'à la saisie du
- * compte rendu, les manquements se lisent dans les données existantes. Créer un indicateur
- * « compte rendu manquant » aurait dupliqué une vérité que le statut porte déjà, avec le risque
- * ordinaire des duplications : diverger.
- *
- * <p><b>Ce module vit dans {@code reporting}</b>, seul endroit qui traverse légitimement les
- * modules métier : le journal croise l'audience, le dossier, ses affectations, les publications des
- * avocats et le stockage de leurs pièces.
+ * <p>No model change: {@code TENUE} is only set when the report is entered, so missing reports are
+ * derived from existing data rather than duplicated in a flag. Lives in {@code reporting} because it
+ * crosses hearings, cases, assignments, lawyer publications and file storage.
  */
 @Service
 @RequiredArgsConstructor
@@ -54,7 +45,7 @@ public class JournalAudiencesService {
     private final CompteRenduAudienceRepository compteRenduAudienceRepository;
     private final MinioStorageService minioStorageService;
 
-    /** Les audiences d'une journée, avec ce qui en a été rapporté de part et d'autre. */
+    /** Hearings of a given day, with what each side has reported. */
     @Transactional(readOnly = true)
     public PageResponse<AudienceDuJourResponse> journal(LocalDate date, Pageable pageable) {
         Page<Audience> audiences =
@@ -80,12 +71,9 @@ public class JournalAudiencesService {
     }
 
     /**
-     * Les audiences passées dont le compte rendu du juriste manque encore.
-     *
-     * <p>La borne haute est ramenée à <b>hier</b> : une audience du jour n'est pas en retard, et la
-     * compter comme telle ferait apparaître chaque matin des manquements imaginaires. Une fenêtre
-     * entièrement future ne renvoie donc rien, plutôt qu'une erreur — il n'y a simplement rien à
-     * reprocher.
+     * Past hearings still missing the legal officer's report. The upper bound is capped at
+     * yesterday (today's hearings are not late), so a fully future window returns an empty page
+     * rather than an error.
      */
     @Transactional(readOnly = true)
     public PageResponse<CompteRenduAttenduResponse> comptesRendusAttendus(LocalDate dateDebut, LocalDate dateFin,
@@ -120,10 +108,8 @@ public class JournalAudiencesService {
     }
 
     /**
-     * L'adresse de téléchargement de la pièce jointe au compte rendu de l'avocat, s'il en a joint une.
-     *
-     * <p>Une adresse signée, produite à la demande et de durée limitée, comme partout ailleurs dans
-     * l'application : le chemin de stockage ne sort jamais du serveur.
+     * Download URL of the attachment to the lawyer's report, if any. A short-lived signed URL: the
+     * storage path never leaves the server.
      */
     private String urlPieceJointe(CompteRenduAudience compteRendu) {
         if (compteRendu == null || compteRendu.getCheminStockage() == null) {
@@ -133,11 +119,8 @@ public class JournalAudiencesService {
     }
 
     /**
-     * Les comptes rendus d'avocats de ces audiences, en une requête.
-     *
-     * <p>Seuls les dépôts <b>validés</b> comptent : un compte rendu en attente de validation n'est
-     * lisible d'aucun juriste, et le présenter comme rendu ferait croire à une information
-     * disponible.
+     * Lawyers' reports for these hearings, in one query. Only validated filings count: a pending
+     * one is not readable by any legal officer.
      */
     private Map<Long, CompteRenduAudience> comptesRendusAvocats(Collection<Audience> audiences) {
         if (audiences.isEmpty()) {
@@ -146,7 +129,7 @@ public class JournalAudiencesService {
         List<Long> identifiants = audiences.stream().map(Audience::getId).toList();
         return compteRenduAudienceRepository
                 .findByAudienceIdInAndStatutValidation(identifiants, StatutPublication.VALIDE).stream()
-                // Un même avocat peut redéposer : on garde le plus récent, celui qui fait foi.
+                // A lawyer may file again: keep the most recent, which is authoritative.
                 .collect(Collectors.toMap(
                         compteRendu -> compteRendu.getAudience().getId(),
                         Function.identity(),
@@ -154,8 +137,8 @@ public class JournalAudiencesService {
     }
 
     /**
-     * La juridiction où l'audience se tient — celle du dossier n'étant que la juridiction de
-     * saisine, exacte au premier degré seulement (V34).
+     * Court where the hearing takes place; the case's court is only the original one, accurate at
+     * first instance only.
      */
     private static String juridictionDe(Audience audience, Dossier dossier) {
         return audience.getJuridiction() != null ? audience.getJuridiction() : dossier.getJuridictionSaisie();

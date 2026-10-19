@@ -82,7 +82,7 @@ public class DossierService {
     private final DossierJuristeRepository dossierJuristeRepository;
     private final DossierAvocatRepository dossierAvocatRepository;
     private final AuditSeuilDossierRepository auditSeuilDossierRepository;
-    /** Entrées d'historique embarquées dans la fiche ; au-delà, l'onglet pagine (Q-100). */
+    /** History entries embedded in the case page; beyond that, the tab paginates. */
     private static final int TAILLE_HISTORIQUE_FICHE = 10;
 
     private final HistoriqueActionRepository historiqueActionRepository;
@@ -103,13 +103,12 @@ public class DossierService {
     private final AgenceService agenceService;
     private final GenerateurReference generateurReference;
     /*
-     * Les conditions de fait, apportées par les modules qui détiennent les faits (2026-09-29).
-     * Spring rassemble ici tout ce qui implémente le contrat : cette liste est vide tant qu'aucune
-     * condition n'est déclarée, et le comportement reste alors exactement celui d'avant.
+     * Factual transition conditions, provided by the modules that own the facts. Spring collects
+     * every implementation; the list may be empty.
      */
     private final List<ConditionTransitionEtape> conditionsTransition;
 
-    // ------------------------------------------------------------------ Création
+    // ------------------------------------------------------------------ Creation
 
     @Transactional
     public DossierResponse creerDossier(CreerDossierRequest request) {
@@ -119,30 +118,20 @@ public class DossierService {
 
         CategorieDossier categorie = resoudreCategorie(request);
         /*
-         * Les références conditionnelles (dossier de crédit, PV de transfert, incident de compte,
-         * éléments justificatifs) ne sont **plus exigées** — amendement de Q-11, sur arbitrage du
-         * métier du 2026-09-29 : « ce sont les pièces jointes qui sont obligatoires, pas leur texte
-         * associé ». L'obligation a changé d'objet, elle n'a pas disparu.
-         *
-         * Elle ne peut pas être tenue ici : une pièce se dépose en GED **après** la création, qui
-         * seule produit l'identifiant du dossier. Le serveur ne peut pas exiger un fichier qu'il n'a
-         * pas encore reçu. L'écran la tient donc seul — limite acceptée par le métier le même jour,
-         * l'alternative étant de refondre la création pour que le dossier naisse avec ses pièces.
+         * The conditional references (credit file, transfer report, account incident, supporting
+         * evidence) are not required: the attachments are mandatory, not their text. That cannot be
+         * enforced here since attachments are uploaded after creation, so the screen enforces it.
          */
-        // Le champ est enregistré qu'il soit ou non accompagné de `estSensible` : le valider
-        // seulement dans la branche sensible laisserait passer une valeur fantaisiste.
+        // Validated whether or not `estSensible` is set, otherwise an invalid value could slip
+        // through outside the sensitive branch.
         if (StringUtils.hasText(request.typeClientSensible())) {
             validerTypeClientSensible(request.typeClientSensible());
         }
 
         /*
-         * Les deux codes d'agence désignent désormais une agence du référentiel (métier,
-         * 2026-10-03, observation 2). Celui d'origine est obligatoire, celui du contentieux
-         * facultatif — mais s'il est fourni, il doit exister lui aussi : un code inventé dans un
-         * champ facultatif reste un code inventé.
-         *
-         * Le contrôle est ici et non en annotation : il interroge la base, ce qu'une contrainte de
-         * validation ne fait pas.
+         * Both branch codes must exist in the branch reference data. The origin code is mandatory,
+         * the litigation code optional but validated when provided. Checked here rather than by
+         * annotation because it queries the database.
          */
         validerAgence(request.codeAgenceOrigine(), "codeAgenceOrigine");
         if (StringUtils.hasText(request.codeAgenceContentieuse())) {
@@ -150,10 +139,8 @@ public class DossierService {
         }
 
         /*
-         * La référence est attribuée par le système (métier, 2026-09-29). Elle est demandée ici,
-         * une fois les refus passés : un numéro servi n'est jamais rendu, et le demander plus tôt
-         * en consommerait un à chaque client introuvable ou catégorie incohérente. La suite
-         * présenterait des trous que personne ne saurait expliquer.
+         * The reference is assigned by the system, only once all checks have passed: an issued
+         * number is never returned, so requesting it earlier would leave gaps in the sequence.
          */
         String reference = referenceAttribuee();
 
@@ -203,26 +190,10 @@ public class DossierService {
     }
 
     /**
-     * Q-06 laisse {@code dossier.type_client_sensible} en VARCHAR libre, non contraint par une clé
-     * étrangère — mais confie explicitement la validation au service, comme pour {@code nature}.
-     * Elle avait été omise ici : n'importe quelle chaîne était enregistrée en silence, y compris une
-     * faute de frappe, et se retrouvait telle quelle dans les écrans et les rapports.
-     * <p>
-     * Le contrôle porte sur le <b>code</b> et non sur le libellé : il est unique, stable si le
-     * libellé est reformulé, et tient dans la colonne — un libellé peut atteindre 100 caractères
-     * pour une colonne cible de 50, ce qui reproduirait le défaut corrigé par V7 sur {@code nature}.
-     */
-    /**
-     * La référence du prochain dossier.
-     *
-     * <p>Le contrôle d'unicité qui précédait la création est conservé, mais il a changé de sens :
-     * il ne sanctionne plus une saisie, il détecte une <b>anomalie de numérotation</b>. Il ne peut
-     * se déclencher que si une référence au format attribué existait sans que le compteur en ait
-     * tenu compte — ce que la reprise de V36 est censée empêcher. Le laisser tomber silencieusement
-     * sur la contrainte d'unicité de la base donnerait une erreur technique là où un message clair
-     * dit quoi regarder.
-     *
-     * <p>Aucun champ n'est nommé dans l'erreur : il n'y a plus de champ à corriger à l'écran.
+     * Reference of the next case.
+     * <p>The uniqueness check now detects a <b>numbering anomaly</b> (a reference in the assigned
+     * format existing without the counter knowing it), with a clear message instead of a database
+     * constraint error. No field is named in the error since there is nothing to correct on screen.
      */
     private String referenceAttribuee() {
         String reference = generateurReference.prochaine(FamilleReference.DOSSIER);
@@ -235,10 +206,8 @@ public class DossierService {
     }
 
     /**
-     * Ce code désigne-t-il une agence ouverte du référentiel ?
-     *
-     * <p>Le message nomme le champ : le formulaire sait alors sous lequel afficher le refus. Il
-     * cite aussi le code reçu, car c'est souvent une saisie d'un autre système, recopiée.
+     * Whether this code designates an open branch in the reference data. The message names the
+     * field so the form can display it in the right place, and quotes the received code.
      */
     private void validerAgence(String code, String champ) {
         if (!agenceService.existeEtEstActive(code)) {
@@ -247,6 +216,11 @@ public class DossierService {
         }
     }
 
+    /**
+     * {@code dossier.type_client_sensible} has no foreign key, so the service validates it, as for
+     * {@code nature}. The check is on the <b>code</b>, not the label: unique, stable if the label
+     * is reworded, and it fits the column.
+     */
     private void validerTypeClientSensible(String code) {
         typeClientSensibleRepository.findByCodeIgnoreCase(code)
                 .orElseThrow(() -> ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
@@ -296,7 +270,7 @@ public class DossierService {
                     .affectePar(auteur)
                     .build();
             dossierAvocatRepository.save(affectation);
-            // D19 : l'avocat apprend qu'un dossier lui est confié, par ses canaux externes (Q-118).
+            // The lawyer is notified through external channels that a case was assigned to them.
             notificationPrestataireService.notifier(EvenementPrestataire.AFFECTATION_DOSSIER, avocat,
                     dossier.getId(), "affectation-" + dossier.getId());
             return avocatId;
@@ -313,20 +287,20 @@ public class DossierService {
                                                           TypeEtape typeEtape, StatutCycleVie statutEtape,
                                                           LocalDate dateDebut, LocalDate dateFin,
                                                           Pageable pageable) {
-        // Une fenêtre à l'envers ne renvoie rien du tout : mieux vaut le dire que laisser croire
-        // qu'aucun dossier n'a eu d'audience sur la période.
+        // A reversed window would return nothing: reject it rather than suggest no hearing took
+        // place.
         if (dateDebut != null && dateFin != null && dateDebut.isAfter(dateFin)) {
             throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
                     "La date de début doit précéder la date de fin");
         }
-        // « Mes dossiers » se lit sur l'utilisateur authentifié, jamais sur un identifiant reçu :
-        // le filtre ne peut donc pas servir à consulter le portefeuille d'un collègue.
+        // "My cases" is resolved from the authenticated user, never from a received id, so it
+        // cannot expose a colleague's portfolio.
         Long juristeId = mesDossiers ? currentUserService.getCurrentUser().getId() : null;
         var page = dossierRepository.findAll(
                 DossierSpecifications.withFilters(nature, categorie, juridiction, reference, clientId, juristeId,
                         estSensible, sensibiliteStatut, typeEtape, statutEtape, dateDebut, dateFin),
                 pageable);
-        // Trois requêtes pour la page entière, et non trois par ligne (QF-41).
+        // Three queries for the whole page, not three per row.
         return new PageResponse<>(construireReponses(page.getContent()), page.getTotalPages(), page.getTotalElements());
     }
 
@@ -339,21 +313,16 @@ public class DossierService {
         List<Long> avocatsAffectes = dossierAvocatRepository.findByDossierId(id).stream()
                 .map(da -> da.getAvocat().getId()).toList();
         /*
-         * Q-100 : la fiche ne transporte plus que la **première page** de l'historique. RG-DOS-06
-         * historise toute action : sur un dossier suivi plusieurs années, `unpaged()` faisait voyager
-         * des centaines d'entrées à chaque ouverture, pour un onglet que l'on n'ouvre pas toujours.
-         * Le champ `historique` du contrat reste présent et garde sa forme ; il en porte désormais
-         * l'entrée la plus récente, et l'onglet pagine par `GET /dossiers/{id}/historique`.
+         * The case page only carries the first page of history (RG-DOS-06 records every action, so
+         * a long-running case can have hundreds). The `historique` field keeps its shape; the tab
+         * paginates via `GET /dossiers/{id}/historique`.
          */
         List<HistoriqueAction> historique = historiqueActionRepository
                 .findByDossierIdOrderByDateActionDesc(id, PageRequest.of(0, TAILLE_HISTORIQUE_FICHE)).getContent();
         return construireReponse(dossier, etapes, juristesAffectes, avocatsAffectes, historique);
     }
 
-    /**
-     * Historique complet d'un dossier, paginé (Q-100). La fiche n'en embarque que la première page :
-     * cet endpoint sert l'onglet, qui seul a besoin de remonter le temps.
-     */
+    /** Full paginated history of a case, for the history tab. */
     @Transactional(readOnly = true)
     public PageResponse<HistoriqueActionResponse> historique(Long id, Pageable pageable) {
         getDossierOrThrow(id);
@@ -375,9 +344,10 @@ public class DossierService {
         return dossierMapper.toResponse(dossier, etapesResponse, juristesAffectes, avocatsAffectes, historiqueResponse);
     }
 
-    // ------------------------------------------------------------------ Vue consolidée par client
+    // ------------------------------------------------------------------ Consolidated view by
+    // client
 
-    /** FR-REP-03, RG-REP-04 : indépendant de l'affectation du juriste courant. */
+    /** FR-REP-03, RG-REP-04: independent of the current in-house lawyer's assignments. */
     @Transactional(readOnly = true)
     public VueClientDossiersResponse vueConsolideeParClient(Long clientId) {
         Client client = clientRepository.findById(clientId)
@@ -391,15 +361,9 @@ public class DossierService {
     }
 
     /**
-     * Construit la réponse d'une <b>liste</b> de dossiers en trois requêtes, quel qu'en soit le
-     * nombre (QF-41).
-     * <p>
-     * La version précédente allait chercher étapes, juristes et avocats <b>dossier par dossier</b> :
-     * sur la vue consolidée d'un client portant 310 dossiers, cela faisait 930 requêtes et 11 à 19
-     * secondes de réponse — assez pour que l'écran reste en chargement et que l'appel monopolise une
-     * connexion au détriment des requêtes voisines. Le contrat impose la liste complète, sans
-     * pagination, et l'écran 13 lit bien l'étape courante de chaque dossier : c'est donc le nombre de
-     * requêtes qu'il fallait réduire, pas la réponse qu'il fallait amputer.
+     * Builds the response for a <b>list</b> of cases in three queries, whatever its size. The
+     * contract requires the full unpaginated list and screen 13 reads each case's current step, so
+     * the number of queries had to be reduced rather than the response.
      */
     private List<DossierResponse> construireReponses(List<Dossier> dossiers) {
         if (dossiers.isEmpty()) {
@@ -410,7 +374,7 @@ public class DossierService {
         Map<Long, List<EtapeProcedure>> etapesParDossier =
                 etapeProcedureRepository.findByDossierIdInOrderByDossierIdAscTypeAsc(ids).stream()
                         .collect(Collectors.groupingBy(etape -> etape.getDossier().getId()));
-        // L'identifiant composite porte déjà `dossierId` : le lire n'initialise aucun proxy.
+        // The composite id already holds `dossierId`: reading it initialises no proxy.
         Map<Long, List<Long>> juristesParDossier = dossierJuristeRepository.findByDossierIdIn(ids).stream()
                 .collect(Collectors.groupingBy(dj -> dj.getId().getDossierId(),
                         Collectors.mapping(dj -> dj.getId().getUtilisateurId(), Collectors.toList())));
@@ -427,7 +391,7 @@ public class DossierService {
                 .toList();
     }
 
-    // ------------------------------------------------------------------ Affectation
+    // ------------------------------------------------------------------ Assignment
 
     @Transactional
     public DossierResponse modifierAffectation(Long dossierId, ModifierAffectationRequest request, boolean forcer) {
@@ -449,8 +413,8 @@ public class DossierService {
                     "Au moins un juriste ou avocat est déjà affecté à ce dossier ; ajoutez ?forcer=true pour confirmer (RG-DOS-07)");
         }
         if (doublon) {
-            // Q-12/Q-36 (DECISIONS_AND_OPEN_QUESTIONS.md) : doublon confirmé par le juriste —
-            // alerte de supervision au(x) DJ actif(s), en plus de l'historisation ci-dessous.
+            // Duplicate confirmed by the in-house lawyer: supervision alert to active DJ users, in
+            // addition to the history entry below.
             signalerDoublonAffectation(dossier);
         }
 
@@ -466,7 +430,7 @@ public class DossierService {
         return construireReponse(dossier, etapes, juristesAffectes, avocatsAffectes, List.of());
     }
 
-    /** Q-36 : destinataires = utilisateurs de profil DJ (supervision des doublons confirmés). */
+    /** Recipients are DJ users (supervision of confirmed duplicates). */
     private void signalerDoublonAffectation(Dossier dossier) {
         List<Utilisateur> destinataires = utilisateurRepository.findByProfilCodeAndActifTrue("DJ");
         String declencheur = "Doublon d'affectation confirmé sur le dossier " + dossier.getReference()
@@ -475,7 +439,7 @@ public class DossierService {
                 dossier.getId(), dj, declencheur));
     }
 
-    // ------------------------------------------------------------------ Cycle de vie des étapes
+    // ------------------------------------------------------------------ Step lifecycle
 
     @Transactional
     public EtapeProcedureResponse modifierStatutEtape(Long dossierId, Long etapeId, ModifierStatutEtapeRequest request) {
@@ -496,8 +460,8 @@ public class DossierService {
         etape.setStatutCycleVie(nouveau);
         etape = etapeProcedureRepository.save(etape);
 
-        // Q-111 : l'étape descend dans `details`. Noyée dans la phrase, elle n'était pas
-        // interrogeable ; ici, « tous les passages en EN_DELIBERE du trimestre » devient une requête.
+        // The step goes into `details` so it can be queried (e.g. all moves to EN_DELIBERE in a
+        // quarter).
         historiqueActionService.enregistrer(dossierId, TypeActionHistorique.ETAPE_STATUT_MODIFIE,
                 Map.of("etape", etape.getType().name(), "ancienStatut", ancien.name(), "nouveauStatut", nouveau.name()));
 
@@ -509,19 +473,12 @@ public class DossierService {
     }
 
     /**
-     * Les conditions de fait du passage (métier, 2026-09-29).
-     *
-     * <p>L'ordre des statuts est vérifié juste avant ; ici on vérifie que ce qui doit avoir eu lieu
-     * a bien eu lieu — une audience tenue avant la mise en délibéré, un jugement défavorable avant
-     * un recours, des frais soldés avant l'archivage.
-     *
-     * <p><b>Toutes les conditions sont évaluées, pas seulement la première.</b> S'arrêter au premier
-     * refus ferait corriger un manque pour en découvrir un autre au clic suivant : l'utilisateur
-     * doit voir d'un coup ce qui lui reste à faire.
-     *
-     * <p>Le code d'erreur reste {@code ERR-004} : du point de vue de celui qui appelle, le passage
-     * est refusé — que ce soit l'ordre ou les faits qui s'y opposent ne change ni son recours ni le
-     * traitement côté écran. Seul le message diffère, et c'est lui qu'on lit.
+     * Factual conditions of the transition (status order is checked just before): e.g. a held
+     * hearing before deliberation, an unfavourable judgment before an appeal, fees paid before
+     * archiving.
+     * <p><b>All conditions are evaluated</b>, so the user sees everything left to do at once.
+     * <p>The error code stays {@code ERR-004}: for the caller the transition is refused either way;
+     * only the message differs.
      */
     private void verifierLesFaits(EtapeProcedure etape, StatutCycleVie ancien, StatutCycleVie nouveau) {
         List<String> empechements = conditionsTransition.stream()
@@ -559,8 +516,8 @@ public class DossierService {
             throw ApiException.conflictSurChamp(ErrorCodes.CONFLIT,
                     "L'étape " + request.type() + " existe déjà pour ce dossier", "type");
         }
-        // Positionnement direct (UC-DOS-04 alt. 3-b) : crée les étapes intermédiaires manquantes
-        // au statut OUVERTURE, sans historique détaillé pour celles-ci (RG-DOS-04).
+        // Direct positioning (UC-DOS-04 alt. 3-b): creates missing intermediate steps in OUVERTURE,
+        // without detailed history (RG-DOS-04).
         for (TypeEtape intermediaire : etapesPrecedentes(request.type())) {
             if (!etapeProcedureRepository.existsByDossierIdAndType(dossierId, intermediaire)) {
                 creerEtapeInterne(dossier, intermediaire, StatutCycleVie.OUVERTURE);
@@ -573,12 +530,9 @@ public class DossierService {
     }
 
     /**
-     * Les étapes que le positionnement direct doit créer si elles manquent (UC-DOS-04 alt. 3-b).
-     *
-     * <p>Le pourvoi CCJA a les mêmes antécédents que le pourvoi national — l'instance et l'appel —
-     * et <b>non</b> {@code RECOURS_2} : les deux cassations sont concurrentes. Positionner un
-     * dossier directement en CCJA ne doit pas faire naître une étape Cour Suprême fantôme, qui
-     * laisserait croire à un pourvoi qui n'a jamais été formé.
+     * Steps that direct positioning must create if missing (UC-DOS-04 alt. 3-b). The CCJA appeal
+     * has the same predecessors as the national one (Instance and Appeal), <b>not</b>
+     * {@code RECOURS_2}: the two cassation appeals are concurrent.
      */
     private List<TypeEtape> etapesPrecedentes(TypeEtape type) {
         return switch (type) {
@@ -597,7 +551,7 @@ public class DossierService {
         return etapeProcedureRepository.save(etape);
     }
 
-    // ------------------------------------------------------------------ Dérogation de seuil
+    // ------------------------------------------------------------------ Threshold override
 
     @Transactional
     public AuditSeuilResponse demanderDerogationSeuil(Long dossierId, DemandeDerogationSeuilRequest request) {
@@ -627,14 +581,8 @@ public class DossierService {
     }
 
     /**
-     * Demandes de seuil d'un dossier, la plus récente d'abord (Q-74).
-     * <p>
-     * Ajouté parce que l'arbitrage (#7) exige l'identifiant d'une demande, que rien n'exposait une
-     * fois celle-ci créée : ni endpoint de lecture, ni champ du dossier, ni détail d'historique. Le
-     * DJ/DJA, seul habilité à arbitrer, ne pouvait donc pas le faire (QF-23 du frontend).
-     * <p>
-     * La liste contient aussi la proposition initiale faite à la création du dossier : c'est
-     * l'historique complet des seuils demandés, pas seulement celui des dérogations.
+     * Threshold requests of a case, most recent first. Exposes the request id needed for
+     * arbitration. Includes the initial proposal made at case creation.
      */
     @Transactional(readOnly = true)
     public List<AuditSeuilResponse> listerDerogationsSeuil(Long dossierId, StatutValidation statut) {
@@ -649,11 +597,9 @@ public class DossierService {
     public AuditSeuilResponse validerDerogationSeuil(Long dossierId, Long auditId, ValiderDerogationRequest request) {
         Dossier dossier = getDossierOrThrow(dossierId);
         /*
-         * Q-74 : tant que la sensibilité n'est pas validée, le seul audit en attente est la
-         * proposition initiale de la création. Elle se tranche par la validation de sensibilité
-         * (#8), qui met aussi à jour le statut du dossier. L'arbitrer ici comme une dérogation
-         * fixerait un seuil en laissant la sensibilité en attente. Latent tant qu'aucun identifiant
-         * n'était exposé, ce contournement devenait atteignable avec la lecture ci-dessus.
+         * While sensitivity is not validated, the only pending audit is the initial proposal,
+         * decided through sensitivity validation (which also updates the case status). Arbitrating
+         * it here would set a threshold while leaving sensitivity pending.
          */
         if (dossier.getSensibiliteStatut() != StatutValidation.VALIDEE) {
             throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
@@ -681,8 +627,8 @@ public class DossierService {
             dossierRepository.save(dossier);
         }
 
-        // Le sens de la décision devient une donnée : « toutes les dérogations rejetées » se
-        // demande, alors qu'il fallait auparavant lire chaque phrase.
+        // The decision outcome is stored as data so that, e.g., all rejected overrides can be
+        // queried.
         historiqueActionService.enregistrerPour(validateur, dossierId, TypeActionHistorique.DEROGATION_SEUIL_ARBITREE,
                 Map.of("decision", request.statut().name(), "auditId", auditId,
                         "motif", Optional.ofNullable(request.motif()).orElse("")));
@@ -690,31 +636,22 @@ public class DossierService {
         return auditSeuilMapper.toResponse(audit);
     }
 
-    // ------------------------------------------------------------------ Validation de la sensibilité
+    // ------------------------------------------------------------------ Sensitivity validation
 
     /**
-     * Le juriste propose la diligence particulière sur un dossier déjà ouvert (métier, 2026-10-03,
-     * observation 5).
-     *
-     * <p><b>Ce qui manquait.</b> {@code estSensible} ne se posait qu'à la création :
-     * {@link #validerSensibilite} exige une proposition déjà en attente, ce que seule la création
-     * produisait. Un dossier ouvert comme ordinaire ne pouvait donc plus jamais devenir sensible,
-     * alors qu'une affaire se révèle telle en cours de route.
-     *
-     * <p><b>Le circuit est celui de la création</b>, et c'est voulu : proposition {@code EN_ATTENTE},
-     * puis arbitrage du DJ ou de la DJA par le même endpoint. Rien n'est doublé, et le DJ voit les
-     * deux origines dans la même file.
-     *
-     * <p><b>Aucun effet avant la validation</b> (Q-10). Le seuil et son origine ne bougent pas ici :
-     * ils ne changent qu'à l'arbitrage. Une proposition en attente ne déclenche donc pas la double
-     * validation des frais - sans quoi un juriste la déclencherait seul.
+     * The in-house lawyer proposes special diligence on an already open case.
+     * <p>Same workflow as on creation: an {@code EN_ATTENTE} proposal, then decision by DJ or DJA
+     * through the same endpoint and queue.
+     * <p><b>No effect before validation</b>: threshold and origin only change on arbitration, so a
+     * pending proposal does not trigger double fee validation.
      */
     @Transactional
     public DossierResponse proposerSensibilite(Long dossierId, ProposerSensibiliteRequest request) {
         Dossier dossier = getDossierOrThrow(dossierId);
 
         if (Boolean.TRUE.equals(dossier.getEstSensible())) {
-            // Deux refus distincts : l'utilisateur doit savoir s'il doit attendre ou s'il n'a rien à faire.
+            // Two distinct refusals: the user must know whether to wait or whether there is nothing
+            // to do.
             String raison = dossier.getSensibiliteStatut() == StatutValidation.EN_ATTENTE
                     ? "Une proposition de diligence particulière est déjà en attente d'arbitrage sur ce dossier"
                     : "Ce dossier est déjà suivi en diligence particulière";
@@ -726,16 +663,15 @@ public class DossierService {
         dossier.setSensibiliteStatut(StatutValidation.EN_ATTENTE);
         dossier.setTypeClientSensible(request.typeClientSensible());
         /*
-         * Les motifs de l'épisode précédent sont effacés : laisser un motif de rejet ou de retrait
-         * sur un dossier dont la diligence est de nouveau en débat ferait lire à l'écran une décision
-         * qui ne porte plus.
+         * Reasons from the previous episode are cleared so the screen does not show a decision that
+         * no longer applies.
          */
         dossier.setSensibiliteMotifRejet(null);
         dossier.setSensibiliteMotifRetrait(null);
         dossier.setSensibiliteValidePar(null);
         dossier = dossierRepository.save(dossier);
 
-        // La proposition de seuil suit le même chemin qu'à la création : l'arbitrage la retrouvera.
+        // The threshold proposal follows the same path as on creation, so arbitration will find it.
         creerPropositionSeuil(dossier, request.seuilMontant(), request.motif());
 
         Utilisateur auteur = currentUserService.getCurrentUser();
@@ -748,20 +684,11 @@ public class DossierService {
     }
 
     /**
-     * Le DJ ou la DJA pose ou lève la diligence particulière directement (métier, 2026-10-03,
-     * observation 5 ; les deux sens arrêtés le 2026-10-06).
-     *
-     * <p><b>Sans proposition.</b> Le juriste propose et attend ; eux décident. Les faire passer par
-     * une proposition qu'ils arbitreraient eux-mêmes n'ajouterait qu'une étape sans contrôle.
-     *
-     * <p><b>Le retrait remet le seuil global.</b> Un seuil de dérogation n'existe que pour un
-     * dossier à diligence particulière - {@link #demanderDerogationSeuil} le refuse ailleurs. Le
-     * laisser en place sur un dossier redevenu ordinaire lui donnerait un seuil que rien ne
-     * justifie, et que personne ne pourrait plus réviser.
-     *
-     * <p><b>Le motif est obligatoire au retrait</b>, et seulement là. Poser la diligence est une
-     * précaution, la lever fait sortir le dossier du circuit de double validation des frais :
-     * l'audit demandera pourquoi.
+     * DJ or DJA sets or lifts special diligence directly, without a proposal.
+     * <p><b>Removal restores the global threshold</b>: an override threshold only exists for a case
+     * under special diligence.
+     * <p><b>A reason is mandatory on removal only</b>: removal takes the case out of the double fee
+     * validation workflow, and the audit will ask why.
      */
     @Transactional
     public DossierResponse modifierSensibilite(Long dossierId, ModifierSensibiliteRequest request) {
@@ -781,8 +708,8 @@ public class DossierService {
             }
 
             /*
-             * Une proposition du juriste peut être en attente : la poser directement la tranche, elle
-             * ne doit pas rester pendante. Le seuil retenu est celui que le DJ indique.
+             * A pending proposal from the in-house lawyer is settled by this direct decision, with
+             * the threshold given by the DJ.
              */
             auditSeuilDossierRepository
                     .findFirstByDossierIdAndStatutOrderByDateActionAsc(dossierId, StatutValidation.EN_ATTENTE)
@@ -822,7 +749,7 @@ public class DossierService {
                     "Le motif est obligatoire pour retirer la diligence particulière");
         }
 
-        // Une proposition encore en attente devient sans objet : on la clôt plutôt que de la laisser.
+        // A still pending proposal becomes moot: close it rather than leave it open.
         auditSeuilDossierRepository
                 .findFirstByDossierIdAndStatutOrderByDateActionAsc(dossierId, StatutValidation.EN_ATTENTE)
                 .ifPresent(audit -> {
@@ -845,7 +772,7 @@ public class DossierService {
         return construireReponseComplete(dossier);
     }
 
-    /** La fiche complète du dossier : étapes et affectations relues après écriture. */
+    /** Full case page: steps and assignments re-read after writing. */
     private DossierResponse construireReponseComplete(Dossier dossier) {
         List<EtapeProcedure> etapes = etapeProcedureRepository.findByDossierIdOrderByTypeAsc(dossier.getId());
         List<Long> juristesAffectes = dossierJuristeRepository.findByDossierId(dossier.getId()).stream()
@@ -872,7 +799,7 @@ public class DossierService {
 
         if (request.statut() == StatutValidation.VALIDEE) {
             if (request.typeClientSensibleAjuste() != null) {
-                // Le DJ ajuste le type au moment de valider : même référentiel, même contrôle.
+                // The DJ adjusts the type when validating: same reference data, same check.
                 validerTypeClientSensible(request.typeClientSensibleAjuste());
                 dossier.setTypeClientSensible(request.typeClientSensibleAjuste());
             }

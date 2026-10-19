@@ -18,18 +18,16 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Réception des accusés par le sidecar Dapr (Guide V1 §8, voie recommandée).
+ * Receives receipts through the Dapr sidecar (Guide V1 §8, recommended path).
  * <p>
- * Dapr découvre les abonnements en appelant {@code GET /dapr/subscribe} au démarrage, puis livre
- * chaque message sur la route déclarée. Les abonnements sont donc annoncés ici plutôt que dans un
- * fichier : ils suivent automatiquement le composant et les topics configurés.
+ * Dapr discovers subscriptions via {@code GET /dapr/subscribe} at startup, so they are declared here
+ * and follow the configured component and topics automatically.
  * <p>
- * <b>Ces routes ne sont ouvertes qu'au sidecar</b>, qui tourne sur la même pile réseau que
- * l'application (cf. {@code docker-compose.yml}). Elles ne portent aucune donnée de l'application et
- * n'en renvoient aucune : elles enregistrent ce que le moteur dit de ses propres envois.
+ * <b>These routes are only reachable by the sidecar</b>, which shares the application's network stack
+ * (see {@code docker-compose.yml}). They expose no application data.
  * <p>
- * Une réponse 200 vaut acquittement : Dapr ne redélivrera pas. On répond donc 200 même lorsque
- * l'accusé ne nous concerne pas — il a bien été traité, et le redemander ne changerait rien.
+ * A 200 acknowledges the message and stops redelivery, so 200 is returned even for receipts that do
+ * not concern us.
  */
 @Slf4j
 @RestController
@@ -44,7 +42,7 @@ public class AccusesDaprController {
     private final DepotPieceJointeService depotPieceJointeService;
     private final NotificationEngineProperties proprietes;
 
-    /** Abonnements annoncés au sidecar : le topic de suivi des succès et celui des échecs. */
+    /** Subscriptions declared to the sidecar: the success and failure tracking topics. */
     @GetMapping("/dapr/subscribe")
     public List<Map<String, String>> abonnements() {
         String pubsub = proprietes.transport().pubsub();
@@ -66,7 +64,7 @@ public class AccusesDaprController {
         return ResponseEntity.ok().build();
     }
 
-    /** Adresse de dépôt d'une pièce jointe : la notification qui l'attend repart une fois le fichier envoyé. */
+    /** Attachment upload URL: the waiting notification resumes once the file is uploaded. */
     @PostMapping(ROUTE_DEPOT)
     public ResponseEntity<Void> depot(@RequestBody ReponseDepotPieceJointe reponse) {
         depotPieceJointeService.traiterLaReponse(reponse);

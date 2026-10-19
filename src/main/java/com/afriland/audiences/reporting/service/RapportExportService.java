@@ -21,25 +21,20 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Exports FR-REP-01 (rapport périodique). Le format JSON est géré directement par le contrôleur ;
- * ce service couvre PDF (PDFBox), Excel (POI) et CSV — présentation en libellé/valeur, le rapport
- * étant un agrégat unique et non une liste de lignes (contrairement au calendrier, Épic 2).
+ * Periodic report exports (FR-REP-01): PDF, Excel and CSV (JSON is handled by the controller).
+ * Laid out as label/value pairs, since the report is a single aggregate.
  */
 @Service
 public class RapportExportService {
 
-    /** Deux colonnes sur les 515 points utiles d'une A4 portrait : le libellé prime sur la valeur. */
+    /** Two columns over the 515 usable points of a portrait A4 page. */
     private static final float[] LARGEURS = {330f, 185f};
 
     /**
-     * Le rapport, mis en page par la charte commune (Q-115 A2).
+     * The report, laid out with the shared PDF template, which handles page breaks.
      *
-     * <p>Il tenait sur une page écrite à la main, sans garde de pagination : six indicateurs
-     * passaient, trente auraient débordé hors de la feuille sans la moindre erreur. La charte
-     * franchit les pages d'elle-même.
-     *
-     * @param auteur qui demande le rapport ; porté par le pied de page
-     * @param langue langue des libellés — le rapport est un document de travail
+     * @param auteur requester, shown in the footer
+     * @param langue label language
      */
     public byte[] exportPdf(RapportResponse rapport, String auteur, Locale langue) {
         LibellesPdf libelles = LibellesPdf.pour(langue);
@@ -58,7 +53,7 @@ public class RapportExportService {
         }
     }
 
-    /** Conservé pour les appels qui n'ont pas d'auteur sous la main. */
+    /** For callers without an author at hand. */
     public byte[] exportPdf(RapportResponse rapport) {
         return exportPdf(rapport, null, null);
     }
@@ -90,12 +85,7 @@ public class RapportExportService {
         return csv.toString().getBytes(StandardCharsets.UTF_8);
     }
 
-    /**
-     * Les six indicateurs, dans l'ordre où ils se lisent.
-     *
-     * <p>Les libellés viennent du même fichier que ceux du PDF : une seule source, sinon l'Excel et
-     * le PDF finiraient par nommer différemment la même chose.
-     */
+    /** The indicators in reading order, with labels from the same source as the PDF. */
     private Map<String, String> indicateurs(RapportResponse rapport, LibellesPdf libelles) {
         Map<String, String> indicateurs = new LinkedHashMap<>();
         indicateurs.put(libelles.texte("rapport.indicateur.nouveauxDossiers"),
@@ -106,11 +96,7 @@ public class RapportExportService {
                 String.valueOf(rapport.nbDemandesFraisDeposees()));
         indicateurs.put(libelles.texte("rapport.indicateur.deliberesEnregistres"),
                 String.valueOf(rapport.nbDeliberesEnregistres()));
-        /*
-         * Des nombres, pas un pourcentage (métier, 2026-10-06). Le taux était la seule ligne du
-         * rapport exporté qui demandait un calcul mental pour être comprise : 71,88 % ne dit pas
-         * sur combien d'affaires il porte. Les trois décomptes le disent.
-         */
+        // Counts rather than the success rate: a percentage hides how many cases it covers.
         indicateurs.put(libelles.texte("rapport.indicateur.litigesGagnes"),
                 String.valueOf(rapport.nbLitigesGagnes()));
         indicateurs.put(libelles.texte("rapport.indicateur.litigesPerdus"),
@@ -123,10 +109,8 @@ public class RapportExportService {
     }
 
     /**
-     * Version française, pour l'Excel et le CSV.
-     *
-     * <p>Ces deux formats ne sont pas traduits : ils alimentent des retraitements et des classeurs
-     * existants, où renommer une colonne d'une exécution à l'autre casserait ce qui les consomme.
+     * French labels for Excel and CSV. These formats are not translated: they feed downstream
+     * processing, where a column renamed between runs would break consumers.
      */
     private Map<String, String> indicateurs(RapportResponse rapport) {
         return indicateurs(rapport, LibellesPdf.pour(null));

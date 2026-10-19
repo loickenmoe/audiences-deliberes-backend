@@ -72,25 +72,22 @@ class ReportingServiceTest {
         assertThat(result.nbDemandesFraisEnAttente()).isEqualTo(3L);
         assertThat(result.nbProrogationsAlerte()).isEqualTo(2L);
         assertThat(result.tauxSuccesRecouvrement()).isEqualTo(0.75d);
-        // Observation 12 : la Direction lisait un taux sans savoir sur combien d'affaires il portait.
+        // Management must know how many cases a rate is based on.
         assertThat(result.nbLitigesGagnes()).isEqualTo(3L);
         assertThat(result.nbLitigesPerdus()).isEqualTo(1L);
         assertThat(result.nbLitigesMixtes()).isZero();
         /*
-         * « Une affaire est vidée lorsqu'elle est à l'étape clôturée » (métier, 2026-10-06). Un
-         * dossier portant plusieurs étapes, la règle se lit au niveau du dossier : plus aucune
-         * étape en cours. C'est le complément exact des dossiers actifs, affiché à côté.
+         * "A case is closed when it is at the closed step." A case has several steps, so the rule applies
+         * at case level: no step in progress. It is the exact complement of active cases, shown alongside.
          */
         assertThat(result.nbAffairesVidees()).isEqualTo(5L);
         assertThat(result.provisionsReprises()).isEqualTo(500000d);
     }
 
     /**
-     * « Perdus » n'est <b>pas</b> « total moins gagnés » (métier, 2026-10-03, observation 12).
-     *
-     * <p>{@code ResultatDelibere} a trois valeurs : un délibéré {@code MIXTE} n'est ni un succès ni
-     * un échec. Le déduire du total aurait compté les affaires partiellement gagnées comme des
-     * pertes, et la Direction aurait lu un chiffre faux sans moyen de s'en apercevoir.
+     * "Lost" is <b>not</b> "total minus won". {@code ResultatDelibere} has three values: a {@code MIXTE}
+     * deliberation is neither a success nor a failure. Deriving it from the total would count partially
+     * won cases as losses.
      */
     @Test
     void tableauDeBord_neCompteNiGagneNiPerduUnDelibereMixte() {
@@ -111,7 +108,7 @@ class ReportingServiceTest {
         assertThat(result.nbLitigesGagnes()).isEqualTo(4L);
         assertThat(result.nbLitigesPerdus()).isEqualTo(2L);
         assertThat(result.nbLitigesMixtes()).isEqualTo(4L);
-        // Les trois s'additionnent au total : rien n'est perdu de vue, rien n'est attribué d'office.
+        // The three add up to the total: nothing is lost, nothing is assigned by default.
         assertThat(result.nbLitigesGagnes() + result.nbLitigesPerdus() + result.nbLitigesMixtes())
                 .isEqualTo(10L);
     }
@@ -124,7 +121,7 @@ class ReportingServiceTest {
         when(demandeFraisRepository.compterNonSoldees(anyList(), anyList())).thenReturn(0L);
         when(alerteRepository.compterParTypeEtStatut(any(), any(), anyList())).thenReturn(0L);
         when(delibereRepository.calculerResultats(anyList())).thenReturn(performanceGlobale);
-        // `SUM` rend `null` sur un ensemble vide, non zéro : les trois décomptes doivent y survivre.
+        // `SUM` returns `null` on an empty set, not zero: the three counts must survive it.
         when(performanceGlobale.getFavorables()).thenReturn(null);
         when(performanceGlobale.getDefavorables()).thenReturn(null);
         when(performanceGlobale.getMixtes()).thenReturn(null);
@@ -176,13 +173,9 @@ class ReportingServiceTest {
     }
 
     /**
-     * <b>Le périmètre voyage jusqu'aux neuf requêtes</b> (Q-138), et « rien demandé » vaut les deux
-     * catégories.
-     *
-     * <p>C'est ce qui rend « Toutes catégories » exact plutôt que sous-entendu : sans ce test, un
-     * indicateur pourrait recevoir une liste vide, ou la liste d'une seule catégorie, et afficher un
-     * chiffre trop petit sans que rien ne le dise. Les neuf sont vérifiés par capture, parce qu'un
-     * seul oublié suffirait à rompre l'invariant des sommes.
+     * <b>The scope reaches all nine queries</b>, and "nothing requested" means both categories. Without
+     * this, an indicator could receive an empty or single-category list and silently show too small a
+     * figure. All nine are checked by capture, since one omission would break the sum invariant.
      */
     @Test
     @DisplayName("sans catégorie demandée, les neuf indicateurs portent sur les deux catégories")
@@ -219,7 +212,7 @@ class ReportingServiceTest {
         verify(alerteRepository).compterParTypeEtStatut(any(), any(), perimetre.capture());
         assertThat(perimetre.getValue()).as("alertes de prorogation").isEqualTo(attendu);
 
-        // Les trois litiges viennent d'une seule requête : la vérifier une fois les couvre tous.
+        // The three litigation counts come from one query: checking it once covers all.
         verify(delibereRepository).calculerResultats(perimetre.capture());
         assertThat(perimetre.getValue()).as("litiges gagnés, perdus et mixtes").isEqualTo(attendu);
 
@@ -228,9 +221,8 @@ class ReportingServiceTest {
     }
 
     /**
-     * Et une catégorie demandée ne laisse passer qu'elle. C'est le pendant du test précédent : sans
-     * lui, un périmètre pourrait être reçu puis ignoré, et l'écran afficherait les mêmes chiffres
-     * sous les trois choix du sélecteur.
+     * A requested category lets only itself through. Otherwise a scope could be received then ignored,
+     * and the screen would show the same figures for all three selector choices.
      */
     @Test
     @DisplayName("une catégorie demandée est la seule transmise")

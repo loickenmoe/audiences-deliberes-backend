@@ -28,10 +28,9 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * Épic 6 (FR-GED-01/02/03/04) — cf. FUNCTIONAL_MAP.md §6, API_IMPLEMENTATION_STATUS.md §8.
- * {@code PUT /ged/documents/{id}/approbation-suppression} : « à proposer » (absent du contrat
- * formel), implémenté selon les critères Gherkin de US 6.4. {@code GET /dossiers/{id}/documents}
- * (#43) : endpoint 🆕, le contrat ne prévoyant que la consultation unitaire.
+ * GED endpoints (FR-GED-01/02/03/04). {@code PUT /ged/documents/{id}/approbation-suppression} is not
+ * in the formal API contract and is implemented from the Gherkin criteria of US 6.4.
+ * {@code GET /dossiers/{id}/documents} is an addition: the contract only provides single-document access.
  */
 @RestController
 @RequiredArgsConstructor
@@ -70,7 +69,7 @@ public class GedController {
                 : ResponseEntity.status(HttpStatus.ACCEPTED).body(resultat.demande());
     }
 
-    /** M15 (Q-68) : file de travail des demandes de suppression (DJ/DJA) — endpoint 🆕. */
+    /** Queue of deletion requests (DJ/DJA). */
     @GetMapping("${api.prefix}/ged/demandes-suppression")
     @PreAuthorize("hasAnyRole('DJ', 'DJA')")
     public PageResponse<DemandeSuppressionResponse> listerDemandesSuppression(
@@ -88,9 +87,8 @@ public class GedController {
     }
 
     /**
-     * Q-80 : « tout juriste » (FR-GED-04) — le DJ et la DJA ont tous les droits d'un juriste (US,
-     * tableau des profils), et le document d'analyse attribue ce rapport à l'Assistante. Or ces trois
-     * profils ne portent pas {@code ROLE_JURISTE} dans le realm : ils sont nommés ici.
+     * "Any legal officer" (FR-GED-04): the DJ and DJA have all of a legal officer's rights, and the
+     * Assistant is assigned this report, so all three are named explicitly.
      */
     @GetMapping("${api.prefix}/ged/rapport-journalier")
     @PreAuthorize("hasAnyRole('JURISTE', 'DJ', 'DJA', 'ASSISTANTE')")

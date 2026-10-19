@@ -27,7 +27,7 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDateTime;
 import java.util.Map;
 
-/** FR-AUD-03/04 (Q-04, Q-13) — cf. FUNCTIONAL_MAP.md §2, API_IMPLEMENTATION_STATUS.md §3. */
+/** Alarms (FR-AUD-03/04). */
 @Service
 @RequiredArgsConstructor
 public class AlarmeService {
@@ -101,8 +101,8 @@ public class AlarmeService {
     }
 
     /**
-     * Q-77 : l'alarme a été traitée. Elle passe {@code TRAITEE} sans être remplacée, et sort donc
-     * de la surveillance d'échéance — jusqu'ici, seule une reprogrammation pouvait la clore.
+     * Marks the alarm as handled: it becomes {@code TRAITEE} without replacement and leaves
+     * due-date monitoring.
      */
     @Transactional
     public AlarmeResponse traiterAlarme(Long alarmeId) {
@@ -123,7 +123,7 @@ public class AlarmeService {
         return alarmeMapper.toResponse(alarme);
     }
 
-    /** M15 (Q-68) : alarmes d'un dossier — 404 si le dossier n'existe pas. */
+    /** Alarms of a case; 404 if the case does not exist. */
     @Transactional(readOnly = true)
     public PageResponse<AlarmeResponse> listerParDossier(Long dossierId, Pageable pageable) {
         if (!dossierRepository.existsById(dossierId)) {

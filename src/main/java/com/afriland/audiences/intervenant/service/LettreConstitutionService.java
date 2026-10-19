@@ -11,53 +11,36 @@ import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 
 /**
- * Compose et met en forme la lettre de constitution (RG-INT-08, FR-INT-07/US 5.7 — Q-115 B1).
+ * Composes and lays out the appointment letter (RG-INT-08, FR-INT-07, US 5.7) on the bank's
+ * letterhead, following the legal department's template: number, recipient, subject, body,
+ * signatory.
  *
- * <p><b>Ce qui change.</b> La lettre était cinq lignes posées sur une page nue : un titre, le
- * dossier, le prestataire, le motif, le validateur. Elle prend le <b>papier à en-tête</b> de la
- * banque — logo, colonne des mentions légales — et la forme que la direction juridique emploie
- * réellement : un numéro, un destinataire, un objet, un corps, un signataire.
- *
- * <p><b>Les pointillés sont conservés.</b> Le gabarit officiel est fait pour être complété à la main ;
- * un champ laissé vide rend donc des pointillés, et non le vide. Les supprimer reviendrait à retirer
- * à la direction juridique une possibilité qu'elle emploie aujourd'hui.
- *
- * <p><b>Le motif n'y figure plus.</b> C'est une justification interne, adressée au supérieur
- * hiérarchique et absente du gabarit officiel : un huissier n'a pas à lire pourquoi la banque a
- * décidé en interne de le constituer. La traçabilité du validateur demeure — dans les propriétés du
- * fichier et dans la GED.
+ * <p>Empty fields render as dotted lines so the letter can be completed by hand. The request reason
+ * is internal and deliberately not printed; the validator remains traceable in the file properties
+ * and the document store.
  */
 @Service
 public class LettreConstitutionService {
 
     private static final DateTimeFormatter FORMAT_DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
-    /** Ce que rend un champ vide : le gabarit papier porte ces pointillés pour être complété. */
+    /** Rendered for an empty field, as on the paper template. */
     private static final String POINTILLES = "..........................";
 
-    /** Valeurs par défaut, relevées sur le gabarit de la direction juridique. */
+    /** Defaults taken from the legal department's template. */
     public static final String SUFFIXE_PAR_DEFAUT = "First Bank/DAJR/DR/CM/ABN/18";
     public static final String LIEU_PAR_DEFAUT = "Yaoundé";
     public static final String OBJET_PAR_DEFAUT = "Lettre de constitution contenant transmission de pièces.";
-    /**
-     * La hauteur réservée à chaque signature, en points.
-     *
-     * <p>Quarante-deux points, soit un centimètre et demi : la taille d'une signature manuscrite sur
-     * un courrier. Trente-deux, essayés d'abord, donnaient un trait qu'on devinait sans le lire.
-     */
+    /** Height reserved for each signature, in points (about 1.5 cm, a handwritten signature). */
     private static final float HAUTEUR_SIGNATURE = 42f;
 
     public static final String SIGNATAIRE_PAR_DEFAUT = "La Direction Juridique";
     public static final String QUALITE_PAR_DEFAUT = "Huissier de Justice";
 
     /**
-     * Le corps type, tel qu'il figure sur le gabarit.
-     *
-     * <p>Les pointillés y sont laissés : ce sont les endroits que le rédacteur complète — le type de
-     * saisie, le débiteur, le montant en chiffres puis en lettres, le tiers saisi, les annexes.
-     * <b>On ne pré-remplit que ce dont on est certain</b>, et aucune de ces valeurs ne se déduit du
-     * dossier sans risque : le « client » d'un dossier de recouvrement n'est pas nécessairement le
-     * débiteur visé par la saisie, et le risque encouru n'est pas le montant de la créance.
+     * Template body. Dotted lines mark what the drafter completes (seizure type, debtor, amount,
+     * garnishee, attachments). None is pre-filled: the case client is not necessarily the targeted
+     * debtor, and the risk amount is not the claim amount.
      */
     public static String corpsParDefaut() {
         return """
@@ -73,11 +56,9 @@ public class LettreConstitutionService {
     }
 
     /**
-     * Le brouillon d'une demande : tout ce qui est certain, le reste en pointillés.
+     * Draft for a request: known values filled in, the rest as dotted lines.
      *
-     * @param numero {@code null} tant que la lettre n'est pas signée — le réserver dès la rédaction
-     *               brûlerait un numéro à chaque demande sans suite, et les trous s'accumuleraient
-     *               définitivement dans une série qui ne repart jamais à un (B2)
+     * @param numero {@code null} until signature, so abandoned requests leave no gaps in the series
      */
     public LettreConstitution brouillonPour(DemandeConstitution demande, Integer numero) {
         return LettreConstitution.builder()
@@ -95,46 +76,32 @@ public class LettreConstitutionService {
                 .build();
     }
 
-    /**
-     * Met la lettre en page sur le papier à en-tête de la banque — c'est l'exemplaire archivé en GED,
-     * celui qui fait foi.
-     */
+    /** Lays out the letter on the bank's letterhead: the authoritative copy archived in the GED. */
     public byte[] generer(LettreConstitution lettre) {
         return generer(lettre, false, null, null);
     }
 
     /**
-     * La même lettre, avec les <b>signatures enregistrées</b> de ceux qui l'engagent (N8, revu le
-     * 2026-10-07).
-     *
-     * <p>Les images arrivent en paramètre : ce service met en page, il ne sait pas où vivent les
-     * signatures et n'a pas à le savoir. Nulles, la lettre part avec les noms seuls, à signer à la
-     * main - c'est le cas de tous ceux qui n'ont rien déposé, et ce n'est pas une erreur.
+     * Same letter with the stored signatures of the signatories. Without images, only the names are
+     * printed and the letter is signed by hand; this is not an error.
      */
     public byte[] generer(LettreConstitution lettre, Signataire redacteur, Signataire valideur) {
         return generer(lettre, false, redacteur, valideur);
     }
 
     /**
-     * @param pourPapierPreimprime tirage destiné aux feuilles que la banque imprime d'avance, qui
-     *                             portent déjà le logo, la colonne et les mentions légales. Le
-     *                             document ne dessine alors que le contenu, <b>aux mêmes
-     *                             emplacements</b> : c'est la géométrie, non le décor, qui fait
-     *                             qu'une lettre tombe juste une fois imprimée.
-     *                             <p>
-     *                             Ce tirage n'est pas archivé et ne remplace pas la pièce du dossier :
-     *                             deux exemplaires en GED poseraient la question de savoir lequel
-     *                             fait foi. Il se régénère à la demande depuis la lettre enregistrée,
-     *                             dont tout le contenu — numéro, destinataire, objet, corps,
-     *                             signataire — est en base.
+     * @param pourPapierPreimprime print for the bank's pre-printed sheets: only the content is drawn,
+     *                             at the same positions. This copy is not archived (a single copy
+     *                             must be authoritative) and is regenerated on demand from the
+     *                             stored letter.
      */
     public byte[] generer(LettreConstitution lettre, boolean pourPapierPreimprime) {
         return generer(lettre, pourPapierPreimprime, null, null);
     }
 
     /**
-     * @param redacteur celui qui a écrit la lettre, à gauche sous le nom du service.
-     * @param valideur  celui qui l'a validée et l'engage, à droite.
+     * @param redacteur drafter, shown on the left under the department name
+     * @param valideur  validator who commits the bank, shown on the right
      */
     public byte[] generer(LettreConstitution lettre, boolean pourPapierPreimprime,
                           Signataire redacteur, Signataire valideur) {
@@ -145,14 +112,13 @@ public class LettreConstitutionService {
                 : DocumentPdf.papierEnTete(titre, nomComplet(validateur), Locale.FRENCH)) {
             document.nouvellePage();
 
-            // La ligne du numéro à gauche, le lieu et la date à droite — sur la MÊME ligne, comme sur
-            // le gabarit. Deux écritures successives les décalaient d'un interligne.
+            // Number on the left, place and date on the right, on the same line as in the template.
             document.ligneGaucheEtDroite(lettre.referenceComplete(),
                     ou(lettre.getLieu(), LIEU_PAR_DEFAUT) + " le " + LocalDate.now().format(FORMAT_DATE),
                     10f);
             document.espace(18f);
 
-            // Le destinataire, en retrait : c'est la disposition d'une lettre, pas d'un formulaire.
+            // Recipient block indented, as in a letter layout.
             document.ligneEnRetrait("Maître " + ou(lettre.getDestinataireNom(), POINTILLES), 150f, true, 10f);
             document.ligneEnRetrait(ou(lettre.getDestinataireQualite(), POINTILLES), 150f, true, 10f);
             document.ligneEnRetrait(ou(lettre.getDestinataireVille(), POINTILLES), 150f, true, 10f);
@@ -169,16 +135,10 @@ public class LettreConstitutionService {
             document.espace(26f);
 
             /*
-             * Le **service** qui écrit - « La Direction Juridique » - puis, en dessous, les deux
-             * personnes qui engagent la banque (métier, 2026-10-07).
-             *
-             * Rien ne se signe au-dessus de cette ligne : elle nomme un service, pas quelqu'un. Une
-             * signature posée là laissait croire que la Direction Juridique signe en personne, ce
-             * qu'aucune direction ne fait. Les signataires viennent dessous, le rédacteur à gauche
-             * et celui qui valide à droite - l'ordre dans lequel la lettre s'est faite.
-             *
-             * Sans image déposée, les noms restent seuls et la lettre s'imprime pour être signée à
-             * la main, exactement comme avant N8.
+             * The issuing department, then below it the two people who commit the bank: drafter
+             * on the left, validator on the right. Nothing is signed above the department line,
+             * since it names a department, not a person. Without images, names are printed alone
+             * for handwritten signature.
              */
             document.centre(ou(lettre.getSignataire(), SIGNATAIRE_PAR_DEFAUT), true, 10f);
             document.espace(20f);
@@ -189,13 +149,9 @@ public class LettreConstitutionService {
     }
 
     /**
-     * Une personne qui signe : son image, et son nom.
+     * A signatory: signature image and name, kept together so they cannot be mismatched.
      *
-     * <p>Les deux tiennent ensemble. Une image sans nom ne dit pas qui a signé ; un nom dont
-     * l'image appartiendrait à un autre serait pire - les passer séparément rendait l'erreur
-     * possible, ce record la rend impossible.
-     *
-     * @param image l'image déposée, ou {@code null} : le nom part alors seul, à signer à la main.
+     * @param image stored image, or {@code null} to print the name alone for handwritten signature
      */
     public record Signataire(byte[] image, String nom) {
     }
@@ -208,12 +164,12 @@ public class LettreConstitutionService {
         return signataire == null ? null : signataire.nom();
     }
 
-    /** Le validateur : c'est lui qui engage la banque, pas le juriste qui a sollicité. */
+    /** The validator's name: they commit the bank, not the requesting legal officer. */
     private static String nomComplet(Utilisateur utilisateur) {
         return utilisateur == null ? null : utilisateur.getPrenom() + " " + utilisateur.getNom();
     }
 
-    /** La valeur, ou son remplacement quand elle manque — jamais le vide. */
+    /** The value, or the replacement when blank. */
     private static String ou(String valeur, String remplacement) {
         return valeur == null || valeur.isBlank() ? remplacement : valeur;
     }

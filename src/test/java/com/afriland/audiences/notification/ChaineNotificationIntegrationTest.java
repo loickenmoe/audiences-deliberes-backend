@@ -53,12 +53,12 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Étape 13 — la chaîne entière, sur un PostgreSQL réel : une action métier déclenche une alerte, le
- * routage et la rédaction la traduisent en notification externe, le dispatcher la remet au transport.
+ * Step 13: the whole chain on a real PostgreSQL. A business action raises an alert, routing and
+ * drafting turn it into an external notification, the dispatcher hands it to the transport.
  * <p>
- * Chaque maillon a ses propres tests ; celui-ci vérifie qu'ils s'enchaînent, ce qu'aucun test unitaire
- * ne peut établir. Le transport est une passerelle d'essai : elle retient les messages au lieu de les
- * envoyer, si bien que le test observe <b>exactement ce qui serait parti</b>, sans rien envoyer.
+ * Each link has its own tests; this one checks they chain together. The transport is a test gateway
+ * that keeps messages instead of sending them, so the test sees <b>exactly what would have been
+ * sent</b>.
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -83,8 +83,8 @@ class ChaineNotificationIntegrationTest {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
-        // Moteur « actif » pour que la redirection et le jeton s'appliquent, mais la passerelle
-        // d'essai n'envoie rien : aucun message ne quitte le test.
+        // Engine "active" so redirection and token apply, but the test gateway sends nothing: no message
+        // leaves the test.
         registry.add("notification.engine.actif", () -> "true");
         registry.add("notification.engine.code-service", () -> "audience-deliberer");
         registry.add("notification.engine.jwt-secret", () -> "0123456789abcdef0123456789abcdef");
@@ -94,7 +94,7 @@ class ChaineNotificationIntegrationTest {
         registry.add("notification.engine.redirection.telephone", () -> "600000000");
     }
 
-    /** Retient ce qui serait parti, au lieu de l'envoyer. */
+    /** Keeps what would have been sent instead of sending it. */
     @TestConfiguration
     static class PasserelleDEssai {
         static final List<MessageEngine> MESSAGES = new CopyOnWriteArrayList<>();
@@ -143,24 +143,24 @@ class ChaineNotificationIntegrationTest {
         Utilisateur juriste = juriste("kc-chaine-1", "juriste.reel@afrilandfirstbank.com");
         Long dossierId = dossier("DOS-CHAINE-1");
 
-        // 1. L'action métier déclenche l'alerte, avec son texte interne — marqueurs et codes compris.
+        // 1. The business action raises the alert, with its internal text (markers and codes included).
         var alerte = alerteService.declencher(TypeAlerte.RAPPEL_AUDIENCE, dossierId, juriste,
                 "[audienceId:5;J-7] Audience prévue (RG-AUD-03) — motif interne");
 
-        // 2. La notification externe est en file, dans la même transaction.
+        // 2. The external notification is queued in the same transaction.
         List<NotificationEnvoi> file = notificationEnvoiRepository.findAll();
         assertThat(file).hasSize(1);
         NotificationEnvoi envoi = file.get(0);
         assertThat(envoi.getEventId()).isEqualTo("alerte-" + alerte.getId() + "-EMAIL");
         assertThat(envoi.getStatut()).isEqualTo(StatutEnvoi.EN_ATTENTE);
 
-        // 3. Le dispatcher la remet au transport.
+        // 3. The dispatcher hands it to the transport.
         remise.remettre(envoi.getId());
 
         assertThat(envoi.getStatut()).isEqualTo(StatutEnvoi.PUBLIEE);
         assertThat(envoi.getStatutEngine()).isEqualTo("ESSAI");
 
-        // 4. Ce qui serait parti : le contrat du moteur, la redirection appliquée, et aucune donnée interne.
+        // 4. What would have been sent: the engine contract, redirection applied, no internal data.
         assertThat(PasserelleDEssai.MESSAGES).hasSize(1);
         MessageEngine message = PasserelleDEssai.MESSAGES.get(0);
         assertThat(message.channels()).containsExactly("EMAIL");
@@ -172,11 +172,11 @@ class ChaineNotificationIntegrationTest {
         assertThat(message.directBody())
                 .contains("Une audience approche", "DOS-CHAINE-1")
                 .doesNotContain("audienceId", "RG-AUD", "motif interne");
-        // Le destinataire réel est conservé : on sait vers qui le message serait parti en production.
+        // The real recipient is kept: we know whom the message would have reached in production.
         assertThat(envoi.getDestinataireOrigine()).isEqualTo("juriste.reel@afrilandfirstbank.com");
     }
 
-    /** Un canal coupé par le DJ arrête toute la chaîne, dès la mise en file. */
+    /** A channel disabled by the DJ stops the whole chain, as early as queueing. */
     @Test
     void un_canal_coupe_par_le_DJ_ne_produit_aucun_message() {
         PasserelleDEssai.MESSAGES.clear();
@@ -190,7 +190,7 @@ class ChaineNotificationIntegrationTest {
         assertThat(PasserelleDEssai.MESSAGES).isEmpty();
     }
 
-    /** Un type retiré de la grille ne part pas, alors que les autres continuent. */
+    /** A type removed from the grid is not sent, while others continue. */
     @Test
     void la_grille_du_DJ_filtre_evenement_par_evenement() {
         PasserelleDEssai.MESSAGES.clear();
@@ -206,11 +206,10 @@ class ChaineNotificationIntegrationTest {
     }
 
     /**
-     * Une coordonnée manquante n'arrête que son canal : la ligne reste visible en supervision et ne
-     * part jamais, pendant que l'autre canal suit son cours.
+     * A missing contact detail stops only its channel: the line stays visible in supervision and is
+     * never sent, while the other channel proceeds.
      * <p>
-     * Le cas ne se pose que pour un prestataire : l'adresse d'un utilisateur interne est obligatoire
-     * et vérifiée par l'entité elle-même, un juriste sans adresse valide ne peut donc pas exister.
+     * Only applies to a provider: an internal user's address is mandatory and validated by the entity.
      */
     @Test
     void une_coordonnee_manquante_n_arrete_que_son_canal() {
@@ -224,7 +223,7 @@ class ChaineNotificationIntegrationTest {
                 "constitution-404");
         dispatcher.remettreLesNotificationsEnAttente();
 
-        // Les deux canaux prestataires par défaut : courriel personnel et SMS.
+        // The two default provider channels: personal email and SMS.
         NotificationEnvoi sms = notificationEnvoiRepository.findByEventId("constitution-404-p"
                 + notaire.getId() + "-SMS").orElseThrow();
         assertThat(sms.getStatut()).isEqualTo(StatutEnvoi.NON_JOIGNABLE);
@@ -237,7 +236,7 @@ class ChaineNotificationIntegrationTest {
         assertThat(PasserelleDEssai.MESSAGES.get(0).channels()).containsExactly("EMAIL");
     }
 
-    /** Le canal applicatif reste intact : c'est lui, et lui seul, qui est obligatoire (NF-ALR-02). */
+    /** The in-app channel stays intact: it alone is mandatory (NF-ALR-02). */
     @Test
     void l_alerte_applicative_survit_a_une_panne_des_notifications_externes() {
         PasserelleDEssai.MESSAGES.clear();
@@ -257,11 +256,11 @@ class ChaineNotificationIntegrationTest {
         Utilisateur juriste = juriste("kc-chaine-6", "juriste6@afrilandfirstbank.com");
         alerteService.declencher(TypeAlerte.RAPPEL_AUDIENCE, dossier("DOS-CHAINE-6"), juriste, "Rappel");
         NotificationEnvoi envoi = notificationEnvoiRepository.findAll().get(0);
-        // Trois heures : au-delà de l'âge maximal (2 h par défaut).
+        // Three hours: beyond the maximum age (2 h by default).
         notificationEnvoiRepository.flush();
         jdbc.update("UPDATE notification_envoi SET date_creation = date_creation - interval '3 hours' WHERE id = ?",
                 envoi.getId());
-        // La mise à jour est passée sous Hibernate : sans cela, la remise relirait la ligne en cache.
+        // The update bypasses Hibernate: otherwise delivery would reread the cached row.
         entityManager.clear();
 
         remise.remettre(envoi.getId());

@@ -9,16 +9,14 @@ import com.afriland.audiences.portail.web.dto.PieceJustificativeResponse;
 import java.util.List;
 
 /**
- * Depuis Q-82 : la demande se lit sans autre appel — dossier et avocat nommés, sensibilité et seuil
- * applicable qui expliquent {@code validationConjointeRequise} (RG-INT-03), et décisions du circuit
- * dans l'ordre chronologique.
+ * The request is readable without further calls: case and lawyer named, sensitivity and applicable
+ * threshold explaining {@code validationConjointeRequise} (RG-INT-03), and workflow decisions in
+ * chronological order.
  * <p>
- * Depuis Q-97 : {@code piecesTelechargeables} porte les pièces réellement stockées, avec une URL
- * pré-signée (10 minutes) — UC-INT-02 étape 3 veut que l'instructeur « affiche la demande, <b>ses
- * pièces justificatives</b> et le résultat du contrôle de conformité ». Renseigné sur le
- * <b>détail</b> seulement, comme l'URL d'un document GED ; vide sur la liste. {@code
- * piecesJustificatives} reste le tableau brut du dictionnaire des données — il peut contenir des
- * entrées antérieures au téléversement, qui ne désignent aucun fichier.
+ * {@code piecesTelechargeables} holds the actually stored documents with a pre-signed URL
+ * (10 minutes), as UC-INT-02 step 3 requires; filled on the <b>detail</b> view only, empty on the
+ * list. {@code piecesJustificatives} is the raw array, which may contain entries predating upload
+ * that point to no file.
  */
 public record DemandeFraisResponse(
         Long id,

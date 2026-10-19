@@ -5,18 +5,12 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 /**
- * 🆕 {@code PUT /intervenants/{id}} — sur le modèle de {@code PUT /clients/{id}} (Q-116), ouvert le
- * 2026-09-22 (Q-117).
+ * Body of {@code PUT /intervenants/{id}}, modelled on {@code PUT /clients/{id}}.
  *
- * <p><b>Le type n'y figure pas : il est figé.</b> Avocat et autre prestataire vivent dans deux tables
- * distinctes (héritage {@code JOINED}), et les dossiers, frais, publications et constitutions pointent
- * vers l'identifiant de l'avocat : changer de type reviendrait à supprimer puis recréer l'intervenant.
- *
- * <p><b>L'identifiant Keycloak d'un avocat n'y figure pas non plus : il est figé</b> — décision du
- * porteur du projet. Les comptes sont créés et authentifiés par Keycloak ; l'application ne fait que
- * s'y rattacher. Laisser ce rattachement modifiable ici ouvrirait un second chemin, hors de Keycloak,
- * pour décider qui se connecte en tant que quel avocat. Seules les informations descriptives se
- * corrigent : nom, courriel, téléphone, et pour un autre prestataire l'indicateur de notification.
+ * <p>The type is immutable: lawyers and other providers live in separate tables ({@code JOINED}
+ * inheritance) and other entities reference the lawyer id. The Keycloak id is immutable too, so
+ * that no path outside Keycloak can decide who logs in as which lawyer. Only descriptive fields
+ * can be corrected.
  */
 public record ModifierIntervenantRequest(
         @NotBlank @Size(max = 100) String nom,

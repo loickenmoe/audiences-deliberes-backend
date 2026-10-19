@@ -25,10 +25,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * M15 — règles de dérivation du profil applicatif à partir du jeton Keycloak, déplacées ici depuis
- * {@code CurrentUserServiceTest} avec le code qu'elles couvrent (correctif R-06). Le comportement
- * transactionnel lui-même ({@code REQUIRES_NEW}) ne peut pas être vérifié sur des mocks : il l'est
- * par {@code ProvisionnementLectureSeuleIntegrationTest}, contre PostgreSQL réel.
+ * Rules deriving the application profile from the Keycloak token. The transactional behaviour
+ * ({@code REQUIRES_NEW}) cannot be checked with mocks; {@code ProvisionnementLectureSeuleIntegrationTest}
+ * covers it against a real PostgreSQL.
  */
 @ExtendWith(MockitoExtension.class)
 class UtilisateurProvisioningServiceTest {
@@ -63,8 +62,8 @@ class UtilisateurProvisioningServiceTest {
 
     @Test
     void provisionner_ignoresTransverseRolesWhenPickingTheProfil() {
-        // ROLE_SAISIE et ROLE_CONSULTATION apparaissent avant ROLE_ASSISTANTE dans le jeton :
-        // seul le rôle métier doit être retenu comme profil (cf. Q-08).
+        // ROLE_SAISIE and ROLE_CONSULTATION come before ROLE_ASSISTANTE in the token: only the business
+        // role must be kept as the profile.
         Jwt jwt = jwtWithRoles("kc-789", List.of("ROLE_SAISIE", "ROLE_CONSULTATION", "ROLE_ASSISTANTE"));
         Profil assistanteProfil = Profil.builder().id(4L).code("ASSISTANTE").build();
         when(utilisateurRepository.findByKeycloakId("kc-789")).thenReturn(Optional.empty());
@@ -75,9 +74,9 @@ class UtilisateurProvisioningServiceTest {
     }
 
     /**
-     * Q-81 : le DJ et la DJA portent aussi {@code ROLE_JURISTE} (rôle composite), et l'ordre des
-     * rôles dans le jeton n'est pas garanti. Le profil se choisit par priorité : un nouveau DJ ne
-     * doit jamais être enregistré comme juriste.
+     * The DJ and the DJA also hold {@code ROLE_JURISTE} (composite role), and role order in the token is
+     * not guaranteed. The profile is chosen by priority: a new DJ must never be recorded as a legal
+     * officer.
      */
     @Test
     void provisionner_prefereLeProfilDjAuRoleJuristeComposite() {
@@ -113,8 +112,8 @@ class UtilisateurProvisioningServiceTest {
     }
 
     /**
-     * Deux requêtes concurrentes du même nouvel utilisateur ne doivent pas produire deux lignes :
-     * l'existence est retestée à l'intérieur de la transaction indépendante.
+     * Two concurrent requests from the same new user must not create two rows: existence is rechecked
+     * inside the independent transaction.
      */
     @Test
     void provisionner_returnsTheExistingUserIfItAppearedMeanwhile() {

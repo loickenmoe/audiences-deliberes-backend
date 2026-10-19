@@ -23,10 +23,7 @@ public interface EtapeProcedureRepository extends JpaRepository<EtapeProcedure, 
 
     List<EtapeProcedure> findByDossierIdOrderByTypeAsc(Long dossierId);
 
-    /**
-     * Étapes de plusieurs dossiers en une requête (QF-41). Sans elle, construire la réponse d'une
-     * liste de dossiers interrogeait la base une fois par dossier.
-     */
+    /** Steps of several cases in one query, avoiding one query per case when building a list. */
     List<EtapeProcedure> findByDossierIdInOrderByDossierIdAscTypeAsc(Collection<Long> dossierIds);
 
     Optional<EtapeProcedure> findByDossierIdAndType(Long dossierId, TypeEtape type);
@@ -34,41 +31,26 @@ public interface EtapeProcedureRepository extends JpaRepository<EtapeProcedure, 
     boolean existsByDossierIdAndType(Long dossierId, TypeEtape type);
 
     /**
-     * Reste-t-il une étape vivante sur ce dossier ? (2026-09-29)
-     *
-     * <p>Sert la garde jurisprudentielle : une décision n'est « définitive » que lorsqu'elle n'est
-     * plus susceptible de recours, donc lorsque plus aucune étape du dossier n'est en cours.
+     * Whether the case still has an active step. Used by the case-law guard: a decision is final
+     * only when no step is still in progress.
      */
     boolean existsByDossierIdAndStatutCycleVieNotIn(Long dossierId, List<StatutCycleVie> statuts);
 
-    /** FR-REP-02 (tableau de bord, M13) : dossiers portant au moins une étape hors {@code statutsFermes} — même définition qu'au Q-53. */
+    /** FR-REP-02 (dashboard): cases with at least one step outside {@code statutsFermes}. */
     @Query("SELECT COUNT(DISTINCT e.dossier.id) FROM EtapeProcedure e "
             + "WHERE e.statutCycleVie NOT IN :statutsFermes AND e.dossier.categorie IN :categories")
     long countDistinctDossierIdByStatutCycleVieNotIn(@Param("statutsFermes") List<StatutCycleVie> statutsFermes,
                                                      @Param("categories") List<CategorieDossier> categories);
 
     /**
-     * Les <b>affaires vidées</b> : les dossiers dont <b>plus aucune étape n'est en cours</b>
-     * (métier, 2026-10-06, observation 12).
-     *
-     * <p><b>Pourquoi cette lecture de la règle.</b> La Direction a dit « une affaire est vidée
-     * lorsqu'elle est à l'étape clôturée ». Un dossier porte plusieurs étapes — Instance, Appel,
-     * les deux pourvois — et compter les étapes clôturées compterait le même dossier jusqu'à quatre
-     * fois. Pire : un dossier dont l'Instance est clôturée mais dont l'Appel est ouvert n'est pas
-     * vidé, il continue. La règle se lit donc au niveau du dossier, et c'est <b>la même notion
-     * qu'au Q-53</b> : une décision n'est définitive que lorsque plus aucune étape n'est en cours.
-     *
-     * <p><b>{@code statutsFermes} comprend l'archivage</b>, et non la seule clôture. Une étape
-     * archivée est passée par la clôture : la retirer du décompte ferait <b>baisser</b> le nombre
-     * d'affaires vidées à mesure qu'on archive, ce que personne ne lirait comme autre chose qu'une
-     * anomalie.
-     *
-     * <p>Ce compteur est donc le <b>complément exact</b> de
-     * {@link #countDistinctDossierIdByStatutCycleVieNotIn}, déjà affiché à côté : les deux
-     * s'additionnent pour faire les dossiers qui portent au moins une étape.
-     *
-     * <p>Sous-requête {@code not exists} et non jointure : une jointure multiplierait les lignes
-     * par étape et falsifierait le compte.
+     * <b>Disposed cases</b>: cases with <b>no step still in progress</b>.
+     * <p>Counted per case, not per closed step: a case with a closed Instance but an open Appeal is
+     * not disposed.
+     * <p>{@code statutsFermes} includes archiving: an archived step went through closure, and
+     * excluding it would make the count drop as cases are archived.
+     * <p>This is the <b>exact complement</b> of
+     * {@link #countDistinctDossierIdByStatutCycleVieNotIn}.
+     * <p>{@code not exists} subquery rather than a join, which would multiply rows per step.
      */
     @Query("""
             SELECT COUNT(DISTINCT e.dossier.id) FROM EtapeProcedure e
@@ -81,12 +63,9 @@ public interface EtapeProcedureRepository extends JpaRepository<EtapeProcedure, 
                                        @Param("categories") List<CategorieDossier> categories);
 
     /**
-     * Les dossiers que {@link #countDistinctDossierIdByStatutCycleVieNotIn} compte (Q-137).
-     *
-     * <p><b>Même prédicat, et c'est tout l'enjeu.</b> Le détail d'un bloc du tableau de bord doit
-     * rendre exactement ce que son compteur compte : la moindre divergence ferait douter des deux
-     * chiffres. {@code DISTINCT} sur le dossier, comme le compte, un dossier portant plusieurs
-     * étapes en cours ne devant paraître qu'une fois.
+     * The cases counted by {@link #countDistinctDossierIdByStatutCycleVieNotIn}, with <b>the same
+     * predicate</b> so the dashboard detail matches its counter. {@code DISTINCT} per case, like
+     * the count.
      */
     @Query("SELECT DISTINCT e.dossier FROM EtapeProcedure e "
             + "WHERE e.statutCycleVie NOT IN :statutsFermes AND e.dossier.categorie IN :categories")
@@ -94,7 +73,7 @@ public interface EtapeProcedureRepository extends JpaRepository<EtapeProcedure, 
                                                  @Param("categories") List<CategorieDossier> categories,
                                                  Pageable pageable);
 
-    /** Les dossiers que {@link #countDossiersSansEtapeEnCours} compte - même sous-requête (Q-137). */
+    /** The cases counted by {@link #countDossiersSansEtapeEnCours}, same subquery. */
     @Query("""
             SELECT DISTINCT e.dossier FROM EtapeProcedure e
              WHERE e.dossier.categorie IN :categories

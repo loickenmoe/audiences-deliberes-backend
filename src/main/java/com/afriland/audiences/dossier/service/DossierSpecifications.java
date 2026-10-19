@@ -15,19 +15,11 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDate;
 
 /**
- * Filtres optionnels de {@code GET /dossiers}.
+ * Optional filters of {@code GET /dossiers}. Filtering must be server-side: client-side filtering
+ * on a paginated list would only search the displayed page.
  * <p>
- * {@code reference}, {@code clientId} et {@code juristeId} ont été ajoutés au jalon M16 (Q-72) :
- * l'endpoint n'exposait que {@code nature}, {@code categorie} et {@code juridiction}, si bien qu'un
- * juriste suivant plusieurs dizaines de dossiers n'avait aucun moyen de retrouver le sien. Filtrer
- * côté client n'était pas une option : sur une liste paginée, cela n'aurait cherché que dans la
- * page affichée et aurait donc renvoyé des résultats faux.
- * <p>
- * {@code estSensible} et {@code sensibiliteStatut} ont été ajoutés au jalon M22 (Q-101), à la
- * demande du porteur du projet. Le second ne sert pas qu'au confort : {@code EN_ATTENTE} donne au DJ
- * et à la DJA la **file des sensibilités à valider**, que rien n'exposait — c'est la moitié de QF-08,
- * que j'avais close à tort en concluant que la notification suffisait. Une notification prévient
- * d'un événement ; elle ne dit pas ce qui reste en attente.
+ * {@code sensibiliteStatut = EN_ATTENTE} gives DJ and DJA the queue of sensitivities awaiting
+ * validation.
  */
 public final class DossierSpecifications {
 
@@ -35,10 +27,10 @@ public final class DossierSpecifications {
     }
 
     /**
-     * @param typeEtape    ne garde que les dossiers portant une étape de ce type
-     * @param statutEtape  ne garde que les dossiers portant une étape à ce statut
-     * @param dateDebut    début de la fenêtre d'audiences, incluse ; {@code null} pour ne pas borner
-     * @param dateFin      fin de la fenêtre d'audiences, incluse
+     * @param typeEtape    keeps only cases with a step of this type
+     * @param statutEtape  keeps only cases with a step in this status
+     * @param dateDebut    start of the hearing window, inclusive; {@code null} for no bound
+     * @param dateFin      end of the hearing window, inclusive
      */
     public static Specification<Dossier> withFilters(String nature, CategorieDossier categorie,
                                                      String juridiction, String reference,
@@ -58,7 +50,7 @@ public final class DossierSpecifications {
                 predicate = cb.and(predicate,
                         cb.like(cb.lower(root.get("juridictionSaisie")), "%" + juridiction.toLowerCase() + "%"));
             }
-            // Recherche partielle : une référence se retient rarement en entier.
+            // Partial match: a reference is rarely remembered in full.
             if (StringUtils.hasText(reference)) {
                 predicate = cb.and(predicate,
                         cb.like(cb.lower(root.get("reference")), "%" + reference.toLowerCase() + "%"));
@@ -73,10 +65,8 @@ public final class DossierSpecifications {
                 predicate = cb.and(predicate, cb.equal(root.get("sensibiliteStatut"), sensibiliteStatut));
             }
             /*
-             * « Mes dossiers ». Sous-requête EXISTS plutôt que jointure : `Dossier` ne mappe aucune
-             * collection d'affectations, et surtout une jointure ferait remonter un dossier autant
-             * de fois qu'il a de juristes — ce qui fausserait le total de la pagination. EXISTS
-             * répond à la seule question posée : ce juriste est-il affecté ?
+             * "My cases". EXISTS subquery rather than a join: a join would return a case once per
+             * in-house lawyer and distort the pagination total.
              */
             if (juristeId != null && query != null) {
                 var sousRequete = query.subquery(Long.class);
@@ -87,14 +77,9 @@ public final class DossierSpecifications {
                 predicate = cb.and(predicate, cb.exists(sousRequete));
             }
             /*
-             * L'étape. Les deux critères portent sur la **même** étape : « un appel en cours » est
-             * une question précise, alors que « un appel, et par ailleurs quelque chose en cours »
-             * n'en est pas une. Cela répond aussi au cas des deux cassations concurrentes — un
-             * dossier porté devant la Cour Suprême et devant la CCJA remonte dans les deux filtres,
-             * ce qui est exact : les deux procédures existent.
-             *
-             * EXISTS et non jointure, pour la même raison que « mes dossiers » : une jointure ferait
-             * remonter un dossier autant de fois qu'il a d'étapes, et fausserait le total paginé.
+             * Both criteria apply to the same step ("an appeal in progress"). A case before both
+             * the Supreme Court and the CCJA matches both filters, which is correct.
+             * EXISTS rather than a join, for the same pagination reason as "my cases".
              */
             if ((typeEtape != null || statutEtape != null) && query != null) {
                 var sousRequete = query.subquery(Long.class);
@@ -111,10 +96,8 @@ public final class DossierSpecifications {
             }
 
             /*
-             * La période porte sur les **audiences** (arbitrage du métier) : « les dossiers qui ont
-             * eu une audience entre ces deux dates ». Les audiences annulées en sont exclues — elles
-             * ne se sont pas tenues, et les compter ferait remonter des dossiers restés muets sur la
-             * période.
+             * The period applies to hearings: cases with a hearing between the two dates.
+             * Cancelled hearings are excluded since they were not held.
              */
             if ((dateDebut != null || dateFin != null) && query != null) {
                 var sousRequete = query.subquery(Long.class);

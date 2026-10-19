@@ -10,7 +10,7 @@ class PeriodeCalendrierTest {
 
     private final LocalDate debut = LocalDate.of(2026, 1, 1);
 
-    /** QF-31 : la borne est incluse, la période s'arrête donc la veille de la suivante. */
+    /** The bound is inclusive, so a period ends the day before the next one starts. */
     @Test
     void une_semaine_s_arrete_la_veille_de_la_suivante() {
         assertThat(PeriodeCalendrier.HEBDOMADAIRE.dateFin(debut)).isEqualTo(LocalDate.of(2026, 1, 7));
@@ -26,7 +26,7 @@ class PeriodeCalendrierTest {
         assertThat(PeriodeCalendrier.TRIMESTRIELLE.dateFin(debut)).isEqualTo(LocalDate.of(2026, 3, 31));
     }
 
-    /** Deux périodes consécutives ne se recouvrent plus d'un jour : c'était tout le défaut. */
+    /** Two consecutive periods must not overlap by one day. */
     @Test
     void deux_periodes_consecutives_ne_partagent_aucun_jour() {
         LocalDate finPremiere = PeriodeCalendrier.HEBDOMADAIRE.dateFin(debut);

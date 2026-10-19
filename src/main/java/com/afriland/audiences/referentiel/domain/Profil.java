@@ -15,8 +15,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * Définit les profils métier et leurs droits (RBAC) : JURISTE, DJ, DJA, ASSISTANTE, SH, AVOCAT,
- * CONSULTATION. Cf. dictionnaire des données §2.4.2 (table {@code profil}).
+ * Business profiles and their rights (RBAC): JURISTE, DJ, DJA, ASSISTANTE, SH, AVOCAT,
+ * CONSULTATION. See data dictionary §2.4.2 (table {@code profil}).
  */
 @Getter
 @Setter

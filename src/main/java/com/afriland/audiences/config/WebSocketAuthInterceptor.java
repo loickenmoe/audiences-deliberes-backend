@@ -19,14 +19,12 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 /**
- * Authentifie les connexions WebSocket (STOMP) avec les jetons JWT émis par Keycloak.
+ * Authenticates WebSocket (STOMP) connections with Keycloak-issued JWTs.
  * <p>
- * La négociation HTTP/SockJS de l'endpoint {@code /ws/**} reste publique (voir
- * {@link SecurityConfig}) : les transports de repli SockJS (xhr-polling, etc.) ne permettent pas
- * de fixer un en-tête {@code Authorization} sur la requête HTTP initiale. L'authentification
- * réelle est donc appliquée ici, au niveau de la trame STOMP {@code CONNECT}, qui porte l'en-tête
- * {@code Authorization} envoyé par le client STOMP. Toute trame ultérieure (SUBSCRIBE, SEND, ...)
- * émise par une session qui n'a pas obtenu de principal authentifié à la connexion est rejetée.
+ * The HTTP/SockJS handshake on {@code /ws/**} stays public (see {@link SecurityConfig}) because
+ * SockJS fallback transports cannot set an {@code Authorization} header. Authentication is enforced
+ * on the STOMP {@code CONNECT} frame instead; any later frame from an unauthenticated session is
+ * rejected.
  */
 @Component
 @RequiredArgsConstructor
@@ -48,7 +46,7 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
             accessor.setUser(authentication);
             log.debug("Connexion WebSocket authentifiée : {}", authentication.getName());
         } else if (accessor.getUser() == null) {
-            // Toute trame autre que CONNECT doit provenir d'une session déjà authentifiée.
+            // Any frame other than CONNECT must come from an already authenticated session.
             log.warn("Trame STOMP {} refusée : aucune session authentifiée.", accessor.getCommand());
             throw new AccessDeniedException("Connexion WebSocket non authentifiée");
         }

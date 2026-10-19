@@ -25,26 +25,17 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * Extraction de l'audit vers un fichier scellé (Q-113).
+ * Exports the audit to a sealed file: generate, hash (SHA-256), store in MinIO and record the hash
+ * in the database, so the delivered file is provably the archived one.
  *
- * <p><b>Ce que l'export ajoute à l'écran.</b> Un inspecteur ne consulte pas un écran : il emporte
- * une pièce. Mais une pièce qu'on peut rééditer ne prouve rien — d'où la chaîne complète : produire,
- * calculer une empreinte, déposer dans MinIO, consigner l'empreinte en base. Le fichier remis et le
- * fichier scellé sont alors démontrablement le même.
- *
- * <p><b>Le plafond n'est pas une limite technique.</b> Au-delà de {@value #PLAFOND_LIGNES} lignes,
- * un PDF cesse d'être un document et un tableur devient un déversement : on refuse, en disant quoi
- * faire — restreindre la période. Tronquer silencieusement aurait produit une archive qui ment sur
- * ce qu'elle couvre, et dont l'empreinte scellerait ce mensonge.
+ * <p>Above {@value #PLAFOND_LIGNES} lines the export is rejected (a usability limit, not a technical
+ * one). Truncating silently would seal an archive that misrepresents what it covers.
  */
 @Service
 @RequiredArgsConstructor
 public class AuditExportService {
 
-    /**
-     * Au-delà, l'extraction est refusée. Choisi pour que le fichier reste consultable par un
-     * humain : c'est un critère d'usage, pas de mémoire.
-     */
+    /** Maximum exported lines, chosen so the file stays readable by a human. */
     public static final int PLAFOND_LIGNES = 20_000;
 
     private static final Sort TRI = Sort.by(Sort.Direction.DESC, "dateAction").and(Sort.by(Sort.Direction.DESC, "id"));
@@ -57,7 +48,7 @@ public class AuditExportService {
     private final MinioStorageService minioStorageService;
     private final CurrentUserService currentUserService;
 
-    /** Le fichier produit, et la ligne qui le scelle. */
+    /** The produced file and the record that seals it. */
     public record Extraction(byte[] contenu, ExportAudit archive, String nomFichier) {
     }
 
@@ -66,8 +57,7 @@ public class AuditExportService {
                                   TypeActionHistorique code, LocalDate dateDebut, LocalDate dateFin,
                                   FormatExportAudit format) {
         if (dateDebut == null || dateFin == null) {
-            // Une archive sans période ne dit pas ce qu'elle contient : son empreinte ne prouverait
-            // que son intégrité, jamais son exhaustivité.
+            // Without a period, the hash would prove integrity but never completeness.
             throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
                     "Une extraction exige une période : indiquez une date de début et une date de fin");
         }
@@ -92,10 +82,8 @@ public class AuditExportService {
         List<LigneExport> lignes = mettreEnLignes(entrees);
 
         /*
-         * La référence est lue **avant** la production du fichier, pour pouvoir y figurer. C'est la
-         * seule chose qui identifie l'archive et que le fichier puisse porter : tout ce qui décrit
-         * son contenu — l'empreinte au premier chef — est par construction impossible à écrire
-         * dedans sans le changer.
+         * The reference is allocated before generating the file so it can be printed in it; the hash
+         * cannot be, since writing it would change the content.
          */
         String reference = String.format("AUD-%d-%04d",
                 LocalDate.now().getYear(), exportAuditRepository.prochainNumeroReference());
@@ -128,12 +116,7 @@ public class AuditExportService {
         return new Extraction(contenu, archive, nomFichier);
     }
 
-    /**
-     * URL de récupération d'une archive déjà produite, <b>et la trace de cette récupération</b>.
-     *
-     * <p>Sans cette trace, l'archive serait un trou plus large que la table qu'elle double : on
-     * pourrait y puiser indéfiniment sans que rien ne le dise.
-     */
+    /** Download URL of an existing archive; the download itself is recorded in the history. */
     @Transactional
     public String telecharger(Long exportId) {
         ExportAudit archive = exportAuditRepository.findById(exportId)
@@ -147,16 +130,10 @@ public class AuditExportService {
     }
 
     /**
-     * Vérifie qu'un fichier détenu par quelqu'un correspond à une archive connue (Q-114).
+     * Checks whether a hash (computed by the browser) matches a known archive.
      *
-     * <p><b>C'est ce qui rend l'empreinte utile.</b> Sans ce chemin, la vérification supposait
-     * d'ouvrir un terminal, de taper {@code sha256sum} et de comparer soixante-quatre caractères à
-     * l'œil — autant dire que personne ne la faisait. L'empreinte est calculée par le navigateur ;
-     * seul le résultat arrive ici, le fichier ne quitte jamais le poste.
-     *
-     * <p><b>Cette consultation n'est pas historisée</b>, et c'est délibéré : elle ne révèle aucun
-     * contenu, et une empreinte ne s'énumère pas — il faut déjà détenir le fichier pour interroger.
-     * La tracer n'aurait ajouté que du bruit à ce qu'on cherche à voir.
+     * <p>Deliberately not recorded: it reveals no content, and a hash cannot be enumerated, so the
+     * caller must already hold the file.
      */
     @Transactional(readOnly = true)
     public VerificationResponse verifier(String empreinte) {
@@ -167,29 +144,22 @@ public class AuditExportService {
         }
         return exportAuditRepository.findByEmpreinte(normalisee)
                 .map(archive -> new VerificationResponse(true, versReponse().apply(archive)))
-                // Un fichier inconnu n'est pas une erreur : c'est une réponse, et souvent celle
-                // qu'on redoutait. Un 404 l'aurait fait passer pour une panne.
+                // An unknown file is a valid answer, not an error: a 404 would look like an outage.
                 .orElseGet(() -> new VerificationResponse(false, null));
     }
 
-    /**
-     * SHA-256 des octets <b>déposés</b>, pas des données interrogées : c'est le fichier qu'on
-     * pourra vérifier plus tard, pas la requête qui l'a produit.
-     */
+    /** SHA-256 of the stored bytes (not of the queried data), so the file itself can be verified. */
     static String empreinte(byte[] contenu) {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(contenu));
         } catch (NoSuchAlgorithmException e) {
-            // SHA-256 est exigé de toute implémentation Java : inatteignable en pratique.
+            // Unreachable in practice: every Java implementation must provide SHA-256.
             throw new IllegalStateException("SHA-256 indisponible", e);
         }
     }
 
     private List<LigneExport> mettreEnLignes(List<HistoriqueAction> entrees) {
-        /*
-         * Les noms d'auteur sont résolus en **une** requête, pas une par ligne : sur vingt mille
-         * entrées, la version naïve aurait produit vingt mille allers-retours.
-         */
+        /* Author names are resolved in a single query rather than one per line. */
         Map<Long, String> noms = utilisateurRepository.findAll().stream()
                 .collect(Collectors.toMap(Utilisateur::getId, AuditExportService::nomComplet, (a, b) -> a));
 
@@ -228,7 +198,7 @@ public class AuditExportService {
         return criteres;
     }
 
-    /** Conversion d'une archive vers sa forme d'API, sans exposer la clé de stockage. */
+    /** Maps an archive to its API form without exposing the storage key. */
     static Function<ExportAudit, ExportAuditResponse> versReponse() {
         return archive -> new ExportAuditResponse(
                 archive.getId(),

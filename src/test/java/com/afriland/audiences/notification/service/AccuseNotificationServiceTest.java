@@ -69,7 +69,7 @@ class AccuseNotificationServiceTest {
         return envoi;
     }
 
-    // ── Topics de suivi ──
+    // Tracking topics
 
     @Test
     void un_accuse_de_notre_service_est_enregistre_avec_son_fournisseur() {
@@ -83,18 +83,18 @@ class AccuseNotificationServiceTest {
         assertThat(accuse.getCanal()).isEqualTo("SMS");
         assertThat(accuse.getFournisseur()).isEqualTo("ozeki");
         assertThat(accuse.getDateEvenement()).isNotNull();
-        // Q-120 : l'accusé ne porte pas notre référence, il reste donc non rattaché.
+        // The ack does not carry our reference, so it stays unlinked.
         assertThat(accuse.getNotificationEnvoiId()).isNull();
     }
 
-    /** Les topics portent les accusés de tous les services de la banque (Guide V1 §8). */
+    /** The topics carry acks for all the bank's services (Guide V1 section 8). */
     @Test
     void un_accuse_d_un_autre_service_est_ignore() {
         assertThat(service.enregistrer(succes("mobile-banking"), TypeAccuse.SENT)).isFalse();
         verify(accuseRepository, never()).save(any());
     }
 
-    /** Livraison au moins une fois : le doublon est normal, et sans effet. */
+    /** At-least-once delivery: a duplicate is normal and has no effect. */
     @Test
     void un_accuse_deja_recu_n_est_pas_enregistre_deux_fois() {
         when(accuseRepository.existsByNotificationIdAndType("019ed46d-c20a-7074", TypeAccuse.SENT)).thenReturn(true);
@@ -112,7 +112,7 @@ class AccuseNotificationServiceTest {
         assertThat(service.enregistrer(null, TypeAccuse.FAILED)).isFalse();
     }
 
-    /** Si le moteur ajoutait un jour notre référence, le rattachement se ferait tout seul. */
+    /** If the engine ever added our reference, linking would happen automatically. */
     @Test
     void un_accuse_portant_notre_reference_rattache_et_marque_la_ligne_envoyee() {
         AccuseEngine avecReference = new AccuseEngine("019ed46d", "wf", "audience-deliberer", "SMS", "ozeki", "SM1",
@@ -126,7 +126,7 @@ class AccuseNotificationServiceTest {
         assertThat(envoi.getStatutEngine()).isEqualTo("ozeki");
     }
 
-    // ── Rappel du moteur (callbackUrl), seule voie exacte aujourd'hui ──
+    // Engine callback (callbackUrl), currently the only exact path
 
     @Test
     void un_rappel_sans_erreur_marque_la_ligne_envoyee_et_rattache_l_accuse() {

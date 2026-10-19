@@ -17,9 +17,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Relance automatique à 72 h des demandes de suppression restées {@code EN_ATTENTE} (UC-GED-03
- * alt. 6-a, Q-02). Vit dans le module {@code ged} (jamais dans {@code alerte}), même principe que
- * les autres planificateurs (Q-38/Q-39/Q-43).
+ * Automatic 72 h reminder for deletion requests still {@code EN_ATTENTE} (UC-GED-03 alt. 6-a).
+ * Lives in the {@code ged} module (never in {@code alerte}), like the other schedulers.
  */
 @Component
 @RequiredArgsConstructor

@@ -14,22 +14,13 @@ import java.time.LocalDateTime;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
 /**
- * Ce que le rédacteur peut réellement taper (A1, étendu en B1).
+ * What the author can actually type.
  *
- * <p><b>Pourquoi ces cas.</b> Le PDF est écrit en Helvetica, et PDFBox <b>lève</b> dès qu'on lui
- * demande un caractère absent de son encodage. Or la génération a lieu <b>dans la transaction de
- * validation</b> ({@code ConstitutionService#valider}) : si elle lève, la demande reste
- * {@code EN_ATTENTE}, le SH reçoit une erreur technique, le prestataire n'est pas notifié — et comme
- * le contenu est enregistré, chaque nouvelle tentative échoue à l'identique. Ce n'est pas un export
- * raté, c'est un processus métier bloqué par une saisie légitime.
- *
- * <p><b>Ce qui a changé en B1.</b> Le motif ne figure plus dans la lettre : la saisie libre s'est
- * déplacée vers le <b>corps</b>, le <b>destinataire</b> et l'<b>objet</b> — qui deviendront tous
- * éditables au jalon suivant. Le risque n'a donc pas disparu, il a changé de champ, et ces cas le
- * suivent.
- *
- * <p>Aucune de ces saisies n'est exotique : un retour à la ligne, un texte collé depuis un traitement
- * de texte, un nom étranger. Toutes doivent produire une lettre.
+ * <p>The PDF is written in Helvetica, and PDFBox <b>throws</b> on any character outside its encoding.
+ * Generation runs <b>inside the validation transaction</b> ({@code ConstitutionService#valider}): if it
+ * throws, the request stays {@code EN_ATTENTE} and every retry fails the same way, blocking a
+ * business process on legitimate input. Free text lives in the <b>body</b>, <b>recipient</b> and
+ * <b>subject</b>; none of these inputs is exotic, and all must produce a letter.
  */
 class LettreConstitutionSaisieLibreTest {
 
@@ -52,7 +43,7 @@ class LettreConstitutionSaisieLibreTest {
         return service.brouillonPour(demande(nomPrestataire), 4);
     }
 
-    /** Le cas le plus banal, et le plus sûrement fatal : la touche Entrée dans une zone de texte. */
+    /** The most common and most surely fatal case: the Enter key in a text area. */
     @Test
     @DisplayName("un corps sur plusieurs lignes ne bloque pas la validation")
     void corpsMultiligne() {
@@ -62,7 +53,7 @@ class LettreConstitutionSaisieLibreTest {
         assertThatCode(() -> service.generer(lettre)).doesNotThrowAnyException();
     }
 
-    /** Copier-coller depuis un traitement de texte : espace fine insécable, apostrophe courbe, cadratin. */
+    /** Copy-paste from a word processor: narrow no-break space, curly apostrophe, em dash. */
     @Test
     @DisplayName("un corps collé depuis un traitement de texte ne bloque pas la validation")
     void corpsColleDepuisWord() {
@@ -72,14 +63,14 @@ class LettreConstitutionSaisieLibreTest {
         assertThatCode(() -> service.generer(lettre)).doesNotThrowAnyException();
     }
 
-    /** Le nom d'un prestataire n'est pas plus contraint que le corps. */
+    /** A provider's name is no more constrained than the body. */
     @Test
     @DisplayName("un nom de prestataire hors Latin-1 ne bloque pas la validation")
     void nomPrestataireHorsLatin1() {
         assertThatCode(() -> service.generer(lettre("Me Nguyễn"))).doesNotThrowAnyException();
     }
 
-    /** Une tabulation dans un collage : invisible à l'écran, refusée par la police. */
+    /** A tab in pasted text: invisible on screen, refused by the font. */
     @Test
     @DisplayName("une tabulation dans l'objet ne bloque pas la validation")
     void objetAvecTabulation() {

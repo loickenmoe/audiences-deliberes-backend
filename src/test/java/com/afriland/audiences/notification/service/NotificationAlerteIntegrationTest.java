@@ -37,8 +37,8 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Étape 6 sur PostgreSQL réel : une alerte déclenchée écrit ses notifications externes dans la même
- * transaction (D12), avec les réglages initiaux de V28 (Outlook seul pour les internes).
+ * Step 6 on a real PostgreSQL: a raised alert writes its external notifications in the same
+ * transaction (D12), with the initial V28 settings (Outlook only for internal users).
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -100,7 +100,7 @@ class NotificationAlerteIntegrationTest {
         assertThat(outlook.getStatut()).isEqualTo(StatutEnvoi.EN_ATTENTE);
         assertThat(outlook.getDestinataire()).isEqualTo("juriste.test@afrilandfirstbank.com");
         assertThat(outlook.getSujet()).isEqualTo("[Audiences et délibérés] Rappel d'audience - DOS-NOTIF-1");
-        // Le texte de l'alerte applicative ne sort pas : ni marqueur, ni code, ni motif.
+        // The in-app alert text does not leave: no marker, no code, no reason.
         assertThat(outlook.getCorps()).doesNotContain("audienceId", "RG-AUD", "motif interne")
                 .contains("/dossiers/" + dossierId);
     }
@@ -124,7 +124,7 @@ class NotificationAlerteIntegrationTest {
         assertThat(notificationEnvoiRepository.findAll()).isEmpty();
     }
 
-    /** D12 : l'action annulée emporte sa notification ; rien ne partira pour un événement qui n'a pas eu lieu. */
+    /** D12: a rolled-back action takes its notification with it; nothing is sent for an event that did not happen. */
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void une_action_annulee_emporte_ses_notifications() {

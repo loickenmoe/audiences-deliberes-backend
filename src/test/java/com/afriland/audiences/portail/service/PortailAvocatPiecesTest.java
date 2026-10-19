@@ -48,12 +48,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Ce que l'avocat lit des pièces et des notes de son dossier (QF-64).
+ * What the lawyer can read of the documents and notes of their case.
  *
- * <p><b>La règle, arbitrée le 2026-10-15 :</b> affecté <b>et constitué</b>. L'affectation ne fait
- * pas le mandat - c'est la lettre signée par le SH qui fait de l'avocat le représentant de la
- * banque. Ces tests gardent les trois portes : pas affecté (403), affecté sans être constitué (rien
- * ne s'ouvre), constitué (les pièces partagées, et elles seules).
+ * <p><b>Rule:</b> assigned <b>and retained</b>. Assignment is not a mandate: the letter signed by the
+ * SH makes the lawyer the bank's representative. Three gates: not assigned (403), assigned but not
+ * retained (nothing opens), retained (shared documents, and only those).
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -107,8 +106,6 @@ class PortailAvocatPiecesTest {
                 .partageAvocat(StatutPartageAvocat.PARTAGE).estSupprime(false).build();
     }
 
-    // ─────────────────────────────────────────────────────────────── la liste
-
     @Test
     @DisplayName("pas affecté au dossier : 403, et la GED n'est même pas interrogée")
     void pieces_nonAffecte_403() {
@@ -120,9 +117,8 @@ class PortailAvocatPiecesTest {
     }
 
     /**
-     * <b>Affecté sans être constitué</b> : rien ne s'ouvre, et l'écran peut le dire. « Aucune pièce »
-     * et « pas encore constitué » sont deux situations différentes - la seconde se règle par une
-     * signature.
+     * <b>Assigned but not retained</b>: nothing opens, and the screen can say so. "No document" and "not
+     * yet retained" are different situations; the latter is resolved by a signature.
      */
     @Test
     @DisplayName("affecté sans être constitué : aucune pièce, et la raison est dite")
@@ -138,7 +134,7 @@ class PortailAvocatPiecesTest {
                 .findByDossierIdAndPartageAvocatAndEstSupprimeFalseOrderByDateChargementDesc(anyLong(), any());
     }
 
-    /** La restriction est dans la requête : seules les pièces PARTAGÉES de CE dossier sont lues. */
+    /** The restriction is in the query: only SHARED documents of THIS case are read. */
     @Test
     @DisplayName("constitué : les pièces partagées de ce dossier, et elles seules")
     void pieces_constitue() {
@@ -153,8 +149,6 @@ class PortailAvocatPiecesTest {
         assertThat(reponse.pieces()).extracting("nomFichier").containsExactly("assignation.pdf");
     }
 
-    // ─────────────────────────────────────────────────────────────── l'ouverture
-
     @Test
     void piece_nonConstitue_403_sansTrace() {
         affecte(true);
@@ -166,8 +160,8 @@ class PortailAvocatPiecesTest {
     }
 
     /**
-     * 404 et non 403 : répondre 403 confirmerait que la pièce existe, et l'avocat pourrait sonder la
-     * GED de la banque en essayant des identifiants.
+     * 404, not 403: a 403 would confirm the document exists, letting the lawyer probe the bank's GED by
+     * trying identifiers.
      */
     @Test
     @DisplayName("une pièce non partagée répond 404, sans rien révéler ni rien tracer")
@@ -183,7 +177,7 @@ class PortailAvocatPiecesTest {
         verify(historiqueActionService, never()).enregistrer(anyLong(), any(), any());
     }
 
-    /** La lecture est tracée : il faut pouvoir dire si l'avocat avait vu la pièce avant l'audience. */
+    /** Reading is traced: it must be possible to tell whether the lawyer saw the document before the hearing. */
     @Test
     @DisplayName("ouvrir une pièce partagée donne son URL et trace la lecture")
     void piece_ouverte_tracee() {
@@ -200,8 +194,6 @@ class PortailAvocatPiecesTest {
                 Map.of("documentId", 7L, "avocatId", AVOCAT));
     }
 
-    // ─────────────────────────────────────────────────────────────── la note
-
     private void uneAudienceAnnotee() {
         Audience audience = Audience.builder().id(11L).datePlanifiee(LocalDate.now().plusDays(3))
                 .statut(StatutAudience.PLANIFIEE).juridiction("TGI Douala")
@@ -211,7 +203,7 @@ class PortailAvocatPiecesTest {
                 .thenReturn(new PageImpl<>(List.of(audience)));
     }
 
-    /** La note est une communication de la banque : c'est le mandat qui l'ouvre, pas l'affectation. */
+    /** The note is a bank communication: the mandate opens it, not the assignment. */
     @Test
     @DisplayName("la note à l'avocat reste masquée tant qu'il n'est pas constitué")
     void note_masqueeSansConstitution() {
@@ -232,7 +224,7 @@ class PortailAvocatPiecesTest {
         var audience = service.audiencesDeMonDossier(DOSSIER).get(0);
 
         assertThat(audience.noteAvocat()).isEqualTo("Apportez l'original de l'acte de prêt");
-        // RG-INT-07 : le compte rendu du juriste n'a aucun champ dans ce que l'avocat reçoit.
+        // RG-INT-07: the legal officer's report has no field in what the lawyer receives.
         assertThat(audience.toString()).doesNotContain("peu préparé");
     }
 }

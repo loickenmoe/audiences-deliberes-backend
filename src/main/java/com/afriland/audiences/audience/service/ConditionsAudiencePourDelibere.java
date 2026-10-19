@@ -11,15 +11,11 @@ import org.springframework.stereotype.Component;
 import java.util.Optional;
 
 /**
- * Ce que les audiences exigent avant qu'une étape parte en délibéré (métier, 2026-09-29).
- *
- * <p>Deux conditions, portées par deux classes pour que leurs manques se disent <b>ensemble</b> :
- * une étape sans audience tenue et avec une audience encore planifiée doit apprendre les deux d'un
- * coup, pas l'une après l'autre.
- *
- * <p><b>Pourquoi ici et pas dans {@code dossier}.</b> Ces deux règles parlent d'audiences ; seul ce
- * module sait ce qu'est une audience tenue. {@code dossier} publie le contrat, {@code audience}
- * l'implémente — le sens de la dépendance reste celui du graphe des modules.
+ * What hearings require before a step goes to deliberation.
+ * <p>Two conditions in two classes so that their failures are reported <b>together</b>.
+ * <p>They live here rather than in {@code dossier} because only this module knows what a held
+ * hearing is: {@code dossier} publishes the contract, {@code audience} implements it, keeping the
+ * module dependency direction.
  */
 public final class ConditionsAudiencePourDelibere {
 
@@ -31,15 +27,10 @@ public final class ConditionsAudiencePourDelibere {
     }
 
     /**
-     * Une étape ne part en délibéré que si une audience s'y est <b>tenue</b>.
-     *
-     * <p><b>« Tenue » veut dire « rapportée »</b>, sur arbitrage du métier : le statut {@code TENUE}
-     * n'est posé qu'à la saisie du compte rendu. Mettre en délibéré sans compte rendu laisserait le
-     * dossier décrire une procédure dont rien ne dit ce qui s'y est passé.
-     *
-     * <p>La date de tenue reste la date <b>planifiée</b> et non celle de la saisie (QF-32,
-     * 2026-09-23) : un compte rendu rédigé trois jours après l'audience n'en déplace pas la date.
-     * Deux tests de {@code AudienceServiceTest} verrouillent ce point, dont cette règle dépend.
+     * A step only goes to deliberation if a hearing was <b>held</b> on it.
+     * <p><b>"Held" means "reported"</b>: {@code TENUE} is only set when the report is entered.
+     * <p>The held date remains the <b>planned</b> date, not the entry date; two tests in
+     * {@code AudienceServiceTest} lock this behaviour, which this rule depends on.
      */
     @Component
     @RequiredArgsConstructor
@@ -63,12 +54,9 @@ public final class ConditionsAudiencePourDelibere {
     }
 
     /**
-     * Aucune audience ne doit rester <b>planifiée</b> sur l'étape mise en délibéré.
-     *
-     * <p>Exigence du métier, et la plus stricte des deux : une étape ne part en délibéré que lorsque
-     * toutes ses audiences sont réglées — tenues ou annulées. Sans elle, une audience planifiée
-     * survivait à la mise en délibéré et continuait d'alimenter le calendrier et les rappels
-     * J-7/J-3/J-1 d'une étape qui n'attendait plus rien.
+     * No hearing may remain <b>scheduled</b> on a step put into deliberation: all its hearings must
+     * be held or cancelled. Otherwise a scheduled hearing would keep feeding the calendar and
+     * J-7/J-3/J-1 reminders.
      */
     @Component
     @RequiredArgsConstructor
@@ -87,7 +75,7 @@ public final class ConditionsAudiencePourDelibere {
             if (enAttente == 0) {
                 return Optional.empty();
             }
-            // Le nombre est dit : « des audiences » enverrait chercher combien, et lesquelles.
+            // State the count so the user knows how many hearings are concerned.
             return Optional.of(enAttente == 1
                     ? "Une audience reste planifiée sur cette étape : "
                             + "tenez-la ou annulez-la avant la mise en délibéré."

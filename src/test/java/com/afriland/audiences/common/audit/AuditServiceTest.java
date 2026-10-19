@@ -28,11 +28,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Consultation de l'audit (Q-112).
+ * Audit consultation.
  *
- * <p>Ce que ces tests protègent n'est pas le filtrage — Spring Data s'en charge — mais les décisions
- * qui rendent l'écran acceptable : la trace de la consultation, sa juste granularité, et le refus
- * des combinaisons de critères qui n'ont pas de sens.
+ * <p>These tests protect not the filtering (handled by Spring Data) but the decisions that make
+ * the screen acceptable: logging the consultation at the right granularity, and rejecting
+ * meaningless combinations of criteria.
  */
 @ExtendWith(MockitoExtension.class)
 class AuditServiceTest {
@@ -60,9 +60,8 @@ class AuditServiceTest {
     }
 
     /**
-     * Le filtre par personne étant autorisé, cet écran permet de suivre nommément l'activité d'un
-     * salarié. La trace de son usage protège le DJ et la DJA autant que ceux qu'ils consultent :
-     * elle démontre qu'ils n'ont regardé que ce qu'ils devaient.
+     * Filtering by person allows tracking an employee's activity by name. Logging its use protects the
+     * DJ and the DJA as much as those consulted: it shows they only looked at what they had to.
      */
     @Test
     void consulter_historiseLaConsultationAvecSesCriteres() {
@@ -79,12 +78,12 @@ class AuditServiceTest {
                 .containsEntry("codeRecherche", "DOCUMENT_CHARGE")
                 .containsEntry("dateDebut", "2026-09-01")
                 .containsEntry("dateFin", "2026-09-30");
-        // Nommé `auteurRecherche` : `utilisateurId` désigne déjà, sur la ligne d'historique, celui
-        // qui a consulté. Les confondre rendrait la trace illisible.
+        // Named `auteurRecherche` because `utilisateurId` already designates, on the history row, the
+        // person who consulted. Mixing them up would make the log unreadable.
         assertThat(criteres).containsEntry("auteurRecherche", 42L);
     }
 
-    /** Un filtre absent n'est pas consigné : une trace pleine de « null » se lit moins bien. */
+    /** An absent filter is not logged: a trace full of "null" is harder to read. */
     @Test
     void consulter_neConsignePasLesCriteresAbsents() {
         lectureVide();
@@ -97,8 +96,8 @@ class AuditServiceTest {
     }
 
     /**
-     * Feuilleter un résultat n'est pas une nouvelle consultation. Compter chaque page produirait un
-     * bruit qui noierait précisément ce que la trace sert à voir.
+     * Paging through results is not a new consultation; logging each page would drown out what the
+     * log is for.
      */
     @Test
     void consulter_neTracePasLeFeuilletage() {
@@ -123,8 +122,8 @@ class AuditServiceTest {
     }
 
     /**
-     * Un périmètre « un dossier » sans dossier renverrait tout l'historique : le pire des résultats,
-     * puisqu'il ressemble à une réponse. Refusé plutôt qu'interprété.
+     * A "single case" scope without a case would return the whole history, the worst result since it
+     * looks like an answer. Refused rather than interpreted.
      */
     @Test
     void consulter_refuseUnPerimetreDossierSansDossier() {
@@ -144,8 +143,8 @@ class AuditServiceTest {
     }
 
     /**
-     * La liste des natures proposées ne dépend pas des filtres actifs : sinon en choisir une ferait
-     * disparaître les autres, et l'on ne pourrait plus changer d'avis sans tout vider.
+     * The list of offered action types does not depend on the active filters; otherwise picking one
+     * would hide the others.
      */
     @Test
     void consulter_proposeToutesLesNaturesPresentes() {

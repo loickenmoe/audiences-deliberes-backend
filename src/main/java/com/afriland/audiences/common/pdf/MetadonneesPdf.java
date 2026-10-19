@@ -6,31 +6,20 @@ import org.apache.pdfbox.pdmodel.PDDocumentInformation;
 import java.util.Calendar;
 
 /**
- * Renseigne les propriétés d'un document PDF (A1).
- *
- * <p><b>Ce que cela corrige.</b> Aucun des quatre documents du système ne portait de métadonnées.
- * Dans l'explorateur de fichiers de celui qui les reçoit, dans une messagerie, dans un moteur
- * documentaire, ils apparaissaient tous sans titre ni origine — quatre fichiers anonymes qu'il
- * fallait ouvrir pour savoir ce qu'ils étaient.
- *
- * <p>Rien de tout cela n'est visible sur la page : c'est précisément pourquoi cela se perd, et
- * pourquoi personne ne le réclame.
+ * Sets PDF document properties (title, author, producer), so files are identifiable in file
+ * explorers, mail clients and document systems without being opened.
  */
 public final class MetadonneesPdf {
 
-    /**
-     * Le producteur, identique pour les quatre documents. Il désigne l'application, pas la
-     * bibliothèque : « PDFBox » ne dit rien à qui reçoit une lettre de constitution.
-     */
+    /** Producer, shared by all documents: names the application, not the PDF library. */
     private static final String PRODUCTEUR = "Afriland First Bank - Audiences et deliberes";
 
     private MetadonneesPdf() {
     }
 
     /**
-     * @param titre  ce que le document est, tel qu'on le nommerait à l'oral
-     * @param auteur qui l'a demandé ; {@code null} quand le générateur ne le sait pas encore —
-     *               l'attribution deviendra systématique avec la charte (A2)
+     * @param titre  what the document is, as one would name it
+     * @param auteur requester; {@code null} when unknown
      */
     public static void appliquer(PDDocument document, String titre, String auteur) {
         PDDocumentInformation infos = document.getDocumentInformation();

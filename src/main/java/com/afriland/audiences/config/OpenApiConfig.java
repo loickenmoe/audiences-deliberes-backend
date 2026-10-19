@@ -14,23 +14,22 @@ public class OpenApiConfig {
 
     @Bean
     public OpenAPI customOpenAPI() {
-        final String securitySchemeName = "bearerAuth"; // Can be any name
+        final String securitySchemeName = "bearerAuth";
 
         return new OpenAPI()
                 .info(new Info()
                         .title("Audiences Application API")
                         .version("v1.0")
                         .description("API documentation for the Audiences Web Application")
-                        .termsOfService("http://swagger.io/terms/") // Replace with actual terms URL
-                        .license(new License().name("Apache 2.0").url("http://springdoc.org"))) // Replace with actual license
-                // Add security scheme component
+                        .termsOfService("http://swagger.io/terms/")
+                        .license(new License().name("Apache 2.0").url("http://springdoc.org")))
                 .components(new Components()
                         .addSecuritySchemes(securitySchemeName, new SecurityScheme()
                                 .name(securitySchemeName)
                                 .type(SecurityScheme.Type.HTTP)
                                 .scheme("bearer")
                                 .bearerFormat("JWT")))
-                // Add security requirement to apply JWT globally to all endpoints
+                // Apply JWT bearer authentication globally to all endpoints
                 .addSecurityItem(new SecurityRequirement().addList(securitySchemeName));
     }
 }

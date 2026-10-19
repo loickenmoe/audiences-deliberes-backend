@@ -28,10 +28,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * Demande de frais déposée par un avocat constitué sur un dossier (Épic 4, RG-INT-01/03/04/05).
- * Circuit : dépôt (avocat) → conformité (Assistante) → opportunité (DJA) → validation conjointe
- * DJ+DJA si dossier sensible ou montant &gt; seuil applicable → paiement (Assistante).
- * Cf. FUNCTIONAL_MAP.md §4, DECISIONS_AND_OPEN_QUESTIONS.md Q-05.
+ * Fee request filed by a lawyer assigned to a case (Epic 4, RG-INT-01/03/04/05).
+ * Workflow: filing (lawyer) → compliance (assistant) → appropriateness (DJA) → joint approval
+ * DJ+DJA if the case is sensitive or the amount &gt; applicable threshold → payment (assistant).
  */
 @Getter
 @Setter
@@ -82,7 +81,7 @@ public class DemandeFrais {
     @Column(name = "reference_facture", length = 50, unique = true)
     private String referenceFacture;
 
-    /** CONF04 (Q-83) : dernière relance de la validation conjointe, nulle tant qu'aucune n'a eu lieu. */
+    /** CONF04: last reminder for the joint approval, null until one has been sent. */
     @Column(name = "date_derniere_relance")
     private LocalDateTime dateDerniereRelance;
 

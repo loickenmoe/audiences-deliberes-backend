@@ -4,20 +4,16 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * Une audience passée dont le compte rendu du juriste n'a pas été saisi (écran 44).
+ * A past hearing whose legal officer report has not been entered.
  *
- * <p><b>D'où vient cette liste.</b> Le statut {@code TENUE} n'est posé qu'à la saisie du compte
- * rendu : une audience dont la date est passée et qui reste {@code PLANIFIEE} est donc, sans
- * ambiguïté et sans donnée nouvelle, une audience dont le compte rendu manque.
+ * <p>{@code TENUE} is only set when the report is entered, so a past hearing still
+ * {@code PLANIFIEE} is unambiguously missing its report. Today's hearings are never included: the
+ * upper bound stops at yesterday whatever the requested window.
  *
- * <p><b>La journée en cours n'y figure jamais.</b> Une audience du jour n'est pas en retard, elle
- * est en cours : la borne haute s'arrête à hier, quelle que soit la fenêtre demandée.
- *
- * @param joursDeRetard         jours écoulés depuis la date de l'audience ; c'est l'ancienneté du
- *                              manquement, pas un délai réglementaire
- * @param compteRenduAvocatDepose l'avocat, lui, a rapporté. La distinction compte : elle sépare
- *                                « personne n'a rien dit de cette audience » de « la banque n'a pas
- *                                encore écrit ce que l'avocat a déjà rapporté »
+ * @param joursDeRetard           days elapsed since the hearing date (age of the gap, not a
+ *                                regulatory deadline)
+ * @param compteRenduAvocatDepose whether the lawyer has already filed a report, which distinguishes
+ *                                "nothing reported" from "the bank has not yet written it up"
  */
 public record CompteRenduAttenduResponse(
         Long audienceId,

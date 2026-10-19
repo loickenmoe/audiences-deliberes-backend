@@ -13,14 +13,13 @@ public interface AvocatRepository extends JpaRepository<Avocat, Long> {
     Optional<Avocat> findByCompteKeycloak(String compteKeycloak);
 
     /**
-     * Les inscriptions de plusieurs comptes d'un coup (Q-136).
+     * Registrations of several accounts at once.
      *
-     * <p>Le rapport d'activite des avocats compte d'abord par compte, puis doit nommer chacun
-     * depuis le repertoire. Une lecture par ligne ferait autant de requetes que d'avocats actifs
-     * sur la periode, pour un tableau qu'on affiche d'un bloc.
+     * <p>The lawyer activity report counts per account, then names each from the directory. One read
+     * per row would issue as many queries as active lawyers in the period.
      */
     List<Avocat> findByCompteKeycloakIn(java.util.Collection<String> comptes);
 
-    /** Recherche par nom (FR-INT-08/US 5.8, `GET /repertoire/avocats?nom=`). */
+    /** Search by name (FR-INT-08/US 5.8, `GET /repertoire/avocats?nom=`). */
     List<Avocat> findByNomContainingIgnoreCase(String nom);
 }

@@ -27,9 +27,8 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Épic 8, volet jurisprudence (FR-DEF-03/RG-DEF-05, US 8.3) — cf. FUNCTIONAL_MAP.md §8,
- * API_IMPLEMENTATION_STATUS.md §10. Dépend de `dossier` (optionnel, Q-58) et `ged`
- * (`MinioStorageService`, sans création de `document` GED).
+ * Case-law base (FR-DEF-03/RG-DEF-05, US 8.3). The case file is optional; files are stored via
+ * {@code MinioStorageService} without creating a {@code document} row.
  */
 @Service
 @RequiredArgsConstructor
@@ -45,28 +44,10 @@ public class JurisprudenceService {
     private final MinioStorageService minioStorageService;
 
     /**
-     * RG-DEF-05 : fichier PDF ≤ 10 Mo, indexation obligatoire, {@code dossierId} optionnel. Ces
-     * deux contraintes (format/poids) sont propres à FR-DEF-03 — pas de clé
-     * {@code configuration_systeme} dédiée (contrairement à `FORMATS_GED`/`TAILLE_MAX_GED`, absentes
-     * de CONF01-07 pour ce workflow), donc littérales plutôt que configurables.
-     */
-    /**
-     * Une décision ne rejoint la base jurisprudentielle que lorsqu'elle est <b>définitive</b>
-     * (métier, 2026-09-29).
-     *
-     * <p><b>Ce que cela protège.</b> {@code Jurisprudence} n'enregistre rien qui dise l'état de la
-     * décision : ni statut, ni lien vers l'étape, ni mention « frappée d'appel ». Les trois types
-     * d'archive — extrait de minute, expédition, grosse — désignent des formes de l'acte, pas des
-     * états de la procédure. Une décision de première instance versée pendant que l'appel court
-     * entrait donc dans la base au même titre qu'un arrêt définitif, et le juriste qui la trouvait
-     * comme précédent ne pouvait pas savoir qu'elle avait peut-être été infirmée depuis.
-     *
-     * <p>« Définitive » a un sens précis — qui n'est plus susceptible de recours — et c'est le nom
-     * même du module. La garde le fait tenir : plus aucune étape du dossier ne doit être en cours.
-     *
-     * <p><b>Une jurisprudence sans dossier reste libre</b> : {@code dossierId} est facultatif, et
-     * sert justement à verser un arrêt trouvé ailleurs, sans rapport avec un dossier de la banque.
-     * Rien ne permet — ni n'a à permettre — d'en juger l'état.
+     * A decision only enters the case-law base once <b>final</b> (no further appeal): no step of the
+     * case file may still be open. {@code Jurisprudence} records nothing about the decision's
+     * procedural state, so an appealed first-instance ruling would otherwise look like a final one.
+     * A case-law entry without a case file (a precedent found elsewhere) is not checked.
      */
     private void verifierQueLeDossierEstTermine(Dossier dossier) {
         if (etapeProcedureRepository.existsByDossierIdAndStatutCycleVieNotIn(
@@ -77,6 +58,10 @@ public class JurisprudenceService {
         }
     }
 
+    /**
+     * RG-DEF-05: PDF file up to 10 MB, indexing required, {@code dossierId} optional. Format and size
+     * are specific to FR-DEF-03 and have no {@code configuration_systeme} key, hence hard-coded.
+     */
     @Transactional
     public JurisprudenceResponse creer(Long dossierId, TypeArchiveJurisprudence typeArchive, List<String> motsCles,
                                         String natureDecision, String juridiction, LocalDate dateDecision, MultipartFile file) {
@@ -116,9 +101,8 @@ public class JurisprudenceService {
     }
 
     /**
-     * UC-DEF-03 : recherche par mots-clés/nature/juridiction, chaque filtre optionnel. Depuis Q-89 :
-     * partielle et insensible à la casse (« saisie » retrouve « Saisie immobilière »), et filtrable
-     * par dossier — la fiche liste les décisions qu'on y a archivées.
+     * UC-DEF-03: search by keywords/nature/court, each filter optional. Partial and case-insensitive
+     * (a lowercase fragment matches a capitalised keyword), and filterable by case file.
      */
     @Transactional(readOnly = true)
     public PageResponse<JurisprudenceResponse> rechercher(String motCle, String natureDecision, String juridiction,
@@ -129,8 +113,8 @@ public class JurisprudenceService {
     }
 
     /**
-     * Motif {@code LIKE} « contient », en minuscules ; {@code null} pour un filtre vide. Les jokers
-     * saisis par l'utilisateur ({@code %}, {@code _}) sont échappés : ils se cherchent tels quels.
+     * Lowercase "contains" {@code LIKE} pattern; {@code null} for an empty filter. User-typed
+     * wildcards ({@code %}, {@code _}) are escaped and matched literally.
      */
     static String motif(String terme) {
         if (terme == null || terme.isBlank()) {

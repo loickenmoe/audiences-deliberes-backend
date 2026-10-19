@@ -8,18 +8,15 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * Réponse conforme au schéma {@code Dossier} du contrat d'API (REF-07), complétée par les
- * champs {@code historique}/{@code documents} attendus par US 1.3 pour la consultation détaillée
- * (extension additive, non documentée dans le schéma OpenAPI formel).
+ * Response matching the {@code Dossier} schema of the API contract (REF-07), extended with
+ * {@code historique}/{@code documents} for detailed view (US 1.3).
  * <p>
- * {@code historique} n'est peuplé que pour {@code GET /dossiers/{id}}, vide pour
- * {@code GET /dossiers} (évite le N+1 sur la liste).
+ * {@code historique} is only filled for {@code GET /dossiers/{id}}, empty for {@code GET /dossiers}
+ * (avoids N+1).
  * <p>
- * <b>{@code documents} est toujours vide, par construction</b> (Q-67, tranché en M14) : le module
- * {@code dossier} ne peut pas dépendre de {@code ged} sans inverser les couches (principe tenu
- * depuis M6 — cf. Q-49/Q-53/Q-54/Q-56). Les pièces d'un dossier sont servies par l'endpoint dédié
- * {@code GET /dossiers/{id}/documents} (#43, module {@code ged}, M8). Le champ est conservé pour
- * ne pas rompre le contrat de réponse déjà publié, mais ne doit pas être consommé.
+ * <b>{@code documents} is always empty by design</b>: {@code dossier} cannot depend on {@code ged}.
+ * Documents are served by {@code GET /dossiers/{id}/documents}. The field is kept for contract
+ * compatibility and must not be consumed.
  */
 public record DossierResponse(
         Long id,

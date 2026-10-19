@@ -41,9 +41,8 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * Épic 8, volet reporting (FR-REP-01/02, US 8.4/8.5) — cf. FUNCTIONAL_MAP.md §8,
- * API_IMPLEMENTATION_STATUS.md §9. US 8.6 (vue consolidée par client) est déjà exposée par
- * {@code GET /clients/{clientId}/dossiers} depuis M4 — cf. `ClientController`.
+ * Reporting (FR-REP-01/02, US 8.4/8.5). US 8.6 (consolidated view per client) is exposed by
+ * {@code GET /clients/{clientId}/dossiers} in {@code ClientController}.
  */
 @RestController
 @RequiredArgsConstructor
@@ -56,15 +55,12 @@ public class ReportingController {
     private final DetailTableauDeBordService detailTableauDeBordService;
     private final RapportActiviteExportService rapportActiviteExportService;
     private final JournalAudiencesService journalAudiencesService;
-    /** Pour attribuer l'export dans le pied de page : un document dit qui l'a demandé (A2). */
+    /** Used to name the requester in the export footer. */
     private final CurrentUserService currentUserService;
 
     /**
-     * Ouvert au DJ <b>et à la DJA</b> (Q-95). Le critère d'acceptation d'US 8.5 ne nomme que
-     * {@code ROLE_DJ}, mais les spécifications fonctionnelles décrivent le tableau de bord consolidé
-     * comme obtenu « à travers le DJ/DJA » (partie prenante STK-06) : la DJA instruit les mêmes
-     * dossiers et valide conjointement les frais sensibles, lui refuser les indicateurs la priverait
-     * du contexte de ses propres décisions. Arbitrage du porteur du projet, 2026-09-14.
+     * Open to DJ and DJA. The specification describes the consolidated dashboard as available to
+     * both (STK-06): the DJA handles the same cases and co-validates sensitive fees.
      */
     @GetMapping("${api.prefix}/tableau-de-bord")
     @PreAuthorize("hasAnyRole('DJ', 'DJA')")
@@ -73,13 +69,8 @@ public class ReportingController {
     }
 
     /**
-     * Le journal des audiences d'une journée (observation métier du 2026-09-25).
-     *
-     * <p>Ouvert aux <b>juristes</b> comme à la direction, sur décision du porteur du projet
-     * (2026-09-28). D'abord réservé au DJ et à la DJA par prudence — l'écran nomme des personnes et
-     * mesure ce qu'elles ont rapporté, et NF-CONF-01 reste « à définir avec la DRH » —, il s'est
-     * avéré que les juristes en ont l'usage quotidien : savoir ce qui s'est dit aux audiences du
-     * jour fait partie de leur métier, et le compte rendu qu'ils doivent écrire est le leur.
+     * Hearing journal for a given day. Open to legal officers as well as management, since they
+     * use it daily and write the reports themselves.
      */
     @GetMapping("${api.prefix}/audiences/journal")
     @PreAuthorize("hasAnyRole('JURISTE', 'DJ', 'DJA')")
@@ -91,11 +82,8 @@ public class ReportingController {
     }
 
     /**
-     * Les audiences passées dont le compte rendu du juriste manque encore.
-     *
-     * <p>La fenêtre est demandée explicitement, comme pour les rapports et la supervision : sans
-     * bornes, la liste grossirait sans fin et cesserait d'être un outil de rappel. Les plus
-     * anciennes viennent en tête : ce sont elles qui pressent.
+     * Past hearings still missing the legal officer's report. The window is mandatory so the list
+     * stays bounded; oldest first, as they are the most urgent.
      */
     @GetMapping("${api.prefix}/audiences/comptes-rendus-attendus")
     @PreAuthorize("hasAnyRole('JURISTE', 'DJ', 'DJA')")
@@ -137,15 +125,9 @@ public class ReportingController {
     }
 
     /**
-     * L'activité de chacun sur une période (observation 14, N6).
-     *
-     * <p><b>Réservé au DJ et à la DJA</b>, et lu sur leurs rôles propres : ce rapport nomme des
-     * personnes, et {@code ROLE_JURISTE} étant composite (Q-81), l'ouvrir par lui le donnerait à
-     * tous les juristes - chacun lirait l'activité de ses collègues. C'est la même discipline que
-     * Q-126.
-     *
-     * <p>204 quand la période est vide, comme le rapport périodique : une page de zéros laisserait
-     * croire que personne n'a rien fait, alors que la période n'a rien à dire.
+     * Each user's activity over a period. Restricted to DJ/DJA by their own roles: this report names
+     * people, and {@code ROLE_JURISTE} is composite, so granting it would expose colleagues'
+     * activity to every legal officer. Returns 204 for an empty period.
      */
     @GetMapping("${api.prefix}/rapports/nominatif")
     @PreAuthorize("hasAnyRole('DJ', 'DJA')")
@@ -156,15 +138,8 @@ public class ReportingController {
     }
 
     /**
-     * Le détail d'un bloc du tableau de bord (Q-137).
-     *
-     * <p>Demandé par le métier le 2026-10-13 : qu'un clic sur un bloc ouvre la liste de ce qu'il
-     * compte. Mêmes habilitations que le tableau de bord lui-même - cet endpoint n'ouvre rien que
-     * l'écran n'affiche déjà, il le détaille.
-     *
-     * <p><b>Le détail rend exactement ce que le compteur compte</b>, prédicat pour prédicat : c'est
-     * la seule propriété qui compte vraiment, et un test d'intégration la vérifie sur base réelle.
-     * Afficher « 12 » puis lister neuf lignes ferait douter des deux chiffres.
+     * Detail behind a dashboard block, with the dashboard's own authorization. The detail returns
+     * exactly what the counter counts, predicate for predicate (checked by an integration test).
      */
     @GetMapping("${api.prefix}/tableau-de-bord/details")
     @PreAuthorize("hasAnyRole('DJ', 'DJA')")
@@ -178,16 +153,8 @@ public class ReportingController {
     }
 
     /**
-     * L'activité des avocats sur une période (Q-136) - le pendant du tableau précédent.
-     *
-     * <p><b>Pourquoi un second endpoint.</b> Signalé par le porteur du projet le 2026-10-13 :
-     * {@code /rapports/nominatif} ne montrait que les profils internes. C'était exact, et ce n'était
-     * pas réparable en y ajoutant les avocats - ce tableau compte six natures de production interne
-     * dont un avocat n'accomplit aucune. Il <b>dépose</b> ; c'est le juriste qui enregistre. L'y
-     * faire figurer n'aurait affiché qu'une ligne de zéros, soit ce que la conception refuse.
-     *
-     * <p>Mêmes habilitations que le tableau interne, et pour la même raison : il nomme des
-     * personnes, et {@code ROLE_JURISTE} est composite (Q-81).
+     * Lawyers' activity over a period, counterpart of {@code /rapports/nominatif}, which counts
+     * internal actions lawyers never perform. Same authorization as the internal report.
      */
     @GetMapping("${api.prefix}/rapports/nominatif/avocats")
     @PreAuthorize("hasAnyRole('DJ', 'DJA')")
@@ -198,25 +165,11 @@ public class ReportingController {
     }
 
     /**
-     * La fiche d'activité d'une personne (Q-133) : <b>chacun sur lui-même</b>, le DJ et la DJA sur
-     * quiconque.
+     * A person's activity sheet: everyone on themselves, DJ/DJA on anyone. Lawyers are included
+     * ({@code ROLE_AVOCAT}, as they do not hold {@code ROLE_CONSULTATION}).
      *
-     * <p><b>Ouvert aussi à l'avocat depuis le 2026-10-13 (Q-135), et j'avais écrit l'inverse.</b>
-     * J'ai soutenu qu'« aucune des natures comptées n'est la sienne - sa fiche serait vide par
-     * construction ». C'était <b>faux</b> : il dépose ses demandes de frais, ses comptes rendus
-     * d'audience, ses autres publications, et répond aux demandes d'explication - quatre natures,
-     * toutes journalisées sous son propre compte. Le métier a demandé qu'il voie et télécharge son
-     * activité, et que la direction puisse la lire.
-     *
-     * <p>{@code ROLE_CONSULTATION} couvre les cinq profils internes ; {@code ROLE_AVOCAT} s'y
-     * ajoute, l'avocat ne portant pas le premier (QF-01). Deux rôles nommés plutôt que sept
-     * profils : ce qui est énuméré ici doit rester court, ou il vieillira.
-     *
-     * <p><b>C'est le service qui décide sur qui.</b> L'annotation dit seulement qui peut toucher à
-     * la fonction : {@code utilisateurId} n'est servi qu'à la direction, ou à la personne qui se
-     * demande elle-même. Un {@code @PreAuthorize} ne sait pas comparer un paramètre à l'appelant.
-     *
-     * <p>204 quand la personne n'a rien fait sur la période : un état vide, pas une erreur.
+     * <p>The service decides whose activity may be read; {@code @PreAuthorize} cannot compare a
+     * parameter with the caller. Returns 204 when the person did nothing in the period.
      */
     @GetMapping("${api.prefix}/rapports/activite")
     @PreAuthorize("hasAnyRole('CONSULTATION', 'AVOCAT')")
@@ -230,16 +183,8 @@ public class ReportingController {
     }
 
     /**
-     * La même fiche, en document : « chaque utilisateur doit être capable de télécharger ses propres
-     * rapports » (métier, 2026-10-09).
-     *
-     * <p>Le nom du fichier porte la personne et la période - une direction qui télécharge cinq
-     * fiches le même jour doit les distinguer sans les ouvrir. Il est construit ici parce que
-     * l'en-tête {@code Content-Disposition} n'est pas exposé en CORS : le frontend ne peut pas le
-     * lire, et devrait le reconstruire de son côté, où il divergerait.
-     *
-     * <p>Pas de {@code JSON} dans les formats admis : c'est l'endpoint précédent. Un format de plus
-     * ici obligerait à choisir entre deux chemins pour la même chose.
+     * The same sheet as a downloadable document. The file name carries the person and period.
+     * JSON is rejected here: it is served by {@code /rapports/activite}.
      */
     @GetMapping("${api.prefix}/rapports/activite/export")
     @PreAuthorize("hasAnyRole('CONSULTATION', 'AVOCAT')")
@@ -268,15 +213,8 @@ public class ReportingController {
     }
 
     /**
-     * Les actions derrière un décompte de la fiche (Q-133) : « cliquer sur un élément doit renvoyer
-     * aux détails de la dite tâche » (métier, 2026-10-09).
-     *
-     * <p>Chaque ligne porte son {@code dossierId} et la référence lisible du dossier : c'est ce qui
-     * permet à l'écran d'ouvrir la fiche du dossier concerné. Un décompte à quatre ne mène nulle
-     * part ; les quatre actions, si.
-     *
-     * <p>Même périmètre que la fiche, tenu par le même service : sans cela, le détail serait une
-     * porte dérobée vers l'activité d'un collègue que le décompte, lui, protège.
+     * Actions behind a count of the activity sheet, each with its case id and reference so the UI
+     * can open the case. Same access scope as the sheet, enforced by the same service.
      */
     @GetMapping("${api.prefix}/rapports/activite/details")
     @PreAuthorize("hasAnyRole('CONSULTATION', 'AVOCAT')")
@@ -291,7 +229,7 @@ public class ReportingController {
                 utilisateurId, avocatId, code, dateDebut, dateFin, PageRequest.of(page, size)));
     }
 
-    /** Un document à télécharger : même en-tête pour les trois formats, pour qu'ils ne divergent pas. */
+    /** Download response, with the same headers for all three formats. */
     private static ResponseEntity<byte[]> fichier(byte[] contenu, String nom, MediaType type) {
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + nom + "\"")
@@ -300,8 +238,8 @@ public class ReportingController {
     }
 
     /**
-     * Le nom de qui demande l'export, pour le pied de page. Jamais bloquant : un document se produit
-     * même si le nom manque, le pied portant alors la date d'édition.
+     * Requester's name for the footer. Never blocking: without it, the document is still produced
+     * and the footer shows only the date.
      */
     private String nomDemandeur() {
         try {

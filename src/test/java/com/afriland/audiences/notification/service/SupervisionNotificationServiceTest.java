@@ -95,7 +95,7 @@ class SupervisionNotificationServiceTest {
         assertThat(sms.remises()).isEqualTo(3);
         assertThat(sms.sansRetour()).isEqualTo(1);
         assertThat(sms.nonJoignables()).isEqualTo(4);
-        // Les lignes sans coordonnée sortent du calcul : elles disent une fiche incomplète, pas un canal en panne.
+        // Lines without contact details are excluded: they indicate an incomplete record, not a failing channel.
         assertThat(sms.tauxAboutissement()).isEqualByComparingTo("75.0");
     }
 
@@ -106,7 +106,7 @@ class SupervisionNotificationServiceTest {
                 .hasMessageContaining("date de début");
     }
 
-    // ── Relance manuelle (D17) ──
+    // Manual retry (D17)
 
     @Test
     void relancer_remet_en_file_et_repart_de_zero() {
@@ -144,7 +144,7 @@ class SupervisionNotificationServiceTest {
                 .hasMessageContaining("pas à relancer");
     }
 
-    /** Sans coordonnée, relancer ne ferait que refaire le même constat : la fiche doit être corrigée. */
+    /** Without contact details, retrying would only repeat the same finding: the record must be fixed. */
     @Test
     void relancer_un_destinataire_non_joignable_est_refuse() {
         NotificationEnvoi nonJoignable = NotificationEnvoi.nonJoignable(

@@ -8,19 +8,15 @@ import org.springframework.kafka.core.KafkaTemplate;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Transport de repli : le message est déposé directement sur le topic Kafka du Notification Engine,
- * sans sidecar.
+ * Fallback transport: the message is written directly to the Notification Engine's Kafka topic,
+ * without a sidecar.
  * <p>
- * <b>L'enveloppe du sidecar est reproduite</b> ({@link EnveloppeCloudEvents}) : le moteur consomme
- * ses topics par Dapr, qui déballe cette enveloppe avant de livrer le message. La produire nous-mêmes
- * donne au moteur exactement ce qu'il attend, sans dépendre d'un sidecar — lequel n'est pas
- * installable sur les postes, le registre d'images étant filtré par le réseau de la banque.
+ * The sidecar envelope is reproduced ({@link EnveloppeCloudEvents}) because the engine consumes through
+ * Dapr, which unwraps it. This avoids depending on a sidecar, which cannot be installed on workstations
+ * (the image registry is filtered by the bank network). Raw sending remains available
+ * ({@code cloud-events=false}).
  * <p>
- * L'envoi brut, sans enveloppe, reste possible ({@code cloud-events=false}) pour départager les deux
- * hypothèses si le moteur restait muet.
- * <p>
- * L'envoi est attendu : sans cela, un courtier injoignable passerait pour un succès, et la
- * notification serait marquée publiée sans être partie.
+ * The send is awaited, otherwise an unreachable broker would look like a success.
  */
 @Slf4j
 public class PasserelleKafka implements PasserelleNotificationEngine {
@@ -75,10 +71,10 @@ public class PasserelleKafka implements PasserelleNotificationEngine {
         }
     }
 
-    /** L'envoi est attendu : sans cela, un courtier injoignable passerait pour un succès. */
+    /** Awaited, otherwise an unreachable broker would look like a success. */
     private void envoyer(String topicVise, String cle, String charge) {
         try {
-            // La clé est l'eventId : les messages d'un même événement gardent leur ordre de partition.
+            // Keyed by eventId so messages of the same event keep their partition order.
             kafkaTemplate.send(topicVise, cle, charge).get(attenteSecondes, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();

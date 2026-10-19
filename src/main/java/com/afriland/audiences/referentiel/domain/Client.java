@@ -19,9 +19,9 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * Client de la Banque (personne physique ou morale) pour lequel un ou plusieurs dossiers
- * contentieux sont suivis. Permet la vue consolidée par client (RG-REP-04).
- * Cf. dictionnaire des données §2.1.1 (table {@code client}).
+ * Bank client (individual or legal entity) for whom one or more litigation case files are tracked.
+ * Enables the consolidated client view (RG-REP-04).
+ * See data dictionary §2.1.1 (table {@code client}).
  */
 @Getter
 @Setter

@@ -9,20 +9,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Parties au procès : demandeurs et défendeurs.
- *
- * <p><b>Plusieurs de chaque depuis le 2026-10-05</b> (métier, observations 1 et 3). Un procès
- * oppose rarement une personne à une autre : une banque assigne un débiteur et sa caution, se
- * défend contre plusieurs héritiers. Les champs uniques d'origine obligeaient à tout écrire dans
- * une phrase, et ce qui est écrit dans une phrase ne se compte ni ne se retrouve.
- *
- * <p>Le client principal reste référencé par {@code dossier.client_id} et <b>n'est pas répété
- * ici</b> (Q-27) : il est partie au procès, mais c'est son identité au référentiel qui fait foi,
- * pas une chaîne recopiée.
- *
- * <p>Stocké en JSONB sur {@code dossier.parties}, via {@code @JdbcTypeCode(SqlTypes.JSON)} sur
- * l'entité {@code Dossier}. Le passage d'une valeur unique à une liste n'a donc demandé aucune
- * colonne nouvelle — seulement une migration du contenu (V41).
+ * Parties to the proceedings: claimants and defendants, several of each.
+ * <p>The main client is referenced by {@code dossier.client_id} and <b>is not repeated here</b>:
+ * its identity in the reference data is authoritative, not a copied string.
+ * <p>Stored as JSONB in {@code dossier.parties} via {@code @JdbcTypeCode(SqlTypes.JSON)} on
+ * {@code Dossier}.
  */
 @Getter
 @Setter
@@ -30,9 +21,9 @@ import java.util.List;
 @AllArgsConstructor
 public class Parties {
 
-    /** Au moins un, jamais vide, depuis le 2026-10-05. Jamais {@code null} : une liste vide sinon. */
+    /** At least one. Never {@code null}: an empty list otherwise. */
     private List<String> demandeurs = new ArrayList<>();
 
-    /** Au moins un, jamais vide, depuis le 2026-10-05. Jamais {@code null} : une liste vide sinon. */
+    /** At least one. Never {@code null}: an empty list otherwise. */
     private List<String> defendeurs = new ArrayList<>();
 }

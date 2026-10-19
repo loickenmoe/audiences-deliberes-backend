@@ -23,9 +23,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Notification Engine, étape 2 : la migration V27 est appliquée par Flyway sur un PostgreSQL réel,
- * l'entité est validée par Hibernate ({@code ddl-auto=validate}), et les contraintes qui protègent
- * la file tiennent aussi quand on écrit sans passer par l'entité.
+ * Notification Engine step 2: migration V27 is applied by Flyway on a real PostgreSQL, the entity is
+ * validated by Hibernate ({@code ddl-auto=validate}), and the queue constraints hold even when writing
+ * without the entity.
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -102,7 +102,7 @@ class NotificationEnvoiRepositoryIntegrationTest {
                 .hasMessageContaining("chk_notification_envoi_joignable");
     }
 
-    // Un test par contrainte : après un refus, PostgreSQL rejette toute la suite de la transaction.
+    // One test per constraint: after a refusal, PostgreSQL rejects the rest of the transaction.
     @Test
     void la_base_refuse_un_canal_inconnu() {
         assertThatThrownBy(() -> jdbc.update("INSERT INTO notification_envoi "

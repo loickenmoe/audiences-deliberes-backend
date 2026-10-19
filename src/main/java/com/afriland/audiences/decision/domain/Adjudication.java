@@ -17,8 +17,8 @@ import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
 /**
- * Adjudication (US 8.1, RG-DEF-01/02) : décision définitive attribuant le bien saisi, avec
- * traitement comptable (reprise de provision, restitution de soulte, mutation, reliquat).
+ * Adjudication (US 8.1, RG-DEF-01/02): final decision awarding the seized asset, with its accounting
+ * treatment (provision reversal, balance refund, transfer, remainder).
  */
 @Getter
 @Setter

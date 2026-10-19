@@ -93,10 +93,10 @@ class DossierServiceTest {
     private final AuditSeuilMapper auditSeuilMapper = new AuditSeuilMapperTestImpl();
     private final HistoriqueActionMapper historiqueActionMapper = new HistoriqueActionMapperTestImpl();
 
-    /** Bonanjo : une agence reelle du referentiel (V42), pour ne pas inventer de code. */
+    /** Bonanjo: a real agency from the reference data (V42), so no code is invented. */
     private static final String AGENCE = "00002";
 
-    /** Les parties sont obligatoires depuis le 2026-10-05 (observation 6). */
+    /** Parties are mandatory. */
     private static final PartiesDto PARTIES =
             new PartiesDto(List.of("Afriland First Bank"), List.of("Client Test"));
 
@@ -118,13 +118,12 @@ class DossierServiceTest {
                 etapeProcedureMapper, auditSeuilMapper, historiqueActionMapper, historiqueActionService, currentUserService,
                 alerteService, agenceService, generateurReference, List.of());
 
-        // Le système attribue la référence : les tests n'en fournissent plus aucune. `lenient` car
-        // la majorité des tests de cette classe ne créent pas de dossier et ne l'appelleront jamais.
+        // The system assigns the reference: tests no longer provide one. `lenient` because most tests
+        // of this class never create a case.
         lenient().when(generateurReference.prochaine(FamilleReference.DOSSIER)).thenReturn("DOS-2026-0001");
 
-        // L'agence d'origine est obligatoire depuis le 2026-10-05 (observation 2) et son code est
-        // verifie au referentiel. `lenient` pour la meme raison que la reference : la plupart des
-        // tests de cette classe ne creent aucun dossier.
+        // The originating agency is mandatory and its code is checked against the reference data.
+        // `lenient` for the same reason as the reference.
         lenient().when(agenceService.existeEtEstActive(AGENCE)).thenReturn(true);
 
         client = Client.builder().id(1L).reference("CLI-1").nom("Client Test").build();
@@ -142,9 +141,8 @@ class DossierServiceTest {
     }
 
     /**
-     * Depuis le 2026-09-29, la référence est attribuée par le système : un doublon ne peut plus
-     * venir d'une saisie. S'il survient, c'est que le compteur (V36) est désynchronisé — le message
-     * doit le dire, et ne nommer <b>aucun champ</b> puisqu'il n'y en a plus à corriger à l'écran.
+     * The reference is assigned by the system, so a duplicate cannot come from user input. If it occurs,
+     * the counter (V36) is out of sync: the message must say so and name <b>no field</b>.
      */
     @Test
     void creerDossier_signaleUneReferenceAttribueeDejaPortee() {
@@ -161,7 +159,7 @@ class DossierServiceTest {
                 .isNull();
     }
 
-    /** La référence ne vient pas de la requête : elle est demandée au générateur. */
+    /** The reference does not come from the request: it is requested from the generator. */
     @Test
     void creerDossier_attribueLaReferenceLuiMeme() {
         when(clientRepository.findById(1L)).thenReturn(Optional.of(client));
@@ -217,12 +215,9 @@ class DossierServiceTest {
     }
 
     /**
-     * Amendement de Q-11 (métier, 2026-09-29) : « ce sont les pièces jointes qui sont obligatoires,
-     * pas leur texte associé ». Un dossier de recouvrement se crée donc sans ses références.
-     *
-     * <p>Ce test tenait la règle inverse jusqu'ici. L'obligation n'a pas disparu, elle a changé
-     * d'objet : elle porte désormais sur les fichiers, et ne peut être tenue que par l'écran —
-     * une pièce se dépose après la création, qui seule produit l'identifiant du dossier.
+     * Attachments are mandatory, not their associated text: a recovery case is created without its
+     * references. The obligation applies to files and is enforced by the UI, since a document can only
+     * be uploaded after creation produces the case identifier.
      */
     @Test
     void creerDossier_accepteUnRecouvrementSansSesReferences() {
@@ -250,11 +245,8 @@ class DossierServiceTest {
     }
 
     /**
-     * Le code d'agence ne s'invente plus (métier, 2026-10-03, observation 2).
-     *
-     * <p>Sur les 341 dossiers de recette, un seul code était renseigné - {@code 5466546546} - et il
-     * ne désignait aucune agence. Le refus doit nommer le champ fautif : le formulaire porte deux
-     * codes d'agence, et l'utilisateur ne saurait pas lequel reprendre.
+     * Agency codes cannot be invented. The refusal must name the faulty field: the form carries two
+     * agency codes, and the user would not know which one to fix.
      */
     @Test
     void creerDossier_rejetteUnCodeAgenceInconnu() {
@@ -273,16 +265,14 @@ class DossierServiceTest {
                 .hasMessageContaining("Aucune agence ouverte")
                 .hasMessageContaining("codeAgenceOrigine");
 
-        // Le refus tombe avant toute écriture : aucune référence consommée, aucun dossier enregistré.
+        // The refusal happens before any write: no reference consumed, no case saved.
         verify(generateurReference, never()).prochaine(any());
         verify(dossierRepository, never()).save(any());
     }
 
     /**
-     * L'agence du contentieux, quand elle est renseignée, passe le même contrôle.
-     *
-     * <p>Elle reste facultative - un dossier n'est pas toujours transféré - mais un code présent et
-     * faux vaut un code inventé : les rapports par agence le compteraient nulle part.
+     * The litigation agency, when provided, goes through the same check. It stays optional (a case is
+     * not always transferred), but a wrong code would be counted nowhere in agency reports.
      */
     @Test
     void creerDossier_rejetteUnCodeAgenceContentieuseInconnu() {
@@ -315,8 +305,8 @@ class DossierServiceTest {
                 PARTIES, 15_000_000d, null, null, AGENCE, null, "CREDIT-1", "PV-1",
                 null, null, null, true, 60_000_000d, "VIPP", List.of(10L), List.of());
 
-        // Q-06 laisse la colonne libre de toute clé étrangère, mais confie ce contrôle au service :
-        // sans lui, une faute de frappe était enregistrée en silence et ressortait dans les rapports.
+        // The column has no foreign key; the service performs this check, otherwise a typo would be
+        // saved silently and show up in reports.
         assertThatThrownBy(() -> service.creerDossier(faute))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("Type de client inconnu");
@@ -438,7 +428,7 @@ class DossierServiceTest {
 
     @Test
     void validerDerogationSeuil_refuseDeTrancherLaPropositionInitiale() {
-        // Sensibilité encore en attente : le seul audit en attente est la proposition initiale.
+        // Sensitivity still pending: the only pending audit is the initial proposal.
         Dossier dossier = Dossier.builder().id(1L).estSensible(true)
                 .sensibiliteStatut(StatutValidation.EN_ATTENTE).build();
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
@@ -454,7 +444,7 @@ class DossierServiceTest {
     void listerDerogationsSeuil_filtreSurLeStatutDemande() {
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(Dossier.builder().id(1L).build()));
         when(auditSeuilDossierRepository.findByDossierIdAndStatutOrderByDateActionDesc(1L, StatutValidation.EN_ATTENTE))
-                // Un audit est toujours rattaché à un dossier et à son auteur : le mapper s'y fie.
+                // An audit is always linked to a case and its author: the mapper relies on it.
                 .thenReturn(List.of(AuditSeuilDossier.builder().id(9L).dossier(Dossier.builder().id(1L).build())
                         .utilisateur(juriste).nouveauSeuil(80_000_000d)
                         .motif("Client stratégique").statut(StatutValidation.EN_ATTENTE).build()));
@@ -477,14 +467,11 @@ class DossierServiceTest {
                 .hasMessageContaining("diligence particulière déjà validé");
     }
 
-    // ------------------------------------------------- N4 : la diligence particulière après l'ouverture
-
     /**
-     * Ce que N4 débloque : avant, {@code estSensible} ne se posait qu'à la création, et un dossier
-     * ouvert comme ordinaire le restait définitivement.
+     * N4: sensitivity can be proposed after opening, not only at creation.
      *
-     * <p>La proposition suit le circuit de la création - {@code EN_ATTENTE} plus une proposition de
-     * seuil - pour que l'arbitrage n'ait pas à savoir d'où elle vient.
+     * <p>The proposal follows the creation workflow ({@code EN_ATTENTE} plus a threshold proposal), so
+     * arbitration does not need to know where it comes from.
      */
     @Test
     void proposerSensibilite_ouvreLeCircuitDeValidationSansToucherAuSeuil() {
@@ -506,16 +493,16 @@ class DossierServiceTest {
         assertThat(dossier.getSensibiliteStatut()).isEqualTo(StatutValidation.EN_ATTENTE);
         assertThat(dossier.getTypeClientSensible()).isEqualTo("VIP");
         /*
-         * Q-10 : aucun effet avant la validation. Le seuil ne bouge pas, sinon un juriste
-         * déclencherait seul la double validation des frais.
+         * No effect before validation: the threshold does not move, otherwise a legal officer alone would
+         * trigger double validation of fees.
          */
         assertThat(dossier.getSeuilMontant()).isNull();
         assertThat(dossier.getSeuilOrigine()).isEqualTo(SeuilOrigine.GLOBAL);
-        // La proposition de seuil est bien créée : c'est elle que l'arbitrage retrouvera.
+        // The threshold proposal is created: arbitration will find it.
         verify(auditSeuilDossierRepository).save(any(AuditSeuilDossier.class));
     }
 
-    /** Proposer deux fois n'a pas de sens, et le refus doit dire laquelle des deux situations on est. */
+    /** Proposing twice makes no sense, and the refusal must state which of the two situations applies. */
     @Test
     void proposerSensibilite_refuseUneSecondePropositionEnAttente() {
         Dossier dossier = Dossier.builder().id(1L).estSensible(true)
@@ -542,9 +529,8 @@ class DossierServiceTest {
     }
 
     /**
-     * Un dossier dont la proposition a été **rejetée** doit pouvoir être reproposé : le refus portait
-     * sur la situation d'alors, pas sur l'avenir du dossier. Le motif de l'épisode précédent est
-     * effacé - le laisser ferait lire à l'écran une décision qui ne porte plus.
+     * A case whose proposal was **rejected** can be proposed again. The previous reason is cleared so the
+     * screen does not show an outdated decision.
      */
     @Test
     void proposerSensibilite_accepteUnDossierDontLaPropositionAvaitEteRejetee() {
@@ -567,7 +553,7 @@ class DossierServiceTest {
         assertThat(dossier.getSensibiliteMotifRejet()).isNull();
     }
 
-    /** Le DJ décide sans proposition : la faire passer par un arbitrage de lui-même n'ajouterait rien. */
+    /** The DJ decides without a proposal: arbitrating their own decision would add nothing. */
     @Test
     void modifierSensibilite_poseLaDiligenceDirectementEtApplique() {
         Dossier dossier = Dossier.builder().id(1L).estSensible(false)
@@ -586,17 +572,16 @@ class DossierServiceTest {
                 new ModifierSensibiliteRequest(true, 60_000_000d, "VIP", "Décision du comité"));
 
         assertThat(dossier.getEstSensible()).isTrue();
-        // Directement **validée** : il n'y a personne d'autre à attendre.
+        // Directly **validated**: nobody else to wait for.
         assertThat(dossier.getSensibiliteStatut()).isEqualTo(StatutValidation.VALIDEE);
         assertThat(dossier.getSeuilMontant()).isEqualTo(60_000_000d);
         assertThat(dossier.getSeuilOrigine()).isEqualTo(SeuilOrigine.DEROGATION);
     }
 
     /**
-     * Le retrait (métier, 2026-10-06). Ce qu'il doit faire en plus de baisser le drapeau : **rendre
-     * le seuil global**. Un seuil de dérogation n'existe que pour un dossier à diligence
-     * particulière ; le laisser donnerait au dossier un seuil que rien ne justifie et que plus
-     * personne ne pourrait réviser, {@code demanderDerogationSeuil} refusant un dossier non sensible.
+     * Withdrawal must also **restore the global threshold**. A derogation threshold only exists for a
+     * sensitive case; keeping it would leave a threshold nobody can revise, since
+     * {@code demanderDerogationSeuil} refuses a non-sensitive case.
      */
     @Test
     void modifierSensibilite_retireLaDiligenceEtRendLeSeuilGlobal() {
@@ -617,11 +602,11 @@ class DossierServiceTest {
         assertThat(dossier.getSensibiliteMotifRetrait()).isEqualTo("L'affaire s'est révélée ordinaire");
         assertThat(dossier.getSeuilMontant()).isNull();
         assertThat(dossier.getSeuilOrigine()).isEqualTo(SeuilOrigine.GLOBAL);
-        // Le motif de retrait et le motif de rejet sont deux faits distincts : le second reste vide.
+        // The withdrawal reason and the rejection reason are distinct facts: the latter stays empty.
         assertThat(dossier.getSensibiliteMotifRejet()).isNull();
     }
 
-    /** Lever la diligence fait sortir le dossier du circuit de double validation : l'audit demandera pourquoi. */
+    /** Removing sensitivity takes the case out of double fee validation: the audit will ask why. */
     @Test
     void modifierSensibilite_exigeUnMotifPourRetirer() {
         Dossier dossier = Dossier.builder().id(1L).estSensible(true)
@@ -648,7 +633,7 @@ class DossierServiceTest {
                 .hasMessageContaining("rien à retirer");
     }
 
-    /** Poser la diligence sans seuil ni type n'a pas de sens : ce sont eux qui la rendent opérante. */
+    /** Setting sensitivity without threshold or type is meaningless: they make it effective. */
     @Test
     void modifierSensibilite_exigeSeuilEtTypePourPoser() {
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(
@@ -662,8 +647,8 @@ class DossierServiceTest {
     }
 
     /**
-     * Une proposition du juriste pendante ne doit pas survivre à la décision du DJ : la poser
-     * directement la tranche, et le seuil retenu est celui que le DJ indique, non celui proposé.
+     * A pending legal officer proposal must not survive the DJ's decision: setting it directly settles it,
+     * and the threshold is the one given by the DJ, not the proposed one.
      */
     @Test
     void modifierSensibilite_trancheLaPropositionPendante() {
@@ -732,8 +717,8 @@ class DossierServiceTest {
         Dossier dossier = Dossier.builder().id(1L).build();
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
         when(etapeProcedureRepository.existsByDossierIdAndType(anyLong(), any())).thenReturn(false);
-        // GenerationType.IDENTITY : l'id est toujours peuplé après un save() réel ; le stub le
-        // simule pour rester réaliste (des appels en aval, ex. l'historisation, en dépendent).
+        // GenerationType.IDENTITY: the id is always set after a real save(); the stub mimics it because
+        // downstream calls (e.g. history logging) depend on it.
         long[] nextId = {1L};
         when(etapeProcedureRepository.save(any(EtapeProcedure.class))).thenAnswer(inv -> {
             EtapeProcedure e = inv.getArgument(0);
@@ -747,7 +732,7 @@ class DossierServiceTest {
                 .save(any(EtapeProcedure.class));
     }
 
-    // ---- Mappers minimaux, sans dépendre du bytecode généré par l'annotation processor MapStruct ----
+    // Minimal mappers, independent of the MapStruct-generated bytecode.
 
     private static class EtapeProcedureMapperTestImpl implements EtapeProcedureMapper {
         @Override

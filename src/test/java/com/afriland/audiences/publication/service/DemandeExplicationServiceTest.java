@@ -41,11 +41,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * La demande d'explication et sa réponse (N7 temps 2, observation 8).
+ * The explanation request and its answer (N7).
  *
- * <p>Ce qui est éprouvé ici n'est pas « un message part », mais les quatre refus qui font de cet
- * échange une pièce et non une conversation : pas deux demandes ouvertes à la fois, pas de réponse
- * à la demande d'un autre, pas de seconde réponse, et un avocat qui ne voit que les siennes.
+ * <p>Tests the four refusals that make this exchange a record rather than a conversation: no two
+ * open requests at once, no answer to someone else's request, no second answer, and a lawyer sees
+ * only their own.
  */
 @ExtendWith(MockitoExtension.class)
 class DemandeExplicationServiceTest {
@@ -91,7 +91,7 @@ class DemandeExplicationServiceTest {
                 .thenReturn(false);
     }
 
-    // ── La demande ────────────────────────────────────────────────────────────
+    // The request
 
     @Test
     @DisplayName("la direction écrit : l'échange est enregistré, tracé, et part dans les deux canaux")
@@ -107,10 +107,10 @@ class DemandeExplicationServiceTest {
         assertThat(reponse.enAttente()).isTrue();
         assertThat(reponse.avocatNom()).isEqualTo("Cabinet TAMO");
         assertThat(reponse.auteurNom()).isEqualTo("Juridique Dir");
-        // La décision est de la direction, pas de l'application : l'historique doit dire qui l'a prise.
+        // The decision belongs to management, not the application: the history must say who made it.
         verify(historiqueActionService).enregistrerPour(eq(directeur), eq(DOSSIER_ID),
                 eq(TypeActionHistorique.EXPLICATION_DEMANDEE), any());
-        // Dans l'application, et au dehors : il peut justement ne plus s'y connecter.
+        // In the application and outside it: the lawyer may no longer log in.
         verify(alerteService).declencher(eq(TypeAlerte.DEMANDE_EXPLICATION), eq(DOSSIER_ID),
                 eq(compteAvocat), anyString());
         verify(notificationPrestataireService).notifier(
@@ -118,15 +118,13 @@ class DemandeExplicationServiceTest {
     }
 
     /**
-     * Une demande en attente à la fois.
-     *
-     * <p>Une seconde brouillerait la file : laquelle suspend la relance, à laquelle faut-il
-     * répondre ? Une fois répondu, la direction peut redemander.
+     * One pending request at a time: a second would blur which one suspends the reminder and which one
+     * to answer. Once answered, management can ask again.
      */
     @Test
     @DisplayName("une seconde demande est refusée tant que la première attend")
     void demande_refuseeSiUneAttendDeja() {
-        // Le refus tombe avant qu'on sache qui écrit : inutile d'avoir un auteur sous la main.
+        // The refusal happens before knowing who writes: no author needed.
         when(intervenantRepository.findById(AVOCAT_ID)).thenReturn(Optional.of(avocat));
         when(demandeExplicationRepository.existsByAvocatIdAndDateReponseIsNull(AVOCAT_ID))
                 .thenReturn(true);
@@ -139,7 +137,7 @@ class DemandeExplicationServiceTest {
         verify(demandeExplicationRepository, never()).save(any());
     }
 
-    /** Sans dossier, la demande existe quand même : elle porte sur une conduite, pas une affaire. */
+    /** Without a case, the request still exists: it concerns conduct, not a matter. */
     @Test
     @DisplayName("une demande sans dossier part, et ne s'historise sur aucun")
     void demande_sansDossier() {
@@ -149,9 +147,9 @@ class DemandeExplicationServiceTest {
         var reponse = service.demander(new DemanderExplicationRequest(AVOCAT_ID, null, "Expliquez-vous."));
 
         assertThat(reponse.dossierId()).isNull();
-        // L'historique s'inscrit toujours sur un dossier : sans dossier, rien à inscrire.
+        // History is always recorded on a case: without a case, nothing to record.
         verify(historiqueActionService, never()).enregistrerPour(any(), anyLong(), any(), any());
-        // Mais la notification externe part : c'est elle qui atteint un avocat déconnecté.
+        // But the external notification is sent: it reaches a logged-out lawyer.
         verify(notificationPrestataireService).notifier(
                 eq(EvenementPrestataire.DEMANDE_EXPLICATION), eq(avocat), eq(null), anyString());
     }
@@ -167,7 +165,7 @@ class DemandeExplicationServiceTest {
                 .hasMessageContaining("Aucun avocat");
     }
 
-    // ── La réponse ────────────────────────────────────────────────────────────
+    // The answer
 
     private DemandeExplication enAttente() {
         return DemandeExplication.builder()
@@ -192,7 +190,7 @@ class DemandeExplicationServiceTest {
         assertThat(reponse.dateReponse()).isNotNull();
         verify(historiqueActionService).enregistrerPour(eq(compteAvocat), eq(DOSSIER_ID),
                 eq(TypeActionHistorique.EXPLICATION_REPONDUE), any());
-        // Sans cela, le demandeur devrait penser à revenir voir.
+        // Otherwise the requester would have to remember to check back.
         verify(alerteService).declencher(eq(TypeAlerte.DEMANDE_EXPLICATION), eq(DOSSIER_ID),
                 eq(directeur), anyString());
     }
@@ -214,10 +212,8 @@ class DemandeExplicationServiceTest {
     }
 
     /**
-     * Une réponse ne se récrit pas.
-     *
-     * <p>C'est une prise de position, datée, que la direction lira peut-être des mois plus tard :
-     * une réponse modifiable ne prouverait rien. Corriger passe par une nouvelle demande.
+     * An answer cannot be rewritten: it is a dated position that management may read months later.
+     * Correcting goes through a new request.
      */
     @Test
     @DisplayName("une seconde réponse est refusée")

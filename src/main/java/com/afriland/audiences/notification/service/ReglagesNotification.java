@@ -14,12 +14,11 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Photographie des réglages du DJ (Q-118) à un instant donné : canaux allumés et grille par canal.
+ * Snapshot of the notification settings: enabled channels and the event grid of each channel.
  * <p>
- * Un canal part pour un événement si et seulement si son interrupteur est allumé <b>et</b> que
- * l'événement figure dans sa grille. Une clé absente ou une valeur inconnue compte comme « rien » :
- * les valeurs sont contrôlées à l'écriture (RegleConfiguration), un écart ici ne peut venir que d'une
- * base modifiée à la main, et ne rien envoyer est alors le défaut le moins dommageable.
+ * A channel fires for an event only if its switch is on <b>and</b> the event is in its grid. A missing
+ * key or unknown value counts as "nothing": values are validated on write (RegleConfiguration), so a
+ * mismatch can only come from a hand-edited database, where sending nothing is the safest default.
  */
 public record ReglagesNotification(
         Set<CanalAlerte> canauxInternes,
@@ -31,7 +30,7 @@ public record ReglagesNotification(
     public static final String CLE_CANAUX_PRESTATAIRES = "CANAUX_NOTIFICATION_PRESTATAIRES";
     public static final String PREFIXE_GRILLE = "GRILLE_NOTIFICATION_";
 
-    /** Canaux internes que la grille couvre ; APPLICATIF n'en fait pas partie, il part toujours. */
+    /** Internal channels covered by the grid; APPLICATIF is not one of them, it always fires. */
     public static final Set<CanalAlerte> CANAUX_INTERNES_EXTERNES = EnumSet.of(CanalAlerte.OUTLOOK, CanalAlerte.TEAMS);
 
     public boolean envoie(CanalAlerte canal, TypeAlerte type) {
@@ -42,7 +41,7 @@ public record ReglagesNotification(
         return canauxPrestataires.contains(canal) && grillePrestataires.getOrDefault(canal, Set.of()).contains(evenement);
     }
 
-    /** Construit les réglages à partir des valeurs brutes de {@code configuration_systeme}, par clé. */
+    /** Builds the settings from the raw {@code configuration_systeme} values, by key. */
     public static ReglagesNotification depuis(Map<String, String> valeurs) {
         Map<CanalAlerte, Set<TypeAlerte>> grilleInternes = new EnumMap<>(CanalAlerte.class);
         for (CanalAlerte canal : CANAUX_INTERNES_EXTERNES) {

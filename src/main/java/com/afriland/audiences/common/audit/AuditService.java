@@ -16,26 +16,16 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Consultation de l'audit (Q-112) — <b>DJ et DJA</b>.
+ * Audit consultation (DJ and DJA): cross-case queries such as "what did X do last month".
  *
- * <p><b>Ce qu'il apporte par rapport au journal de Q-110.</b> Celui-ci répondait à une question de
- * <i>couverture</i> : des lignes existaient sans aucun point de lecture. Il restait une question de
- * <i>point d'entrée</i> — « qu'a fait X le mois dernier ? », « toutes les suppressions du
- * trimestre ? », « que s'est-il passé entre le 1er et le 15 ? ». Aucune ne part d'un dossier, et
- * aucune n'était donc possible. C'est ce que cet écran ouvre.
- *
- * <p><b>Le périmètre devient un filtre, et c'est un changement assumé.</b> En Q-110, l'exclusivité
- * de {@link Perimetre} était structurelle : ouvrir la vue transversale devait être une décision, pas
- * l'effet d'un paramètre oublié. Cette décision est prise — le filtre par personne est autorisé
- * (NF-CONF-01, 2026-09-17) — et le périmètre redevient donc ce qu'il est, un critère. Ce qui protège
- * désormais n'est plus la forme du code mais deux garde-fous explicites : la garde de rôle, et le
- * fait que <b>toute consultation est elle-même historisée</b>.
+ * <p>{@link Perimetre} is just one filter; filtering by person is allowed by NF-CONF-01. Protection
+ * relies on the role guard and on the fact that every consultation is itself recorded.
  */
 @Service
 @RequiredArgsConstructor
 public class AuditService {
 
-    /** Du plus récent au plus ancien, `id` départageant les ex æquo (Q-92). */
+    /** Newest first, `id` breaking ties. */
     private static final Sort TRI = Sort.by(Sort.Direction.DESC, "dateAction").and(Sort.by(Sort.Direction.DESC, "id"));
 
     private final HistoriqueActionRepository historiqueActionRepository;
@@ -56,10 +46,8 @@ public class AuditService {
         }
 
         /*
-         * Historisé **avant** la lecture et sur la première page seulement. Avant, pour que la trace
-         * existe même si la requête échoue ensuite. Sur la première page seulement, parce que
-         * feuilleter un résultat n'est pas une nouvelle consultation : compter chaque page
-         * produirait un bruit qui noierait ce qu'on cherche à voir.
+         * Recorded before reading, so the trace exists even if the query fails, and only for the
+         * first page: paging through results is not a new consultation.
          */
         if (page == 0) {
             historiqueActionService.enregistrer(null, TypeActionHistorique.AUDIT_CONSULTE,
@@ -80,17 +68,13 @@ public class AuditService {
                         .toList());
     }
 
-    /**
-     * Les critères employés, tels quels. Un filtre absent n'est pas consigné : une trace qui
-     * énumérerait des « null » se lirait moins bien qu'une trace qui ne dit que ce qui a servi.
-     */
+    /** The criteria used, as given; absent filters are omitted. */
     private Map<String, Object> criteres(Perimetre perimetre, Long dossierId, Long utilisateurId,
                                             TypeActionHistorique code, LocalDate dateDebut, LocalDate dateFin) {
         Map<String, Object> criteres = new LinkedHashMap<>();
         criteres.put("perimetre", perimetre.name());
         if (dossierId != null) criteres.put("dossierId", dossierId);
-        // Nommé `auteurRecherche` et non `utilisateurId` : ce dernier désigne déjà, sur la ligne
-        // d'historique, celui qui a consulté. Les confondre rendrait la trace illisible.
+        // Named `auteurRecherche`, not `utilisateurId`, which already identifies the consulting user.
         if (utilisateurId != null) criteres.put("auteurRecherche", utilisateurId);
         if (code != null) criteres.put("codeRecherche", code.name());
         if (dateDebut != null) criteres.put("dateDebut", dateDebut.toString());

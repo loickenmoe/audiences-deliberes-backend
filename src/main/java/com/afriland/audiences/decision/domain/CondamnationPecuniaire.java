@@ -18,7 +18,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
-/** Condamnation pécuniaire (US 8.2, RG-DEF-03/04) : statut de paiement suivi dans le temps. */
+/** Monetary judgment (US 8.2, RG-DEF-03/04) whose payment status is tracked over time. */
 @Getter
 @Setter
 @SuperBuilder

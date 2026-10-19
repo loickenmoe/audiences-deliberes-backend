@@ -10,18 +10,11 @@ import org.springframework.stereotype.Component;
 import java.util.Optional;
 
 /**
- * Une étape ne s'archive pas sans que son issue définitive soit enregistrée (métier, 2026-09-29).
- *
- * <p><b>Ce que cela protège.</b> {@code CLOTURE → ARCHIVE} n'exigeait rien. On pouvait donc archiver
- * une étape dont l'adjudication ou la condamnation n'avait jamais été saisie — et l'archivage est un
- * gel : c'est précisément le moment où l'on cesse de revenir sur un dossier pour le compléter. Le
- * manque devenait alors définitif, sans que personne ne s'en aperçoive.
- *
- * <p><b>Une limite à connaître.</b> Toutes les étapes closes ne produisent pas une décision
- * définitive — un désistement, une radiation en laissent l'étape sans adjudication ni condamnation.
- * Pour celles-là, cette règle interdira l'archivage tant que rien n'est enregistré. C'est
- * l'arbitrage du métier du 2026-09-29 ; s'il s'avère trop strict à l'usage, la réponse sera de
- * permettre d'enregistrer une issue « sans décision », pas de lever la garde.
+ * A step cannot be archived until its final decision is recorded. Archiving freezes the case file, so
+ * a missing adjudication or judgment would otherwise become permanent unnoticed.
+ * <p>
+ * Limitation: some closed steps (withdrawal, striking out) produce no final decision and therefore
+ * cannot be archived either.
  */
 @Component
 @RequiredArgsConstructor

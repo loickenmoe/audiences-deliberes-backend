@@ -8,12 +8,10 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * La notion d'étape « fermée », sur laquelle repose la garde jurisprudentielle (2026-09-29).
+ * The notion of a "closed" step on which the case-law guard relies.
  *
- * <p>Une décision ne rejoint la base que lorsqu'elle est définitive — plus aucune étape du dossier
- * en cours. Ce qui se teste ici est la frontière elle-même : quels statuts comptent comme terminés.
- * Elle était jusqu'ici recopiée dans {@code RepertoireAvocatsService} et {@code ReportingService},
- * sans que rien ne garantisse que les trois copies disent la même chose.
+ * <p>A decision enters the case-law base only once final, with no step of the case still in
+ * progress. This tests the boundary itself: which statuses count as finished.
  */
 class GardeJurisprudenceTest {
 
@@ -24,8 +22,8 @@ class GardeJurisprudenceTest {
     }
 
     /**
-     * Le délibéré vidé <b>n'est pas</b> une fin : le délai de recours peut courir, et l'étape se
-     * rouvrir. Verser une décision à ce moment-là serait exactement le défaut que la garde vise.
+     * A delivered deliberation is <b>not</b> an end: the appeal period may run and the step may reopen.
+     * Filing a decision at that point is exactly what the guard prevents.
      */
     @Test
     void un_delibere_vide_ne_ferme_pas_l_etape() {
@@ -47,7 +45,7 @@ class GardeJurisprudenceTest {
         assertThat(StatutCycleVie.FERMES).isEqualTo(fermes);
     }
 
-    /** Un statut ajouté demain sans décision explicite compterait comme ouvert : c'est le bon défaut. */
+    /** A status added later without an explicit decision counts as open: the safe default. */
     @Test
     void tout_statut_hors_de_la_liste_compte_comme_ouvert() {
         for (StatutCycleVie statut : StatutCycleVie.values()) {

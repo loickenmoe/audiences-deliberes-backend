@@ -35,7 +35,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-/** M15 (Q-68) — création d'un intervenant : les invariants RG-INT-01/02 sont portés par le service. */
+/** M15: stakeholder creation; RG-INT-01/02 invariants are enforced by the service. */
 @ExtendWith(MockitoExtension.class)
 class IntervenantServiceTest {
 
@@ -65,7 +65,7 @@ class IntervenantServiceTest {
         assertThat(result.id()).isEqualTo(1L);
         assertThat(result.type()).isEqualTo(TypeIntervenant.AVOCAT);
         assertThat(result.compteKeycloak()).isEqualTo("kc-1");
-        // Q-119 : l'avocat consent par défaut aux canaux externes.
+        // The lawyer consents to external channels by default.
         assertThat(result.notification()).isTrue();
     }
 
@@ -97,7 +97,7 @@ class IntervenantServiceTest {
         when(avocatRepository.findByCompteKeycloak("kc-2")).thenReturn(Optional.empty());
         when(avocatRepository.save(any(Avocat.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        // Q-119 : le consentement de l'avocat se refuse à la création comme il se retire ensuite.
+        // The lawyer's consent can be refused at creation, just as it can be withdrawn later.
         IntervenantResponse result = service.creer(new CreerIntervenantRequest(
                 TypeIntervenant.AVOCAT, "Me Fotso", null, null, "kc-2", false));
 
@@ -142,9 +142,8 @@ class IntervenantServiceTest {
     }
 
     /**
-     * Q-100 : le filtre de type est désormais **poussé en SQL** par le discriminant de la hiérarchie,
-     * là où le service chargeait tout l'annuaire pour le trier en mémoire. Le test vérifie donc la
-     * traduction du type en critère de requête, et non plus un filtrage Java.
+     * The type filter is **pushed down to SQL** via the hierarchy discriminator, so the test checks the
+     * translation of the type into a query criterion, not Java-side filtering.
      */
     @Test
     void lister_traduitLeTypeEnCritereDeRequete() {
@@ -157,7 +156,7 @@ class IntervenantServiceTest {
         verify(intervenantRepository).rechercher(eq(Boolean.FALSE), isNull(), any());
     }
 
-    /** Q-105 — la recherche au fil de la frappe : un nom vide ne doit pas devenir un critère. */
+    /** Search-as-you-type: an empty name must not become a criterion. */
     @Test
     void lister_ignoreUnNomVide() {
         when(intervenantRepository.rechercher(any(), any(), any())).thenReturn(new PageImpl<>(List.of()));
@@ -167,11 +166,9 @@ class IntervenantServiceTest {
         verify(intervenantRepository).rechercher(isNull(), isNull(), any());
     }
 
-    // ------------------------------------------------------------ Modification (PUT /intervenants)
+    // Step 11: contact details validated and normalized on entry
 
-    // ── Étape 11 : coordonnées contrôlées et mises en forme à la saisie ──
-
-    /** Le moteur n'accepte que trois écritures : la fiche porte donc un numéro directement utilisable. */
+    /** The engine accepts only three formats: the record carries a directly usable number. */
     @Test
     void creerAvocat_metEnFormeLeTelephone() {
         when(avocatRepository.findByCompteKeycloak("kc-tel")).thenReturn(Optional.empty());
@@ -185,8 +182,8 @@ class IntervenantServiceTest {
     }
 
     /**
-     * Refus immédiat, sur le champ : sans lui, la saisie fautive ne se voyait qu'à l'envoi, sous la
-     * forme d'une ligne « non joignable » en supervision — trop tard, et loin de qui peut corriger.
+     * Immediate refusal on the field: otherwise the faulty entry would only show at sending time, as an
+     * "unreachable" line in supervision, too late and far from who can fix it.
      */
     @Test
     void creerAvocat_auTelephoneHorsFormat_estRefuse() {
@@ -221,7 +218,7 @@ class IntervenantServiceTest {
                 .hasMessageContaining("Numéro de téléphone invalide");
     }
 
-    /** Une fiche sans coordonnée reste permise : tout prestataire n'a pas de numéro. */
+    /** A record without contact details is allowed: not every provider has a number. */
     @Test
     void lesCoordonneesRestentFacultatives() {
         when(avocatRepository.findByCompteKeycloak("kc-sans")).thenReturn(Optional.empty());
@@ -257,18 +254,18 @@ class IntervenantServiceTest {
         IntervenantResponse result = service.modifier(7L,
                 new ModifierIntervenantRequest("Me Fotso", "fotso@cab.cm", "690000000", null));
 
-        // Le compte Keycloak est figé : il n'est pas dans la requête, il ne bouge pas.
+        // The Keycloak account is fixed: it is not in the request, it does not move.
         assertThat(result.compteKeycloak()).isEqualTo("kc-1");
         assertThat(result.type()).isEqualTo(TypeIntervenant.AVOCAT);
-        // Le nom, identique, n'encombre pas la trace ; le téléphone, absent jusque-là, y figure
-        // avec une ancienne valeur nulle.
+        // The unchanged name does not clutter the trace; the phone, previously absent, appears with a
+        // null old value.
         assertThat(detailsHistorises()).hasSize(6)
                 .containsEntry("prestataireId", 7L)
                 .containsEntry("intervenant", "Me Fotso")
                 .containsEntry("ancienEmail", "me@cab.cm")
                 .containsEntry("nouvelEmail", "fotso@cab.cm")
                 .containsEntry("ancienTelephone", null)
-                // Étape 11 : le numéro est mis en forme avant d'être enregistré et historisé.
+                // Step 11: the number is normalized before being saved and logged.
                 .containsEntry("nouveauTelephone", "+237690000000");
     }
 
@@ -277,7 +274,7 @@ class IntervenantServiceTest {
         when(intervenantRepository.findById(7L)).thenReturn(Optional.of(avocat()));
         when(intervenantRepository.save(any(Intervenant.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        // Q-119 : coché par défaut, il se retire ; le changement est historisé comme les autres.
+        // Checked by default, it can be withdrawn; the change is logged like the others.
         IntervenantResponse result = service.modifier(7L, new ModifierIntervenantRequest("Me Fotso", null, null, false));
 
         assertThat(result.notification()).isFalse();

@@ -13,25 +13,24 @@ import java.util.List;
 @Repository
 public interface DocumentRepository extends JpaRepository<Document, Long> {
 
-    /** FR-GED-02/UC-GED-02 (#43) : documents actifs d'un dossier, hors documents supprimés. */
+    /** FR-GED-02/UC-GED-02: active documents of a case file, excluding deleted ones. */
     Page<Document> findByDossierIdAndEstSupprimeFalse(Long dossierId, Pageable pageable);
 
-    /** FR-GED-04 : pièces ajoutées à une date donnée (rapport journalier). */
+    /** FR-GED-04: documents added on a given date (daily report). */
     long countByDateChargementBetween(LocalDateTime debut, LocalDateTime fin);
 
-    /** La file du DJ et de la DJA : les partages proposés, le plus ancien d'abord (QF-64). */
+    /** The DJ/DJA queue: proposed shares, oldest first. */
     Page<Document> findByPartageAvocatAndEstSupprimeFalseOrderByPartageLeAsc(
             StatutPartageAvocat partageAvocat, Pageable pageable);
 
     /**
-     * Les pièces d'un dossier partagées avec l'avocat (QF-64). La restriction est **dans la
-     * requête** : un filtre appliqué après coup exposerait toute la GED du dossier s'il était
-     * oublié une seule fois.
+     * Documents of a case file shared with the lawyer. The restriction lives <b>in the query</b>:
+     * a filter applied afterwards would expose the whole case file's GED if it were forgotten once.
      */
     List<Document> findByDossierIdAndPartageAvocatAndEstSupprimeFalseOrderByDateChargementDesc(
             Long dossierId, StatutPartageAvocat partageAvocat);
 
-    /** Une pièce précise, à la seule condition qu'elle soit de ce dossier et partagée (QF-64). */
+    /** A single document, only if it belongs to this case file and is shared. */
     java.util.Optional<Document> findByIdAndDossierIdAndPartageAvocatAndEstSupprimeFalse(
             Long id, Long dossierId, StatutPartageAvocat partageAvocat);
 }

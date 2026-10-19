@@ -22,8 +22,8 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * Commentaire d'un juriste sur une publication (US 5.5, RG-INT-07) : jamais transmis directement à
- * l'avocat — seul le DJ/DJA peut lui répondre via une {@link CorrespondanceAvocat} unique.
+ * Comment by a legal officer on a publication (US 5.5, RG-INT-07): never sent directly to the
+ * lawyer; only the DJ/DJA can reply to the lawyer, through a single {@link CorrespondanceAvocat}.
  */
 @Getter
 @Setter

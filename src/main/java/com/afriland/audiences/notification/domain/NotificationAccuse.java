@@ -16,13 +16,12 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * Accusé publié par le Notification Engine sur {@code notification-sent} ou
- * {@code notification-failed} (voir la migration V30).
+ * Receipt published by the Notification Engine on {@code notification-sent} or
+ * {@code notification-failed} (migration V30).
  * <p>
- * <b>Il n'identifie pas notre envoi.</b> Le moteur le rattache à son propre {@code notificationId},
- * jamais à l'{@code eventId} que nous avons fourni. Ces lignes permettent donc de mesurer ce qui part
- * et ce qui échoue, par canal et par fournisseur, mais pas de dire quelle notification de la file a
- * abouti. Le champ {@code notificationEnvoiId} attend que ce rattachement devienne possible (Q-120).
+ * It does not identify our send: the engine links it to its own {@code notificationId}, never to our
+ * {@code eventId}. These rows measure successes and failures per channel and provider, but not which
+ * queued notification succeeded. {@code notificationEnvoiId} is reserved for when that link becomes possible.
  */
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -80,7 +79,7 @@ public class NotificationAccuse {
         return accuse;
     }
 
-    /** Rattache l'accusé à une ligne de la file, le jour où le moteur nous en donnera le moyen. */
+    /** Links the receipt to a queue row, once the engine provides the means to do so. */
     public void rattacherA(Long notificationEnvoiId) {
         this.notificationEnvoiId = notificationEnvoiId;
     }

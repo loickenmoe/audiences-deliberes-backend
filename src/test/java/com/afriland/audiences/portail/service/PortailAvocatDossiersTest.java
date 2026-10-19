@@ -45,13 +45,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * La liste des dossiers du portail avocat, et sa recherche (2026-09-28).
+ * The lawyer portal case list and its search.
  *
- * <p><b>Le défaut que ces tests protègent.</b> Le sélecteur chargeait une page des dossiers les
- * plus récents. Un avocat qui en suit davantage — 427 dans la base de recette — ne voyait plus les
- * anciens : ni demande de frais, ni compte rendu possible pour eux. Le dossier existait,
- * l'affectation aussi ; seule la liste était tronquée, <b>en silence</b>. Une liste qui ment par
- * omission est pire qu'une erreur : rien n'avertit qu'il manque quelque chose.
+ * <p>The selector must not load only one page of the most recent cases: a lawyer with many cases
+ * would silently lose the older ones (no fee request or report possible). A list that lies by
+ * omission is worse than an error.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -107,9 +105,8 @@ class PortailAvocatDossiersTest {
     }
 
     /**
-     * Le cas signalé en recette : un dossier ancien, hors de la page chargée, que la recherche doit
-     * retrouver. C'est le serveur qui cherche — filtrer la page reçue n'aurait cherché que parmi
-     * les cent plus récents, et aurait répondu « aucun résultat » pour un dossier bien présent.
+     * An old case, outside the loaded page, must be found by search. The server searches: filtering the
+     * received page would only search the most recent hundred.
      */
     @Test
     @DisplayName("la recherche retrouve un dossier ancien, hors de la première page")
@@ -123,7 +120,7 @@ class PortailAvocatDossiersTest {
         verify(dossierRepository, never()).findDossiersDeLAvocat(any(), any());
     }
 
-    /** Une saisie entourée d'espaces est la même recherche : elle ne doit pas rester sans résultat. */
+    /** Input surrounded by spaces is the same search: it must not return nothing. */
     @Test
     void mesDossiers_rechercheEpargneeDesEspaces() {
         when(dossierRepository.rechercherDossiersDeLAvocat(eq(1L), eq("dss1"), any()))
@@ -132,7 +129,7 @@ class PortailAvocatDossiersTest {
         assertThat(service.mesDossiers("  dss1  ", PAGE).content()).hasSize(1);
     }
 
-    /** Une recherche vide n'est pas une recherche : c'est la liste entière qu'on veut. */
+    /** An empty search is not a search: the whole list is wanted. */
     @Test
     void mesDossiers_rechercheVideVautListeEntiere() {
         when(dossierRepository.findDossiersDeLAvocat(1L, PAGE)).thenReturn(new PageImpl<>(List.of()));
@@ -144,9 +141,8 @@ class PortailAvocatDossiersTest {
     }
 
     /**
-     * La restriction reste portée par la requête : la recherche reçoit l'identifiant de l'avocat
-     * courant, jamais celui d'un autre. C'est ce qui empêche un prestataire externe de sonder le
-     * portefeuille de la banque par tâtonnement sur les références.
+     * The restriction stays in the query: the search receives the current lawyer's id, never another's.
+     * This prevents an external provider from probing the bank's portfolio by guessing references.
      */
     @Test
     void mesDossiers_rechercheResteLimiteeALAvocatCourant() {
@@ -158,16 +154,10 @@ class PortailAvocatDossiersTest {
         verify(dossierRepository).rechercherDossiersDeLAvocat(eq(1L), eq("DOS"), any());
     }
 
-    // ------------------------------------------------------------------ QF-58
-
     /**
-     * <b>La correspondance accompagne la publication de l'avocat</b> (QF-58).
-     *
-     * <p>Le défaut, exactement : {@code mesPublications} cartographiait avec la forme à un seul
-     * argument du mapper, qui délègue à {@code toResponse(publication, null, null, null)}. L'avocat
-     * recevait donc la notification d'une correspondance transmise - {@code alerteService} et
-     * {@code notificationPrestataireService} la lui envoient tous deux - sans qu'aucun écran ne
-     * puisse la lui montrer. Signalé en recette le 2026-10-14.
+     * <b>The correspondence accompanies the lawyer's publication.</b> {@code mesPublications} must map
+     * with the full mapper signature, otherwise the lawyer is notified of a correspondence that no screen
+     * can show.
      */
     @Test
     @DisplayName("la publication de l'avocat porte la correspondance qui lui a été transmise")
@@ -185,15 +175,14 @@ class PortailAvocatDossiersTest {
         var transmise = page.content().get(0).correspondance();
         assertThat(transmise).isNotNull();
         assertThat(transmise.contenu()).isEqualTo("Merci de préciser la date de l'audience.");
-        // Une lettre sans signature n'en est pas une : l'avocat doit savoir à qui il répond.
+        // A letter without a signature is not one: the lawyer must know whom they are answering.
         assertThat(transmise.auteurNom()).isEqualTo("Loïc Kenmoe");
     }
 
     /**
-     * <b>La règle que ce test garde.</b> Le juriste ne s'adresse jamais directement à l'avocat
-     * (Q-20, US 5.5, RG-INT-07) : il commente pour le DJ/DJA, qui transmet <b>une</b> correspondance.
-     * Joindre les commentaires à la charge utile du portail ouvrirait la délibération interne à
-     * celui dont elle discute - et la correction de QF-58 passait à un argument près de le faire.
+     * <b>Rule guarded here.</b> The legal officer never addresses the lawyer directly (US 5.5,
+     * RG-INT-07): they comment for the DJ/DJA, who forwards <b>one</b> correspondence. Including comments
+     * in the portal payload would expose internal deliberation to the person it discusses.
      */
     @Test
     @DisplayName("les commentaires internes ne partent jamais vers l'avocat")
@@ -209,9 +198,8 @@ class PortailAvocatDossiersTest {
     }
 
     /**
-     * Une page sans publication ne doit pas interroger la base : {@code findByPublicationIdIn} avec
-     * une liste vide produirait un {@code IN ()} pour rien, sur l'écran que l'avocat ouvre en
-     * premier.
+     * A page without publications must not query the database: {@code findByPublicationIdIn} with an
+     * empty list would produce a pointless {@code IN ()}.
      */
     @Test
     void mesPublications_pageVideNInterrogePas() {
@@ -223,8 +211,8 @@ class PortailAvocatDossiersTest {
     }
 
     /**
-     * Dix publications, <b>une</b> lecture. Le portail en affiche dix par page : une lecture par
-     * publication ferait dix requêtes là où une suffit.
+     * Ten publications, <b>one</b> read. The portal shows ten per page: one read per publication would
+     * issue ten queries where one suffices.
      */
     @Test
     @DisplayName("une seule lecture des correspondances pour toute la page")
@@ -241,7 +229,7 @@ class PortailAvocatDossiersTest {
         verify(correspondanceAvocatRepository, times(1)).findByPublicationIdIn(any());
     }
 
-    /** Un filtre sur le statut ne doit pas priver l'avocat de sa correspondance. */
+    /** A status filter must not deprive the lawyer of their correspondence. */
     @Test
     void mesPublications_filtreeParStatutPorteAussiLaCorrespondance() {
         Publication publication = publicationDeLAvocat(7L);
@@ -272,8 +260,8 @@ class PortailAvocatDossiersTest {
     }
 
     /**
-     * Le mapper est simulé : on lui fait rendre ce que le service lui passe, pour que le test porte
-     * sur <b>ce que le service transmet</b> - le point même où la correspondance était perdue.
+     * The mapper is stubbed to return what the service passes, so the test covers <b>what the service
+     * transmits</b>, exactly where the correspondence could be lost.
      */
     private void capturerLeMapper() {
         when(publicationMapper.toResponse(any(), any(), any(), any())).thenAnswer(invocation ->

@@ -15,7 +15,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
-/** M15 (Q-69) — répertoire des utilisateurs internes : filtres et tri. */
+/** M15: internal user directory, filters and sorting. */
 @ExtendWith(MockitoExtension.class)
 class UtilisateurServiceTest {
 
@@ -55,7 +55,7 @@ class UtilisateurServiceTest {
                 .containsExactly(2L, 1L);
     }
 
-    /** Le code de profil vient d'une URL : la casse ne doit pas faire échouer le filtre. */
+    /** The profile code comes from a URL: case must not break the filter. */
     @Test
     void lister_filtreParProfil_insensibleALaCasse() {
         assertThat(service.lister("juriste", false)).hasSize(2);
@@ -68,7 +68,7 @@ class UtilisateurServiceTest {
                 .containsExactly("Ancien", "Bello", "Ndjock");
     }
 
-    /** {@code keycloakId} est un identifiant d'authentification : il ne doit pas fuiter. */
+    /** {@code keycloakId} is an authentication identifier: it must not leak. */
     @Test
     void lister_exposeLesChampsUtilesSansIdentifiantDAuthentification() {
         UtilisateurResponse premier = service.lister("DJ", false).getFirst();

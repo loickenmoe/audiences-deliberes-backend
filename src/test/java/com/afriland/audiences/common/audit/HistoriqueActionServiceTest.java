@@ -45,8 +45,7 @@ class HistoriqueActionServiceTest {
         assertThat(saved.getDossierId()).isEqualTo(99L);
         assertThat(saved.getUtilisateur()).isEqualTo(juriste);
         assertThat(saved.getCode()).isEqualTo(TypeActionHistorique.ETAPE_STATUT_MODIFIE);
-        // Q-111 : le libellé n'est plus transmis, il est dérivé du code. Un écart entre les deux,
-        // possible tant qu'ils étaient deux arguments côte à côte, ne peut plus se produire.
+        // The label is derived from the code rather than passed, so the two cannot diverge.
         assertThat(saved.getAction()).isEqualTo(TypeActionHistorique.ETAPE_STATUT_MODIFIE.libelle());
         assertThat(saved.getDetails()).isEqualTo(details);
         assertThat(result).isSameAs(saved);

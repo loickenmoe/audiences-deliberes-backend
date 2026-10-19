@@ -26,11 +26,10 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * Alarme libre (objet + échéance) rattachée à un dossier et une étape (Q-04,
- * DECISIONS_AND_OPEN_QUESTIONS.md) — distincte de {@code Alerte}, qui n'a ni objet ni etape_id et
- * dont le type est une énumération fermée. L'échéance d'une alarme génère une {@code Alerte} de
- * type {@code ALARME} (cf. {@code AlarmeEcheanceScheduler}).
- * Cf. dictionnaire des données §2.3.2 (table {@code alarme}).
+ * Free-form alarm (subject + due date) attached to a case and a step. Unlike {@code Alerte}, it has
+ * a subject and a step, and its type is not a closed enum. Its due date raises an {@code Alerte} of
+ * type {@code ALARME} (see {@code AlarmeEcheanceScheduler}).
+ * See data dictionary §2.3.2 (table {@code alarme}).
  */
 @Getter
 @Setter

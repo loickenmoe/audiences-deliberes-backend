@@ -26,22 +26,15 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
- * Délibéré rendu sur une étape {@code EN_DELIBERE} (RG-DEL-01, FR-DEL-01). Le module
- * {@code delibere} dépend de {@code dossier} et {@code audience} (cf. FUNCTIONAL_MAP.md §3), une
- * {@code @ManyToOne} directe vers {@code Dossier}/{@code EtapeProcedure} est donc légitime, sur
- * le même principe que le module {@code audience} (M6).
+ * Deliberation rendered on an {@code EN_DELIBERE} step (RG-DEL-01, FR-DEL-01).
  * <p>
- * {@code dateEcheanceRecours} (Q-19/Q-42, DECISIONS_AND_OPEN_QUESTIONS.md) n'existe que pour un
- * résultat {@code DEFAVORABLE}/{@code MIXTE} — seuls ceux-ci ouvrent une voie de recours ; elle
- * est distincte du mécanisme générique d'alarme (Q-04) car propre au cycle de vie du délibéré et
- * suivie par un planificateur dédié ({@code DelaiRecoursScheduler}).
+ * {@code dateEcheanceRecours} exists only for a {@code DEFAVORABLE}/{@code MIXTE} result, the only
+ * ones that open an appeal; it is tracked by {@code DelaiRecoursScheduler}, not by the generic alarms.
  * <p>
- * Une étape peut porter plusieurs délibérés au fil du temps (rabattements successifs, RG-DEL-07) :
- * pas de contrainte d'unicité sur {@code etape_id}. Cf. dictionnaire des données §2.3.3.
- * <p>
- * <b>Cycle (Q-78)</b> : le délibéré naît à la mise en délibéré, sans résultat ({@link EtatDelibere#EN_ATTENTE}) ;
- * il est prorogé ou rabattu pendant cette attente, puis vidé quand le résultat est connu. Au plus
- * un délibéré en attente par étape.
+ * A step may carry several deliberations over time (successive reopenings, RG-DEL-07), hence no
+ * uniqueness constraint on {@code etape_id}. Lifecycle: created without a result
+ * ({@link EtatDelibere#EN_ATTENTE}), extended or reopened while pending, then delivered once the
+ * result is known. At most one pending deliberation per step.
  */
 @Getter
 @Setter
@@ -69,17 +62,17 @@ public class Delibere {
     @Column(name = "date_deliberee", nullable = false)
     private LocalDate dateDeliberee;
 
-    /** Q-78 : absent tant que le délibéré n'est pas vidé (mise en délibéré, prorogations). */
+    /** Absent until the deliberation is delivered (while pending or extended). */
     @Enumerated(EnumType.STRING)
     @Column(length = 20)
     private ResultatDelibere resultat;
 
-    /** Q-78 : n'existe qu'une fois la décision rendue — posé à {@code A_LEVER} quand le délibéré est vidé. */
+    /** Exists only once the decision is rendered; set to {@code A_LEVER} when the deliberation is delivered. */
     @Enumerated(EnumType.STRING)
     @Column(name = "statut_expedition", length = 20)
     private StatutExpedition statutExpedition;
 
-    /** Q-78, RG-DEL-07 : « DÉLIBÉRÉ RABATTU LE [date, motif] » — le juge a rouvert les débats. */
+    /** RG-DEL-07: the judge reopened the proceedings before ruling. */
     @Column(name = "date_rabattement")
     private LocalDate dateRabattement;
 

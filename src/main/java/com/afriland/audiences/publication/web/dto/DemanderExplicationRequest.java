@@ -5,10 +5,10 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 /**
- * Ce que la direction écrit à un avocat (N7 temps 2).
+ * What management writes to a lawyer.
  *
- * @param dossierId facultatif : la demande porte sur une conduite, pas sur une affaire. Renseigné,
- *                  il situe l'échange et donne à l'historique le dossier sur lequel s'inscrire
+ * @param dossierId optional: the request concerns a conduct, not a matter. When set, it places the
+ *                  exchange in context and gives the history the case file to record it on
  */
 public record DemanderExplicationRequest(
         @NotNull Long avocatId,

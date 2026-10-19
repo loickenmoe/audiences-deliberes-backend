@@ -20,10 +20,9 @@ public interface DemandeFraisRepository extends JpaRepository<DemandeFrais, Long
         JpaSpecificationExecutor<DemandeFrais> {
 
     /**
-     * Anti-doublon de facture (RG-INT-01, ERR-006) : unicité vérifiée sur l'ensemble des demandes,
-     * quel que soit leur statut — y compris une demande déjà {@code REJETEE} (US 4.3, cf.
-     * FUNCTIONAL_MAP.md §4 « Tests attendus »), conformément à la contrainte SQL {@code UNIQUE}
-     * portée par la colonne.
+     * Duplicate invoice check (RG-INT-01, ERR-006): uniqueness is checked across all requests whatever
+     * their status, including {@code REJETEE} ones (US 4.3), consistent with the SQL {@code UNIQUE}
+     * constraint on the column.
      */
     boolean existsByReferenceFacture(String referenceFacture);
 
@@ -33,19 +32,16 @@ public interface DemandeFraisRepository extends JpaRepository<DemandeFrais, Long
 
     Page<DemandeFrais> findByStatutCircuit(StatutCircuitFrais statut, Pageable pageable);
 
-    /** CONF04 (Q-83) : demandes en attente de validation conjointe, pour la relance. */
+    /** CONF04: requests awaiting joint approval, for reminders. */
     List<DemandeFrais> findAllByStatutCircuit(StatutCircuitFrais statut);
 
-    /** FR-REP-02 (tableau de bord, M13) : demandes non encore soldées (ni payées, ni rejetées). */
+    /** FR-REP-02 (dashboard): requests not yet settled (neither paid nor rejected). */
     @Query("SELECT COUNT(d) FROM DemandeFrais d "
             + "WHERE d.statutCircuit NOT IN :statuts AND d.dossier.categorie IN :categories")
     long compterNonSoldees(@Param("statuts") List<StatutCircuitFrais> statuts,
                            @Param("categories") List<CategorieDossier> categories);
 
-    /**
-     * Les demandes que {@link #countByStatutCircuitNotIn} compte (Q-137) - la plus ancienne
-     * d'abord, qui est l'ordre de traitement.
-     */
+    /** The requests counted by {@link #countByStatutCircuitNotIn}, oldest first (processing order). */
     @Query("SELECT d FROM DemandeFrais d "
             + "WHERE d.statutCircuit NOT IN :statuts AND d.dossier.categorie IN :categories "
             + "ORDER BY d.createdAt ASC")
@@ -54,16 +50,16 @@ public interface DemandeFraisRepository extends JpaRepository<DemandeFrais, Long
                                         Pageable pageable);
 
     /**
-     * Condition d archivage (2026-09-29) : les demandes d un dossier qui ne sont ni payées ni
-     * rejetées. Rendues et non comptées : le refus les nomme, celui qui archive n ayant pas la main
-     * sur le circuit des frais et devant savoir auprès de qui aller.
+     * Archiving condition: a case's requests that are neither paid nor rejected. Returned rather than
+     * counted so that the refusal can name them: the person archiving does not control the fee
+     * workflow and needs to know whom to contact.
      */
     List<DemandeFrais> findByDossierIdAndStatutCircuitNotIn(Long dossierId, List<StatutCircuitFrais> statuts);
 
-    /** FR-REP-01 (rapport périodique, M13) : demandes déposées dans la période. */
+    /** FR-REP-01 (periodic report): requests filed within the period. */
     long countByCreatedAtBetween(LocalDateTime debut, LocalDateTime fin);
 
-    /** FR-REP-01, recadré par catégorie (Q-138). */
+    /** FR-REP-01, by category. */
     @Query("SELECT COUNT(d) FROM DemandeFrais d "
             + "WHERE d.createdAt BETWEEN :debut AND :fin AND d.dossier.categorie IN :categories")
     long compterDeposeesEntre(@Param("debut") LocalDateTime debut,

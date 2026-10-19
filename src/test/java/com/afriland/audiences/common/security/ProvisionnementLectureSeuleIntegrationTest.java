@@ -21,16 +21,13 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * M15 — non-régression de **R-06** : jusqu'ici, le provisionnement d'un utilisateur à sa première
- * requête échouait (`cannot execute INSERT in a read-only transaction`, 500) dès lors que cette
- * requête tombait sur un endpoint en lecture seule — cas de figure quasi systématique pour un
- * frontend, qui charge notifications et listes juste après le login.
+ * Provisioning a user on their first request must not fail when that request hits a read-only
+ * endpoint ({@code cannot execute INSERT in a read-only transaction}), the usual case for a frontend
+ * loading notifications and lists right after login.
  * <p>
- * Ce test reproduit exactement ce contexte : un appelant annoté
- * {@code @Transactional(readOnly = true)} invoque {@code getCurrentUser()} pour un utilisateur
- * inconnu, contre un PostgreSQL réel (le mode lecture seule n'est refusé que par la base — un test
- * sur base mémoire ou avec repository mocké ne l'aurait jamais détecté, raison pour laquelle le
- * défaut a survécu à 8 jalons).
+ * A caller annotated {@code @Transactional(readOnly = true)} calls {@code getCurrentUser()} for an
+ * unknown user against a real PostgreSQL: only the database enforces read-only mode, so an
+ * in-memory or mocked test would not detect the issue.
  */
 @SpringBootTest
 @Testcontainers
@@ -90,7 +87,7 @@ class ProvisionnementLectureSeuleIntegrationTest {
                 .build();
     }
 
-    /** Reproduit un service métier en lecture seule (ex. {@code AlerteService.mesNotifications}). */
+    /** Simulates a read-only business service (e.g. {@code AlerteService.mesNotifications}). */
     @Service
     static class AppelantLectureSeule {
 

@@ -43,11 +43,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Le journal des audiences (observation métier du 2026-09-25).
- *
- * <p>Ce que ces tests protègent : les deux comptes rendus sont rapportés sans que l'un masque
- * l'autre, les manquements se déduisent du statut sans donnée nouvelle, et la journée en cours
- * n'est jamais comptée comme un retard.
+ * The hearing log. Both reports are shown without one hiding the other, missed reports are derived
+ * from the status without new data, and the current day is never counted as late.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -111,8 +108,8 @@ class JournalAudiencesServiceTest {
     }
 
     /**
-     * La pièce que l'avocat joint à son compte rendu — plumitif, note d'audience — se consulte
-     * depuis le journal. Sans elle, l'écran affichait le récit en taisant le document qui l'appuie.
+     * The document the lawyer attaches to the report (court record, hearing note) can be opened from the
+     * log; otherwise the screen would show the narrative while hiding its supporting document.
      */
     @Test
     @DisplayName("la pièce jointe au compte rendu de l'avocat est consultable")
@@ -132,7 +129,7 @@ class JournalAudiencesServiceTest {
         assertThat(ligne.urlPieceJointeAvocat()).isEqualTo("https://stockage/plumitif.pdf?signature=abc");
     }
 
-    /** Un compte rendu sans pièce n'en invente pas : le bloc n'a rien à proposer. */
+    /** A report without attachment does not invent one: the block has nothing to offer. */
     @Test
     void journal_sansPieceJointeNInterrogePasLeStockage() {
         Audience audience = audience(10L, LocalDate.of(2026, 3, 12), StatutAudience.TENUE, "Récit");
@@ -147,7 +144,7 @@ class JournalAudiencesServiceTest {
         verify(minioStorageService, never()).urlTelechargement(any());
     }
 
-    /** Le cas qui motive l'écran : l'audience a eu lieu, personne n'en a rien dit. */
+    /** The case motivating the screen: the hearing took place, nobody reported on it. */
     @Test
     @DisplayName("une audience sans aucun compte rendu se signale comme telle")
     void journal_signaleUneAudienceMuette() {
@@ -165,8 +162,8 @@ class JournalAudiencesServiceTest {
     }
 
     /**
-     * Un dépôt non validé n'est lisible d'aucun juriste : le compter comme rendu ferait croire à
-     * une information disponible, et masquerait un manquement réel.
+     * An unvalidated upload is readable by no legal officer: counting it as reported would suggest
+     * available information and hide a real omission.
      */
     @Test
     void journal_ignoreUnCompteRenduAvocatNonValide() {
@@ -189,8 +186,8 @@ class JournalAudiencesServiceTest {
     }
 
     /**
-     * Les manquements se lisent dans le statut : une audience passée encore {@code PLANIFIEE} n'a
-     * pas reçu son compte rendu, puisque c'est la saisie qui la fait passer à {@code TENUE}.
+     * Omissions are read from the status: a past hearing still {@code PLANIFIEE} has no report, since
+     * entering the report moves it to {@code TENUE}.
      */
     @Test
     @DisplayName("les comptes rendus attendus sont les audiences passées restées planifiées")
@@ -207,7 +204,7 @@ class JournalAudiencesServiceTest {
 
         assertThat(attendus.content()).hasSize(1);
         assertThat(attendus.content().get(0).joursDeRetard()).isEqualTo(10);
-        // La distinction utile : la banque n'a pas écrit ce que l'avocat a déjà rapporté.
+        // The useful distinction: the bank has not written what the lawyer already reported.
         assertThat(attendus.content().get(0).compteRenduAvocatDepose()).isTrue();
         assertThat(attendus.content().get(0).juristesAffectes()).containsExactly(10L);
 
@@ -215,11 +212,11 @@ class JournalAudiencesServiceTest {
                 StatutAudience.PLANIFIEE, LocalDate.now().minusDays(30), LocalDate.now().minusDays(1), PAGE);
     }
 
-    /** Une audience du jour n'est pas en retard : la journée n'est pas finie. */
+    /** A hearing today is not late: the day is not over. */
     @Test
     @DisplayName("la journée en cours n'est jamais comptée comme un retard")
     void attendus_excluentLaJourneeEnCours() {
-        // Mockito rend `null` pour une Page non stubbée, là où il rendait une liste vide.
+        // Mockito returns `null` for an unstubbed Page, where it returned an empty list.
         when(audienceRepository.findByStatutAndDatePlanifieeBetween(any(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of()));
 
@@ -229,7 +226,7 @@ class JournalAudiencesServiceTest {
                 StatutAudience.PLANIFIEE, LocalDate.now().minusDays(3), LocalDate.now().minusDays(1), PAGE);
     }
 
-    /** Une fenêtre entièrement future ne reproche rien : elle ne renvoie rien, et n'échoue pas. */
+    /** A fully future window blames nothing: it returns nothing and does not fail. */
     @Test
     void attendus_uneFenetreFutureNeRenvoieRien() {
         PageResponse<CompteRenduAttenduResponse> attendus =
@@ -257,7 +254,7 @@ class JournalAudiencesServiceTest {
                 .thenReturn(List.of());
 
         assertThat(service.journal(LocalDate.of(2026, 3, 12), PAGE).content()).hasSize(2);
-        // Une seule requête de publications pour toute la journée, jamais une par ligne.
+        // A single publications query for the whole day, never one per row.
         verify(compteRenduAudienceRepository).findByAudienceIdInAndStatutValidation(List.of(7L, 8L),
                 StatutPublication.VALIDE);
         verify(dossierJuristeRepository, org.mockito.Mockito.times(2)).findByDossierId(anyLong());

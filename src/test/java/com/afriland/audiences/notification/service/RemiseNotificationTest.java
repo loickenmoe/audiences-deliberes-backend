@@ -42,7 +42,7 @@ class RemiseNotificationTest {
     @Mock private NotificationEnvoiRepository repository;
     @Mock private PasserelleNotificationEngine passerelle;
 
-    /** Le moteur est déclaré actif dès que la redirection est en jeu : elle ne s'applique pas sinon. */
+    /** The engine is declared active whenever redirection is involved: otherwise it does not apply. */
     private static NotificationEngineProperties proprietes(boolean redirection) {
         return new NotificationEngineProperties(redirection, "audience-deliberer", SECRET, 5, Duration.ofHours(2),
                 new Redirection(redirection, "juriste.test@afrilandfirstbank.com", "prestataire.test@example.cm", "+237600000000"),
@@ -59,7 +59,7 @@ class RemiseNotificationTest {
                 new Origine("alerte-42", "RAPPEL_AUDIENCE", 5L, 42L, type, 7L), canal, destinataire, "Objet", "Texte");
     }
 
-    /** {@code dateCreation} est posée par la base : on la simule pour éprouver la péremption. */
+    /** {@code dateCreation} is set by the database: it is simulated to test expiry. */
     private static NotificationEnvoi avecDateCreation(NotificationEnvoi envoi, LocalDateTime date) throws Exception {
         Field champ = NotificationEnvoi.class.getDeclaredField("dateCreation");
         champ.setAccessible(true);
@@ -97,14 +97,14 @@ class RemiseNotificationTest {
         assertThat(envoi.getDestinataireOrigine()).isNull();
     }
 
-    /** Le jeton identifie le service ; il est signé avec le secret partagé et vaut 5 minutes. */
+    /** The token identifies the service; it is signed with the shared secret and valid 5 minutes. */
     @Test
     void le_jeton_est_signe_HS256_avec_le_code_du_service() throws Exception {
         NotificationEnvoi envoi = avecDateCreation(envoi(CanalEngine.TEAMS, TypeDestinataire.UTILISATEUR,
                 "juriste@afrilandfirstbank.com"), LocalDateTime.now());
         when(repository.findById(1L)).thenReturn(Optional.of(envoi));
 
-        // Moteur actif : c'est le seul cas où un jeton est signé.
+        // Engine active: the only case where a token is signed.
         service(proprietes(true)).remettre(1L);
 
         SignedJWT jeton = SignedJWT.parse(publie().token());
@@ -116,7 +116,7 @@ class RemiseNotificationTest {
                 .isEqualTo(Duration.ofMinutes(5));
     }
 
-    // ── Redirection hors production (D10) ──
+    // Redirection outside production (D10)
 
     @Test
     void la_redirection_remplace_le_destinataire_et_conserve_le_reel() throws Exception {
@@ -160,13 +160,13 @@ class RemiseNotificationTest {
 
         service(incomplete).remettre(1L);
 
-        // L'erreur est traitée comme un échec de remise : rien ne part vers le vrai numéro.
+        // The error is treated as a delivery failure: nothing goes to the real number.
         verify(passerelle, never()).publier(any());
         assertThat(envoi.getStatut()).isEqualTo(StatutEnvoi.EN_ATTENTE);
         assertThat(envoi.getDerniereErreur()).contains("sans destinataire de test");
     }
 
-    // ── Tentatives et péremption (D13) ──
+    // Attempts and expiry (D13)
 
     @Test
     void un_echec_replanifie_selon_les_delais_prevus_puis_abandonne() throws Exception {
@@ -200,8 +200,7 @@ class RemiseNotificationTest {
         assertThat(service.prochaineTentative(4)).isNull();
     }
 
-    /** Sans cette garde, la file accumulée avant l'activation partirait d'un seul bloc. */
-    /** Moteur coupé : la passerelle journal consomme la file, sans exiger de destinataires de test. */
+    /** Engine off: the log gateway drains the queue, without requiring test recipients. */
     @Test
     void moteur_coupe_la_file_se_vide_sans_redirection() throws Exception {
         NotificationEngineProperties coupe = new NotificationEngineProperties(false, "audience-deliberer", SECRET, 5,
@@ -216,7 +215,7 @@ class RemiseNotificationTest {
         assertThat(envoi.getStatut()).isEqualTo(StatutEnvoi.PUBLIEE);
         assertThat(envoi.getStatutEngine()).isEqualTo("JOURNAL");
         assertThat(publie().recipient()).isEqualTo("juriste@afrilandfirstbank.com");
-        // Aucun jeton signé tant que rien ne part : le secret n'est pas nécessaire pour vider la file.
+        // No signed token while nothing is sent: the secret is not needed to drain the queue.
         assertThat(publie().token()).isNull();
     }
 

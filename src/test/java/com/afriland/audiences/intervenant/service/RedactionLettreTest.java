@@ -45,16 +45,14 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * La rédaction de la lettre, et les deux règles qui la bornent (Q-115 B2).
+ * Drafting the letter, and the two rules that bound it.
  *
- * <p><b>Le gel.</b> Une lettre signée est partie chez un huissier et figure dans la GED. La retoucher
- * en silence ferait mentir la pièce : une correction passe par une nouvelle demande, donc une
- * nouvelle lettre et un nouveau numéro, et la première reste consultable. C'est le raisonnement déjà
- * retenu pour les archives d'audit (Q-113).
+ * <p><b>Freeze.</b> A signed letter has been sent and is in the GED. Editing it silently would
+ * falsify the document: a correction goes through a new request, hence a new letter and number, and
+ * the first one stays available.
  *
- * <p><b>L'unicité du numéro.</b> Le compteur est modifiable — la direction juridique l'a demandé —
- * mais deux lettres ne peuvent pas porter le même numéro : dans une série de courrier officiel, un
- * numéro servi deux fois ne désigne plus rien.
+ * <p><b>Unique number.</b> The counter is editable, but two letters cannot carry the same number: in
+ * an official mail series, a number used twice identifies nothing.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -79,7 +77,7 @@ class RedactionLettreTest {
     @Mock
     private NotificationPrestataireService notificationPrestataireService;
 
-    /** Celui qui a sollicité la constitution : la lettre est la sienne (Q-126). */
+    /** The person who requested the retainer: the letter is theirs. */
     private Utilisateur auteur;
 
     @BeforeEach
@@ -87,17 +85,16 @@ class RedactionLettreTest {
         service = new ConstitutionService(demandeConstitutionRepository, dossierRepository, intervenantRepository,
                 utilisateurRepository, currentUserService, historiqueActionService, alerteService,
                 new LettreConstitutionService(),
-                // Aucune signature déposée dans ce parcours : la lettre part avec le nom seul, comme
-                // avant N8. C'est le cas de tous ceux qui n'ont rien déposé.
+                // No signature uploaded in this journey: the letter goes out with the name only, as for anyone
+                // who uploaded nothing.
                 new SignatureService(utilisateurRepository, currentUserService),
                 lettreConstitutionRepository, minioStorageService,
                 documentRepository, mapper,
                 new CompteAvocatService(avocatRepository, utilisateurRepository), notificationPrestataireService);
 
         /*
-         * La demande porte son demandeur, comme en base : la colonne est `nullable = false`, et une
-         * demande sans demandeur n'existe pas. Depuis Q-126 elle lui appartient, et c'est lui qui
-         * écrit la lettre - le décor doit donc le nommer.
+         * The request carries its requester, as in the database (`nullable = false`). It belongs to them and
+         * they write the letter, so the setup must name them.
          */
         auteur = Utilisateur.builder().id(10L).nom("Juriste").prenom("Jean").build();
         demande = DemandeConstitution.builder()
@@ -132,17 +129,15 @@ class RedactionLettreTest {
         assertThat(reponse.objet()).isEqualTo("Saisie-attribution");
         assertThat(reponse.destinataireNom()).isEqualTo("Me Kamga");
         assertThat(reponse.modifiable()).isTrue();
-        // La lettre engage la banque : savoir qui l'a rédigée fait partie de la pièce.
+        // The letter commits the bank: knowing who drafted it is part of the document.
         verify(historiqueActionService).enregistrerPour(any(), eq(1L),
                 eq(TypeActionHistorique.LETTRE_CONSTITUTION_REDIGEE), any());
     }
 
     /**
-     * Un autre juriste ne récrit pas la lettre de celui-ci (métier, 2026-10-07).
-     *
-     * <p>C'était possible jusqu'au 2026-10-07 : le droit tenait au rôle, et {@code ROLE_JURISTE}
-     * étant composite (Q-81), tout juriste, le DJ et la DJA passaient. Une lettre engage la banque
-     * sous le nom de celui qui l'a écrite - nul ne doit pouvoir écrire sous le nom d'un autre.
+     * Another legal officer cannot rewrite this one's letter. A letter commits the bank under its
+     * author's name; nobody may write under someone else's name (a role-based check would let any legal
+     * officer, the DJ and the DJA through, since {@code ROLE_JURISTE} is composite).
      */
     @Test
     @DisplayName("un autre juriste ne récrit pas la lettre d'un collègue")
@@ -155,17 +150,14 @@ class RedactionLettreTest {
         assertThatThrownBy(() -> service.redigerLettre(100L, requete(null)))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("appartient au demandeur");
-        // Le refus est total : rien n'est enregistré, rien n'est historisé.
+        // The refusal is total: nothing is saved, nothing is logged.
         verify(lettreConstitutionRepository, never()).save(any());
         verify(historiqueActionService, never()).enregistrerPour(any(), any(), any(), any());
     }
 
     /**
-     * Le supérieur hiérarchique, lui, passe (Q-124).
-     *
-     * <p>Il corrige au lieu de renvoyer la lettre : c'est la contrepartie de la plume retirée aux
-     * autres. Le droit se lit sur son <b>profil</b>, non sur un rôle - un rôle composite rouvrirait
-     * la porte au DJ et à la DJA.
+     * The line manager is allowed: they correct instead of sending the letter back. The right is read
+     * from their <b>profile</b>, not a role, since a composite role would let the DJ and DJA through.
      */
     @Test
     @DisplayName("le supérieur hiérarchique corrige la lettre d'un autre")
@@ -192,7 +184,7 @@ class RedactionLettreTest {
         assertThatThrownBy(() -> service.redigerLettre(100L, requete(34)))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("ne peut plus être modifiée");
-        // Et rien n'est enregistré : le refus doit être total, pas partiel.
+        // Nothing is saved: the refusal must be total, not partial.
         verify(lettreConstitutionRepository, never()).save(any());
         verify(historiqueActionService, never()).enregistrerPour(any(), any(), any(), any());
     }
@@ -209,8 +201,8 @@ class RedactionLettreTest {
     }
 
     /**
-     * Le cas courant : le rédacteur n'impose rien. Le numéro reste vide et sera tiré de la séquence
-     * à la signature — ce qui évite d'en brûler un sur une demande sans suite.
+     * The common case: the author imposes nothing. The number stays empty and is drawn from the sequence
+     * at signature, so none is burned on an abandoned request.
      */
     @Test
     @DisplayName("sans numéro imposé, le brouillon reste sans numéro")

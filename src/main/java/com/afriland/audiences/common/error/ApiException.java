@@ -4,9 +4,8 @@ import lombok.Getter;
 import org.springframework.http.HttpStatus;
 
 /**
- * Exception métier applicative, porteuse d'un statut HTTP et d'un code d'erreur applicatif
- * (cf. {@link ErrorCodes}). Capturée par {@link GlobalExceptionHandler} et traduite en
- * {@link ErrorResponse} conforme au contrat d'API.
+ * Application business exception carrying an HTTP status and an error code ({@link ErrorCodes}).
+ * Translated into an {@link ErrorResponse} by {@link GlobalExceptionHandler}.
  */
 @Getter
 public class ApiException extends RuntimeException {
@@ -16,9 +15,8 @@ public class ApiException extends RuntimeException {
     private final String details;
 
     /**
-     * Champ de la requête à corriger, ou {@code null} quand l'erreur n'en vise aucun. Repris tel
-     * quel dans {@link ErrorResponse#champ()} : c'est ce qui permet à un client de signaler
-     * l'erreur sur le bon champ sans la déduire de l'endpoint appelé.
+     * Request field to fix, or {@code null}. Exposed as {@link ErrorResponse#champ()} so clients can
+     * flag the right field without inferring it from the endpoint.
      */
     private final String champ;
 
@@ -51,9 +49,8 @@ public class ApiException extends RuntimeException {
     }
 
     /**
-     * Conflit imputable à un champ précis de la requête : doublon de référence, de compte, de
-     * facture. À préférer à {@link #conflict(String, String)} chaque fois que le champ fautif est
-     * connu — le client peut alors surligner ce champ au lieu d'afficher un bandeau générique.
+     * Error tied to a specific request field (duplicate reference, account, invoice). Prefer the
+     * field-specific variants whenever the field is known, so the client can highlight it.
      */
     public static ApiException badRequestSurChamp(String code, String message, String champ) {
         return new ApiException(HttpStatus.BAD_REQUEST, code, message, null, champ);

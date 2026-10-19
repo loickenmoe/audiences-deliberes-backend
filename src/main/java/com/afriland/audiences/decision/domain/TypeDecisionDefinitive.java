@@ -1,6 +1,6 @@
 package com.afriland.audiences.decision.domain;
 
-/** Discriminant de la hiérarchie {@link DecisionDefinitive} (RG-DEF-01/03). */
+/** Discriminator of the {@link DecisionDefinitive} hierarchy (RG-DEF-01/03). */
 public enum TypeDecisionDefinitive {
     ADJUDICATION,
     CONDAMNATION_PECUNIAIRE

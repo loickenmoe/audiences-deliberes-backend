@@ -51,8 +51,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Épic 4 (RG-INT-01/03/04/05) — circuit complet dépôt → conformité → opportunité → validation
- * conjointe → paiement. Cf. FUNCTIONAL_MAP.md §4, API_IMPLEMENTATION_STATUS.md §5.
+ * Epic 4 (RG-INT-01/03/04/05): full workflow filing → compliance → appropriateness → joint
+ * approval → payment.
  */
 @Service
 @RequiredArgsConstructor
@@ -71,13 +71,12 @@ public class FraisService {
     private final HistoriqueActionService historiqueActionService;
     private final AlerteService alerteService;
     private final ConfigurationService configurationService;
-    // Q-97 : URL pré-signées des pièces réellement stockées, sur le détail seulement.
+    // Pre-signed URLs of the actually stored documents, on the detail view only.
     private final MinioStorageService minioStorageService;
 
     /**
-     * FR-INT-01/RG-INT-01 : seul un avocat affecté au dossier (table {@code dossier_avocat},
-     * même relation que celle retenue en Q-28 — la constitution formelle par lettre signée du SH
-     * est un processus distinct, cf. module {@code intervenant}) peut y déposer une demande.
+     * FR-INT-01/RG-INT-01: only a lawyer assigned to the case (table {@code dossier_avocat}) may file
+     * a request. Formal appointment by signed letter is a separate process (module {@code intervenant}).
      */
     @Transactional
     public DemandeFraisResponse deposer(DeposerFraisRequest request) {
@@ -113,7 +112,7 @@ public class FraisService {
         return versReponse(demande);
     }
 
-    /** FR-INT-02/RG-INT-03/05 : contrôle de conformité par l'Assistante. */
+    /** FR-INT-02/RG-INT-03/05: compliance check by the assistant. */
     @Transactional
     public DemandeFraisResponse controlerConformite(Long demandeId, ControleConformiteRequest request) {
         DemandeFrais demande = getDemandeOrThrow(demandeId);
@@ -138,9 +137,9 @@ public class FraisService {
     }
 
     /**
-     * FR-INT-03/RG-INT-03 : le DJA évalue l'opportunité ; {@code estSensible = true} ou
-     * {@code montant > seuilApplicable} déclenche la validation conjointe DJ+DJA, sinon le DJA
-     * valide seul.
+     * FR-INT-03/RG-INT-03: the DJA assesses appropriateness; {@code estSensible = true} or
+     * {@code montant > seuilApplicable} triggers the DJ+DJA joint approval, otherwise the DJA
+     * approves alone.
      */
     @Transactional
     public DemandeFraisResponse controlerOpportunite(Long demandeId, ControleOpportuniteRequest request) {
@@ -171,8 +170,8 @@ public class FraisService {
     }
 
     /**
-     * FR-INT-04/RG-INT-03 : le DJ et le DJA enregistrent chacun leur accord individuel ; les deux
-     * accords sont requis pour {@code VALIDEE}, un seul refus suffit pour {@code REJETEE}.
+     * FR-INT-04/RG-INT-03: the DJ and the DJA each record their own approval; both are required for
+     * {@code VALIDEE}, a single refusal is enough for {@code REJETEE}.
      */
     @Transactional
     public DemandeFraisResponse validerConjointement(Long demandeId, ValidationConjointeRequest request) {
@@ -205,7 +204,7 @@ public class FraisService {
         return versReponse(demande);
     }
 
-    /** FR-INT-05/RG-INT-04 : paiement par l'Assistante, demande nécessairement {@code VALIDEE}. */
+    /** FR-INT-05/RG-INT-04: payment by the assistant; the request must be {@code VALIDEE}. */
     @Transactional
     public DemandeFraisResponse enregistrerPaiement(Long demandeId) {
         DemandeFrais demande = getDemandeOrThrow(demandeId);
@@ -225,7 +224,7 @@ public class FraisService {
                 + payee.getDossier().getReference() + " a été effectué (RG-INT-04).";
         compteAvocatService.utilisateurDe(payee.getAvocat())
                 .ifPresent(u -> alerteService.declencher(TypeAlerte.PAIEMENT_EFFECTUE, dossierId, u, message));
-        // Canaux externes (Q-118) : ni le montant ni la référence de la demande n'y figurent (D18).
+        // External channels: neither the amount nor the request reference is included.
         notificationPrestataireService.notifier(EvenementPrestataire.PAIEMENT_EFFECTUE, payee.getAvocat(),
                 dossierId, "frais-" + demandeId + "-paiement");
         notifierProfil("DJ", dossierId, TypeAlerte.PAIEMENT_EFFECTUE, message);
@@ -234,17 +233,16 @@ public class FraisService {
         return versReponse(payee);
     }
 
-    /** Endpoint 🆕 (Q-24) : file de travail filtrable par statut — propre à l'avocat pour ROLE_AVOCAT, transverse pour le personnel interne. */
+    /** Work queue filterable by status: restricted to the lawyer's own requests for ROLE_AVOCAT, cross-cutting for internal staff. */
     @Transactional(readOnly = true)
     public PageResponse<DemandeFraisResponse> lister(StatutCircuitFrais statut, Long dossierId, Long avocatId,
                                                        String referenceFacture, LocalDate dateDebut, LocalDate dateFin,
                                                        Pageable pageable) {
         Utilisateur utilisateur = currentUserService.getCurrentUser();
         /*
-         * Pour un avocat, l'identifiant est **imposé**, jamais reçu : il ne lit que ses propres
-         * demandes. Un `avocatId` laissé libre aurait suffi à lire celles d'un confrère en changeant
-         * un chiffre dans l'URL — le filtre d'instruction et la restriction d'accès ne peuvent pas
-         * être le même paramètre.
+         * For a lawyer, the id is forced, never taken from the request: otherwise changing one digit in
+         * the URL would expose a colleague's requests. The search filter and the access restriction
+         * cannot be the same parameter.
          */
         Long avocatFiltre = avocatId;
         if ("AVOCAT".equals(utilisateur.getProfil().getCode())) {
@@ -257,22 +255,21 @@ public class FraisService {
                 DemandeFraisSpecifications.withFilters(avocatFiltre, statut, dossierId, referenceFacture,
                         dateDebut, dateFin),
                 pageable);
-        // Une requête pour les décisions de toute la page, un seul seuil global (Q-82).
+        // One query for the decisions of the whole page, and a single global threshold.
         Map<Long, List<ValidationFrais>> validations = validationFraisRepository
                 .findByDemandeFraisIdInOrderByDateValidationAscIdAsc(page.map(DemandeFrais::getId).getContent())
                 .stream()
                 .collect(Collectors.groupingBy(v -> v.getDemandeFrais().getId()));
         double seuilGlobal = page.isEmpty() ? 0 : seuilGlobal();
-        // Pas d'URL pré-signée sur la liste : elles ne vivent que 10 minutes et coûteraient un
-        // aller-retour MinIO par pièce, pour un écran qui ne les affiche pas (Q-97).
+        // No pre-signed URLs on the list: they only live 10 minutes and would cost one MinIO round trip
+        // per document, for a screen that does not display them.
         return PageResponse.of(page,
                 d -> versReponse(d, validations.getOrDefault(d.getId(), List.of()), seuilGlobal, List.of()));
     }
 
     /**
-     * 🆕 M16 (Q-82) : détail d'une demande et décisions du circuit (UC-INT-02 étape 3 : « la demande,
-     * ses pièces justificatives et le résultat du contrôle de conformité »). L'avocat ne lit que ses
-     * propres demandes, comme dans la file (Q-24).
+     * Detail of a request with its workflow decisions (UC-INT-02 step 3: the request, its supporting
+     * documents and the compliance check result). A lawyer can only read their own requests.
      */
     @Transactional(readOnly = true)
     public DemandeFraisResponse consulter(Long demandeId) {
@@ -288,10 +285,8 @@ public class FraisService {
     }
 
     /**
-     * Rejet terminal d'une demande, quelle que soit l'étape (RG-INT-03) : l'avocat est notifié à
-     * chaque fois — seul FR-INT-02 le mentionne explicitement dans le texte fonctionnel, mais rien
-     * ne justifierait de le priver de cette information aux étapes suivantes (RG-INT-03 étant la
-     * même règle pour FR-INT-02/03/04) ; complété par cohérence (Q-54).
+     * Terminal rejection of a request at any step (RG-INT-03): the lawyer is notified each time. Only
+     * FR-INT-02 says so explicitly, but RG-INT-03 is the same rule for FR-INT-02/03/04.
      */
     private void rejeter(DemandeFrais demande, Utilisateur decideur, EtapeValidationFrais etape, String motif) {
         enregistrerValidation(demande, etape, decideur, DecisionValidationFrais.REJET, motif);
@@ -303,7 +298,7 @@ public class FraisService {
                 + demande.getDossier().getReference() + " a été rejetée : " + motif;
         compteAvocatService.utilisateurDe(demande.getAvocat())
                 .ifPresent(u -> alerteService.declencher(TypeAlerte.NOUVELLE_DEMANDE_FRAIS, demande.getDossier().getId(), u, message));
-        // Canaux externes (Q-118) : le motif du rejet reste dans l'application (D18).
+        // External channels: the rejection reason stays in the application.
         notificationPrestataireService.notifier(EvenementPrestataire.FRAIS_REJETES, demande.getAvocat(),
                 demande.getDossier().getId(), "frais-" + demande.getId() + "-rejet");
     }
@@ -319,7 +314,7 @@ public class FraisService {
                 .build());
     }
 
-    /** RG-ALR : signale à DJ et DJA qu'une validation conjointe est requise (FR-INT-03, dossier sensible ou montant &gt; seuil). */
+    /** RG-ALR: tells the DJ and the DJA that a joint approval is required (FR-INT-03, sensitive case or amount &gt; threshold). */
     private void signalerValidationConjointeRequise(DemandeFrais demande) {
         String message = "La demande de frais " + demande.getId() + " sur le dossier "
                 + demande.getDossier().getReference() + " requiert une validation conjointe DJ+DJA (RG-INT-03).";
@@ -332,7 +327,7 @@ public class FraisService {
         destinataires.forEach(destinataire -> alerteService.declencher(type, dossierId, destinataire, declencheur));
     }
 
-    /** Q-26 : seuil du dossier si dérogation validée, sinon seuil global. */
+    /** Case threshold if an approved exemption exists, otherwise the global threshold. */
     private static double seuilApplicable(Dossier dossier, double seuilGlobal) {
         if (dossier.getSeuilOrigine() == SeuilOrigine.DEROGATION && dossier.getSeuilMontant() != null) {
             return dossier.getSeuilMontant();
@@ -344,7 +339,7 @@ public class FraisService {
         return Double.parseDouble(configurationService.getOrThrow(CLE_SEUIL_MONTANT_DEFAUT).getValeur());
     }
 
-    /** RG-INT-03 : {@code estSensible = true} OU {@code montant > seuilApplicable}. */
+    /** RG-INT-03: {@code estSensible = true} OR {@code montant > seuilApplicable}. */
     private static boolean exigeValidationConjointe(Dossier dossier, Double montant, double seuil) {
         return Boolean.TRUE.equals(dossier.getEstSensible()) || (montant != null && montant > seuil);
     }
@@ -356,10 +351,9 @@ public class FraisService {
     }
 
     /**
-     * UC-INT-02 étape 3 (Q-97) : l'instructeur doit <b>voir</b> les pièces, pas en lire les noms.
-     * Seules les entrées déposées par le portail sont signées — le tableau peut contenir des
-     * libellés antérieurs au téléversement, qui ne désignent aucun objet stocké et pour lesquels
-     * une URL pré-signée échouerait.
+     * UC-INT-02 step 3: the reviewer must <b>see</b> the documents, not just their names. Only entries
+     * uploaded through the portal are signed: the array may hold labels predating upload, which
+     * point to no stored object and for which a pre-signed URL would fail.
      */
     private List<PieceJustificativeResponse> piecesTelechargeables(DemandeFrais demande) {
         List<String> pieces = demande.getPiecesJustificatives();
@@ -373,7 +367,7 @@ public class FraisService {
                 .toList();
     }
 
-    /** La clé est {@code frais/{uuid}-{nom}} : seul le nom d'origine est lisible par un humain. */
+    /** The key is {@code frais/{uuid}-{name}}: only the original name is human-readable. */
     private static String nomDOrigine(String cle) {
         String fin = cle.substring(cle.lastIndexOf('/') + 1);
         int tiret = fin.indexOf('-', 35);
@@ -381,8 +375,8 @@ public class FraisService {
     }
 
     /**
-     * Q-82 : {@code validationConjointeRequise} applique la règle en vigueur (RG-INT-03) — pour une
-     * demande qui n'a pas encore atteint l'opportunité, c'est ce qui l'attend.
+     * {@code validationConjointeRequise} applies the current rule (RG-INT-03): for a request that has
+     * not reached the appropriateness step yet, it is what awaits it.
      */
     private static DemandeFraisResponse versReponse(DemandeFrais demande, List<ValidationFrais> validations,
                                                       double seuilGlobal, List<PieceJustificativeResponse> pieces) {

@@ -9,16 +9,14 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Le format du message publié, comparé à un message <b>réellement accepté</b> par le moteur, transmis
- * par l'administrateur (Q-121).
+ * The published message format, compared to a message <b>actually accepted</b> by the engine.
  * <p>
- * Ce test existe parce que le Guide V1 s'écarte de ce que le moteur accepte vraiment, et qu'un
- * message mal formé est rejeté <b>sans aucun retour</b> : ni accusé, ni erreur. La seule défense est
- * de figer ici la forme observée, champ par champ.
+ * The V1 Guide differs from what the engine really accepts, and a malformed message is rejected
+ * <b>without any feedback</b>. The only defense is to freeze the observed shape here, field by field.
  */
 class FormatMessageTest {
 
-    /** Champs vus dans un message accepté, à l'exception de l'objet — absent d'un SMS. */
+    /** Fields seen in an accepted message, except the subject (absent from an SMS). */
     private static final List<String> CHAMPS_ENVELOPPE = List.of("data", "datacontenttype", "id", "pubsubname",
             "source", "specversion", "time", "topic", "traceid", "traceparent", "tracestate", "type");
     private static final List<String> CHAMPS_MESSAGE = List.of("category", "channels", "directBody", "eventId",
@@ -49,7 +47,7 @@ class FormatMessageTest {
         JsonNode data = publier(null).get("data");
 
         assertThat(data.fieldNames()).toIterable().containsExactlyInAnyOrderElementsOf(CHAMPS_MESSAGE);
-        // Ni locale ni metadata : le Guide les documente, aucun message accepté ne les porte.
+        // Neither locale nor metadata: the Guide documents them, no accepted message carries them.
         assertThat(data.has("locale")).isFalse();
         assertThat(data.has("metadata")).isFalse();
         assertThat(data.has("channelRecipients")).isFalse();
@@ -59,7 +57,7 @@ class FormatMessageTest {
         assertThat(data.get("channels").get(0).asText()).isEqualTo("SMS");
     }
 
-    /** Un courriel ajoute son objet, comme le montre le Guide ; le reste ne bouge pas. */
+    /** An email adds its subject, as shown in the Guide; the rest is unchanged. */
     @Test
     void un_courriel_ajoute_son_objet_et_rien_d_autre() throws Exception {
         JsonNode data = publier("Objet du courriel").get("data");
@@ -69,7 +67,7 @@ class FormatMessageTest {
                 .containsExactlyInAnyOrderElementsOf(concat(CHAMPS_MESSAGE, "directSubject"));
     }
 
-    /** Horodatage à la seconde, avec décalage local : c'est la forme observée, pas un instant UTC. */
+    /** Timestamp to the second, with local offset: the observed form, not a UTC instant. */
     @Test
     void l_horodatage_suit_la_forme_observee() throws Exception {
         String temps = publier(null).get("time").asText();
@@ -78,7 +76,7 @@ class FormatMessageTest {
         assertThat(temps).doesNotContain(".");
     }
 
-    /** Contexte de trace W3C : version, trace sur 32 caractères, portée sur 16, indicateur. */
+    /** W3C trace context: version, 32-char trace, 16-char span, flags. */
     @Test
     void le_contexte_de_trace_est_bien_forme() throws Exception {
         JsonNode enveloppe = publier(null);
@@ -87,7 +85,7 @@ class FormatMessageTest {
         assertThat(enveloppe.get("traceid").asText()).isEqualTo(enveloppe.get("traceparent").asText());
     }
 
-    /** La référence ne porte pas de deux-points : aucun message accepté n'en contient. */
+    /** The reference contains no colon: no accepted message has one. */
     @Test
     void la_reference_ne_porte_aucun_caractere_inhabituel() throws Exception {
         assertThat(publier(null).get("data").get("eventId").asText()).matches("[A-Za-z0-9_.-]+");

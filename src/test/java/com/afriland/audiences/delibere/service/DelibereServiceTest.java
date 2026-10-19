@@ -52,8 +52,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Cycle d'un délibéré (Q-78) : mise en délibéré → prorogations / rabattement pendant l'attente →
- * vidage par le résultat. L'enregistrement d'un délibéré déjà rendu, en un seul geste, reste possible.
+ * Deliberation lifecycle: placed under deliberation → extensions / reopening while pending →
+ * delivered with the result. Recording an already-rendered deliberation in one go remains possible.
  */
 @ExtendWith(MockitoExtension.class)
 class DelibereServiceTest {
@@ -86,13 +86,13 @@ class DelibereServiceTest {
                 .statutCycleVie(StatutCycleVie.EN_DELIBERE).build();
     }
 
-    /** Délibéré mis en délibéré, date annoncée dans une semaine, sans résultat. */
+    /** Pending deliberation, announced date in one week, no result. */
     private Delibere enAttente() {
         return Delibere.builder().id(100L).dossier(dossier).etape(etapeEnDelibere)
                 .dateDeliberee(LocalDate.now().plusDays(7)).build();
     }
 
-    /** Délibéré déjà vidé : étape « Délibéré vidé », résultat connu, expédition ouverte. */
+    /** Delivered deliberation: step "deliberation delivered", result known, enforceable copy open. */
     private Delibere vide() {
         EtapeProcedure etapeVide = EtapeProcedure.builder().id(10L).dossier(dossier).type(TypeEtape.INSTANCE)
                 .statutCycleVie(StatutCycleVie.DELIBERE_VIDE).build();
@@ -428,7 +428,7 @@ class DelibereServiceTest {
         verify(delibereRepository, never()).save(any());
     }
 
-    // ------------------------------------------------------------------ listerParDossier (M15, Q-68)
+    // ------------------------------------------------------------------ listerParDossier
 
     @Test
     void listerParDossier_retourneLesDeliberesDuDossierAvecLeurEtat() {
@@ -438,8 +438,8 @@ class DelibereServiceTest {
                 Delibere.builder().id(1L).dossier(dossier).etape(etapeEnDelibere)
                         .dateDeliberee(LocalDate.now().minusMonths(1))
                         .dateRabattement(LocalDate.now().minusDays(20)).motifRabattement("Réouverture").build()));
-        // Appelé pour chaque délibéré de la liste : réponse selon l'identifiant (le mode strict de
-        // Mockito refuserait un stub posé sur 100L puis appelé avec 1L).
+        // Called for each deliberation in the list: answer by id (Mockito strict mode would reject a stub
+        // set on 100L and called with 1L).
         when(prorogationRepository.countByDelibereId(any())).thenAnswer(inv -> Long.valueOf(100L).equals(inv.getArgument(0)) ? 2L : 0L);
 
         List<DelibereResponse> result = service.listerParDossier(1L);

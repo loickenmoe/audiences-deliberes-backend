@@ -18,9 +18,8 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Exports FR-AUD-05 (calendrier des audiences). Le format JSON est géré directement par le
- * contrôleur (sérialisation Jackson standard) ; ce service ne couvre que PDF (PDFBox, Apache 2.0
- * — cf. Q-31) et Excel (Apache POI).
+ * FR-AUD-05 hearing calendar exports. JSON is handled by the controller (standard Jackson
+ * serialisation); this service covers PDF (PDFBox) and Excel (Apache POI).
  */
 @Service
 public class CalendrierExportService {
@@ -29,23 +28,16 @@ public class CalendrierExportService {
             "Référence", "Juridiction", "Étape", "Client", "Agence d'origine", "Risque encouru", "Date"
     };
     /**
-     * Largeur de chaque colonne, en points. Elles somment à 762 sur les 762 disponibles en A4
-     * paysage (842 moins deux marges de 40) : la place est répartie selon ce que chaque colonne a
-     * réellement à porter, et non également.
+     * Column widths in points. They add up to the 762 available in A4 landscape (842 minus two 40
+     * margins), allocated by content rather than evenly.
      */
     private static final float[] LARGEURS = {96f, 150f, 110f, 150f, 80f, 90f, 86f};
 
     /**
-     * Le calendrier, mis en page par la charte commune (Q-115 A2).
+     * The calendar, laid out with the shared document template (title, date, page numbers).
      *
-     * <p>Ce que cette version change, au-delà de l'habillage : le document portait jusqu'ici
-     * <b>ni titre, ni date, ni numéro de page</b>. Une feuille détachée de la liasse ne disait plus
-     * ce qu'elle était. Et les cellules étaient coupées à dix-huit caractères, sans égard pour la
-     * largeur réelle d'une police proportionnelle.
-     *
-     * @param auteur qui demande l'export ; porté par le pied de page
-     * @param langue langue des libellés — le calendrier est un document de travail, il suit son
-     *               lecteur (à la différence d'une pièce, qui garde la langue de la procédure)
+     * @param auteur who requested the export; shown in the footer
+     * @param langue label language: the calendar is a working document and follows its reader
      */
     public byte[] exportPdf(List<CalendrierEntreeResponse> entrees, String auteur, Locale langue) {
         LibellesPdf libelles = LibellesPdf.pour(langue);
@@ -53,8 +45,8 @@ public class CalendrierExportService {
                 libelles.texte("calendrier.titre"), periode(entrees, libelles), auteur, langue)) {
             document.nouvellePage();
             if (entrees.isEmpty()) {
-                // Une page qui dit « rien sur cette période » vaut mieux qu'une page nue, qu'on
-                // prendrait pour un fichier abîmé.
+                // An explicit "nothing in this period" page, so it is not mistaken for a broken
+                // file.
                 document.ligne(libelles.texte("calendrier.vide"), false, 10f);
             } else {
                 document.tableau(entetes(libelles), LARGEURS, entrees.stream().map(this::cellules).toList());
@@ -63,7 +55,7 @@ public class CalendrierExportService {
         }
     }
 
-    /** Conservé pour les appels qui n'ont pas d'auteur sous la main. */
+    /** For callers without an author at hand. */
     public byte[] exportPdf(List<CalendrierEntreeResponse> entrees) {
         return exportPdf(entrees, null, null);
     }
@@ -87,10 +79,7 @@ public class CalendrierExportService {
                 entree.datePlanifiee() == null ? "" : entree.datePlanifiee().toString());
     }
 
-    /**
-     * La période couverte, déduite des entrées elles-mêmes : l'appelant ne la transmet pas, et un
-     * calendrier qui ne dit pas ce qu'il couvre n'est qu'une liste.
-     */
+    /** The covered period, derived from the entries since the caller does not pass it. */
     private String periode(List<CalendrierEntreeResponse> entrees, LibellesPdf libelles) {
         List<LocalDate> dates = entrees.stream()
                 .map(CalendrierEntreeResponse::datePlanifiee)

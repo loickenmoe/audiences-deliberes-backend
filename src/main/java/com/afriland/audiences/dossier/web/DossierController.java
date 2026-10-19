@@ -40,9 +40,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Module Dossiers (FR-DOS-01..04, RG-DOS-09) — cf. FUNCTIONAL_MAP.md §1, API_IMPLEMENTATION_STATUS.md §1.
- * {@code POST /dossiers/{id}/etapes} est un endpoint 🆕 (cf. CreerEtapeRequest) nécessaire au
- * positionnement direct d'une étape (UC-DOS-04 alt. 3-a/3-b), absent du contrat d'API formel.
+ * Cases module (FR-DOS-01..04, RG-DOS-09). {@code POST /dossiers/{id}/etapes} (see
+ * CreerEtapeRequest) supports direct positioning of a step (UC-DOS-04 alt. 3-a/3-b) and is not part
+ * of the formal API contract.
  */
 @RestController
 @RequestMapping("${api.prefix}/dossiers")
@@ -58,13 +58,11 @@ public class DossierController {
     }
 
     /**
-     * {@code reference}, {@code clientId} et {@code mesDossiers} ont été ajoutés en M16 (Q-72) :
-     * sans eux, un juriste ne pouvait retrouver un dossier qu'en parcourant les pages.
-     * {@code mesDossiers} se résout sur l'utilisateur authentifié — il n'y a donc pas d'identifiant
-     * de juriste à passer, et pas de moyen de consulter le portefeuille d'un autre par ce biais.
+     * {@code mesDossiers} is resolved from the authenticated user: no in-house lawyer id is passed,
+     * so another user's portfolio cannot be read this way.
      * <p>
-     * {@code estSensible} et {@code sensibiliteStatut} sont arrivés en M22 (Q-101). Le second ouvre
-     * au DJ et à la DJA la file des sensibilités **en attente de validation**, que rien n'exposait.
+     * {@code sensibiliteStatut = EN_ATTENTE} gives DJ and DJA the queue of sensitivities awaiting
+     * validation.
      */
     @GetMapping
     @PreAuthorize("hasRole('CONSULTATION')")
@@ -84,8 +82,7 @@ public class DossierController {
             @RequestParam(defaultValue = "RECENT") TriDossiers tri,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        // Plus récent d'abord (Q-93) : sans tri, l'ordre des lignes était laissé à PostgreSQL. Le
-        // métier peut désormais en demander un autre, parmi ceux que `TriDossiers` énumère.
+        // Most recent first by default; other orders are those listed in `TriDossiers`.
         return dossierService.listerDossiers(nature, categorie, juridiction, reference, clientId,
                 mesDossiers, estSensible, sensibiliteStatut, typeEtape, statutEtape, dateDebut, dateFin,
                 PageRequest.of(page, size, tri.sort()));
@@ -97,7 +94,7 @@ public class DossierController {
         return dossierService.consulterDossier(id);
     }
 
-    /** Q-100 — l'onglet Historique : la fiche n'embarque que la première page. */
+    /** History tab: the case page only embeds the first page. */
     @GetMapping("/{id}/historique")
     @PreAuthorize("hasRole('CONSULTATION')")
     public PageResponse<HistoriqueActionResponse> historique(@PathVariable Long id,
@@ -136,8 +133,8 @@ public class DossierController {
     }
 
     /**
-     * Q-74 — demandes de seuil d'un dossier. {@code statut=EN_ATTENTE} donne la file à arbitrer.
-     * Lecture seule, sous {@code ROLE_CONSULTATION} comme la fiche dont elle dépend.
+     * Threshold requests of a case; {@code statut=EN_ATTENTE} gives the queue to arbitrate.
+     * Read-only, under {@code ROLE_CONSULTATION} like the case page.
      */
     @GetMapping("/{id}/seuil-derogation")
     @PreAuthorize("hasRole('CONSULTATION')")
@@ -161,12 +158,8 @@ public class DossierController {
     }
 
     /**
-     * Le juriste propose la diligence particulière sur un dossier déjà ouvert (métier, 2026-10-03,
-     * observation 5).
-     *
-     * <p>Même partage des rôles que la dérogation de seuil : {@code ROLE_SAISIE} propose,
-     * {@code ROLE_DJ}/{@code ROLE_DJA} arbitrent - par l'endpoint de validation ci-dessus, qui n'a
-     * pas à savoir si la proposition vient de la création ou d'ici.
+     * The in-house lawyer proposes special diligence on an already open case. {@code ROLE_SAISIE}
+     * proposes, {@code ROLE_DJ}/{@code ROLE_DJA} decide through the validation endpoint above.
      */
     @PostMapping("/{id}/sensibilite/proposition")
     @PreAuthorize("hasRole('SAISIE')")
@@ -176,11 +169,9 @@ public class DossierController {
     }
 
     /**
-     * Le DJ ou la DJA pose ou lève la diligence particulière <b>directement</b>, sans proposition
-     * (métier, 2026-10-03, observation 5 ; les deux sens arrêtés le 2026-10-06).
-     *
-     * <p>{@code PUT} et non {@code POST} : on ne crée pas une demande, on fixe l'état de la
-     * diligence du dossier. Le retrait exige un motif, la pose exige seuil et type de client.
+     * DJ or DJA sets or lifts special diligence <b>directly</b>, without a proposal. {@code PUT}
+     * because it sets the case's diligence state. Removal requires a reason; setting requires
+     * threshold and client type.
      */
     @PutMapping("/{id}/sensibilite")
     @PreAuthorize("hasAnyRole('DJ', 'DJA')")

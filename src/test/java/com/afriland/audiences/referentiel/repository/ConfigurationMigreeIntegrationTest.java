@@ -19,9 +19,8 @@ import java.util.stream.Collectors;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Les valeurs initiales écrites en SQL par les migrations doivent respecter les règles Java des clés
- * (Q-91, Q-118). Une faute de frappe dans un nom d'événement de V28 ne serait sinon découverte qu'au
- * premier enregistrement du DJ, qui se verrait refuser une valeur qu'il n'a pas saisie.
+ * Initial values written in SQL by migrations must respect the Java key rules. Otherwise a typo in a
+ * V28 event name would only surface on the DJ's first save, refusing a value they never entered.
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -63,13 +62,9 @@ class ConfigurationMigreeIntegrationTest {
         for (RegleConfiguration regle : RegleConfiguration.values()) {
             if (regle.name().startsWith("GRILLE_NOTIFICATION_")) {
                 /*
-                 * **Sans l'ordre, mais sans rien lâcher.** Ce qui est éprouvé est la *couverture* :
-                 * aucun événement oublié, aucun inconnu en trop - et l'égalité des ensembles le dit
-                 * entièrement. L'ordre, lui, ne veut rien dire : la grille est une liste que la
-                 * direction réécrit à sa guise depuis l'écran de configuration, et une valeur
-                 * nouvelle s'y ajoute à la suite (V45, V46) sans avoir à être déclarée en dernier
-                 * dans son énumération. Exiger l'ordre faisait échouer ce test pour une raison
-                 * étrangère à ce qu'il garde.
+                 * **Order-insensitive, but strict.** What is tested is *coverage*: no event missing, no unknown
+                 * extra, which set equality fully expresses. Order is meaningless: management rewrites the grid
+                 * from the configuration screen, and new values are appended (V45, V46) regardless of enum order.
                  */
                 assertThat(lignes.get(regle.name()).getValeur().split(","))
                         .as(regle.name())
@@ -78,7 +73,7 @@ class ConfigurationMigreeIntegrationTest {
         }
     }
 
-    /** WhatsApp éteint tant que l'exigence de modèles préapprouvés n'est pas levée (plan, points ouverts). */
+    /** WhatsApp off until the pre-approved template requirement is lifted. */
     @Test
     void les_canaux_prestataires_demarrent_sans_whatsapp() {
         assertThat(repository.findByCle("CANAUX_NOTIFICATION_PRESTATAIRES").orElseThrow().getValeur())

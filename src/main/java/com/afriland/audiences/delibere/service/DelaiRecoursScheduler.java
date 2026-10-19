@@ -21,19 +21,13 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 
 /**
- * Suivi du délai de recours (FR-DEL-02, RG-DEL-02/04) : à l'échéance, si aucun recours n'a été
- * exercé (étape toujours {@code DELIBERE_VIDE}), déclenche {@link TypeAlerte#DELAI_RECOURS} vers
- * les juristes affectés puis bascule l'étape en {@code CLOTURE} — sur le même principe que
- * {@link com.afriland.audiences.dossier.service.ChargeMaxAvocatScheduler} (Q-38) et
- * {@link com.afriland.audiences.audience.service.RappelAudienceScheduler} (Q-39) : le
- * planificateur vit dans le module dépendant ({@code delibere}, qui dépend de {@code dossier} et
- * {@code alerte}), jamais dans {@code alerte} lui-même.
+ * Appeal deadline tracking (FR-DEL-02, RG-DEL-02/04): at the deadline, if no appeal was lodged
+ * (step still {@code DELIBERE_VIDE}), raises {@link TypeAlerte#DELAI_RECOURS} to the assigned legal
+ * officers and moves the step to {@code CLOTURE}. Like the other schedulers, it lives in the
+ * dependent module, never in {@code alerte} itself.
  * <p>
- * La « bascule décisions définitives » évoquée par FR-DEL-02 est différée au module M12 (pas
- * encore implémenté) — seule la transition d'étape et la notification sont réalisées ici (Q-43).
- * Aucun historique n'est enregistré pour cette transition automatique, faute d'utilisateur
- * "système" (contrainte {@code historique_action.utilisateur_id NOT NULL}) — même choix que les
- * planificateurs M5/M6, où seul le déclenchement de l'alerte fait foi de la traçabilité.
+ * No history entry is recorded for this automatic transition, for lack of a "system" user
+ * ({@code historique_action.utilisateur_id NOT NULL}); the alert itself provides traceability.
  */
 @Component
 @RequiredArgsConstructor
@@ -67,7 +61,7 @@ public class DelaiRecoursScheduler {
                 alerteService.declencher(TypeAlerte.DELAI_RECOURS, dossier.getId(), juriste, declencheur);
             }
         }
-        // D19 : l'avocat du dossier est prévenu par ses canaux externes (Q-118).
+        // The case lawyer is also notified through external channels.
         for (var affectation : dossierAvocatRepository.findByDossierId(dossier.getId())) {
             notificationPrestataireService.notifier(EvenementPrestataire.DELAI_RECOURS, affectation.getAvocat(),
                     dossier.getId(), "delibere-" + delibere.getId() + "-recours");

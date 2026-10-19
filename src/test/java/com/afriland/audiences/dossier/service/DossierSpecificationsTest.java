@@ -27,9 +27,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * M14 — les filtres optionnels de {@code GET /dossiers} n'étaient couverts par aucun test : seule
- * la composition des prédicats est vérifiable sans base (l'exécution SQL réelle l'est, elle, par
- * les tests bout en bout).
+ * Optional filters of {@code GET /dossiers}: only predicate composition is checked here, without a
+ * database (actual SQL execution is covered by end-to-end tests).
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -105,7 +104,7 @@ class DossierSpecificationsTest {
         DossierSpecifications.withFilters(null, null, null, "DOS-2026", null, null, null, null, null, null, null, null)
                 .toPredicate(root, query, cb);
 
-        // Une référence se retient rarement en entier : `like` et non `equal`.
+        // A reference is rarely remembered in full: `like`, not `equal`.
         verify(cb).like(any(Expression.class), eq("%dos-2026%"));
     }
 
@@ -120,9 +119,8 @@ class DossierSpecificationsTest {
     }
 
     /**
-     * Q-101 — le filtre demandé par le porteur du projet. `estSensible` est un booléen : le tester
-     * vérifie surtout qu'il n'est **pas** confondu avec « non renseigné », faute de quoi filtrer sur
-     * les dossiers non sensibles renverrait tout.
+     * `estSensible` is a boolean: the test mainly checks it is **not** confused with "not set", otherwise
+     * filtering on non-sensitive cases would return everything.
      */
     @Test
     void laSensibiliteEstFiltreeSurSaValeurBooleenne() {
@@ -140,7 +138,7 @@ class DossierSpecificationsTest {
         verify(cb).equal(any(Expression.class), eq(Boolean.FALSE));
     }
 
-    /** `EN_ATTENTE` est la file des sensibilités à valider du DJ et de la DJA (moitié de QF-08). */
+    /** `EN_ATTENTE` is the queue of sensitivity flags awaiting DJ/DJA validation. */
     @Test
     void leStatutDeSensibiliteEstFiltre() {
         DossierSpecifications.withFilters(null, null, null, null, null, null, null, StatutValidation.EN_ATTENTE, null, null, null, null)

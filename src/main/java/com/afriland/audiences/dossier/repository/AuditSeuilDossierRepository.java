@@ -13,9 +13,9 @@ public interface AuditSeuilDossierRepository extends JpaRepository<AuditSeuilDos
 
     Optional<AuditSeuilDossier> findFirstByDossierIdAndStatutOrderByDateActionAsc(Long dossierId, StatutValidation statut);
 
-    /** Q-74 : toutes les demandes de seuil d'un dossier, la plus récente d'abord. */
+    /** All threshold requests of a case, most recent first. */
     List<AuditSeuilDossier> findByDossierIdOrderByDateActionDesc(Long dossierId);
 
-    /** Q-74 : même liste, restreinte à un statut — `EN_ATTENTE` pour la file d'arbitrage. */
+    /** Same list restricted to a status ({@code EN_ATTENTE} for the arbitration queue). */
     List<AuditSeuilDossier> findByDossierIdAndStatutOrderByDateActionDesc(Long dossierId, StatutValidation statut);
 }

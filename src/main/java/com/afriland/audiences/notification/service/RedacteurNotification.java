@@ -16,23 +16,23 @@ import java.util.List;
 import java.util.Properties;
 
 /**
- * Rédige le texte d'une notification externe pour un canal donné (NOTIFICATION_ENGINE_PLAN.md, D3 et D18).
+ * Writes the text of an external notification for a given channel.
  * <p>
- * <b>Le texte de l'alerte applicative n'est jamais réutilisé.</b> Il est écrit pour l'écran : il peut
- * contenir un motif de rejet, l'objet libre d'une alarme, un marqueur technique ou un code de règle.
- * Le texte externe part d'un gabarit versionné ({@code notifications/textes_fr.properties}) et ne
- * reçoit que deux données : la référence du dossier et un lien vers l'application.
+ * <b>The in-app alert text is never reused</b>: it may contain a rejection reason, free-text alarm
+ * subject, technical marker or rule code. External text comes from a versioned template
+ * ({@code notifications/textes_fr.properties}) and only receives the case-file reference and an
+ * application link.
  * <p>
- * Trois niveaux de détail (D18) :
+ * Three levels of detail:
  * <ul>
- *   <li><b>complet</b> (Outlook, Teams) : phrase, référence du dossier, lien ;</li>
- *   <li><b>modéré</b> (courriel personnel) : salutation, phrase, référence du dossier, puis le lien de
- *       l'espace avocat s'il existe, sinon une invitation à contacter la Direction Juridique ;</li>
- *   <li><b>minimal</b> (SMS, WhatsApp) : le seul nom de l'événement, sans référence ni lien. Un SMS
- *       peut être lu par un tiers sur un écran verrouillé.</li>
+ *   <li><b>full</b> (Outlook, Teams): sentence, case-file reference, link;</li>
+ *   <li><b>moderate</b> (personal e-mail): greeting, sentence, case-file reference, then the lawyer
+ *       portal link if any, otherwise an invitation to contact the Legal Department;</li>
+ *   <li><b>minimal</b> (SMS, WhatsApp): event name only, no reference or link, since an SMS can be
+ *       read by a third party on a locked screen.</li>
  * </ul>
- * Les courriels partent en HTML (le moteur rend {@code directBody} tel quel), les autres canaux en
- * texte brut. Toute donnée insérée dans le HTML est échappée.
+ * E-mails are HTML (the engine renders {@code directBody} as is), other channels plain text. Any data
+ * inserted in HTML is escaped.
  */
 @Component
 public class RedacteurNotification {
@@ -45,12 +45,12 @@ public class RedacteurNotification {
         this.textes = charger();
     }
 
-    /** Texte d'une alerte destinée à un utilisateur interne (Outlook ou Teams). */
+    /** Text of an alert for an internal user (Outlook or Teams). */
     public ContenuNotification pourUtilisateur(TypeAlerte type, Route route, Contexte contexte) {
         return rediger("interne." + type.name(), route, contexte);
     }
 
-    /** Texte d'un événement destiné à un prestataire (courriel personnel, SMS ou WhatsApp). */
+    /** Text of an event for a provider (personal e-mail, SMS or WhatsApp). */
     public ContenuNotification pourPrestataire(EvenementPrestataire evenement, Route route, Contexte contexte) {
         return rediger("prestataire." + evenement.name(), route, contexte);
     }
@@ -66,15 +66,9 @@ public class RedacteurNotification {
     }
 
     /**
-     * Le message court d'un événement : l'en-tête commun, puis ce que l'événement a à dire.
-     *
-     * <p><b>Pourquoi une phrase par événement.</b> La Direction Juridique rédige ces textes, et elle
-     * les rédige <b>un par un</b> : le 2026-10-07 elle a réécrit celui de la constitution, et lui
-     * seul. Un gabarit unique aurait imposé sa reformulation aux treize autres, qu'elle n'a pas
-     * relus. Faute de phrase propre, l'événement retombe sur le défaut - son nom, et où chercher.
-     *
-     * <p>Le niveau minimal reste ce qu'il est : <b>ni référence de dossier ni lien</b>. Un SMS se lit
-     * sur un écran verrouillé, par-dessus l'épaule de son destinataire.
+     * Short message of an event: the common header, then the event's own sentence. Each event has its
+     * own sentence because the Legal Department writes them individually; without one, the default
+     * (event name and where to look) is used. The minimal level never includes a reference or link.
      */
     private String minimal(String evenement, String titre) {
         String propre = textes.getProperty(evenement + ".minimal");
@@ -147,7 +141,7 @@ public class RedacteurNotification {
         return proprietes;
     }
 
-    /** Niveau de détail d'un canal réglé (D18). */
+    /** Level of detail of a configured channel. */
     enum NiveauDetail {
         COMPLET, MODERE, MINIMAL;
 
@@ -162,17 +156,17 @@ public class RedacteurNotification {
     }
 
     /**
-     * Les seules données qu'un texte externe peut recevoir.
+     * The only data an external text may receive.
      *
-     * @param referenceDossier référence du dossier concerné, ou {@code null} (alerte hors dossier)
-     * @param lien             adresse de l'application à ouvrir, ou {@code null} (prestataire sans compte)
+     * @param referenceDossier case-file reference, or {@code null} (alert without case file)
+     * @param lien             application URL to open, or {@code null} (provider without account)
      */
     public record Contexte(String referenceDossier, String lien) {
     }
 
     /**
-     * @param sujet objet du message ; {@code null} pour SMS et WhatsApp, qui n'en ont pas
-     * @param corps texte prêt à transmettre au moteur ({@code directBody})
+     * @param sujet message subject; {@code null} for SMS and WhatsApp
+     * @param corps text ready for the engine ({@code directBody})
      */
     public record ContenuNotification(String sujet, String corps) {
     }

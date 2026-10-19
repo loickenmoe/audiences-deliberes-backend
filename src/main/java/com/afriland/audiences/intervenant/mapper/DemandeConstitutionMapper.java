@@ -27,13 +27,13 @@ public interface DemandeConstitutionMapper {
     @Mapping(target = "prestataireType", expression = "java(typeDe(demande.getPrestataire()))")
     @Mapping(target = "demandeurNom", expression = "java(nomComplet(demande.getDemandeur()))")
     @Mapping(target = "valideParNom", expression = "java(nomComplet(demande.getValidePar()))")
-    // Le droit d'écrire dépend de **qui lit**, que le mappeur ignore : le service le pose.
+    // The write permission depends on the current reader, unknown here: the service sets it.
     @Mapping(target = "redactionPossible", ignore = true)
     DemandeConstitutionResponse toResponse(DemandeConstitution demande);
 
     /**
-     * Q-87 : le prestataire est chargé à la demande — un proxy d'{@link Intervenant} n'est jamais une
-     * instance d'{@link Avocat}. On compare donc l'entité réelle.
+     * The provider is lazily loaded and an {@link Intervenant} proxy is never an instance of
+     * {@link Avocat}, so the unproxied entity is checked.
      */
     default TypeIntervenant typeDe(Intervenant prestataire) {
         if (prestataire == null) {

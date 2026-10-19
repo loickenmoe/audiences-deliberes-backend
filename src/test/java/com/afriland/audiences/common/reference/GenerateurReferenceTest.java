@@ -4,10 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Le format des références attribuées par le système. Vérifiable sans base : c'est une mise en
- * forme, et c'est elle que lisent les utilisateurs.
- */
+/** Format of system-assigned references; testable without a database since it is pure formatting. */
 class GenerateurReferenceTest {
 
     @Test
@@ -24,8 +21,8 @@ class GenerateurReferenceTest {
     }
 
     /**
-     * Au-delà de 9999 dans l'année, le numéro déborde sur cinq chiffres plutôt que de recommencer.
-     * Une référence tronquée en désignerait deux.
+     * Beyond 9999 in a year, the number overflows to five digits rather than restarting: a truncated
+     * reference would designate two records.
      */
     @Test
     void au_dela_de_quatre_chiffres_le_numero_deborde_sans_se_tronquer() {
@@ -42,7 +39,7 @@ class GenerateurReferenceTest {
         assertThat(distincts).isEqualTo(FamilleReference.values().length);
     }
 
-    /** La référence doit tenir dans la colonne, qui accepte cinquante caractères. */
+    /** The reference must fit in the column, which accepts fifty characters. */
     @Test
     void la_reference_tient_dans_la_colonne() {
         assertThat(GenerateurReference.formater(FamilleReference.DOSSIER, 2026, 9999)).hasSize(13);

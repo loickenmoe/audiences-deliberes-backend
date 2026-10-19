@@ -21,15 +21,14 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * La demande d'explication (N7 temps 2, observation 8).
+ * Requests for explanation.
  *
- * <p><b>Trois rôles, trois gestes.</b> Le DJ et la DJA écrivent ; l'avocat répond ; les deux lisent
- * la file, chacun la sienne. Le périmètre de lecture se décide <b>dans le service</b>, sur
- * l'identité de qui appelle : un paramètre d'écran suffirait à un avocat pour demander la liste
- * entière.
+ * <p>The DJ and DJA write, the lawyer answers, and each reads their own queue. The read scope is
+ * decided <b>in the service</b> from the caller's identity: a UI parameter would let a lawyer
+ * request the whole list.
  *
- * <p>Les profils sont lus tels quels, jamais par un rôle : {@code ROLE_JURISTE} est composite
- * (Q-81) et ouvrirait l'écriture à tous les juristes. C'est la règle posée par Q-126.
+ * <p>Profiles are read as is, never through a role: {@code ROLE_JURISTE} is composite and would
+ * open writing to all legal officers.
  */
 @RestController
 @RequestMapping("${api.prefix}/demandes-explication")
@@ -38,7 +37,7 @@ public class DemandeExplicationController {
 
     private final DemandeExplicationService demandeExplicationService;
 
-    /** La direction demande à un avocat de s'expliquer. 409 si une demande attend déjà sa réponse. */
+    /** Management asks a lawyer to explain themselves. 409 if a request is already awaiting an answer. */
     @PostMapping
     @PreAuthorize("hasAnyRole('DJ', 'DJA')")
     public ResponseEntity<DemandeExplicationResponse> demander(
@@ -47,11 +46,10 @@ public class DemandeExplicationController {
     }
 
     /**
-     * L'avocat répond, une seule fois.
+     * The lawyer answers, only once.
      *
-     * <p>{@code PUT} et non {@code POST} : on complète une demande existante, on n'en crée pas une
-     * seconde. Le service refuse une réponse qui ne vous est pas adressée (403) et une seconde
-     * réponse (409).
+     * <p>{@code PUT} rather than {@code POST}: it completes an existing request. The service rejects an
+     * answer to a request not addressed to the caller (403) and a second answer (409).
      */
     @PutMapping("/{id}/reponse")
     @PreAuthorize("hasRole('AVOCAT')")
@@ -61,10 +59,10 @@ public class DemandeExplicationController {
     }
 
     /**
-     * La file : celle de la direction, ou celle de l'avocat.
+     * The queue: management's, or the lawyer's.
      *
-     * <p>{@code enAttente} ne vaut que pour la direction - un avocat voit les siennes, répondues ou
-     * non, et c'est l'historique de ce qu'on lui a demandé.
+     * <p>{@code enAttente} only applies to management; a lawyer sees all their requests, answered or
+     * not, as the history of what they were asked.
      */
     @GetMapping
     @PreAuthorize("hasAnyRole('DJ', 'DJA', 'AVOCAT')")

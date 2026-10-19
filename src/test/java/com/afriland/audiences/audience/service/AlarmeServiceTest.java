@@ -134,7 +134,7 @@ class AlarmeServiceTest {
         assertThat(result.alarmePrecedenteId()).isEqualTo(3L);
     }
 
-    /** Q-77 : clore une alarme traitée, sans la remplacer. */
+    /** Closes a handled alarm without replacing it. */
     @Test
     void traiterAlarme_passeTraiteeSansCreerDeNouvelleAlarme() {
         Alarme active = Alarme.builder().id(3L).dossier(dossier).etape(etape).objet("Relancer le greffe")
@@ -148,7 +148,7 @@ class AlarmeServiceTest {
         assertThat(result.id()).isEqualTo(3L);
         assertThat(result.statut()).isEqualTo(StatutAlarme.TRAITEE);
         assertThat(result.dateTraitement()).isNotNull();
-        // Un seul enregistrement : l'alarme elle-même, aucune remplaçante.
+        // A single save: the alarm itself, no replacement.
         verify(alarmeRepository, times(1)).save(any(Alarme.class));
         verify(historiqueActionService).enregistrerPour(eq(juriste), eq(1L), eq(TypeActionHistorique.ALARME_TRAITEE), any());
     }
@@ -165,7 +165,7 @@ class AlarmeServiceTest {
         verify(alarmeRepository, never()).save(any());
     }
 
-    /** M15 (Q-68) : onglet « alarmes » d'un dossier. */
+    /** Case file "alarms" tab. */
     @Test
     void listerParDossier_retourneLesAlarmesTrieesParEcheance() {
         when(dossierRepository.existsById(1L)).thenReturn(true);

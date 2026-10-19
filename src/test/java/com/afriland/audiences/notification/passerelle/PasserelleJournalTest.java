@@ -20,7 +20,7 @@ class PasserelleJournalTest {
     void masquer_cache_les_coordonnees_personnelles() {
         assertThat(PasserelleJournal.masquer("juriste.test@afrilandfirstbank.com"))
                 .isEqualTo("ju***@afrilandfirstbank.com");
-        // Un numéro au format international commence par « + » : le masquage garde les deux premiers signes.
+        // An international number starts with "+": masking keeps the first two characters.
         assertThat(PasserelleJournal.masquer("+237600000000")).isEqualTo("+2***");
         assertThat(PasserelleJournal.masquer("ab")).isEqualTo("***");
         assertThat(PasserelleJournal.masquer(" ")).isEqualTo("(vide)");
@@ -36,7 +36,7 @@ class PasserelleJournalTest {
         assertThat(masque).doesNotContain("600000000", "juriste.test");
     }
 
-    /** Le jeton porte la signature du service : il ne doit jamais être journalisé. */
+    /** The token carries the service signature: it must never be logged. */
     @Test
     void le_message_journalise_est_depouille_de_son_jeton() {
         assertThat(MESSAGE.token()).isEqualTo("jeton");
@@ -44,7 +44,7 @@ class PasserelleJournalTest {
         assertThat(MESSAGE.sansJeton().directBody()).isEqualTo("Audience dans 7 jours.");
     }
 
-    /** Le Guide ignore {@code recipient} quand {@code channelRecipients} est présent : on n'utilise que ce dernier. */
+    /** The Guide ignores {@code recipient} when {@code channelRecipients} is present: only the latter is used. */
     @Test
     void le_message_porte_un_destinataire_par_canal() {
         assertThat(MESSAGE.channels()).containsExactly("SMS");

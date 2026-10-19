@@ -63,7 +63,7 @@ class FraisServiceTest {
     @Mock private HistoriqueActionService historiqueActionService;
     @Mock private AlerteService alerteService;
     @Mock private ConfigurationService configurationService;
-    // Q-97 : URL pré-signées des pièces justificatives, sur le détail seulement.
+    // Pre-signed URLs of supporting documents, on the detail view only.
     @Mock private MinioStorageService minioStorageService;
 
     private FraisService service;
@@ -83,7 +83,7 @@ class FraisServiceTest {
                 dossierAvocatRepository, new CompteAvocatService(avocatRepository, utilisateurRepository),
                 notificationPrestataireService, utilisateurRepository, currentUserService,
                 historiqueActionService, alerteService, configurationService, minioStorageService);
-        // Toute réponse porte le seuil applicable (Q-82).
+        // Every response carries the applicable threshold.
         lenient().when(configurationService.getOrThrow("SEUIL_MONTANT_DEFAUT"))
                 .thenReturn(ConfigurationSysteme.builder().cle("SEUIL_MONTANT_DEFAUT").valeur("50000000").build());
 
@@ -97,7 +97,7 @@ class FraisServiceTest {
         dj = Utilisateur.builder().id(40L).profil(Profil.builder().code("DJ").build()).build();
     }
 
-    // --- Dépôt (FR-INT-01) ---
+    // --- Filing (FR-INT-01) ---
 
     @Test
     void deposer_rejectsAvocatNotAffected() {
@@ -143,7 +143,7 @@ class FraisServiceTest {
         verify(alerteService).declencher(eq(TypeAlerte.NOUVELLE_DEMANDE_FRAIS), eq(1L), eq(assistante), any());
     }
 
-    // --- Conformité (FR-INT-02) ---
+    // --- Compliance (FR-INT-02) ---
 
     @Test
     void controlerConformite_rejectsWrongStatut() {
@@ -196,7 +196,7 @@ class FraisServiceTest {
         verify(alerteService).declencher(eq(TypeAlerte.NOUVELLE_DEMANDE_FRAIS), eq(1L), eq(utilisateurAvocat), any());
     }
 
-    // --- Opportunité (FR-INT-03) ---
+    // --- Appropriateness (FR-INT-03) ---
 
     @Test
     void controlerOpportunite_nonSensibleUnderSeuilValidatesDirectly() {
@@ -261,7 +261,7 @@ class FraisServiceTest {
         verify(alerteService).declencher(eq(TypeAlerte.NOUVELLE_DEMANDE_FRAIS), eq(1L), eq(utilisateurAvocat), any());
     }
 
-    // --- Validation conjointe (FR-INT-04) ---
+    // --- Joint approval (FR-INT-04) ---
 
     @Test
     void validerConjointement_singleAccordDoesNotValidate() {
@@ -325,7 +325,7 @@ class FraisServiceTest {
                 .isInstanceOf(ApiException.class);
     }
 
-    // --- Paiement (FR-INT-05) ---
+    // --- Payment (FR-INT-05) ---
 
     @Test
     void enregistrerPaiement_rejectsWhenNotValidee() {
@@ -355,7 +355,7 @@ class FraisServiceTest {
         verify(alerteService).declencher(eq(TypeAlerte.PAIEMENT_EFFECTUE), eq(1L), eq(dja), any());
     }
 
-    // --- Consultation (Q-82) ---
+    // --- Consultation ---
 
     @Test
     void consulter_avocatCannotReadAnotherAvocatsDemande() {

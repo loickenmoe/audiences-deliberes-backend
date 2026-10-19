@@ -11,13 +11,11 @@ import org.springframework.util.StringUtils;
 import java.util.Optional;
 
 /**
- * Q-84 : lien entre un compte applicatif et un avocat du référentiel.
+ * Link between an application account and a lawyer in the reference list.
  * <p>
- * {@code avocat.compte_keycloak} est ce que le DJ saisit à la création de l'avocat : son
- * <b>identifiant de connexion</b> ({@code preferred_username}). Jusqu'à Q-84, le backend le
- * comparait au {@code sub} du jeton — un UUID que personne ne connaît : aucun avocat saisi par
- * l'interface n'était reconnu. Le {@code sub} reste accepté en second, pour les comptes déjà
- * rattachés ainsi.
+ * {@code avocat.compte_keycloak} is what the DJ enters when creating the lawyer: their <b>login
+ * identifier</b> ({@code preferred_username}). The token {@code sub} is still accepted as a
+ * fallback, for accounts linked that way.
  */
 @Service
 @RequiredArgsConstructor
@@ -26,7 +24,7 @@ public class CompteAvocatService {
     private final AvocatRepository avocatRepository;
     private final UtilisateurRepository utilisateurRepository;
 
-    /** L'avocat de cet utilisateur : par identifiant de connexion, à défaut par {@code sub}. */
+    /** The lawyer of this user: by login identifier, otherwise by {@code sub}. */
     public Optional<Avocat> avocatDe(Utilisateur utilisateur) {
         Optional<Avocat> parIdentifiant = StringUtils.hasText(utilisateur.getIdentifiant())
                 ? avocatRepository.findByCompteKeycloak(utilisateur.getIdentifiant())
@@ -34,14 +32,14 @@ public class CompteAvocatService {
         return parIdentifiant.or(() -> avocatRepository.findByCompteKeycloak(utilisateur.getKeycloakId()));
     }
 
-    /** Le compte applicatif d'un avocat, destinataire de ses alertes — même double lecture. */
+    /** A lawyer's application account, recipient of their alerts; same dual lookup. */
     public Optional<Utilisateur> utilisateurDe(Avocat avocat) {
         String compte = avocat.getCompteKeycloak();
         return utilisateurRepository.findByIdentifiant(compte)
                 .or(() -> utilisateurRepository.findByKeycloakId(compte));
     }
 
-    /** Vrai si cet utilisateur est bien cet avocat. */
+    /** True if this user is this lawyer. */
     public boolean estLeCompteDe(Utilisateur utilisateur, Avocat avocat) {
         return avocatDe(utilisateur).map(a -> a.getId().equals(avocat.getId())).orElse(false);
     }

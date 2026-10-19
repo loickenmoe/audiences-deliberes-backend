@@ -14,13 +14,12 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.web.client.RestClient;
 
 /**
- * Choix de la passerelle vers le Notification Engine.
+ * Selects the Notification Engine gateway.
  * <p>
- * Interrupteur désactivé (par défaut) : {@link PasserelleJournal}, rien n'est envoyé, quel que soit le
- * transport configuré. Interrupteur activé : le compte de service et la redirection sont vérifiés au
- * démarrage, puis le transport demandé est monté — sidecar Dapr (voie documentée par le Guide) ou
- * Kafka direct (repli). Échouer au démarrage vaut mieux que laisser le moteur rejeter chaque message
- * en silence.
+ * Disabled (default): {@link PasserelleJournal}, nothing is sent whatever the transport. Enabled: the
+ * service account and redirection are checked at startup, then the chosen transport is wired (Dapr
+ * sidecar as documented by the Guide, or direct Kafka as fallback). Failing at startup beats having
+ * the engine silently reject every message.
  */
 @Slf4j
 @Configuration
@@ -62,8 +61,8 @@ public class NotificationEngineConfig {
     }
 
     /**
-     * Hors production, la redirection (D10) doit être complète avant tout envoi : une cible manquante
-     * ferait partir le message vers le destinataire réel, ce qu'elle existe précisément pour empêcher.
+     * Outside production, redirection must be complete before any send: a missing target would let the
+     * message reach the real recipient, which is exactly what redirection prevents.
      */
     static void verifierRedirection(NotificationEngineProperties proprietes) {
         if (proprietes.redirection().actif() && !proprietes.redirection().complete()) {

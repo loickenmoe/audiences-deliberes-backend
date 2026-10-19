@@ -26,10 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
 
-/**
- * Épic 8 partiel (RG-DEF-01 à 04) — cf. FUNCTIONAL_MAP.md §8, API_IMPLEMENTATION_STATUS.md §10.
- * Le volet jurisprudence (US 8.3) vit dans {@link JurisprudenceService}.
- */
+/** Final decisions (RG-DEF-01 to 04). Case law (US 8.3) lives in {@link JurisprudenceService}. */
 @Service
 @RequiredArgsConstructor
 public class DecisionDefinitiveService {
@@ -41,11 +38,7 @@ public class DecisionDefinitiveService {
     private final AdjudicationMapper adjudicationMapper;
     private final CondamnationMapper condamnationMapper;
 
-    /**
-     * 🆕 M16 (Q-88, QF-03 du frontend) : décisions d'un dossier — aucune lecture n'existait, l'onglet
-     * de la fiche restait en écriture seule et la mise à jour d'une condamnation (#53) inatteignable
-     * après un rechargement. 404 si le dossier est inconnu, comme #56/#57/#58.
-     */
+    /** Final decisions of a case file; 404 if the case file is unknown. */
     @Transactional(readOnly = true)
     public DecisionsDossierResponse lister(Long dossierId) {
         getDossierOrThrow(dossierId);
@@ -54,7 +47,7 @@ public class DecisionDefinitiveService {
                 decisionDefinitiveRepository.condamnationsDuDossier(dossierId).stream().map(condamnationMapper::toResponse).toList());
     }
 
-    /** FR-DEF-01/RG-DEF-01 : l'étape indiquée doit être {@code CLOTURE}. */
+    /** FR-DEF-01/RG-DEF-01: the given step must be {@code CLOTURE}. */
     @Transactional
     public AdjudicationResponse creerAdjudication(Long dossierId, CreerAdjudicationRequest request) {
         Dossier dossier = getDossierOrThrow(dossierId);
@@ -83,13 +76,8 @@ public class DecisionDefinitiveService {
     }
 
     /**
-     * FR-DEF-02/RG-DEF-03/04 : le suivi d'une condamnation pécuniaire.
-     *
-     * <p><b>Sur une étape clôturée seulement, depuis QF-66</b> (porteur du projet, 2026-10-15). Q-59
-     * l'avait laissée sans précondition, faute de texte fonctionnel ; on pouvait donc suivre une
-     * condamnation sur un dossier tout juste ouvert, avant même qu'un juge ait statué. La règle est
-     * désormais celle de l'adjudication, sa voisine (RG-DEF-01) : l'étape est obligatoire, et elle
-     * doit être {@code CLOTURE}.
+     * FR-DEF-02/RG-DEF-03/04: records a monetary judgment. As for the adjudication (RG-DEF-01), the
+     * step is required and must be {@code CLOTURE}.
      */
     @Transactional
     public CondamnationResponse creerCondamnation(Long dossierId, CreerCondamnationRequest request) {
@@ -118,7 +106,7 @@ public class DecisionDefinitiveService {
         return condamnationMapper.toResponse(condamnation);
     }
 
-    /** FR-DEF-02/US 8.2 : mise à jour du statut de paiement au fil du suivi. */
+    /** FR-DEF-02/US 8.2: updates the payment status as it is followed up. */
     @Transactional
     public CondamnationResponse modifierStatutCondamnation(Long id, ModifierStatutCondamnationRequest request) {
         CondamnationPecuniaire condamnation = decisionDefinitiveRepository.findById(id)

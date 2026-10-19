@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-/** FR-INT-08/US 5.8 — absent de l'OpenAPI formel, implémenté selon les critères Gherkin de l'US. */
+/** Lawyer directory (FR-INT-08, US 5.8), implemented from the user story's acceptance criteria. */
 @RestController
 @RequiredArgsConstructor
 public class RepertoireController {

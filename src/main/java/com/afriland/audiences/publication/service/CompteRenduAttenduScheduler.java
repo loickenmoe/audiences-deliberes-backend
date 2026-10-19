@@ -32,28 +32,22 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * RG-INT-11 (métier du 2026-10-05) : relance de l'avocat dont le compte rendu d'audience manque.
+ * RG-INT-11: reminds the lawyer whose hearing report is missing.
  *
- * <p><b>Le manque que cela comble.</b> L'avocat est prévenu <i>avant</i> l'audience — J-7, J-3, J-1
- * (RG-AUD-03). Après, rien. Une audience tenue dont le compte rendu n'arrivait jamais ne produisait
- * aucun signal, et c'est précisément le cas que la Direction Juridique a relevé en présentation.
+ * <p>The lawyer is notified <i>before</i> the hearing (D-7, D-3, D-1, RG-AUD-03); this covers the
+ * period after it, when a missing report otherwise produced no signal.
  *
- * <p><b>Pourquoi il vit dans {@code publication}.</b> Il lui faut à la fois les audiences, les
- * comptes rendus et les avocats affectés. Le module {@code publication} dépend déjà des trois ;
- * {@code audience} ne connaît pas les publications, et l'y placer créerait un cycle — c'est la même
- * contrainte que celle qui a fait naître {@code ConditionTransitionEtape}.
+ * <p><b>Why it lives in {@code publication}</b>: it needs hearings, reports and assigned lawyers.
+ * {@code publication} already depends on all three; {@code audience} does not know publications,
+ * and placing it there would create a cycle.
  *
- * <p><b>Pourquoi la relance se répète.</b> Un rappel unique qu'on manque n'est jamais repris, or
- * c'est l'oubli durable que le métier veut traiter. La cadence vaut le délai : relance au bout de
- * {@code DELAI_RAPPEL_CR_AVOCAT} jours, puis tous les {@code DELAI_RAPPEL_CR_AVOCAT} jours, jusqu'au
- * dépôt — qui l'arrête de lui-même, puisque la condition cesse d'être vraie.
+ * <p><b>Repeated reminders</b>: first after {@code DELAI_RAPPEL_CR_AVOCAT} days, then every
+ * {@code DELAI_RAPPEL_CR_AVOCAT} days until the report is filed, which stops them naturally.
  *
- * <p><b>Pourquoi aucun état n'est stocké.</b> Le rang de la relance se déduit du temps écoulé, et
- * il entre dans la référence de l'événement. La déduplication du moteur de notification fait le
- * reste : deux exécutions du même jour ne produisent qu'un envoi, et un redémarrage ne rejoue rien.
- * C'est le procédé déjà employé par {@code RappelAudienceScheduler} pour ses trois échéances.
- * Le revers est assumé : une journée où le traitement ne tourne pas est une relance
- * perdue, non rattrapée le lendemain — la suivante arrive au multiple suivant.
+ * <p><b>No stored state</b>: the reminder rank is derived from elapsed time and included in the
+ * event reference; the notification engine's deduplication ensures two runs on the same day send
+ * only one message and a restart replays nothing (same approach as {@code RappelAudienceScheduler}).
+ * Trade-off: a day when the job does not run is a lost reminder, not caught up the next day.
  */
 @Slf4j
 @Component
@@ -63,32 +57,28 @@ public class CompteRenduAttenduScheduler {
     private static final String CLE_DELAI = "DELAI_RAPPEL_CR_AVOCAT";
 
     /**
-     * Les profils avertis d'un manquement repete : le Directeur Juridique et son adjointe.
+     * Profiles notified of repeated failures: the Legal Director and the Deputy.
      *
-     * <p>Lus tels quels, et <b>jamais par un role</b> : {@code ROLE_JURISTE} est composite (Q-81) et
-     * couvrirait les deux, mais aussi tous les juristes. C'est le trou que Q-126 a ferme ailleurs,
-     * et il ne se rouvre pas ici.
+     * <p>Read as profiles, <b>never through a role</b>: {@code ROLE_JURISTE} is composite and would
+     * cover both, but also every legal officer.
      */
     private static final List<String> PROFILS_AVERTIS = List.of("DJ", "DJA");
 
-    /** Deux audiences de suite sans compte rendu : c'est le seuil arrete par le metier. */
+    /** Two consecutive hearings without a report: the business threshold. */
     private static final int MANQUEMENTS_AVANT_ALERTE = 2;
 
     /**
-     * Nombre de relances au-delà duquel on cesse.
+     * Number of reminders after which they stop.
      *
-     * <p>Une relance qui ne s'arrête jamais n'est plus une relance : sans borne, un avocat serait
-     * rappelé tous les deux jours, des années durant, au sujet d'une audience de 2024. Au bout de
-     * cinq rappels sans réponse, le problème n'est plus un oubli et ne se traite plus par un
-     * message automatique.
+     * <p>Without a limit, a lawyer would be reminded every two days for years about an old hearing.
+     * After five unanswered reminders, the problem is no longer an oversight.
      *
-     * <p>Constante et non paramètre : le métier n'a pas arbitré ce nombre — c'est une hypothèse,
-     * posée pour que la fonction soit utilisable, et à remplacer par un réglage le jour où la
-     * Direction Juridique voudra le choisir.
+     * <p>A constant rather than a parameter: this number is an assumption, to be replaced by a setting
+     * if the Legal Department wants to choose it.
      */
     private static final long RELANCES_MAX = 5;
 
-    /** Un compte rendu rejeté ne vaut pas compte rendu : l'audience reste sans récit. */
+    /** A rejected report does not count: the hearing still has no report. */
     private static final Set<StatutPublication> DEPOSE_OU_VALIDE =
             Set.of(StatutPublication.DEPOSE, StatutPublication.VALIDE);
 
@@ -110,24 +100,21 @@ public class CompteRenduAttenduScheduler {
         }
         LocalDate aujourdHui = LocalDate.now();
         /*
-         * Les avocats à qui la direction a écrit et qui n'ont pas encore répondu (N7 temps 2).
+         * Lawyers to whom management has written and who have not answered yet.
          *
-         * **Un responsable qui écrit en personne couvre la machine.** Continuer à envoyer un rappel
-         * automatique tous les deux jours pendant qu'une demande d'explication attend sa réponse
-         * ferait du bruit, et affaiblirait les deux : le rappel, qu'on cesse de lire, et la demande,
-         * noyée dedans. La relance reprend à la réponse - le compte rendu manque toujours, et c'est
-         * de nouveau l'affaire du rappel.
+         * A manager writing in person takes precedence over automatic reminders: sending one every two
+         * days while a request for explanation awaits an answer would be noise and weaken both. Reminders
+         * resume once the lawyer answers, since the report is still missing.
          *
-         * La question est posée **une fois par passage**, et non une fois par audience : la réponse
-         * ne change pas d'une ligne à l'autre, et le planificateur en parcourt des centaines.
+         * Queried once per run, not per hearing: the answer does not change from one row to the next.
          */
         Set<Long> dispenses = Set.copyOf(demandeExplicationRepository.avocatsEnAttenteDeReponse());
 
         for (Audience audience : audienceRepository.findByDatePlanifieeBeforeAndStatutNot(
                 aujourdHui, StatutAudience.ANNULEE)) {
             long jours = ChronoUnit.DAYS.between(audience.getDatePlanifiee(), aujourdHui);
-            // La première relance tombe au bout du délai, les suivantes à chaque multiple : entre
-            // deux, il n'y a rien à faire et la journée se passe sans message.
+            // First reminder at the end of the delay, then at each multiple: in between, there is
+            // nothing to do.
             if (jours < delai || jours % delai != 0) {
                 continue;
             }
@@ -135,8 +122,8 @@ public class CompteRenduAttenduScheduler {
             if (rang > RELANCES_MAX) {
                 continue;
             }
-            // Une étape close ou archivée a tourné la page : la procédure a avancé sans ce récit,
-            // et réclamer encore ne servirait qu'à troubler l'avocat sur un dossier terminé.
+            // A closed or archived step means the procedure moved on without this report; reminding
+            // the lawyer about a finished case file would only confuse them.
             if (audience.getEtape() != null && audience.getEtape().getStatutCycleVie() != null
                     && audience.getEtape().getStatutCycleVie().estFerme()) {
                 continue;
@@ -153,14 +140,14 @@ public class CompteRenduAttenduScheduler {
         Long dossierId = audience.getDossier().getId();
         List<DossierAvocat> affectations = dossierAvocatRepository.findByDossierId(dossierId);
         if (affectations.isEmpty()) {
-            // Un dossier sans avocat affecté n'a personne à relancer. Ce n'est pas une anomalie du
-            // planificateur, mais c'est un compte rendu que personne ne doit : on le dit une fois.
+            // A case file with no assigned lawyer has no one to remind. Not a scheduler error, but a
+            // report nobody owes: it is logged once.
             log.info("Compte rendu manquant sur l'audience {} ({} jours), aucun avocat affecté au "
                     + "dossier {}", audience.getId(), joursEcoules, dossierId);
             return;
         }
         for (DossierAvocat affectation : affectations) {
-            // Une demande d'explication attend sa réponse : la machine se tait pour celui-ci.
+            // A request for explanation is awaiting an answer: no automatic reminder for this lawyer.
             if (dispenses.contains(affectation.getAvocat().getId())) {
                 continue;
             }
@@ -174,30 +161,21 @@ public class CompteRenduAttenduScheduler {
 
 
     /**
-     * N7 : deux audiences consecutives sans compte rendu remontent au Directeur Juridique
-     * (observation 8, definition arretee le 2026-10-07).
+     * Two consecutive hearings without a report are escalated to the Legal Director.
      *
-     * <p><b>Ce que compte cette methode, et que l'autre ne comptait pas.</b> La relance raisonne
-     * <b>par audience</b> : elle ne sait pas qu'un meme avocat en a manque deux. Celle-ci raisonne
-     * <b>par avocat</b>, a travers tous ses dossiers - c'est la lecture que le metier a retenue :
-     * ce sont les manquements de la personne qui comptent, pas ceux d'une affaire.
+     * <p>Unlike reminders, which reason <b>per hearing</b>, this method reasons <b>per lawyer</b>
+     * across all their case files: it is the person's failures that count.
      *
-     * <p><b>Seule la serie en cours est regardee.</b> On prend les audiences echues de l'avocat dans
-     * l'ordre des dates et on remonte depuis la fin tant que le compte rendu manque. Deux raisons :
-     * un avocat qui a manque deux audiences puis s'est remis a rendre compte n'a plus a etre
-     * signale - la serie est rompue, et nommer un comportement corrige ferait du bruit ; et au
-     * premier passage apres la mise en service, regarder tout l'historique produirait une alerte
-     * par serie ancienne, c'est-a-dire une avalanche le matin de la livraison.
+     * <p><b>Only the current streak is considered</b>: the lawyer's due hearings are sorted by date and
+     * walked back from the end while the report is missing. A lawyer who has resumed reporting is no
+     * longer flagged, and the first run after go-live does not raise an alert for every old streak.
      *
-     * <p><b>Une alerte par serie, pas une par jour.</b> « Deux audiences sans compte rendu » est un
-     * <b>etat</b> : il reste vrai tant que rien n'arrive. Le marqueur porte donc la premiere
-     * audience de la serie, et non la date : la troisieme audience manquee allonge la meme serie et
-     * ne reveille personne. Le metier a dit « au deuxieme manquement », pas « a chaque manquement ».
+     * <p><b>One alert per streak, not per day</b>: the marker holds the streak's first hearing, so a
+     * third missed hearing extends the same streak and notifies no one.
      *
-     * <p>L'application constate ; <b>c'est la direction qui decide</b> d'envoyer une demande
-     * d'explication. L'alerte va au Directeur Juridique <b>et a son adjointe</b> : l'un des deux
-     * peut etre absent le jour ou un avocat decroche, et un signalement qui attend un retour de
-     * conge n'en est plus un.
+     * <p>The application only reports; <b>management decides</b> whether to send a request for
+     * explanation. The alert goes to the Legal Director <b>and the Deputy</b>, so that one absence
+     * does not delay it.
      */
     @Scheduled(cron = "${publication.manquement-compte-rendu.cron:0 45 6 * * *}")
     @Transactional
@@ -211,7 +189,7 @@ public class CompteRenduAttenduScheduler {
                 .flatMap(List::stream)
                 .toList();
         if (directeurs.isEmpty()) {
-            // Personne a prevenir : ce n'est pas une anomalie du planificateur, mais cela se dit.
+            // No one to notify: not a scheduler error, but worth logging.
             log.info("Manquements de comptes rendus non signales : ni Directeur Juridique ni adjointe actifs");
             return;
         }
@@ -226,11 +204,10 @@ public class CompteRenduAttenduScheduler {
     }
 
     /**
-     * Les audiences dont le delai de depot est ecoule, rangees par avocat et par date.
+     * Hearings whose filing delay has elapsed, sorted by lawyer and date.
      *
-     * <p>« Echue » a ici le <b>meme sens</b> que pour la relance : le delai passe, l'audience non
-     * annulee, l'etape encore ouverte. Un autre seuil ferait signaler au DJ une audience pour
-     * laquelle l'avocat n'a jamais ete relance.
+     * <p>"Due" has the <b>same meaning</b> as for reminders: delay elapsed, hearing not cancelled, step
+     * still open. Any other threshold would flag a hearing for which the lawyer was never reminded.
      */
     private Map<Avocat, List<Audience>> audiencesEchuesParAvocat(int delai) {
         LocalDate limite = LocalDate.now().minusDays(delai);
@@ -255,7 +232,7 @@ public class CompteRenduAttenduScheduler {
         return parAvocat;
     }
 
-    /** La suite de manquements qui termine la liste : vide des que le dernier compte rendu existe. */
+    /** The streak of failures ending the list: empty as soon as the latest report exists. */
     private List<Audience> serieDeManquementsEnCours(List<Audience> audiences) {
         List<Audience> serie = new ArrayList<>();
         for (int rang = audiences.size() - 1; rang >= 0; rang--) {
@@ -270,8 +247,8 @@ public class CompteRenduAttenduScheduler {
     }
 
     private void signaler(Avocat avocat, List<Audience> serie, List<Utilisateur> directeurs) {
-        // Le marqueur porte la **premiere** audience de la serie : une serie qui s'allonge reste
-        // la meme, et n'alerte qu'une fois.
+        // The marker holds the **first** hearing of the streak: a growing streak stays the same one
+        // and alerts only once.
         String marqueur = "[avocat:" + avocat.getId() + ";serie:" + serie.get(0).getId() + "] ";
         Audience derniere = serie.get(serie.size() - 1);
         String declencheur = marqueur + "L'avocat " + avocat.getNom() + " n'a pas depose le compte "
@@ -290,10 +267,10 @@ public class CompteRenduAttenduScheduler {
     }
 
     /**
-     * Le délai, ou 0 si le paramètre est illisible.
+     * The delay, or 0 if the parameter cannot be read.
      *
-     * <p>Un planificateur ne doit pas faire tomber son exécution sur une configuration douteuse :
-     * il se tait, le dit au journal, et les autres traitements de la nuit continuent.
+     * <p>A scheduler must not fail on a dubious configuration: it stays silent, logs it, and the other
+     * nightly jobs continue.
      */
     private int delaiEnJours() {
         try {

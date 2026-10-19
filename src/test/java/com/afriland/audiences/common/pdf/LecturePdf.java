@@ -10,20 +10,15 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Relit un PDF produit par le système, pour les tests (A1).
- *
- * <p><b>Pourquoi cette classe existe.</b> Les trois générateurs historiques n'étaient éprouvés que
- * par « le tableau d'octets n'est pas vide et commence par {@code %PDF-} ». Un document qui aurait
- * perdu toutes ses données passait au vert. Avant de refondre leur mise en forme, il fallait des
- * tests capables de dire ce que le fichier contient — sans quoi « ne rien casser » serait resté une
- * affirmation au lieu d'être une mesure.
+ * Reads back a PDF produced by the system, for tests: checks what the file contains rather than only
+ * that it is a non-empty byte array starting with {@code %PDF-}.
  */
 public final class LecturePdf {
 
     private LecturePdf() {
     }
 
-    /** Le texte du document, toutes pages confondues. */
+    /** The document text, all pages combined. */
     public static String texte(byte[] pdf) throws Exception {
         try (PDDocument document = Loader.loadPDF(pdf)) {
             return new PDFTextStripper().getText(document);
@@ -31,15 +26,11 @@ public final class LecturePdf {
     }
 
     /**
-     * Le texte <b>avec sa position</b>, une ligne par fragment : {@code x;y;texte}, au point près.
+     * The text <b>with its position</b>, one line per fragment: {@code x;y;text}, rounded to the point.
      *
-     * <p>Ce que cela permet de vérifier, et que {@link #texte(byte[])} laisse passer : qu'un même
-     * contenu se pose au <b>même endroit</b> d'un tirage à l'autre. Un document dont le décor
-     * change peut garder tous ses mots et les avoir tous déplacés — à l'impression sur une feuille
-     * préimprimée, c'est la seule chose qui compte.
-     *
-     * <p>Les coordonnées sont arrondies au point : PDFBox les calcule en virgule flottante, et deux
-     * rendus identiques peuvent différer d'un millième sans que rien n'ait bougé sur la page.
+     * <p>Unlike {@link #texte(byte[])}, this verifies that content lands in the <b>same place</b> from
+     * one rendering to the next, which matters when printing on preprinted paper. Coordinates are
+     * rounded because PDFBox computes them in floating point.
      */
     public static String positions(byte[] pdf) throws Exception {
         try (PDDocument document = Loader.loadPDF(pdf)) {
@@ -60,7 +51,7 @@ public final class LecturePdf {
         }
     }
 
-    /** Les propriétés du fichier — invisibles sur la page, et c'est pourquoi elles se perdent. */
+    /** File properties: invisible on the page, which is why they get lost. */
     public static PDDocumentInformation proprietes(byte[] pdf) throws Exception {
         try (PDDocument document = Loader.loadPDF(pdf)) {
             return document.getDocumentInformation();

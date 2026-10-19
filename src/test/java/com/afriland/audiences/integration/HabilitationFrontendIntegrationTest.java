@@ -51,14 +51,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * M15 (Q-68) — tests d'intégration des endpoints ajoutés pour rendre le backend consommable par un
- * frontend : référentiels de formulaire, administration des intervenants et listes de travail.
- * <p>
- * Ces endpoints n'ont presque pas de règle métier ; leur risque est ailleurs — routage, filtres de
- * requête et surtout <b>habilitations</b>, qu'un test de service mocké ne peut pas vérifier. D'où
- * un test de bout en bout (contexte Spring complet, PostgreSQL réel migré par Flyway) plutôt que
- * des tests unitaires supplémentaires. Mêmes substitutions assumées qu'en M14 (Q-65) : JWT simulé,
- * {@link MinioClient} mocké.
+ * M15: integration tests for the endpoints that make the backend usable by a frontend (form
+ * reference data, stakeholder administration, work lists).
+ *
+ * <p>Their risk lies in routing, query filters and above all <b>authorizations</b>, which a mocked
+ * service test cannot check. Hence a full Spring context on a real Flyway-migrated PostgreSQL, with
+ * a simulated JWT and a mocked {@link MinioClient}.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -107,8 +105,6 @@ class HabilitationFrontendIntegrationTest {
                         .build()).getId());
     }
 
-    // ---------------------------------------------------------------- Référentiels de formulaire
-
     @Test
     @DisplayName("Les natures de dossier sont exposées et filtrables par catégorie")
     void naturesDossier_sontExposeesEtFiltrables() throws Exception {
@@ -145,24 +141,19 @@ class HabilitationFrontendIntegrationTest {
                 .andExpect(status().isForbidden());
     }
 
-    // ------------------------------------------------- Diligence particulière après l'ouverture (N4)
-
     /**
-     * Le circuit complet, par HTTP : le juriste propose, le DJ arbitre, puis la DJA retire.
+     * N4, full workflow over HTTP: the legal officer proposes, the DJ arbitrates, then the DJA withdraws.
      *
-     * <p>Une seule méthode, parce que c'est une <b>chaîne</b> : chaque étape suppose l'état laissé
-     * par la précédente, et la découper imposerait de recréer un dossier à chaque fois.
-     *
-     * <p>Ce qu'elle prouve, et que les tests unitaires ne peuvent pas prouver : les
-     * {@code @PreAuthorize} sont au bon endroit, et le seuil suit réellement la décision - global
-     * tant que rien n'est validé, dérogatoire après, global de nouveau après le retrait.
+     * <p>A single method because it is a <b>chain</b>: each step depends on the previous state. It proves
+     * the {@code @PreAuthorize} placement and that the threshold follows the decision: global until
+     * validated, derogatory after, global again after withdrawal.
      */
     @Test
     @DisplayName("La diligence particulière se propose, s'arbitre et se retire après l'ouverture")
     void diligence_circuitCompletApresOuverture() throws Exception {
         long dossierId = creerDossierOrdinaire();
 
-        // 1. Le juriste propose. Rien ne doit changer pour les frais avant l'arbitrage (Q-10).
+        // 1. The legal officer proposes. Nothing changes for fees before arbitration.
         JsonNode propose = lireJson(mockMvc.perform(post(api("/dossiers/" + dossierId + "/sensibilite/proposition"))
                         .contentType(MediaType.APPLICATION_JSON).characterEncoding(StandardCharsets.UTF_8)
                         .content("""
@@ -177,7 +168,7 @@ class HabilitationFrontendIntegrationTest {
         assertThat(propose.get("seuilOrigine").asText()).isEqualTo("GLOBAL");
         assertThat(propose.get("seuilMontant").isNull()).isTrue();
 
-        // Proposer deux fois n'a pas de sens : le refus dit laquelle des deux situations on est.
+        // Proposing twice makes no sense: the refusal states which situation applies.
         mockMvc.perform(post(api("/dossiers/" + dossierId + "/sensibilite/proposition"))
                         .contentType(MediaType.APPLICATION_JSON).characterEncoding(StandardCharsets.UTF_8)
                         .content("""
@@ -187,7 +178,7 @@ class HabilitationFrontendIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message", containsString("déjà en attente")));
 
-        // 2. Le DJ arbitre, par l'endpoint qui existait déjà : il ignore d'où vient la proposition.
+        // 2. The DJ arbitrates through the existing endpoint, unaware of where the proposal comes from.
         JsonNode valide = lireJson(mockMvc.perform(post(api("/dossiers/" + dossierId + "/sensibilite/validation"))
                         .contentType(MediaType.APPLICATION_JSON).characterEncoding(StandardCharsets.UTF_8)
                         .content("""
@@ -200,7 +191,7 @@ class HabilitationFrontendIntegrationTest {
         assertThat(valide.get("seuilMontant").asDouble()).isEqualTo(60_000_000d);
         assertThat(valide.get("seuilOrigine").asText()).isEqualTo("DEROGATION");
 
-        // 3. Le retrait exige un motif : lever la diligence sort le dossier du circuit des frais.
+        // 3. Withdrawal requires a reason: removing sensitivity takes the case out of the fee workflow.
         mockMvc.perform(put(api("/dossiers/" + dossierId + "/sensibilite"))
                         .contentType(MediaType.APPLICATION_JSON).characterEncoding(StandardCharsets.UTF_8)
                         .content("""
@@ -220,11 +211,11 @@ class HabilitationFrontendIntegrationTest {
                 .andReturn());
         assertThat(retire.get("estSensible").asBoolean()).isFalse();
         assertThat(retire.get("sensibiliteMotifRetrait").asText()).isEqualTo("L'affaire s'est révélée ordinaire");
-        // Le seuil redevient global : un seuil dérogatoire n'existe que pour un dossier sensible.
+        // The threshold becomes global again: a derogation threshold only exists for a sensitive case.
         assertThat(retire.get("seuilOrigine").asText()).isEqualTo("GLOBAL");
         assertThat(retire.get("seuilMontant").isNull()).isTrue();
 
-        // 4. Rien à retirer deux fois.
+        // 4. Nothing to withdraw twice.
         mockMvc.perform(put(api("/dossiers/" + dossierId + "/sensibilite"))
                         .contentType(MediaType.APPLICATION_JSON).characterEncoding(StandardCharsets.UTF_8)
                         .content("""
@@ -234,7 +225,7 @@ class HabilitationFrontendIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message", containsString("rien à retirer")));
 
-        // 5. Et le dossier peut repartir en diligence : le passé ne le condamne pas.
+        // 5. The case can become sensitive again: its past does not prevent it.
         mockMvc.perform(post(api("/dossiers/" + dossierId + "/sensibilite/proposition"))
                         .contentType(MediaType.APPLICATION_JSON).characterEncoding(StandardCharsets.UTF_8)
                         .content("""
@@ -243,22 +234,20 @@ class HabilitationFrontendIntegrationTest {
                         .with(role("kc-juriste-m15", "ROLE_SAISIE")))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.sensibiliteStatut").value("EN_ATTENTE"))
-                // Le motif du retrait est effacé : il ne porte plus sur la situation en cours.
+                // The withdrawal reason is cleared: it no longer applies to the current situation.
                 .andExpect(jsonPath("$.sensibiliteMotifRetrait").doesNotExist());
     }
 
     /**
-     * Le partage des rôles : le juriste <b>propose</b>, le DJ et la DJA <b>décident</b>.
-     *
-     * <p>Même règle que la dérogation de seuil, et pour la même raison : poser la diligence engage
-     * la double validation des frais, ce n'est pas un geste de saisie.
+     * Role split: the legal officer <b>proposes</b>, the DJ and DJA <b>decide</b>. Setting sensitivity
+     * triggers double fee validation, so it is not a data-entry action.
      */
     @Test
     @DisplayName("Le juriste propose la diligence, il ne la pose pas ; le DJ fait l'inverse")
     void diligence_partageDesRoles() throws Exception {
         long dossierId = creerDossierOrdinaire();
 
-        // Le juriste n'a pas la main sur la pose directe.
+        // The legal officer cannot set it directly.
         mockMvc.perform(put(api("/dossiers/" + dossierId + "/sensibilite"))
                         .contentType(MediaType.APPLICATION_JSON).characterEncoding(StandardCharsets.UTF_8)
                         .content("""
@@ -267,7 +256,7 @@ class HabilitationFrontendIntegrationTest {
                         .with(role("kc-juriste-m15", "ROLE_SAISIE", "ROLE_JURISTE")))
                 .andExpect(status().isForbidden());
 
-        // Le DJ pose directement, sans proposition : il est lui-même la décision.
+        // The DJ sets it directly, without a proposal: they are the decision.
         mockMvc.perform(put(api("/dossiers/" + dossierId + "/sensibilite"))
                         .contentType(MediaType.APPLICATION_JSON).characterEncoding(StandardCharsets.UTF_8)
                         .content("""
@@ -279,7 +268,7 @@ class HabilitationFrontendIntegrationTest {
                 .andExpect(jsonPath("$.sensibiliteStatut").value("VALIDEE"))
                 .andExpect(jsonPath("$.seuilOrigine").value("DEROGATION"));
 
-        // L'Assistante ne touche à ni l'un ni l'autre.
+        // The Assistant can do neither.
         mockMvc.perform(post(api("/dossiers/" + dossierId + "/sensibilite/proposition"))
                         .contentType(MediaType.APPLICATION_JSON).characterEncoding(StandardCharsets.UTF_8)
                         .content("""
@@ -289,12 +278,7 @@ class HabilitationFrontendIntegrationTest {
                 .andExpect(status().isForbidden());
     }
 
-    /**
-     * Un dossier **ordinaire**, sans diligence particulière : le point de départ de N4.
-     *
-     * <p>Avant N4, un dossier créé ainsi ne pouvait plus jamais devenir sensible - c'est précisément
-     * ce que ces deux tests vérifient.
-     */
+    /** An **ordinary** case without sensitivity: the N4 starting point. */
     private long creerDossierOrdinaire() throws Exception {
         int n = COMPTEUR.incrementAndGet();
         long clientId = extraireId(mockMvc.perform(post(api("/clients"))
@@ -308,18 +292,12 @@ class HabilitationFrontendIntegrationTest {
                 clientId, juristeId, avocatId, "N4-" + n);
     }
 
-    // ---------------------------------------------------------------- Référentiel des agences (N1)
-
     /**
-     * Le cycle de vie complet d'une agence, par HTTP (métier, 2026-10-03 et 2026-10-06).
+     * N1: full lifecycle of an agency over HTTP, in one method because each step depends on the
+     * identifier returned by the previous one (and codes are unique).
      *
-     * <p>Ce test tient en une méthode parce que c'est une <b>chaîne</b> : chaque étape dépend de
-     * l'identifiant rendu par la précédente. La découper imposerait de recréer une agence à chaque
-     * fois, et le code étant unique, de forger un code différent par test.
-     *
-     * <p>Ce qu'il prouve : la création, le refus du doublon de code, le refus du changement de code,
-     * la fermeture, la <b>réouverture</b>, et le fait qu'une agence fermée disparaît des listes de
-     * saisie <b>sans disparaître de la base</b>.
+     * <p>Proves creation, duplicate code refusal, code change refusal, closing, <b>reopening</b>, and that
+     * a closed agency leaves the entry lists <b>without leaving the database</b>.
      */
     @Test
     @DisplayName("Une agence se crée, se corrige, se ferme et se rouvre ; son code ne change jamais")
@@ -337,13 +315,13 @@ class HabilitationFrontendIntegrationTest {
                 .andReturn());
         long id = creee.get("id").asLong();
 
-        // Le code est unique : le doublon est un 409, non un 500 venu de la contrainte SQL.
+        // The code is unique: a duplicate is a 409, not a 500 from the SQL constraint.
         mockMvc.perform(post(api("/referentiels/agences"))
                         .contentType(MediaType.APPLICATION_JSON).content(corps)
                         .with(role("kc-dj-m15", "ROLE_DJ")))
                 .andExpect(status().isConflict());
 
-        // Le code ne se modifie pas : les dossiers le portent en clair, sans clé étrangère.
+        // The code cannot be changed: cases store it as plain text, without a foreign key.
         mockMvc.perform(put(api("/referentiels/agences/" + id))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -353,7 +331,7 @@ class HabilitationFrontendIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message", containsString("ne se modifie pas")));
 
-        // Le reste se corrige, code inchangé.
+        // Everything else can be corrected, code unchanged.
         mockMvc.perform(put(api("/referentiels/agences/" + id))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -364,17 +342,17 @@ class HabilitationFrontendIntegrationTest {
                 .andExpect(jsonPath("$.nom").value("AGENCE INTEGRATION 2"))
                 .andExpect(jsonPath("$.ville").value("Yaoundé"));
 
-        // Fermeture : l'agence quitte les listes de saisie...
+        // Closing: the agency leaves the entry lists...
         mockMvc.perform(delete(api("/referentiels/agences/" + id))
                         .with(role("kc-dj-m15", "ROLE_DJ")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.actif").value(false));
 
         assertThat(codesProposes()).doesNotContain("00901");
-        // ...mais pas la base : l'écran d'administration la voit toujours.
+        // ...but not the database: the administration screen still sees it.
         assertThat(codesConnus()).contains("00901");
 
-        // Réouverture (2026-10-06) : même agence, même code, de nouveau proposable.
+        // Reopening: same agency, same code, selectable again.
         mockMvc.perform(patch(api("/referentiels/agences/" + id + "/reactivation"))
                         .with(role("kc-dja-m15", "ROLE_DJA")))
                 .andExpect(status().isOk())
@@ -385,9 +363,8 @@ class HabilitationFrontendIntegrationTest {
     }
 
     /**
-     * La <b>lecture</b> est ouverte à la consultation - elle explique ce que propose le formulaire -
-     * mais l'écriture est réservée au DJ et à la DJA : un code d'agence engage les dossiers qui le
-     * portent, et sa tenue n'est pas un geste de saisie.
+     * <b>Reading</b> is open to consultation (it explains what the form offers), but writing is reserved
+     * to the DJ and DJA: an agency code affects every case that carries it.
      */
     @Test
     @DisplayName("Les agences se lisent avec CONSULTATION, ne s'écrivent qu'en DJ ou DJA")
@@ -411,8 +388,8 @@ class HabilitationFrontendIntegrationTest {
     }
 
     /**
-     * La recherche porte sur le <b>code</b> et sur le <b>nom</b>, par fragment et sans distinction de
-     * casse : « bona » doit ramener Bonanjo, Bonabéri, Bonamoussadi et Bonapriso, chargées par V42.
+     * Search applies to <b>code</b> and <b>name</b>, by fragment and case-insensitive: "bona" must return
+     * Bonanjo, Bonaberi, Bonamoussadi and Bonapriso, loaded by V42.
      */
     @Test
     @DisplayName("La recherche d'agence porte sur le code et sur le nom, sans distinction de casse")
@@ -434,7 +411,7 @@ class HabilitationFrontendIntegrationTest {
         assertThat(parCode.get("totalElements").asInt()).isEqualTo(1);
         assertThat(parCode.get("content").get(0).get("nom").asText()).isEqualTo("BONANJO");
 
-        // Les 82 agences de V42 portent toutes une ville : c'est elle qui sépare les homonymes.
+        // All 82 agencies of V42 have a city: it distinguishes homonyms.
         JsonNode toutes = lireJson(mockMvc.perform(get(api("/referentiels/agences"))
                         .param("size", "200")
                         .with(role("kc-juriste-m15", "ROLE_CONSULTATION")))
@@ -444,12 +421,12 @@ class HabilitationFrontendIntegrationTest {
                 assertThat(agence.get("ville").asText()).isNotBlank());
     }
 
-    /** Les codes que la <b>saisie</b> propose : agences ouvertes seulement. */
+    /** Codes offered for <b>data entry</b>: open agencies only. */
     private List<String> codesProposes() throws Exception {
         return codes(true);
     }
 
-    /** Les codes que l'<b>administration</b> voit : ouvertes et fermées. */
+    /** Codes seen by <b>administration</b>: open and closed. */
     private List<String> codesConnus() throws Exception {
         return codes(false);
     }
@@ -466,12 +443,9 @@ class HabilitationFrontendIntegrationTest {
         return resultat;
     }
 
-    // ---------------------------------------------------------------- Répertoire des utilisateurs internes
-
     /**
-     * Q-69 — le test le plus important du lot : il rejoue la chaîne complète qui était rompue.
-     * Le frontend liste les juristes, en retient un identifiant, et s'en sert pour créer un dossier.
-     * Sans {@code GET /utilisateurs}, ce dernier appel était impossible à construire.
+     * Replays the full chain: the frontend lists legal officers, keeps an identifier and uses it to
+     * create a case. Without {@code GET /utilisateurs}, that last call could not be built.
      */
     @Test
     @DisplayName("Un juriste listé peut être affecté à un dossier — chaîne complète de création")
@@ -510,11 +484,11 @@ class HabilitationFrontendIntegrationTest {
                                 Map.entry("pvTransfert", "PV-Q69-" + n),
                                 Map.entry("juristesAffectes", List.of(juristeId)),
                                 Map.entry("avocatsAffectes", List.of(avocatId)),
-                                // Obligatoires depuis le 2026-10-05 (observations 1 et 3).
+                                // Mandatory.
                                 Map.entry("parties", Map.of(
                                         "demandeurs", List.of("AFRILAND FIRST BANK"),
                                         "defendeurs", List.of("Défendeur au procès"))),
-                                // Obligatoire depuis le 2026-10-05 (observation 2) : 00002 = Bonanjo.
+                                // Mandatory: 00002 = Bonanjo.
                                 Map.entry("codeAgenceOrigine", "00002"))))
                         .with(role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_SAISIE")))
                 .andExpect(status().isCreated())
@@ -536,12 +510,10 @@ class HabilitationFrontendIntegrationTest {
                 .andReturn());
         assertThat(tous.size()).isGreaterThan(dj.size());
 
-        // Le profil AVOCAT ne porte pas ROLE_CONSULTATION (cf. audiences-realm.json).
+        // The AVOCAT profile does not carry ROLE_CONSULTATION (see audiences-realm.json).
         mockMvc.perform(get(api("/utilisateurs")).with(role("kc-avocat-externe", "ROLE_AVOCAT")))
                 .andExpect(status().isForbidden());
     }
-
-    // ---------------------------------------------------------------- Administration des intervenants
 
     @Test
     @DisplayName("Le DJ crée un avocat, puis le retrouve dans le référentiel filtré")
@@ -563,7 +535,7 @@ class HabilitationFrontendIntegrationTest {
                         .with(role("kc-juriste-m15", "ROLE_CONSULTATION")))
                 .andExpect(status().isOk())
                 .andReturn());
-        // Q-100 : la réponse est paginée — `{content, totalPages, totalElements}`.
+        // The response is paginated: `{content, totalPages, totalElements}`.
         assertThat(avocats.get("content").findValues("id")).anySatisfy(n -> assertThat(n.asLong()).isEqualTo(id));
         avocats.get("content").forEach(a -> assertThat(a.get("type").asText()).isEqualTo("AVOCAT"));
     }
@@ -616,12 +588,10 @@ class HabilitationFrontendIntegrationTest {
                 .andExpect(status().isForbidden());
     }
 
-    // ---------------------------------------------------------------- Listes de travail
-
     @Test
     @DisplayName("Chaque file de travail est servie à son profil et refusée aux autres")
     void filesDeTravail_respectentLesHabilitations() throws Exception {
-        // File des publications à valider — Assistante
+        // Publications awaiting validation: Assistant
         mockMvc.perform(get(api("/publications")).param("statut", "DEPOSE")
                         .with(role("kc-assistante-m15", "ROLE_ASSISTANTE")))
                 .andExpect(status().isOk())
@@ -629,7 +599,7 @@ class HabilitationFrontendIntegrationTest {
         mockMvc.perform(get(api("/publications")).with(role("kc-sh-m15", "ROLE_SH")))
                 .andExpect(status().isForbidden());
 
-        // File des demandes de suppression — DJ/DJA
+        // Deletion requests: DJ/DJA
         mockMvc.perform(get(api("/ged/demandes-suppression")).param("statut", "EN_ATTENTE")
                         .with(role("kc-dj-m15", "ROLE_DJ")))
                 .andExpect(status().isOk())
@@ -639,21 +609,20 @@ class HabilitationFrontendIntegrationTest {
                         .with(role("kc-juriste-m15", "ROLE_JURISTE")))
                 .andExpect(status().isForbidden());
 
-        // File des constitutions à signer — SH
+        // Retainer letters to sign: SH
         mockMvc.perform(get(api("/constitutions/prestataires")).param("statut", "EN_ATTENTE")
                         .with(role("kc-sh-m15", "ROLE_SH")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content").isArray())
                 .andExpect(jsonPath("$.totalElements").exists());
         /*
-         * L'Assistante y accède depuis le 2026-10-07 : elle sollicite et rédige comme un juriste
-         * (Q-126). La lettre qu'elle fait naître est la sienne - elle seule y écrit, et le
-         * supérieur hiérarchique la corrige avant de la signer.
+         * The Assistant has access too: she requests and drafts like a legal officer. The letter she
+         * creates is hers (only she writes it), and the line manager corrects it before signing.
          */
         mockMvc.perform(get(api("/constitutions/prestataires"))
                         .with(role("kc-assistante-m15", "ROLE_ASSISTANTE")))
                 .andExpect(status().isOk());
-        // Elle rédige, elle ne signe pas : la seconde signature reste au supérieur hiérarchique.
+        // She drafts, she does not sign: the second signature stays with the line manager.
         mockMvc.perform(put(api("/constitutions/prestataires/1/validation"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .characterEncoding(StandardCharsets.UTF_8)
@@ -662,18 +631,14 @@ class HabilitationFrontendIntegrationTest {
                 .andExpect(status().isForbidden());
     }
 
-    // ---------------------------------------------------------------- Sous-ressources d'un dossier
-
     @Test
     @DisplayName("Les onglets audiences / délibérés / alarmes d'un dossier sont servis, 404 si le dossier n'existe pas")
     void sousRessourcesDossier() throws Exception {
         long dossierId = creerDossier();
 
         /*
-         * Q-100 : audiences et alarmes sont paginées — elles grandissent avec la vie du dossier. Les
-         * délibérés restent une liste : un dossier en compte un par étape, trois au maximum. Cette
-         * asymétrie est délibérée, et ce test la fige pour qu'elle ne soit pas « corrigée » par
-         * mégarde dans un sens ou dans l'autre.
+         * Hearings and alarms are paginated (they grow over the case's life). Deliberations stay a list:
+         * at most one per step, three in total. This asymmetry is intentional and locked here.
          */
         for (String sousRessource : List.of("audiences", "alarmes")) {
             mockMvc.perform(get(api("/dossiers/" + dossierId + "/" + sousRessource))
@@ -695,13 +660,10 @@ class HabilitationFrontendIntegrationTest {
         }
     }
 
-    // ---------------------------------------------------------------- Provisionnement en lecture seule (R-06)
-
     /**
-     * Reproduit le scénario exact de R-06 par HTTP : {@code GET /alertes/mes-notifications} est
-     * servi par un service {@code @Transactional(readOnly = true)} et résout l'utilisateur courant.
-     * Avant M15, la toute première requête d'un nouvel utilisateur — celle que le frontend émet au
-     * chargement — retombait en 500 (« cannot execute INSERT in a read-only transaction »).
+     * R-06 scenario over HTTP: {@code GET /alertes/mes-notifications} is served by a
+     * {@code @Transactional(readOnly = true)} service and resolves the current user. A new user's very
+     * first request used to fail with a 500 ("cannot execute INSERT in a read-only transaction").
      */
     @Test
     @DisplayName("R-06 corrigé : un utilisateur inconnu est provisionné depuis un endpoint en lecture seule")
@@ -713,18 +675,15 @@ class HabilitationFrontendIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content").isArray());
 
-        // Le profil dérivé du jeton est vérifié par ProvisionnementLectureSeuleIntegrationTest ;
-        // ici, seule compte la présence de la ligne — la preuve que l'INSERT a bien eu lieu.
+        // The token-derived profile is checked by ProvisionnementLectureSeuleIntegrationTest; here only
+        // the row's presence matters, proving the INSERT happened.
         assertThat(utilisateurRepository.findByKeycloakId(nouveau)).isPresent();
     }
 
-    // ---------------------------------------------------------------- Ordre des notifications (Q-92)
-
     /**
-     * Q-92 : {@code GET /alertes/mes-notifications} n'avait aucun {@code ORDER BY}. L'ordre était
-     * laissé à PostgreSQL, donc une notification pouvait atterrir sur n'importe quelle page — et
-     * une même alerte apparaître deux fois, ou disparaître, en changeant de page. Les trois alertes
-     * de ce test sont créées dans la même seconde : seul le départage par {@code id} les ordonne.
+     * {@code GET /alertes/mes-notifications} must have a deterministic {@code ORDER BY}, otherwise an
+     * alert may appear twice or vanish across pages. The three alerts here are created in the same
+     * second: only the {@code id} tie-breaker orders them.
      */
     @Test
     @DisplayName("Q-92 : les notifications reviennent de la plus récente à la plus ancienne")
@@ -747,8 +706,8 @@ class HabilitationFrontendIntegrationTest {
     }
 
     /**
-     * Q-93 : {@code GET /clients} et {@code GET /dossiers} paginaient sans {@code ORDER BY}. Passé
-     * vingt clients, celui qu'on venait de créer basculait en page 2 — invisible pour son auteur.
+     * {@code GET /clients} and {@code GET /dossiers} must paginate with an {@code ORDER BY}; otherwise,
+     * past twenty clients, a newly created one could land on page 2, invisible to its author.
      */
     @Test
     @DisplayName("Q-93 : le client et le dossier qu'on vient de créer sont en tête de la première page")
@@ -770,12 +729,9 @@ class HabilitationFrontendIntegrationTest {
                 .andExpect(jsonPath("$.content[0].id").value(dossierId));
     }
 
-    // ---------------------------------------------------------------- Modification d'un client
-
     /**
-     * {@code PUT /clients/{id}} : recommandé en Q-23, ouvert le 2026-09-22. Trois règles, vérifiées
-     * ensemble sur la pile réelle : la garde est celle de la création, la référence reste figée même
-     * si le corps en porte une autre, et la modification laisse une trace lisible dans l'audit.
+     * {@code PUT /clients/{id}}: same guard as creation, the reference stays fixed even if the body
+     * carries another, and the change leaves a readable audit trace.
      */
     @Test
     @DisplayName("un client se corrige, sa référence reste figée, et la modification est tracée")
@@ -788,14 +744,14 @@ class HabilitationFrontendIntegrationTest {
         String reference = extraireReference(creation);
         long clientId = extraireId(creation);
 
-        // L'avocat n'a pas ROLE_SAISIE : il ne corrige pas un client de la banque.
+        // The lawyer lacks ROLE_SAISIE: they do not edit a bank client.
         mockMvc.perform(put(api("/clients/" + clientId))
                         .with(role("kc-avocat-m15", "ROLE_AVOCAT"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("nom", "Intrusion"))))
                 .andExpect(status().isForbidden());
 
-        // Le corps porte une autre référence : elle est ignorée, l'identifiant ne bouge pas.
+        // The body carries another reference: it is ignored, the identifier does not move.
         mockMvc.perform(put(api("/clients/" + clientId)).with(juriste)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("reference", "AUTRE-" + reference, "nom", "Nom corrigé",
@@ -805,13 +761,13 @@ class HabilitationFrontendIntegrationTest {
                 .andExpect(jsonPath("$.nom").value("Nom corrigé"))
                 .andExpect(jsonPath("$.email").value("contact@client.cm"));
 
-        // Un nom vide est refusé, comme à la création.
+        // An empty name is refused, as on creation.
         mockMvc.perform(put(api("/clients/" + clientId)).with(juriste)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("nom", " "))))
                 .andExpect(status().isBadRequest());
 
-        // La trace : hors dossier, avec la référence et les deux valeurs du nom.
+        // The trace: outside any case, with the reference and both name values.
         mockMvc.perform(get(api("/historique")).param("perimetre", "HORS_DOSSIER")
                         .param("code", "CLIENT_MODIFIE").param("size", "1")
                         .with(role("kc-dj-m15", "ROLE_DJ", "ROLE_CONSULTATION")))
@@ -822,12 +778,10 @@ class HabilitationFrontendIntegrationTest {
                 .andExpect(jsonPath("$.content[0].details.nouvelEmail").value("contact@client.cm"));
     }
 
-    // ---------------------------------------------------------------- Modification d'un intervenant
-
     /**
-     * {@code PUT /intervenants/{id}} (Q-117) : la garde est celle de la création (DJ, DJA), et ni le
-     * type ni l'identifiant Keycloak ne bougent, même si le corps en porte d'autres — l'identité se
-     * gère dans Keycloak. Le nom et les coordonnées se corrigent, et la modification est tracée.
+     * {@code PUT /intervenants/{id}}: same guard as creation (DJ, DJA); neither the type nor the Keycloak
+     * identifier changes, even if the body carries others (identity is managed in Keycloak). Name and
+     * contact details can be corrected, and the change is traced.
      */
     @Test
     @DisplayName("Q-117 : un avocat se corrige, son type et son identifiant Keycloak restent figés, et c'est tracé")
@@ -839,14 +793,14 @@ class HabilitationFrontendIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("type", "AVOCAT", "nom", "Me Coquile " + n, "compteKeycloak", compte))))
                 .andExpect(status().isCreated()).andReturn());
-        // Le juriste consulte le référentiel mais ne le modifie pas.
+        // The legal officer reads the reference data but does not modify it.
         mockMvc.perform(put(api("/intervenants/" + avocatId))
                         .with(role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_SAISIE", "ROLE_CONSULTATION"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("nom", "Intrusion"))))
                 .andExpect(status().isForbidden());
 
-        // Le corps porte un autre type et un autre compte : ils sont ignorés.
+        // The body carries another type and account: they are ignored.
         mockMvc.perform(put(api("/intervenants/" + avocatId)).with(dj).contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("type", "AUTRE_PRESTATAIRE", "nom", "Me Corrigé " + n,
                                 "email", "corrige@cab.cm", "compteKeycloak", compte + "-bis"))))
@@ -866,13 +820,10 @@ class HabilitationFrontendIntegrationTest {
                 .andExpect(jsonPath("$.content[0].details.nouveauCompteKeycloak").doesNotExist());
     }
 
-    // ---------------------------------------------------------------- Vue consolidée par client (QF-41)
-
     /**
-     * QF-41 : les étapes, juristes et avocats de la vue consolidée sont désormais chargés en trois
-     * requêtes pour toute la liste, au lieu de trois par dossier. Le risque d'une telle bascule est
-     * l'appariement — qu'un dossier hérite des affectations d'un autre. Ce parcours le vérifie sur
-     * deux dossiers du même client, affectés à des avocats différents.
+     * Steps, legal officers and lawyers of the consolidated view are loaded in three queries for the
+     * whole list instead of three per case. The risk is mismatching; this checks two cases of the same
+     * client assigned to different lawyers.
      */
     @Test
     @DisplayName("QF-41 : chaque dossier de la vue consolidée garde ses propres étapes et affectations")
@@ -888,7 +839,7 @@ class HabilitationFrontendIntegrationTest {
         long autreAvocatId = extraireId(mockMvc.perform(post(api("/intervenants"))
                         .with(role("kc-dj-qf41", "ROLE_DJ", "ROLE_SAISIE", "ROLE_CONSULTATION"))
                         .contentType(MediaType.APPLICATION_JSON)
-                        // RG-INT-01 : un avocat porte obligatoirement un compte.
+                        // RG-INT-01: a lawyer must have an account.
                         .content(json(Map.of("type", "AVOCAT", "nom", "Me QF41 " + n,
                                 "compteKeycloak", "kc-avocat-qf41-" + n))))
                 .andExpect(status().isCreated())
@@ -909,7 +860,7 @@ class HabilitationFrontendIntegrationTest {
                     .as("le dossier %s doit porter son propre avocat", dossier.get("reference").asText())
                     .isEqualTo(attendu);
             assertThat(dossier.get("juristesAffectes").get(0).asLong()).isEqualTo(juristeId);
-            // Chaque dossier naît avec son étape INSTANCE : la liste ne doit être ni vide ni doublée.
+            // Every case is born with its INSTANCE step: the list must be neither empty nor duplicated.
             assertThat(dossier.get("etapes")).hasSize(1);
         });
         assertThat(recouvrement.get(0).get("id").asLong()).isNotEqualTo(recouvrement.get(1).get("id").asLong());
@@ -930,22 +881,19 @@ class HabilitationFrontendIntegrationTest {
                                 Map.entry("pvTransfert", "PV-" + reference),
                                 Map.entry("juristesAffectes", List.of(juristeId)),
                                 Map.entry("avocatsAffectes", List.of(avocat)),
-                                // Obligatoires depuis le 2026-10-05 (observations 1 et 3).
+                                // Mandatory.
                                 Map.entry("parties", Map.of(
                                         "demandeurs", List.of("AFRILAND FIRST BANK"),
                                         "defendeurs", List.of("Défendeur " + reference))),
-                                // Obligatoire depuis le 2026-10-05 (observation 2) : 00002 = Bonanjo.
+                                // Mandatory: 00002 = Bonanjo.
                                 Map.entry("codeAgenceOrigine", "00002")))))
                 .andExpect(status().isCreated())
                 .andReturn());
     }
 
-    // ---------------------------------------------------------------- Portail Avocat (Q-96)
-
     /**
-     * Q-96 : le point sensible du portail n'est pas ce que l'avocat voit, c'est ce qu'il ne doit
-     * <b>pas</b> voir. Ce parcours crée deux dossiers — un auquel il est affecté, un auquel il ne
-     * l'est pas — et vérifie que le second n'apparaît ni dans sa liste ni par son identifiant.
+     * Lawyer portal: what matters is what the lawyer must <b>not</b> see. Two cases are created (one
+     * assigned to the lawyer, one not), and the second must appear neither in the list nor by its id.
      */
     @Test
     @DisplayName("Q-96 : l'avocat ne voit que les dossiers auxquels il est affecté")
@@ -960,14 +908,14 @@ class HabilitationFrontendIntegrationTest {
         List<Long> identifiants = mesDossiers.get("content").findValues("id").stream().map(JsonNode::asLong).toList();
         assertThat(identifiants).contains(sien).doesNotContain(autre);
 
-        // La réponse reste réduite à l'identification : ni client, ni risque, ni sensibilité.
+        // The response is limited to identification: no client, no risk, no sensitivity.
         JsonNode premier = mesDossiers.get("content").get(0);
         assertThat(premier.has("reference")).isTrue();
         assertThat(premier.has("clientId")).as("le portefeuille de la banque ne doit pas fuiter").isFalse();
         assertThat(premier.has("risqueEncouru")).isFalse();
         assertThat(premier.has("estSensible")).isFalse();
 
-        // Les audiences de son dossier lui sont ouvertes, celles d'un autre non (403, pas 404).
+        // Hearings of the lawyer's case are open, others are not (403, not 404).
         mockMvc.perform(get(api("/avocat/mes-dossiers/" + sien + "/audiences")).with(avocat))
                 .andExpect(status().isOk());
         mockMvc.perform(get(api("/avocat/mes-dossiers/" + autre + "/audiences")).with(avocat))
@@ -1002,9 +950,8 @@ class HabilitationFrontendIntegrationTest {
     }
 
     /**
-     * Q-97 : UC-INT-01 étape 4 veut que l'avocat <b>charge</b> ses pièces justificatives, et le
-     * dictionnaire décrit {@code pieces_justificatives} comme des « chemins ou références ». Ce
-     * parcours va du téléversement jusqu'à la relecture par l'instructeur (UC-INT-02 étape 3).
+     * UC-INT-01 step 4: the lawyer <b>uploads</b> supporting documents ({@code pieces_justificatives}).
+     * Covers upload through review by the instructor (UC-INT-02 step 3).
      */
     @Test
     @DisplayName("Q-97 : l'avocat charge une pièce, la demande la porte, l'instructeur peut l'ouvrir")
@@ -1029,18 +976,18 @@ class HabilitationFrontendIntegrationTest {
                 .andExpect(status().isCreated())
                 .andReturn());
 
-        // L'Assistante instruit : elle doit voir la pièce, pas en lire le nom (UC-INT-02 étape 3).
+        // The Assistant instructs: she must see the document, not just read its name (UC-INT-02 step 3).
         JsonNode detail = lireJson(mockMvc.perform(get(api("/frais/demandes/" + demandeId))
                         .with(role("kc-assistante-m15", "ROLE_ASSISTANTE")))
                 .andExpect(status().isOk())
                 .andReturn());
         assertThat(detail.get("piecesTelechargeables")).hasSize(1);
         assertThat(detail.get("piecesTelechargeables").get(0).get("nomFichier").asText()).isEqualTo("facture.pdf");
-        // Le champ est bien renseigné ; sa valeur vient de MinIO, dont le client est mocké ici.
+        // The field is set; its value comes from MinIO, whose client is mocked here.
         assertThat(detail.get("piecesTelechargeables").get(0).has("urlTelechargement")).isTrue();
     }
 
-    /** Q-97 : un format hors FORMATS_GED est refusé — mêmes règles que la GED, un seul réglage. */
+    /** A format outside FORMATS_GED is refused: same rules as the GED, one single setting. */
     @Test
     @DisplayName("Q-97 : une pièce d'un format non autorisé est refusée")
     void pieceJustificative_refuseUnFormatNonAutorise() throws Exception {
@@ -1050,7 +997,7 @@ class HabilitationFrontendIntegrationTest {
                 .andExpect(status().isBadRequest());
     }
 
-    /** Un dossier du même client, affecté à un autre avocat : le témoin de la restriction. */
+    /** A case of the same client, assigned to another lawyer: the control for the restriction. */
     private long creerDossierSansAvocat() throws Exception {
         int n = COMPTEUR.incrementAndGet();
         long clientId = extraireId(mockMvc.perform(post(api("/clients"))
@@ -1079,29 +1026,20 @@ class HabilitationFrontendIntegrationTest {
                                 Map.entry("pvTransfert", "PV-Q96-" + n),
                                 Map.entry("juristesAffectes", List.of(juristeId)),
                                 Map.entry("avocatsAffectes", List.of(autreAvocat)),
-                                // Obligatoires depuis le 2026-10-05 (observations 1 et 3).
+                                // Mandatory.
                                 Map.entry("parties", Map.of(
                                         "demandeurs", List.of("AFRILAND FIRST BANK"),
                                         "defendeurs", List.of("Défendeur " + n))),
-                                // Obligatoire depuis le 2026-10-05 (observation 2) : 00002 = Bonanjo.
+                                // Mandatory: 00002 = Bonanjo.
                                 Map.entry("codeAgenceOrigine", "00002"))))
                         .with(role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_SAISIE")))
                 .andExpect(status().isCreated())
                 .andReturn());
     }
 
-    // ---------------------------------------------------------------- Helpers
-
-    // ---------------------------------------------------------------- Pagination (Q-100)
-
     /**
-     * L'exigence du porteur du projet, vérifiée là où elle se joue : **dix lignes par page, et la
-     * onzième sur la page suivante**.
-     *
-     * <p>Ce test ne se contente pas de compter dix lignes — une page qui perdrait la onzième
-     * passerait encore. Il vérifie que la onzième **existe**, qu'elle est **sur la page 2**, et
-     * qu'elle est **différente** de celles de la page 1 : c'est la garantie « aucune perte de
-     * données » prise au mot.
+     * Pagination: **ten rows per page, the eleventh on the next page**. Checks that the eleventh
+     * **exists**, is **on page 2**, and **differs** from those of page 1: no data loss.
      */
     @Test
     @DisplayName("Q-100 : onze alarmes tiennent sur deux pages, sans perte ni doublon")
@@ -1143,7 +1081,7 @@ class HabilitationFrontendIntegrationTest {
         assertThat(idsPage2).hasSize(1);
     }
 
-    /** Q-101 — le filtre demandé par le porteur du projet : la file des sensibilités à valider. */
+    /** Filter: the queue of sensitivity flags to validate. */
     @Test
     @DisplayName("Q-101 : les dossiers sensibles et leur statut de validation sont filtrables")
     void filtreSensibilite() throws Exception {
@@ -1160,7 +1098,7 @@ class HabilitationFrontendIntegrationTest {
                 .andExpect(jsonPath("$.content").isArray());
     }
 
-    /** Q-105 — la recherche au fil de la frappe des sélecteurs. */
+    /** Search-as-you-type of the selectors. */
     @Test
     @DisplayName("Q-105 : le référentiel se cherche par fragment de nom")
     void rechercheIntervenantParNom() throws Exception {
@@ -1173,7 +1111,7 @@ class HabilitationFrontendIntegrationTest {
                         .with(role("kc-dj-m15", "ROLE_DJ")))
                 .andExpect(status().isCreated());
 
-        // Fragment au milieu du nom : c'est ce qu'un index B-tree ne sait pas servir (Q-106).
+        // Fragment in the middle of the name: what a B-tree index cannot serve.
         mockMvc.perform(get(api("/intervenants")).param("nom", "Rechercheable")
                         .with(role("kc-juriste-m15", "ROLE_CONSULTATION")))
                 .andExpect(status().isOk())
@@ -1208,11 +1146,11 @@ class HabilitationFrontendIntegrationTest {
                                 Map.entry("pvTransfert", "PV-M15-" + n),
                                 Map.entry("juristesAffectes", List.of(juristeId)),
                                 Map.entry("avocatsAffectes", List.of(avocatId)),
-                                // Obligatoires depuis le 2026-10-05 (observations 1 et 3).
+                                // Mandatory.
                                 Map.entry("parties", Map.of(
                                         "demandeurs", List.of("AFRILAND FIRST BANK"),
                                         "defendeurs", List.of("Défendeur au procès"))),
-                                // Obligatoire depuis le 2026-10-05 (observation 2) : 00002 = Bonanjo.
+                                // Mandatory: 00002 = Bonanjo.
                                 Map.entry("codeAgenceOrigine", "00002"))))
                         .with(role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_SAISIE")))
                 .andExpect(status().isCreated())
@@ -1233,7 +1171,7 @@ class HabilitationFrontendIntegrationTest {
                 .build());
     }
 
-    /** Cf. {@code ParcoursEndToEndIntegrationTest#role} : les autorités sont fournies explicitement. */
+    /** See {@code ParcoursEndToEndIntegrationTest#role}: authorities are provided explicitly. */
     @Test
     @DisplayName("Q-84 : un avocat est reconnu par son identifiant de connexion, et l'utilisateur le garde")
     void avocat_estReconnuParSonIdentifiantDeConnexion() throws Exception {
@@ -1245,7 +1183,7 @@ class HabilitationFrontendIntegrationTest {
         assertThat(utilisateurRepository.findByKeycloakId("kc-sub-" + identifiant))
                 .get().extracting(Utilisateur::getIdentifiant).isEqualTo(identifiant);
 
-        // Un compte sans avocat rattaché, ni par identifiant ni par sub, reste refusé.
+        // An account with no linked lawyer, by identifier or by sub, stays refused.
         mockMvc.perform(get(api("/frais/demandes")).with(avocatConnecte("kc-sub-inconnu-" + identifiant, "inconnu." + identifiant)))
                 .andExpect(status().isForbidden());
     }
@@ -1257,7 +1195,7 @@ class HabilitationFrontendIntegrationTest {
         RequestPostProcessor juriste = role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_CONSULTATION");
         RequestPostProcessor assistante = role("kc-assistante-m15", "ROLE_ASSISTANTE", "ROLE_CONSULTATION");
 
-        // QF-66 : une condamnation se suit sur une étape clôturée, comme l'adjudication.
+        // A conviction is followed up on a closed step, like an adjudication.
         cloreLesEtapes(dossierId);
         long etapeId = etapeProcedureRepository.findByDossierIdOrderByTypeAsc(dossierId).get(0).getId();
         long condamnationId = extraireId(mockMvc.perform(post(api("/dossiers/" + dossierId + "/condamnations"))
@@ -1289,10 +1227,8 @@ class HabilitationFrontendIntegrationTest {
     void jurisprudences_rechercheSouple() throws Exception {
         long dossierId = creerDossier();
         /*
-         * Depuis le 2026-09-29, une décision ne rejoint la base jurisprudentielle qu'une fois
-         * définitive : plus aucune étape du dossier en cours. Ce parcours porte sur la recherche,
-         * pas sur le cycle de vie — dérouler audience, délibéré et clôture n'y prouverait rien de
-         * plus. Les étapes sont donc closes directement, comme P2 antidate son audience.
+         * A decision joins the case-law base only once final (no step of the case in progress). This test
+         * is about search, not lifecycle, so steps are closed directly.
          */
         cloreLesEtapes(dossierId);
         String marque = "Q89M" + COMPTEUR.incrementAndGet();
@@ -1311,22 +1247,22 @@ class HabilitationFrontendIntegrationTest {
                         .with(role("kc-juriste-m15", "ROLE_JURISTE")))
                 .andExpect(status().isCreated());
 
-        // Un fragment de mot-clé, en minuscules, suffit.
+        // A lowercase keyword fragment is enough.
         mockMvc.perform(get(api("/jurisprudences")).param("motCle", marque.toLowerCase()).with(consultation))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(1));
-        // Juridiction en minuscules, restreinte au dossier.
+        // Lowercase court, restricted to the case.
         mockMvc.perform(get(api("/jurisprudences")).param("motCle", marque).param("juridiction", "tgi douala")
                         .param("dossierId", String.valueOf(dossierId)).with(consultation))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(1));
-        // Un autre dossier ne la contient pas.
+        // Another case does not contain it.
         mockMvc.perform(get(api("/jurisprudences")).param("motCle", marque).param("dossierId", "999999").with(consultation))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(0));
     }
 
-    /** Jeton d'avocat tel que Keycloak l'émet : avec son identifiant de connexion (Q-84). */
+    /** Lawyer token as issued by Keycloak: with its login identifier. */
     private RequestPostProcessor avocatConnecte(String sub, String identifiant) {
         return SecurityMockMvcRequestPostProcessors.jwt()
                 .jwt(jwt -> jwt
@@ -1368,13 +1304,9 @@ class HabilitationFrontendIntegrationTest {
                 .andExpect(status().isCreated());
 
         /*
-         * ERR-CONFLICT sert à une dizaine de conflits sans rapport entre eux. Sans « champ », un
-         * frontend recevant ce code devait deviner la cible depuis l'endpoint appelé — et se
-         * trompait dès qu'un endpoint en gagnait un second.
-         *
-         * Le cas jouait sur une référence client en doublon jusqu'au 2026-09-29 ; le système
-         * attribuant désormais les références, ce conflit-là ne peut plus se produire. Le compte
-         * Keycloak d'un avocat, lui, reste saisi (RG-INT-01) et porte le même besoin.
+         * ERR-CONFLICT covers a dozen unrelated conflicts. Without a "champ", a frontend had to guess the
+         * target from the endpoint called. A lawyer's Keycloak account is still entered by hand
+         * (RG-INT-01), which makes it a valid case for this.
          */
         mockMvc.perform(post(api("/intervenants"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -1385,8 +1317,8 @@ class HabilitationFrontendIntegrationTest {
                 .andExpect(jsonPath("$.code").value("ERR-CONFLICT"))
                 .andExpect(jsonPath("$.champ").value("compteKeycloak"));
 
-        // Une erreur qui ne vise aucun champ n'en invente pas : la clé est absente du corps, pas
-        // présente à null — c'est ce qui rend l'ajout rétrocompatible.
+        // An error targeting no field does not invent one: the key is absent from the body, not null,
+        // which keeps the addition backward compatible.
         mockMvc.perform(post(api("/clients"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("email", "sans-nom@client.cm")))
@@ -1407,17 +1339,16 @@ class HabilitationFrontendIntegrationTest {
                         .with(juriste))
                 .andExpect(status().isCreated())
                 .andReturn());
-        // Un compte n'existe en base qu'apres son premier appel authentifie (correctif R-06) :
-        // creer un client ne suffit pas, il faut une lecture qui passe par getCurrentUser.
+        // An account exists in the database only after its first authenticated call (R-06):
+        // creating a client is not enough, a read going through getCurrentUser is needed.
         mockMvc.perform(get(api("/alertes/mes-notifications")).with(juriste)).andExpect(status().isOk());
         Long juristeId = utilisateurRepository.findByKeycloakId("kc-juriste-m16").orElseThrow().getId();
         long avocatId = avocatRepository.save(Avocat.builder().nom("Me M16 " + n)
                 .compteKeycloak("kc-avocat-m16-nature-" + n).build()).getId();
 
         /*
-         * 71 caracteres : au-dela de l'ancienne limite de 50 imposee a `dossier.nature`, alors meme
-         * que ce libelle vient du referentiel que le service interroge. Trois des dix-sept natures
-         * etaient dans ce cas et rendaient la creation impossible.
+         * 71 characters: beyond the former 50-character limit of `dossier.nature`, although this label
+         * comes from the reference data the service queries.
          */
         String natureLongue = "Hypothèque judiciaire (inscription provisoire, définitive, réalisation)";
         assertThat(natureLongue.length()).isGreaterThan(50);
@@ -1436,16 +1367,16 @@ class HabilitationFrontendIntegrationTest {
                                 Map.entry("typeClientSensible", "VIP"),
                                 Map.entry("juristesAffectes", List.of(juristeId)),
                                 Map.entry("avocatsAffectes", List.of(avocatId)),
-                                // Obligatoires depuis le 2026-10-05 (observations 1 et 3).
+                                // Mandatory.
                                 Map.entry("parties", Map.of(
                                         "demandeurs", List.of("AFRILAND FIRST BANK"),
                                         "defendeurs", List.of("Défendeur au procès"))),
-                                // Obligatoire depuis le 2026-10-05 (observation 2) : 00002 = Bonanjo.
+                                // Mandatory: 00002 = Bonanjo.
                                 Map.entry("codeAgenceOrigine", "00002"))))
                         .with(juriste))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.nature").value(natureLongue))
-                // La categorie n'a pas ete soumise : elle est deduite de la nature (RG-DOS-02).
+                // The category was not submitted: it is derived from the nature (RG-DOS-02).
                 .andExpect(jsonPath("$.categorie").value("RECOUVREMENT"))
                 .andExpect(jsonPath("$.typeClientSensible").value("VIP"));
     }
@@ -1462,8 +1393,8 @@ class HabilitationFrontendIntegrationTest {
                         .with(juriste))
                 .andExpect(status().isCreated())
                 .andReturn());
-        // Un compte n'existe en base qu'apres son premier appel authentifie (correctif R-06) :
-        // creer un client ne suffit pas, il faut une lecture qui passe par getCurrentUser.
+        // An account exists in the database only after its first authenticated call (R-06):
+        // creating a client is not enough, a read going through getCurrentUser is needed.
         mockMvc.perform(get(api("/alertes/mes-notifications")).with(juriste)).andExpect(status().isOk());
         Long juristeId = utilisateurRepository.findByKeycloakId("kc-juriste-m16b").orElseThrow().getId();
         long avocatId = avocatRepository.save(Avocat.builder().nom("Me M16b " + n)
@@ -1483,11 +1414,11 @@ class HabilitationFrontendIntegrationTest {
                                 Map.entry("typeClientSensible", "VIPP"),
                                 Map.entry("juristesAffectes", List.of(juristeId)),
                                 Map.entry("avocatsAffectes", List.of(avocatId)),
-                                // Obligatoires depuis le 2026-10-05 (observations 1 et 3).
+                                // Mandatory.
                                 Map.entry("parties", Map.of(
                                         "demandeurs", List.of("AFRILAND FIRST BANK"),
                                         "defendeurs", List.of("Défendeur au procès"))),
-                                // Obligatoire depuis le 2026-10-05 (observation 2) : 00002 = Bonanjo.
+                                // Mandatory: 00002 = Bonanjo.
                                 Map.entry("codeAgenceOrigine", "00002"))))
                         .with(juriste))
                 .andExpect(status().isBadRequest())
@@ -1506,8 +1437,8 @@ class HabilitationFrontendIntegrationTest {
                         .with(juriste))
                 .andExpect(status().isCreated())
                 .andReturn());
-        // Un compte n'existe en base qu'apres son premier appel authentifie (correctif R-06) :
-        // creer un client ne suffit pas, il faut une lecture qui passe par getCurrentUser.
+        // An account exists in the database only after its first authenticated call (R-06):
+        // creating a client is not enough, a read going through getCurrentUser is needed.
         mockMvc.perform(get(api("/alertes/mes-notifications")).with(juriste)).andExpect(status().isOk());
         Long juristeId = utilisateurRepository.findByKeycloakId("kc-juriste-m16c").orElseThrow().getId();
         long avocatId = avocatRepository.save(Avocat.builder().nom("Me M16c " + n)
@@ -1524,35 +1455,33 @@ class HabilitationFrontendIntegrationTest {
                                 Map.entry("pvTransfert", "PV-" + n),
                                 Map.entry("juristesAffectes", List.of(juristeId)),
                                 Map.entry("avocatsAffectes", List.of(avocatId)),
-                                // Obligatoires depuis le 2026-10-05 (observations 1 et 3).
+                                // Mandatory.
                                 Map.entry("parties", Map.of(
                                         "demandeurs", List.of("AFRILAND FIRST BANK"),
                                         "defendeurs", List.of("Défendeur au procès"))),
-                                // Obligatoire depuis le 2026-10-05 (observation 2) : 00002 = Bonanjo.
+                                // Mandatory: 00002 = Bonanjo.
                                 Map.entry("codeAgenceOrigine", "00002"))))
                         .with(juriste))
                 .andExpect(status().isCreated())
                 .andReturn());
 
         /*
-         * Reference : recherche partielle, on ne retient jamais une reference en entier. Depuis le
-         * 2026-09-29 elle est attribuee par le systeme, le test cherche donc un fragment de la
-         * reference recue — l'annee et le numero, sans le prefixe.
+         * Reference: partial search, a reference is never remembered in full. It is assigned by the
+         * system, so the test searches a fragment of the received reference (year and number, no prefix).
          */
         mockMvc.perform(get(api("/dossiers")).param("reference", reference.substring(4)).with(juriste))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.content[0].reference").value(reference));
 
-        // Client : tous les dossiers portes contre lui.
+        // Client: all cases brought against them.
         mockMvc.perform(get(api("/dossiers")).param("clientId", String.valueOf(clientId)).with(juriste))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(1));
 
         /*
-         * « Mes dossiers » se resout sur l'utilisateur authentifie. Le meme appel joue par un autre
-         * juriste ne doit donc rien renvoyer : c'est ce qui garantit que le filtre ne sert pas a
-         * consulter le portefeuille d'un collegue.
+         * "My cases" resolves on the authenticated user. The same call by another legal officer must
+         * return nothing: the filter cannot be used to browse a colleague's portfolio.
          */
         mockMvc.perform(get(api("/dossiers")).param("mesDossiers", "true")
                         .param("reference", reference.substring(4)).with(juriste))
@@ -1598,18 +1527,18 @@ class HabilitationFrontendIntegrationTest {
                                 Map.entry("typeClientSensible", "VIP"),
                                 Map.entry("juristesAffectes", List.of(juristeId)),
                                 Map.entry("avocatsAffectes", List.of(avocatId)),
-                                // Obligatoires depuis le 2026-10-05 (observations 1 et 3).
+                                // Mandatory.
                                 Map.entry("parties", Map.of(
                                         "demandeurs", List.of("AFRILAND FIRST BANK"),
                                         "defendeurs", List.of("Défendeur au procès"))),
-                                // Obligatoire depuis le 2026-10-05 (observation 2) : 00002 = Bonanjo.
+                                // Mandatory: 00002 = Bonanjo.
                                 Map.entry("codeAgenceOrigine", "00002"))))
                         .with(juriste))
                 .andExpect(status().isCreated())
                 .andReturn());
 
-        // Avant validation : la seule demande est la proposition initiale — lisible, mais pas
-        // arbitrable comme une dérogation. Elle se tranche par la validation de sensibilité.
+        // Before validation the only request is the initial proposal: readable, but not arbitrable as a
+        // derogation. It is settled by the sensitivity validation.
         JsonNode initiales = lireJson(mockMvc.perform(get(api("/dossiers/" + dossierId + "/seuil-derogation")).with(dj))
                 .andExpect(status().isOk())
                 .andReturn());
@@ -1633,7 +1562,7 @@ class HabilitationFrontendIntegrationTest {
                         .with(juriste))
                 .andExpect(status().isCreated());
 
-        // Le DJ lit la file d'arbitrage : c'est ce qui manquait (QF-23).
+        // The DJ reads the arbitration queue.
         JsonNode enAttente = lireJson(mockMvc.perform(get(api("/dossiers/" + dossierId + "/seuil-derogation"))
                         .param("statut", "EN_ATTENTE").with(dj))
                 .andExpect(status().isOk())
@@ -1664,7 +1593,7 @@ class HabilitationFrontendIntegrationTest {
         RequestPostProcessor juriste = role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_SAISIE");
         Long juristeId = utilisateurRepository.findByKeycloakId("kc-juriste-m15").orElseThrow().getId();
 
-        // L'endpoint remplace les listes : une liste vide retirait tout le monde, contre RG-DOS-03.
+        // The endpoint replaces the lists: an empty list would remove everyone, violating RG-DOS-03.
         mockMvc.perform(put(api("/dossiers/" + dossierId + "/affectation"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("juristesAffectes", List.of(), "avocatsAffectes", List.of(avocatId))))
@@ -1673,7 +1602,7 @@ class HabilitationFrontendIntegrationTest {
                 .andExpect(jsonPath("$.code").value("ERR-VALIDATION"))
                 .andExpect(jsonPath("$.details").value(containsString("juristesAffectes")));
 
-        // Une liste absente vaut une liste vide : même refus.
+        // A missing list counts as an empty list: same refusal.
         mockMvc.perform(put(api("/dossiers/" + dossierId + "/affectation"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("juristesAffectes", List.of(juristeId))))
@@ -1681,7 +1610,7 @@ class HabilitationFrontendIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.details").value(containsString("avocatsAffectes")));
 
-        // Le cas nominal passe toujours, confirmation du doublon comprise.
+        // The nominal case still passes, including duplicate confirmation.
         mockMvc.perform(put(api("/dossiers/" + dossierId + "/affectation")).param("forcer", "true")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("juristesAffectes", List.of(juristeId), "avocatsAffectes", List.of(avocatId))))
@@ -1702,7 +1631,7 @@ class HabilitationFrontendIntegrationTest {
                 .andExpect(status().isCreated())
                 .andReturn());
 
-        // Le motif est obligatoire, et l'annulation réservée au juriste, comme la planification.
+        // The reason is mandatory, and cancellation is reserved to the legal officer, like scheduling.
         mockMvc.perform(patch(api("/audiences/" + audienceId + "/annulation"))
                         .contentType(MediaType.APPLICATION_JSON).content(json(Map.of("motif", " "))).with(juriste))
                 .andExpect(status().isBadRequest());
@@ -1719,22 +1648,22 @@ class HabilitationFrontendIntegrationTest {
                 .andExpect(jsonPath("$.motifAnnulation").value("Renvoi prononcé par le tribunal"))
                 .andExpect(jsonPath("$.dateAnnulation").isNotEmpty());
 
-        // Une audience déjà annulée ne s'annule pas une seconde fois.
+        // An already cancelled hearing cannot be cancelled again.
         mockMvc.perform(patch(api("/audiences/" + audienceId + "/annulation"))
                         .contentType(MediaType.APPLICATION_JSON).content(json(Map.of("motif", "Encore"))).with(juriste))
                 .andExpect(status().isBadRequest());
 
         /*
-         * Replanifier à la même date après un renvoi n'est pas un doublon : 201 direct, sans
-         * ?forcer — l'audience annulée aurait sinon déclenché ERR-005 et une alerte au DJ.
+         * Rescheduling on the same date after a postponement is not a duplicate: direct 201, without
+         * ?forcer. Otherwise the cancelled hearing would trigger ERR-005 and an alert to the DJ.
          */
         long nouvelleId = extraireId(mockMvc.perform(post(api("/dossiers/" + dossierId + "/audiences"))
                         .contentType(MediaType.APPLICATION_JSON).content(planification).with(juriste))
                 .andExpect(status().isCreated())
                 .andReturn());
 
-        // Le calendrier — donc ses exports, qui en reprennent les entrées — écarte l'annulée et garde
-        // la replanifiée : le filtre ne se contente pas de tout vider.
+        // The calendar (and its exports) excludes the cancelled hearing and keeps the rescheduled one:
+        // the filter does not just empty everything.
         JsonNode calendrier = lireJson(mockMvc.perform(get(api("/audiences/calendrier"))
                         .param("periode", "TRIMESTRIELLE").param("dateDebut", LocalDate.now().toString())
                         .with(juriste))
@@ -1744,7 +1673,7 @@ class HabilitationFrontendIntegrationTest {
                 .contains(nouvelleId)
                 .doesNotContain(audienceId);
 
-        // Une audience annulée ne reçoit pas de compte rendu — refus propre, avant même la règle de date.
+        // A cancelled hearing gets no report: clean refusal, even before the date rule.
         mockMvc.perform(put(api("/audiences/" + audienceId + "/compte-rendu"))
                         .contentType(MediaType.APPLICATION_JSON).content(json(Map.of("compteRendu", "CR")))
                         .with(juriste))
@@ -1780,14 +1709,14 @@ class HabilitationFrontendIntegrationTest {
         mockMvc.perform(patch(api("/alarmes/" + alarmeId + "/traiter")).with(juriste))
                 .andExpect(status().isBadRequest());
 
-        // Contrairement à la reprogrammation, aucune alarme de remplacement n'a été créée.
+        // Unlike rescheduling, no replacement alarm was created.
         mockMvc.perform(get(api("/dossiers/" + dossierId + "/alarmes")).with(juriste))
                 .andExpect(status().isOk())
-                // Paginé depuis Q-100 : `$.length()` compterait les trois clés de l'enveloppe.
+                // Paginated: `$.length()` would count the three keys of the envelope.
                 .andExpect(jsonPath("$.totalElements").value(1));
     }
 
-    /** Passe la première étape du dossier « en cours » : la condition d'une audience (RG-AUD-01). */
+    /** Moves the case's first step to "in progress": the precondition of a hearing (RG-AUD-01). */
     private long etapeEnCours(long dossierId, RequestPostProcessor juriste) throws Exception {
         long etapeId = lireJson(mockMvc.perform(get(api("/dossiers/" + dossierId)).with(juriste))
                         .andExpect(status().isOk())
@@ -1818,19 +1747,19 @@ class HabilitationFrontendIntegrationTest {
                 .andExpect(status().isCreated())
                 .andReturn());
 
-        // Le juriste auteur demande (202) : la demande nomme déjà son fichier et son dossier.
+        // The authoring legal officer requests (202): the request already names its file and case.
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
                         .delete(api("/ged/documents/" + documentId)).with(juriste))
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.documentNom").value(nom))
                 .andExpect(jsonPath("$.dossierId").value(dossierId));
 
-        // Le DJ supprime directement le même document (200).
+        // The DJ deletes the same document directly (200).
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
                         .delete(api("/ged/documents/" + documentId)).with(dj))
                 .andExpect(status().isOk());
 
-        // Plus de demande fantôme en attente : elle est close avec le document, validée par le DJ.
+        // No more ghost pending request: it is closed with the document, validated by the DJ.
         JsonNode enAttente = lireJson(mockMvc.perform(get(api("/ged/demandes-suppression"))
                         .param("statut", "EN_ATTENTE").with(dj))
                 .andExpect(status().isOk())
@@ -1838,10 +1767,8 @@ class HabilitationFrontendIntegrationTest {
         assertThat(enAttente.findValues("documentId").stream().map(JsonNode::asLong).toList()).doesNotContain(documentId);
 
         /*
-         * `size` explicite : la file est paginée depuis Q-100, et ce test cherche **une** demande
-         * précise dans tout l'historique. S'en remettre à la page par défaut le rendrait dépendant du
-         * nombre de demandes créées par les autres tests — vert aujourd'hui, rouge le jour où la
-         * classe en compte onze.
+         * Explicit `size`: the queue is paginated and this test looks for **one** specific request in the
+         * whole history. Relying on the default page would depend on how many requests other tests create.
          */
         JsonNode toutes = lireJson(mockMvc.perform(get(api("/ged/demandes-suppression"))
                         .param("size", "200").with(dj))
@@ -1856,8 +1783,7 @@ class HabilitationFrontendIntegrationTest {
         assertThat(demande).as("la demande reste dans l'historique").isNotNull();
         assertThat(demande.get("statut").asText()).isEqualTo("APPROUVEE");
         assertThat(demande.get("documentNom").asText()).isEqualTo(nom);
-        // La reference est attribuee par le systeme depuis le 2026-09-29 : le test ne la choisit
-        // plus, il verifie sa forme.
+        // The reference is assigned by the system: the test checks its format.
         assertThat(demande.get("referenceDossier").asText()).matches("DOS-\\d{4}-\\d{4,}");
     }
 
@@ -1874,16 +1800,9 @@ class HabilitationFrontendIntegrationTest {
                 .andExpect(status().isForbidden());
     }
 
-    // ---------------------------------------------------------------- Administration (Q-108)
-
     /**
-     * Q-108 — l'écriture des paramètres système est ouverte au DJ <b>et</b> à la DJA.
-     *
-     * <p>Ces deux endpoints n'avaient <b>aucun</b> test d'habilitation : la restriction ne tenait
-     * qu'à une annotation, sur une règle que la documentation énonce pourtant explicitement. Le
-     * constat a été fait en relevant les habilitations DJ/DJA à la demande du porteur du projet ;
-     * l'ouverture à la DJA est sa décision, motivée par la continuité de service — le DJ absent,
-     * personne ne pouvait plus relever un seuil.
+     * Writing system parameters is open to the DJ <b>and</b> the DJA, for continuity of service when the
+     * DJ is absent. These endpoints previously had no authorization test.
      */
     @Test
     @DisplayName("Q-108 : le DJ et la DJA écrivent les paramètres système, les autres profils sont refusés")
@@ -1933,10 +1852,9 @@ class HabilitationFrontendIntegrationTest {
     }
 
     /**
-     * Le pendant du test précédent, et il compte autant : l'ouverture consentie à la DJA est <b>à
-     * sens unique</b>. Le contrôle d'opportunité reste réservé à la DJA, sans quoi RG-INT-03
-     * perdrait la séparation de ses deux étapes — le même profil préparerait l'avis puis voterait la
-     * validation conjointe. Ce test empêche qu'on « harmonise » les deux rôles par symétrie.
+     * The counterpart: opening to the DJA is <b>one-way</b>. The opportunity review stays reserved to the
+     * DJA, otherwise RG-INT-03 would lose the separation of its two steps (the same profile would prepare
+     * the opinion then vote the joint validation). Prevents "harmonizing" both roles by symmetry.
      */
     @Test
     @DisplayName("Q-108 : le contrôle d'opportunité des frais reste refusé au DJ")
@@ -1948,7 +1866,7 @@ class HabilitationFrontendIntegrationTest {
                         .with(role("kc-dj-m15", "ROLE_DJ")))
                 .andExpect(status().isForbidden());
 
-        // La DJA franchit la garde : la demande est introuvable, ce qui n'est plus une question de droits.
+        // The DJA passes the guard: the request is not found, which is no longer an authorization matter.
         mockMvc.perform(put(api("/frais/demandes/999999/opportunite"))
                         .contentType(MediaType.APPLICATION_JSON).content(corps)
                         .with(role("kc-dja-m15", "ROLE_DJA")))
@@ -1956,9 +1874,8 @@ class HabilitationFrontendIntegrationTest {
     }
 
     /**
-     * Q-109 — la supervision du canal applicatif est une lecture d'administration : DJ et DJA, comme
-     * l'écriture des paramètres. Elle expose un taux global, tous destinataires confondus ; l'ouvrir
-     * plus largement reviendrait à publier l'activité de chacun.
+     * Supervision of the in-app channel is an administration read: DJ and DJA only. It exposes a global
+     * rate across all recipients; opening it wider would publish everyone's activity.
      */
     @Test
     @DisplayName("Q-109 : le taux de délivrance des alertes est réservé au DJ et à la DJA")
@@ -1983,8 +1900,8 @@ class HabilitationFrontendIntegrationTest {
     }
 
     /**
-     * Une fenêtre inversée est une erreur de saisie, pas une fenêtre vide : la laisser passer
-     * renverrait un taux de 0 % parfaitement silencieux, que l'on prendrait pour une panne.
+     * An inverted window is an input error, not an empty window: letting it through would return a
+     * silent 0 % rate, easily mistaken for an outage.
      */
     @Test
     @DisplayName("Q-109 : une fenêtre inversée est refusée plutôt que renvoyée à zéro")
@@ -1996,13 +1913,9 @@ class HabilitationFrontendIntegrationTest {
     }
 
 
-    // ---------------------------------------------------------------- Audit (Q-112)
-
     /**
-     * Le test le plus important du lot : la consultation de l'audit est <b>elle-même historisée</b>.
-     *
-     * <p>Le filtre par personne étant autorisé, cet écran permet de suivre nommément l'activité d'un
-     * salarié. La trace de son usage protège le DJ et la DJA autant que ceux qu'ils consultent.
+     * Consulting the audit is <b>itself logged</b>. Since filtering by person is allowed, this screen can
+     * track an employee's activity by name; tracing its use protects both sides.
      */
     @Test
     @DisplayName("Q-112 : consulter l'audit laisse une trace portant les critères employés")
@@ -2022,17 +1935,15 @@ class HabilitationFrontendIntegrationTest {
         assertThat(trace.get("totalElements").asLong()).isPositive();
 
         /*
-         * La ligne la plus récente est **cette lecture-ci**, pas celle qu'on cherche : consulter
-         * l'audit laisse une trace, qui prend aussitôt la tête du classement. Une première version
-         * de ce test lisait content[0] et échouait pour cette raison — le défaut était dans le test,
-         * et la propriété qu'il révèle mérite d'être affirmée plutôt que contournée.
+         * The most recent row is **this read itself**: consulting the audit leaves a trace, which immediately
+         * tops the ranking. The property is asserted rather than worked around.
          */
         JsonNode derniere = trace.get("content").get(0);
         assertThat(derniere.get("code").asText()).isEqualTo("AUDIT_CONSULTE");
         assertThat(derniere.get("details").get("codeRecherche").asText()).isEqualTo("AUDIT_CONSULTE");
 
-        // Et parmi les traces, celle de la consultation par personne porte bien son critère — sous
-        // un nom distinct de l'auteur de la consultation, que confondre rendrait la trace illisible.
+        // Among the traces, the per-person consultation carries its criterion, under a name distinct from
+        // the consultation's author (mixing them would make the trace unreadable).
         boolean recherchePersonneTracee = false;
         for (JsonNode entree : trace.get("content")) {
             if (entree.get("details").has("auteurRecherche")) recherchePersonneTracee = true;
@@ -2052,7 +1963,7 @@ class HabilitationFrontendIntegrationTest {
         assertThat(tout.get("totalElements").asLong()).isPositive();
         assertThat(tout.get("actionsDisponibles")).isNotEmpty();
 
-        // Le périmètre d'un dossier ne renvoie que ses lignes — jamais les actions système.
+        // A case scope returns only its rows, never system actions.
         JsonNode duDossier = lireJson(mockMvc.perform(get(api("/historique"))
                         .param("perimetre", "UN_DOSSIER").param("dossierId", String.valueOf(dossierId))
                         .param("size", "100").with(role("kc-dja-m15", "ROLE_DJA")))
@@ -2070,8 +1981,8 @@ class HabilitationFrontendIntegrationTest {
     }
 
     /**
-     * Un périmètre « un dossier » sans dossier renverrait tout l'historique : le pire des résultats,
-     * puisqu'il ressemble à une réponse. Refusé plutôt qu'interprété.
+     * A "single case" scope without a case would return the whole history, which looks like an answer.
+     * Refused rather than interpreted.
      */
     @Test
     @DisplayName("Q-112 : les combinaisons de critères sans signification sont refusées")
@@ -2084,13 +1995,13 @@ class HabilitationFrontendIntegrationTest {
                         .with(role("kc-dj-m15", "ROLE_DJ")))
                 .andExpect(status().isBadRequest());
 
-        // Un code inconnu est refusé par la conversion, là où une phrase libre renvoyait zéro ligne.
+        // An unknown code is refused by conversion, where free text would return zero rows.
         mockMvc.perform(get(api("/historique")).param("code", "CODE_QUI_NEXISTE_PAS")
                         .with(role("kc-dj-m15", "ROLE_DJ")))
                 .andExpect(status().isBadRequest());
     }
 
-    /** Q-112 : l'écran des paramètres répond sur place à « qui a mis ce réglage là ? ». */
+    /** The parameters screen answers "who set this value?" in place. */
     @Test
     @DisplayName("Q-112 : un paramètre porte l'auteur de sa dernière modification")
     void configuration_porteLAuteurDeLaDerniereModification() throws Exception {
@@ -2122,25 +2033,21 @@ class HabilitationFrontendIntegrationTest {
     }
 
     /**
-     * Le corps de la réponse, lu en <b>UTF-8</b>.
-     *
-     * <p>{@code getContentAsString()} sans argument décode en ISO-8859-1 quand la réponse ne
-     * déclare pas de jeu de caractères : un motif accentué ressortait alors double-encodé
-     * (« révélée » devenait « rÃ©vÃ©lÃ©e »). Le défaut ne se voyait pas, parce qu'aucun test ne
-     * comparait d'accents - jusqu'à celui du retrait de diligence, dont le motif en porte.
+     * Response body read as <b>UTF-8</b>. {@code getContentAsString()} without argument decodes as
+     * ISO-8859-1 when no charset is declared, which double-encodes accented characters.
      */
     private JsonNode lireJson(MvcResult resultat) throws Exception {
         return objectMapper.readTree(resultat.getResponse().getContentAsString(StandardCharsets.UTF_8));
     }
 
-    /** La reference attribuee par le serveur, que le client ne choisit plus (2026-09-29). */
+    /** The reference assigned by the server, which the client no longer chooses. */
     private String extraireReference(MvcResult resultat) throws Exception {
         JsonNode noeud = lireJson(resultat);
         assertThat(noeud.has("reference")).as("réponse sans référence : %s", noeud).isTrue();
         return noeud.get("reference").asText();
     }
 
-    /** Ferme les étapes d'un dossier, condition du versement en jurisprudence (2026-09-29). */
+    /** Closes the case's steps, the precondition for adding it to case law. */
     private void cloreLesEtapes(long dossierId) {
         etapeProcedureRepository.findByDossierIdOrderByTypeAsc(dossierId).forEach(etape -> {
             etape.setStatutCycleVie(com.afriland.audiences.dossier.domain.StatutCycleVie.CLOTURE);

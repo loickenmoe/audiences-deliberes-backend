@@ -24,10 +24,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 
 /**
- * M15 — administration du référentiel des intervenants (endpoints 🆕, Q-68). Aucune user story ne
- * les décrit, mais sans eux aucun avocat ne peut exister dans le système : ils conditionnent
- * l'affectation d'un dossier (RG-DOS-03), les demandes de frais (RG-INT-01), les publications et
- * les constitutions. Même raisonnement que {@code POST /clients} (Q-23, M4).
+ * Administration of the participant reference data. Without these endpoints no lawyer could exist,
+ * and lawyers are required for case assignment (RG-DOS-03), fee requests (RG-INT-01),
+ * publications and appointments.
  */
 @RestController
 @RequestMapping("${api.prefix}/intervenants")
@@ -43,8 +42,8 @@ public class IntervenantController {
     }
 
     /**
-     * 🆕 Modifie un intervenant (Q-117) — même garde que la création. Le type et l'identifiant
-     * Keycloak d'un avocat sont figés ; nom, courriel, téléphone et notification se corrigent.
+     * Updates a participant, with the same guard as creation. The type and a lawyer's Keycloak id
+     * are immutable; name, email, phone and notification flag can be corrected.
      */
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('DJ', 'DJA')")
@@ -53,13 +52,8 @@ public class IntervenantController {
     }
 
     /**
-     * Paginé depuis Q-100, et **cherchable par nom depuis Q-105**.
-     *
-     * <p>C'est ce paramètre {@code nom} qui règle le vrai problème des sélecteurs. Une liste
-     * déroulante qui demandait « une grande page » cassait silencieusement dès que l'annuaire la
-     * dépassait ; elle interroge désormais le serveur au fil de la frappe et n'a plus besoin de tout
-     * détenir. La taille par défaut redescend donc à 20 : ce qu'affiche une liste déroulante, pas ce
-     * qu'elle contient.
+     * Paginated and searchable by name. Selectors query the server as the user types instead of
+     * loading the whole directory, hence the small default page size.
      */
     @GetMapping
     @PreAuthorize("hasRole('CONSULTATION')")

@@ -2,7 +2,7 @@ package com.afriland.audiences.dossier.domain;
 
 import java.util.List;
 
-/** Statut de cycle de vie d'une étape de procédure (RG-DOS-04). */
+/** Lifecycle status of a procedure step (RG-DOS-04). */
 public enum StatutCycleVie {
     OUVERTURE,
     EN_COURS,
@@ -12,15 +12,12 @@ public enum StatutCycleVie {
     ARCHIVE;
 
     /**
-     * Les statuts d'une étape qui ne vit plus : plus d'audience à tenir, plus de recours à exercer.
-     *
-     * <p>Nommé ici plutôt que redéfini au cas par cas : {@code RepertoireAvocatsService} et
-     * {@code ReportingService} en portent chacun leur copie, et une troisième — celle de la garde
-     * jurisprudentielle — aurait fait diverger la notion le jour où un statut s'ajoute.
+     * Statuses of a step that is no longer active: no more hearings, no more appeals. Defined once
+     * here so the notion cannot diverge across services when a status is added.
      */
     public static final List<StatutCycleVie> FERMES = List.of(CLOTURE, ARCHIVE);
 
-    /** Cette étape est-elle terminée, au sens où plus rien n'y est attendu ? */
+    /** Whether this step is finished, i.e. nothing more is expected on it. */
     public boolean estFerme() {
         return FERMES.contains(this);
     }

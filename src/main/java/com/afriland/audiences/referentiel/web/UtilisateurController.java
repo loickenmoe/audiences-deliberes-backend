@@ -20,18 +20,15 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 
 /**
- * M15 (Q-69) — répertoire des utilisateurs internes, endpoint 🆕, et la <b>signature
- * enregistrée</b> de chacun (N8).
+ * Directory of internal users, and each user's <b>stored signature</b>.
  * <p>
- * {@code ROLE_CONSULTATION} : porté par les six profils internes, il n'est <b>pas</b> attribué au
- * profil {@code AVOCAT} — un intervenant externe ne doit pas pouvoir énumérer le personnel de la
- * Direction Juridique. Même niveau d'habilitation que {@code GET /intervenants}.
+ * {@code ROLE_CONSULTATION} is carried by the six internal profiles and <b>not</b> by
+ * {@code AVOCAT}: an external party must not be able to list Legal Department staff. Same
+ * authorisation level as {@code GET /intervenants}.
  * <p>
- * <b>La signature se dit « mienne », et jamais autrement.</b> Les trois endpoints de signature
- * travaillent sur l'utilisateur de la session, sans jamais prendre d'identifiant : aucun ne permet
- * de lire ou de poser la signature d'un autre (métier, 2026-10-06). C'est la seule forme où une
- * signature garde un sens - celle qu'un tiers détient ne vaut déjà plus rien. La lettre de
- * constitution, elle, appose celle du signataire par un appel interne au service.
+ * <b>Signature endpoints only act on "my" signature</b>: they work on the session user and never
+ * take an id, so none can read or set someone else's signature. The appointment letter applies the
+ * signer's signature through an internal service call.
  */
 @RestController
 @RequestMapping("${api.prefix}/utilisateurs")
@@ -50,11 +47,10 @@ public class UtilisateurController {
     }
 
     /**
-     * L'état de ma signature : déposée ou non, et depuis quand.
+     * State of my signature: uploaded or not, and since when.
      *
-     * <p>Rend l'état, <b>pas l'image</b> : l'écran a besoin de savoir s'il doit proposer un dépôt ou
-     * un remplacement, pas d'afficher le trait. Un appel distinct sert l'image, pour que celle-ci ne
-     * voyage pas à chaque chargement d'écran.
+     * <p>Returns the state, <b>not the image</b>: a separate endpoint serves the image so it is not
+     * sent on every screen load.
      */
     @GetMapping("/moi/signature")
     @PreAuthorize("isAuthenticated()")
@@ -64,7 +60,7 @@ public class UtilisateurController {
                 .orElseGet(() -> new SignatureResponse(false, null, null));
     }
 
-    /** L'image elle-même, pour l'aperçu. 404 tant que rien n'est déposé. */
+    /** The image itself, for preview. 404 until one is uploaded. */
     @GetMapping("/moi/signature/image")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<byte[]> maSignatureImage() {
@@ -75,7 +71,7 @@ public class UtilisateurController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    /** Dépose ou remplace ma signature. PNG ou JPEG, 200 Ko au plus. */
+    /** Uploads or replaces my signature. PNG or JPEG, 200 KB max. */
     @PutMapping("/moi/signature")
     @PreAuthorize("isAuthenticated()")
     public SignatureResponse deposerMaSignature(@RequestParam("fichier") MultipartFile fichier) {
@@ -84,10 +80,10 @@ public class UtilisateurController {
     }
 
     /**
-     * Retire ma signature.
+     * Removes my signature.
      *
-     * <p>Les lettres déjà signées ne changent pas : leur PDF est produit et archivé. Et la preuve
-     * de la signature n'a jamais été cette image.
+     * <p>Already signed letters are unchanged: their PDF is generated and archived, and the evidence of
+     * signing was never this image.
      */
     @DeleteMapping("/moi/signature")
     @PreAuthorize("isAuthenticated()")

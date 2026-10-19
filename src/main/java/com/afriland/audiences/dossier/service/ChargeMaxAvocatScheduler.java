@@ -17,14 +17,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 /**
- * Vérification planifiée du seuil {@code CHARGE_MAX_AVOCAT} (RG-ALR-02, FR-ALR-01/US 7.1) :
- * déclenche une alerte à destination des DJ actifs pour tout avocat dont le nombre de dossiers
- * affectés dépasse le seuil configuré. Ce composant vit dans le module {@code dossier} — et non
- * {@code alerte} — car il a besoin de {@link DossierAvocatRepository} ; {@code alerte} reste un
- * socle transversal sans dépendance vers les modules métier (cf. Javadoc {@link
- * com.afriland.audiences.alerte.domain.Alerte}). Décision Q-38 (DECISIONS_AND_OPEN_QUESTIONS.md) :
- * les destinataires sont les utilisateurs de profil DJ (RG-ALR-02 ne le précise pas explicitement,
- * mais {@code PUT /alertes/seuils} — qui configure ce seuil — est réservé au DJ).
+ * Scheduled check of the {@code CHARGE_MAX_AVOCAT} threshold (RG-ALR-02, FR-ALR-01/US 7.1): alerts
+ * active DJ users about any lawyer whose number of assigned cases exceeds the configured threshold.
+ * Lives in {@code dossier} because it needs {@link DossierAvocatRepository}; {@code alerte} has no
+ * dependency on business modules. Recipients are DJ users, since {@code PUT /alertes/seuils}
+ * configures this threshold.
  */
 @Slf4j
 @Component

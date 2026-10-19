@@ -14,20 +14,17 @@ import java.util.Base64;
 import java.util.Optional;
 
 /**
- * Adresse que le Notification Engine rappelle après avoir traité un message ({@code callbackUrl},
- * Guide V1 §7.9), et vérification de ce rappel.
+ * Callback URL the Notification Engine calls after processing a message ({@code callbackUrl},
+ * Guide V1 §7.9), and its verification.
  * <p>
- * <b>C'est la seule façon exacte de savoir quelle notification a abouti</b> : les topics de suivi
- * ne renvoient pas notre référence (Q-120). Elle est donc placée dans l'URL elle-même.
+ * This is the only exact way to know which notification succeeded, since the tracking topics do not
+ * return our reference; it is therefore placed in the URL.
  * <p>
- * <b>Le rappel arrive sans authentification</b> — le Guide n'en décrit aucune. L'URL porte donc une
- * signature HMAC-SHA256 de la référence, calculée avec le secret du compte de service : seul un
- * appelant connaissant ce secret peut forger une adresse valable, et la comparaison se fait en temps
- * constant. Sans cela, n'importe qui pourrait déclarer une notification délivrée.
+ * The callback is unauthenticated, so the URL carries an HMAC-SHA256 signature of the reference using
+ * the service account secret, compared in constant time. Otherwise anyone could mark a notification
+ * delivered.
  * <p>
- * Le rappel reste <b>désactivé tant qu'aucune adresse publique n'est configurée</b> : depuis un poste
- * de travail, le moteur ne peut pas joindre l'application, et annoncer une adresse injoignable ne
- * ferait qu'ajouter des erreurs de son côté.
+ * Disabled while no public URL is configured: the engine cannot reach a workstation.
  */
 @Component
 @RequiredArgsConstructor
@@ -38,7 +35,7 @@ public class RappelsNotification {
 
     private final NotificationEngineProperties proprietes;
 
-    /** URL à transmettre au moteur, ou vide si les rappels ne sont pas configurés. */
+    /** URL to send to the engine, or empty if callbacks are not configured. */
     public Optional<String> urlPour(String eventId) {
         String base = proprietes.callbackBaseUrl();
         if (base == null || base.isBlank()) {
@@ -49,7 +46,7 @@ public class RappelsNotification {
                 + "?" + PARAMETRE_SIGNATURE + "=" + signer(eventId));
     }
 
-    /** Comparaison en temps constant : une comparaison ordinaire laisserait deviner la signature. */
+    /** Constant-time comparison, so timing does not leak the signature. */
     public boolean signatureValide(String eventId, String signature) {
         if (signature == null || signature.isBlank()) {
             return false;

@@ -26,11 +26,10 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
- * Audience planifiée sur une étape de procédure (RG-AUD-01). Le module {@code audience} dépend
- * de {@code dossier} (cf. FUNCTIONAL_MAP.md §2), une {@code @ManyToOne} directe est donc légitime
- * ici — contrairement à {@code alerte}/{@code historique_action}, qui restent un socle
- * transversal sans dépendance vers les modules métier.
- * Cf. dictionnaire des données §2.3.1 (table {@code audience}).
+ * Hearing scheduled on a procedure step (RG-AUD-01). The {@code audience} module depends on
+ * {@code dossier}, so a direct {@code @ManyToOne} is legitimate here, unlike the cross-cutting
+ * {@code alerte} and {@code historique_action}.
+ * See data dictionary §2.3.1 (table {@code audience}).
  */
 @Getter
 @Setter
@@ -65,23 +64,18 @@ public class Audience {
     private String compteRendu;
 
     /**
-     * Ce que le juriste veut dire à l'avocat de cette audience (QF-64). **Distincte du compte
-     * rendu**, qui reste interne : il peut juger la stratégie, voire le travail de l'avocat
-     * lui-même (RG-INT-07). L'avocat ne la lit que s'il est constitué.
+     * What the in-house lawyer wants to tell the assigned lawyer about this hearing. <b>Separate
+     * from the report</b>, which stays internal (RG-INT-07). The lawyer only sees it when assigned
+     * to the case.
      */
     @Column(name = "note_avocat")
     private String noteAvocat;
 
     /**
-     * La juridiction devant laquelle l'audience se tient (V34).
-     *
-     * <p><b>Distincte de {@code dossier.juridictionSaisie}</b>, qui est celle de la saisine — le
-     * premier degré. Une audience d'appel ne se tient pas devant le tribunal qui a jugé : afficher
-     * la juridiction du dossier pour toutes les audiences ne laissait pas l'information manquante,
-     * elle la rendait <b>fausse</b>.
-     *
-     * <p>Héritée du dossier à la planification quand l'utilisateur n'en indique pas d'autre : c'est
-     * le cas courant, et c'est ce qui était affiché jusqu'ici.
+     * The court where the hearing takes place.
+     * <p><b>Distinct from {@code dossier.juridictionSaisie}</b>, the first-instance court: an
+     * appeal hearing is not held before the court that ruled. Defaults to the case's court when
+     * none is given at scheduling.
      */
     @Size(max = 100)
     @Column(length = 100)
@@ -93,7 +87,7 @@ public class Audience {
     @Column(length = 20)
     private StatutAudience statut = StatutAudience.PLANIFIEE;
 
-    /** Q-76 : motif obligatoire d'une annulation (renvoi, date erronée). */
+    /** Mandatory reason for a cancellation (adjournment, wrong date). */
     @Column(name = "motif_annulation")
     private String motifAnnulation;
 

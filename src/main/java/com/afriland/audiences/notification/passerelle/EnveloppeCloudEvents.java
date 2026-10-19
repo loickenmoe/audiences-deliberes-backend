@@ -10,17 +10,14 @@ import java.util.UUID;
 import java.util.random.RandomGenerator;
 
 /**
- * Enveloppe que le sidecar Dapr pose autour d'un message publié, au format CloudEvents 1.0.
+ * CloudEvents 1.0 envelope that the Dapr sidecar puts around a published message.
  * <p>
- * <b>Pourquoi la reproduire nous-mêmes.</b> Le Notification Engine consomme ses topics par Dapr, qui
- * déballe cette enveloppe avant de livrer le message. Publier directement sur Kafka sans elle
- * reviendrait à parier sur la tolérance du moteur, et un message ignoré ne laisse aucune trace
- * (Guide V1 §4 bis). Le sidecar n'étant pas installable sur les postes — le registre d'images est
- * inaccessible depuis le réseau de la banque —, nous produisons la même enveloppe.
- * <p>
- * Les noms de champs sont ceux de CloudEvents et de Dapr : c'est un contrat externe.
+ * The Notification Engine consumes through Dapr, which unwraps this envelope; publishing to Kafka
+ * without it would rely on the engine's tolerance, and an ignored message leaves no trace
+ * (Guide V1 §4 bis). Since the sidecar cannot be installed on workstations, we produce the same
+ * envelope. Field names follow the CloudEvents/Dapr external contract.
  *
- * @param data le message métier, tel que le moteur le lira
+ * @param data the business message, as the engine will read it
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record EnveloppeCloudEvents(
@@ -37,13 +34,13 @@ public record EnveloppeCloudEvents(
         String tracestate,
         Object data) {
 
-    /** Type que Dapr donne aux messages publiés par son API. */
+    /** Type Dapr gives to messages published through its API. */
     public static final String TYPE = "com.dapr.event.sent";
     public static final String SPEC_VERSION = "1.0";
     public static final String CONTENT_TYPE = "application/json";
 
     public static EnveloppeCloudEvents autour(Object message, String source, String pubsub, String topic) {
-        // Format d'horodatage repris d'un message accepté : heure locale avec décalage, à la seconde.
+        // Timestamp format copied from an accepted message: local time with offset, to the second.
         String horodatage = OffsetDateTime.now().truncatedTo(ChronoUnit.SECONDS)
                 .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
         String trace = nouveauTraceparent();
@@ -52,8 +49,8 @@ public record EnveloppeCloudEvents(
     }
 
     /**
-     * Contexte de trace W3C, tel que le sidecar en pose un : version 00, un identifiant de trace de
-     * 16 octets, un identifiant de portée de 8 octets, et l'indicateur « échantillonné ».
+     * W3C trace context, as the sidecar sets it: version 00, 16-byte trace id, 8-byte span id and the
+     * "sampled" flag.
      */
     private static String nouveauTraceparent() {
         RandomGenerator alea = RandomGenerator.getDefault();

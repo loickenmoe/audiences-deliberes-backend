@@ -13,16 +13,16 @@ import java.util.stream.IntStream;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /*
- * Un PNG minuscule mais **valide** : ce test vérifie une géométrie, pas un dessin. Il suffit que
- * PDFBox l'accepte, pour que la bande réservée soit bien remplie d'un côté et vide de l'autre.
+ * A tiny but valid PNG: this test checks geometry, not a drawing. PDFBox only needs to accept it
+ * for the reserved band to be filled on one side and empty on the other.
  */
 
 /**
- * La charte, éprouvée sur ce qu'elle promet (Q-115 A2).
+ * The document template, tested against what it promises.
  *
- * <p>On ne vérifie pas qu'une page est belle — un test ne sait pas cela. On vérifie ce qui se perd
- * sans qu'on s'en aperçoive : la marque présente sur <b>chaque</b> page, la numérotation juste, les
- * en-têtes de tableau redessinés après un saut de page, et les données ni tronquées ni débordantes.
+ * <p>Not whether a page looks good, but what gets lost unnoticed: branding on <b>every</b> page,
+ * correct numbering, table headers redrawn after a page break, and data neither truncated nor
+ * overflowing.
  */
 class DocumentPdfTest {
     private static final byte[] PNG_VALIDE = java.util.Base64.getDecoder().decode(
@@ -69,15 +69,15 @@ class DocumentPdfTest {
         assertThat(contenu).contains("Afriland First Bank").contains("Direction Juridique");
         assertThat(contenu).contains("Calendrier des audiences");
         assertThat(contenu).contains("Du 2026-09-01 au 2026-09-30");
-        // Le pied attribue : c'est un fait, pas une signature en attente.
+        // The footer attributes: it states a fact, not a pending signature.
         assertThat(contenu).contains("Édité par Marie Directrice");
-        // La numérotation connaît le total — ce qui suppose de n'écrire le pied qu'à la fin.
+        // The numbering knows the total, which requires writing the footer last.
         assertThat(contenu).contains("Page 1 sur " + pages).contains("Page " + pages + " sur " + pages);
     }
 
     /**
-     * Le défaut le plus coûteux d'un tableau paginé : perdre ses en-têtes en page 2. Le lecteur ne
-     * sait alors plus ce qu'il lit, et rien ne le lui signale.
+     * The costliest defect of a paginated table: losing its headers on page 2, leaving the reader lost
+     * with no warning.
      */
     @Test
     @DisplayName("les en-têtes de colonnes sont redessinés à chaque page")
@@ -109,8 +109,8 @@ class DocumentPdfTest {
     }
 
     /**
-     * La coupe se fait à la **largeur mesurée**, pas au nombre de caractères : Helvetica est
-     * proportionnelle, et compter les signes revenait à déborder sur la colonne voisine.
+     * Wrapping uses the <b>measured width</b>, not a character count: Helvetica is proportional, and
+     * counting characters overflows into the next column.
      */
     @Test
     @DisplayName("une valeur trop longue est coupée, jamais laissée à déborder")
@@ -128,7 +128,7 @@ class DocumentPdfTest {
         assertThat(contenu).doesNotContain("soixante points de large");
     }
 
-    /** Un document sans la moindre ligne doit rester un document, pas un fichier illisible. */
+    /** A document with no rows must still be a valid document. */
     @Test
     @DisplayName("un document vide sort une page qui le dit")
     void documentVide() throws Exception {
@@ -142,8 +142,8 @@ class DocumentPdfTest {
     }
 
     /**
-     * Sans auteur connu, le pied porte la date plutôt qu'un vide : un document qui ne dit pas quand
-     * il a été édité laisse croire qu'il est à jour.
+     * With no known author, the footer shows the date instead of nothing: a document that does not say
+     * when it was produced suggests it is current.
      */
     @Test
     @DisplayName("sans auteur, le pied porte la date d'édition")
@@ -174,12 +174,10 @@ class DocumentPdfTest {
     }
 
     /**
-     * Une image illisible ne doit pas emporter le document (N8).
+     * An unreadable image must not break the document.
      *
-     * <p>La signature enregistrée est un <b>confort</b> ; la lettre de constitution est une
-     * <b>pièce officielle</b>. Perdre la seconde pour la première serait disproportionné - et c'est
-     * arrivé : les décodeurs de PDFBox lèvent sur une entrée mal formée des exceptions non
-     * vérifiées, qu'un filet trop étroit laissait passer.
+     * <p>The stored signature is a convenience; the appointment letter is an official document. PDFBox
+     * decoders throw unchecked exceptions on malformed input, which must be caught.
      */
     @Test
     void deuxSignatures_ignoreUneImageIllisibleEtRendLeDocument() throws Exception {
@@ -192,11 +190,11 @@ class DocumentPdfTest {
             pdf = doc.finaliser();
         }
 
-        // Le document existe, et porte les deux noms : la lettre est partie sans la vignette.
+        // The document exists and carries both names: the letter is produced without the image.
         assertThat(LecturePdf.texte(pdf)).contains("Clara Juriste").contains("Le Secrétaire Général");
     }
 
-    /** Rien à apposer : celui qui n'a rien déposé signe à la main, et le document ne bronche pas. */
+    /** Nothing to affix: whoever has not uploaded a signature signs by hand, and the document is unaffected. */
     @Test
     void deuxSignatures_toleLAbsenceDImage() throws Exception {
         byte[] pdf;
@@ -210,11 +208,8 @@ class DocumentPdfTest {
     }
 
     /**
-     * Les deux noms restent sur la <b>même ligne</b>, qu'il y ait une signature ou deux.
-     *
-     * <p>C'est ce qui distingue cette disposition d'une pile de blocs : le nom de celui qui n'a rien
-     * déposé ne doit pas remonter là où l'autre a son trait. Ne pas avoir déposé d'image est un cas
-     * normal - la lettre ne doit pas en paraître bancale.
+     * Both names stay on the <b>same line</b>, whether there are one or two signatures. Not having
+     * uploaded an image is a normal case, and the letter must not look lopsided.
      */
     @Test
     void deuxSignatures_alignentLesNomsMemeSansImage() throws Exception {
@@ -231,7 +226,7 @@ class DocumentPdfTest {
             sansAucuneImage = doc.finaliser();
         }
 
-        // La bande réservée est la même : les noms tombent au même endroit dans les deux cas.
+        // The reserved band is the same: the names land in the same place in both cases.
         assertThat(LecturePdf.positions(avecUneImage)).isEqualTo(LecturePdf.positions(sansAucuneImage));
     }
 }

@@ -11,16 +11,13 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Le socle des conditions de fait (métier, 2026-09-29).
- *
- * <p>Ces tests portent sur le <b>mécanisme</b>, pas sur les règles métier : chaque condition réelle
- * est vérifiée dans le module qui la fournit. Ce qui se joue ici est ce qu'aucun de ces modules ne
- * peut vérifier seul — qu'une condition qui ne concerne pas le passage se tait, que plusieurs
- * refus soient rendus <b>ensemble</b>, et qu'un refus porte toujours un motif lisible.
+ * The factual-condition mechanism (each real condition is tested in the module that provides it).
+ * Checks what no module can check alone: an unrelated condition stays silent, several refusals are
+ * returned <b>together</b>, and a refusal always carries a readable reason.
  */
 class ConditionTransitionEtapeTest {
 
-    /** Une condition d'essai : elle concerne un passage donné et refuse toujours, ou jamais. */
+    /** A test condition: applies to a given transition and always or never refuses. */
     private static ConditionTransitionEtape condition(StatutCycleVie de, StatutCycleVie vers, String motif) {
         return new ConditionTransitionEtape() {
             @Override
@@ -61,8 +58,8 @@ class ConditionTransitionEtapeTest {
     }
 
     /**
-     * Le point qui compte : deux manques se disent ensemble. S'arrêter au premier ferait corriger
-     * une chose pour en découvrir une autre au clic suivant.
+     * Two missing items are reported together. Stopping at the first would make the user fix one thing
+     * and discover another on the next click.
      */
     @Test
     void plusieurs_manques_sont_rendus_ensemble() {
@@ -80,7 +77,7 @@ class ConditionTransitionEtapeTest {
         assertThat(empechements(List.of(), StatutCycleVie.EN_COURS, StatutCycleVie.EN_DELIBERE)).isEmpty();
     }
 
-    /** Le motif est destiné à être lu à l'écran : un refus muet laisserait devant un bouton inerte. */
+    /** The reason is shown on screen: a silent refusal would leave the user facing an inert button. */
     @Test
     void un_refus_porte_toujours_un_motif_lisible() {
         var conditions = List.of(
@@ -92,7 +89,7 @@ class ConditionTransitionEtapeTest {
         assertThat(motifs.get(0)).isNotBlank().doesNotContain("EN_DELIBERE", "null");
     }
 
-    /** L'exception produite reste un 400 `ERR-004` : le client la traite déjà. */
+    /** The exception remains a 400 `ERR-004`: the client already handles it. */
     @Test
     void le_refus_est_un_ERR_004() {
         ApiException erreur = ApiException.badRequest(

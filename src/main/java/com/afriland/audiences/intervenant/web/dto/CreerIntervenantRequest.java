@@ -7,10 +7,9 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 /**
- * M15 — création d'un intervenant du référentiel (Q-68). {@code compteKeycloak} est **obligatoire
- * pour un {@code AVOCAT}** (RG-INT-01 : seul type de prestataire disposant d'un compte) et doit
- * rester absent pour un {@code AUTRE_PRESTATAIRE} (RG-INT-02) ; {@code notification} est le
- * symétrique, propre au second.
+ * Creation of a reference-data participant. {@code compteKeycloak} is mandatory for an
+ * {@code AVOCAT} (RG-INT-01: the only provider type with an account) and must be absent for an
+ * {@code AUTRE_PRESTATAIRE} (RG-INT-02); {@code notification} applies only to the latter.
  */
 public record CreerIntervenantRequest(
         @NotNull TypeIntervenant type,

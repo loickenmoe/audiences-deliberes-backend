@@ -35,12 +35,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Le partage d'une pièce avec l'avocat du dossier (QF-64).
+ * Sharing a document with the case lawyer.
  *
- * <p><b>Les règles que ces tests gardent</b>, arbitrées par le porteur du projet le 2026-10-15 :
- * tout juriste partage sans validation ; sur un dossier sensible, le juriste propose et le DJ ou la
- * DJA valide ; un rejet exige son motif ; et chaque geste laisse sa trace - une pièce qui sort de la
- * banque doit pouvoir dire qui l'a laissée sortir.
+ * <p>Rules: any legal officer shares without validation; on a sensitive case the officer proposes
+ * and the DJ or DJA validates; a rejection requires a reason; and every action is traced.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -81,8 +79,6 @@ class PartageDocumentServiceTest {
         return document;
     }
 
-    // ─────────────────────────────────────────────────────────────── partager
-
     @Test
     @DisplayName("un juriste partage directement une pièce d'un dossier ordinaire")
     void partager_dossierOrdinaire() {
@@ -93,16 +89,15 @@ class PartageDocumentServiceTest {
 
         assertThat(reponse.partageAvocat()).isEqualTo(StatutPartageAvocat.PARTAGE);
         assertThat(document.getPartagePar()).isEqualTo(juriste);
-        // Aucune validation n'est en jeu hors d'un dossier sensible : rien à signer.
+        // No validation is involved outside a sensitive case: nothing to sign.
         assertThat(document.getPartageValidePar()).isNull();
         verify(historiqueActionService).enregistrer(3L, TypeActionHistorique.DOCUMENT_PARTAGE_AVOCAT,
                 Map.of("documentId", 7L));
     }
 
     /**
-     * <b>La règle du dossier sensible.</b> Le geste du juriste ne rend rien visible : il propose, et
-     * c'est le DJ ou la DJA qui décide. Si ce test tombait, une pièce d'un dossier sensible partirait
-     * chez l'avocat sans que la direction l'ait vue.
+     * <b>Sensitive case rule.</b> The legal officer's action makes nothing visible: it proposes, and the
+     * DJ or DJA decides.
      */
     @Test
     @DisplayName("sur un dossier sensible, le juriste propose : rien n'est visible avant le DJ/DJA")
@@ -118,7 +113,7 @@ class PartageDocumentServiceTest {
                 Map.of("documentId", 7L));
     }
 
-    /** Le DJ qui partage lui-même n'a pas à se valider : sa décision est la validation. */
+    /** A DJ sharing directly needs no validation: the decision is the validation. */
     @Test
     void partager_dossierSensible_parDj() {
         Document document = document(true, StatutPartageAvocat.NON);
@@ -132,9 +127,8 @@ class PartageDocumentServiceTest {
     }
 
     /**
-     * <b>QF-65 : le SH et l'Assistante partagent</b>, « ils sont à la base des juristes ». Sur un
-     * dossier ordinaire leur geste partage ; sur un dossier sensible, il propose, comme celui du
-     * juriste - seule la direction partage directement.
+     * <b>SH and the Assistant share too.</b> On an ordinary case their action shares; on a sensitive
+     * case it proposes, like the legal officer's. Only management shares directly.
      */
     @Test
     @DisplayName("le SH et l'Assistante partagent un dossier ordinaire, et proposent un dossier sensible")
@@ -151,9 +145,7 @@ class PartageDocumentServiceTest {
         }
     }
 
-    // ─────────────────────────────────────────────────────────────── l'etat
-
-    /** La règle même qui ouvre les pièces : un avocat affecté ET constitué. */
+    /** The rule that opens documents: a lawyer both assigned AND retained. */
     @Test
     @DisplayName("l'état dit si un avocat affecté est constitué")
     void etat_constitution() {
@@ -171,7 +163,7 @@ class PartageDocumentServiceTest {
         assertThat(service.etat(3L).avocatConstitue()).isTrue();
     }
 
-    /** Un dossier sans avocat affecté n'en a aucun de constitué. */
+    /** A case with no assigned lawyer has no retained one. */
     @Test
     void etat_sansAvocat() {
         when(dossierAvocatRepository.findByDossierId(3L)).thenReturn(java.util.List.of());
@@ -187,7 +179,7 @@ class PartageDocumentServiceTest {
         verify(historiqueActionService, never()).enregistrer(anyLong(), any(), any());
     }
 
-    /** Une pièce supprimée n'existe plus pour personne hors de l'audit : elle ne se partage pas. */
+    /** A deleted document no longer exists outside the audit: it cannot be shared. */
     @Test
     void partager_documentSupprime_404() {
         Document document = document(false, StatutPartageAvocat.NON);
@@ -196,8 +188,6 @@ class PartageDocumentServiceTest {
         assertThatThrownBy(() -> service.partager(7L)).isInstanceOf(ApiException.class)
                 .hasMessageContaining("introuvable");
     }
-
-    // ─────────────────────────────────────────────────────────────── retirer
 
     @Test
     @DisplayName("retirer un partage efface tout ce qui le décrivait, et le trace")
@@ -209,7 +199,7 @@ class PartageDocumentServiceTest {
         var reponse = service.retirer(7L);
 
         assertThat(reponse.partageAvocat()).isEqualTo(StatutPartageAvocat.NON);
-        // La contrainte de la base l'exige : un état NON ne garde ni auteur ni validation.
+        // Required by a database constraint: a NON state keeps neither author nor validation.
         assertThat(document.getPartagePar()).isNull();
         assertThat(document.getPartageLe()).isNull();
         assertThat(document.getPartageValidePar()).isNull();
@@ -225,8 +215,6 @@ class PartageDocumentServiceTest {
         assertThatThrownBy(() -> service.retirer(7L)).isInstanceOf(ApiException.class);
     }
 
-    // ─────────────────────────────────────────────────────────────── arbitrer
-
     @Test
     @DisplayName("le DJ valide une proposition : la pièce devient visible, signée de sa main")
     void arbitrer_valide() {
@@ -237,11 +225,11 @@ class PartageDocumentServiceTest {
 
         assertThat(reponse.partageAvocat()).isEqualTo(StatutPartageAvocat.PARTAGE);
         assertThat(document.getPartageValidePar()).isEqualTo(dj);
-        // Le proposant reste nommé : la validation s'ajoute, elle ne remplace personne.
+        // The proposer stays named: validation is added, it replaces no one.
         assertThat(document.getPartagePar()).isEqualTo(juriste);
     }
 
-    /** Le juriste qui a proposé doit savoir pourquoi la pièce ne part pas. */
+    /** The proposing legal officer must know why the document is not shared. */
     @Test
     @DisplayName("un rejet sans motif est refusé, et la proposition reste intacte")
     void arbitrer_rejetSansMotif_400() {
@@ -268,7 +256,7 @@ class PartageDocumentServiceTest {
                 eq(Map.of("documentId", 7L, "decision", "REJETE", "motif", "Pièce couverte par le secret bancaire")));
     }
 
-    /** Une pièce déjà partagée n'a plus rien à valider : la redemander serait une erreur de l'écran. */
+    /** An already shared document has nothing left to validate: asking again is a UI error. */
     @Test
     void arbitrer_horsProposition_409() {
         document(false, StatutPartageAvocat.PARTAGE);

@@ -24,13 +24,9 @@ import java.sql.SQLException;
 import java.util.stream.Collectors;
 
 /**
- * Traduit toute exception non gérée par un contrôleur en {@link ErrorResponse}, conformément au
- * format d'erreur du contrat d'API (REF-07 §1.3-1.4) : codes HTTP standard + corps JSON
- * {@code {code, message, details}}.
- * <p>
- * Étend {@link ResponseEntityExceptionHandler} pour intercepter proprement les exceptions
- * standard de Spring MVC (validation, désérialisation, méthode HTTP non supportée, etc.), en
- * plus des {@link ApiException} métier levées explicitement par les services applicatifs.
+ * Translates unhandled controller exceptions into an {@link ErrorResponse} per the API contract
+ * (REF-07 §1.3-1.4): standard HTTP status plus {@code {code, message, details}}. Extends
+ * {@link ResponseEntityExceptionHandler} to also cover standard Spring MVC exceptions.
  */
 @Slf4j
 @RestControllerAdvice
@@ -59,10 +55,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     /**
-     * Q-85 : deux créations concurrentes franchissent le même contrôle d'unicité du service, et la
-     * contrainte de la base tranche la seconde. Une violation d'unicité (SQLState {@code 23505}) est
-     * donc un conflit — le même 409 que le contrôle aurait rendu —, pas une erreur interne. Toute
-     * autre violation d'intégrité reste une erreur interne.
+     * Two concurrent creations can pass the same service uniqueness check; the database constraint
+     * rejects the second. A unique violation (SQLState {@code 23505}) is therefore a 409 conflict;
+     * any other integrity violation stays an internal error.
      */
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
@@ -91,7 +86,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 .body(new ErrorResponse(ErrorCodes.ERREUR_INTERNE, "Erreur interne", null));
     }
 
-    // ---- Exceptions Spring MVC standard (interceptées via ResponseEntityExceptionHandler) ----
+    // Standard Spring MVC exceptions (via ResponseEntityExceptionHandler)
 
     @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(
@@ -132,16 +127,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     /**
-     * RG-GED-08 : intercepte le rejet Spring/Tomcat (413, format {@code ProblemDetail} générique)
-     * avant même que {@code GedService} ne voie la requête, pour rester conforme au format
-     * {@code {code, message, details}} du contrat — découvert en validation manuelle M8, un
-     * fichier dépassant {@code spring.servlet.multipart.max-file-size} déclenche cette exception
-     * en amont du contrôleur, quel que soit le seuil {@code TAILLE_MAX_GED} configuré.
+     * RG-GED-08: a file exceeding {@code spring.servlet.multipart.max-file-size} is rejected before
+     * reaching the controller, whatever {@code TAILLE_MAX_GED} is; map it to the contract error format.
      * <p>
-     * Contrairement aux autres cas ci-dessus, ce n'est pas un {@code @ExceptionHandler} distinct
-     * (ambigu avec le {@code handleException} générique final de {@link ResponseEntityExceptionHandler}
-     * — constaté via {@code contextLoads()} en échec) mais l'override du point d'extension dédié
-     * que la classe mère expose déjà pour ce type précis.
+     * Implemented as an override of the parent's dedicated hook: a separate {@code @ExceptionHandler}
+     * would be ambiguous with {@link ResponseEntityExceptionHandler}'s generic handler.
      */
     @Override
     protected ResponseEntity<Object> handleMaxUploadSizeExceededException(

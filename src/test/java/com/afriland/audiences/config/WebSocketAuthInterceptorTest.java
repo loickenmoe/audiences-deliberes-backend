@@ -26,10 +26,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 /**
- * M14 — l'authentification WebSocket est le seul chemin d'authentification que les tests bout en
- * bout ne couvrent pas (ils passent par MockMvc/HTTP). Ce test verrouille les quatre décisions de
- * sécurité de {@link WebSocketAuthInterceptor} : jeton requis, schéma {@code Bearer} requis, jeton
- * valide requis, et rejet de toute trame émise hors session authentifiée.
+ * WebSocket authentication is the only authentication path that end-to-end tests do not cover (they
+ * use MockMvc/HTTP). Locks the four security decisions of {@link WebSocketAuthInterceptor}: token
+ * required, {@code Bearer} scheme required, valid token required, and rejection of any frame sent
+ * outside an authenticated session.
  */
 @ExtendWith(MockitoExtension.class)
 class WebSocketAuthInterceptorTest {
@@ -52,9 +52,8 @@ class WebSocketAuthInterceptorTest {
                 .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(300)).build();
         when(jwtDecoder.decode("jeton")).thenReturn(jwt);
 
-        // L'accesseur doit rester mutable : c'est ainsi que le canal STOMP entrant construit les
-        // messages en production, et c'est la condition pour que l'intercepteur puisse y poser le
-        // principal authentifié.
+        // The accessor must stay mutable: that is how the inbound STOMP channel builds messages in
+        // production, and it lets the interceptor set the authenticated principal.
         StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.CONNECT);
         accessor.setLeaveMutable(true);
         accessor.setNativeHeader("Authorization", "Bearer jeton");

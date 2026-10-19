@@ -18,10 +18,10 @@ class EtapeTransitionValidatorTest {
             "DELIBERE_VIDE, CLOTURE, true",
             "DELIBERE_VIDE, EN_COURS, true",
             "CLOTURE, ARCHIVE, true",
-            // Réservées aux endpoints dédiés du module délibéré (M7) :
+            // Reserved for the dedicated endpoints of the deliberation module (M7):
             "EN_DELIBERE, DELIBERE_VIDE, false",
             "EN_DELIBERE, EN_COURS, false",
-            // Sauts et retours interdits :
+            // Forbidden jumps and returns:
             "OUVERTURE, EN_DELIBERE, false",
             "OUVERTURE, CLOTURE, false",
             "EN_COURS, CLOTURE, false",

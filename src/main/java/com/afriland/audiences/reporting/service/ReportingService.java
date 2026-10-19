@@ -26,9 +26,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * Épic 8, volet reporting (FR-REP-01/02, RG-REP-01/02/03, US 8.4/8.5) — cf. FUNCTIONAL_MAP.md §8,
- * API_IMPLEMENTATION_STATUS.md §9. US 8.6 (vue consolidée par client) est déjà couverte depuis M4
- * par {@code DossierService.vueConsolideeParClient} — non dupliquée ici.
+ * Reporting (FR-REP-01/02, RG-REP-01/02/03, US 8.4/8.5). US 8.6 (consolidated view per client) is
+ * covered by {@code DossierService.vueConsolideeParClient}.
  */
 @Service
 @RequiredArgsConstructor
@@ -37,18 +36,13 @@ public class ReportingService {
     private static final List<StatutCycleVie> ETAPES_FERMEES = List.of(StatutCycleVie.CLOTURE, StatutCycleVie.ARCHIVE);
 
     /**
-     * Le périmètre par défaut : <b>les deux catégories</b> (Q-138).
-     *
-     * <p><b>Pourquoi une liste des deux valeurs et non un filtre optionnel.</b> {@code categorie}
-     * est {@code NOT NULL} en base, avec une contrainte {@code CHECK} sur ces deux valeurs exactement
-     * (V1) : « toutes catégories » est donc littéralement leur union, et l'invariant
-     * <b>Recouvrement + Litiges d'exploitation = Toutes</b> repose sur la base, non sur ce code. Un
-     * filtre optionnel aurait demandé un {@code :categorie IS NULL OR …} dans seize requêtes, et
-     * laissé la porte ouverte à un appel non scopé.
+     * Default scope: both categories. {@code categorie} is {@code NOT NULL} with a {@code CHECK} on
+     * exactly these values, so "all categories" is their union. An explicit list avoids an
+     * optional {@code :categorie IS NULL OR ...} filter in every query and any unscoped call.
      */
     static final List<CategorieDossier> TOUTES_CATEGORIES = List.of(CategorieDossier.values());
 
-    /** Le périmètre demandé, ou les deux catégories à défaut. */
+    /** The requested scope, or both categories by default. */
     static List<CategorieDossier> perimetre(CategorieDossier categorie) {
         return categorie == null ? TOUTES_CATEGORIES : List.of(categorie);
     }
@@ -62,20 +56,14 @@ public class ReportingService {
     private final DecisionDefinitiveRepository decisionDefinitiveRepository;
     private final DossierRepository dossierRepository;
 
-    /** FR-REP-02/RG-REP-03 : indicateurs temps réel, tous dossiers confondus. */
+    /** Real-time indicators across all cases (FR-REP-02, RG-REP-03). */
     @Transactional(readOnly = true)
     public TableauDeBordResponse tableauDeBord(CategorieDossier categorie) {
-        /*
-         * Les neuf indicateurs suivent le même périmètre, et c'est tout l'objet de Q-138 : six
-         * d'entre eux portaient sur les deux catégories, trois sur le recouvrement seul, sans que
-         * l'écran le distingue. Un dossier d'exploitation jugé ne faisait donc bouger aucun des
-         * compteurs de résultat - son délibéré existait sans être compté nulle part.
-         */
+        // All indicators share the same category scope.
         List<CategorieDossier> categories = perimetre(categorie);
         long nbDossiersActifs = etapeProcedureRepository
                 .countDistinctDossierIdByStatutCycleVieNotIn(ETAPES_FERMEES, categories);
-        // Les affaires vidées : plus aucune étape en cours (métier, 2026-10-06). Le complément
-        // exact du compteur ci-dessus, et la même notion qu'au Q-53.
+        // Closed matters: no step still in progress, the exact complement of the counter above.
         long nbAffairesVidees = etapeProcedureRepository.countDossiersSansEtapeEnCours(ETAPES_FERMEES, categories);
         long nbAudiencesPlanifiees = audienceRepository.compterParStatut(StatutAudience.PLANIFIEE, categories);
         long nbDemandesFraisEnAttente = demandeFraisRepository.compterNonSoldees(FRAIS_SOLDES, categories);
@@ -92,36 +80,27 @@ public class ReportingService {
     }
 
     /**
-     * FR-REP-01/RG-REP-01/02 : rapport restreint à {@code [dateDebut, dateFin]}. {@code type} est
-     * une étiquette de période sans effet de calcul, {@code dateDebut}/{@code dateFin} étant
-     * explicitement fournies par l'appelant (Q-63).
+     * Report restricted to {@code [dateDebut, dateFin]} (FR-REP-01, RG-REP-01/02). {@code type} is
+     * only a period label; the caller supplies the dates explicitly.
      */
     @Transactional(readOnly = true)
     public RapportResponse genererRapport(TypeRapport type, LocalDate dateDebut, LocalDate dateFin,
                                           CategorieDossier categorie) {
         LocalDateTime debutJour = dateDebut.atStartOfDay();
         LocalDateTime finJour = dateFin.atTime(23, 59, 59);
-        /*
-         * Le rapport suit le même périmètre que le tableau de bord (Q-138). Il portait la même
-         * asymétrie : quatre indicateurs sur les deux catégories, trois sur le recouvrement seul.
-         * Ne scoper que les trois aurait reproduit le défaut qu'on retire.
-         */
+        // Same category scope as the dashboard, applied to every indicator.
         List<CategorieDossier> categories = perimetre(categorie);
 
         long nbNouveauxDossiers = dossierRepository.compterCreesEntre(debutJour, finJour, categories);
         long nbAudiencesTenues = audienceRepository.compterTenuesEntre(
                 StatutAudience.TENUE, dateDebut, dateFin, categories);
         long nbDemandesFraisDeposees = demandeFraisRepository.compterDeposeesEntre(debutJour, finJour, categories);
-        // Délibérés rendus dans la période : une mise en délibéré sans résultat n'en est pas un (Q-78).
+        // Deliberations rendered in the period: one without a result does not count.
         long nbDeliberesEnregistres = delibereRepository.compterRendusEntre(dateDebut, dateFin, categories);
         DelibereRepository.PerformanceGlobale performance =
                 delibereRepository.calculerResultatsPeriode(dateDebut, dateFin, categories);
-        /*
-         * Le taux suit désormais le périmètre, et son nom est devenu historique : sous « toutes
-         * catégories » il ne mesure plus le seul recouvrement. Aucun écran ne l'affiche depuis le
-         * 2026-10-06 ; le laisser figé au recouvrement aurait fait, dans la même réponse, un champ
-         * qui ignore le périmètre que tous les autres respectent.
-         */
+        // The rate follows the requested scope too, so despite its name it is not limited to debt
+        // recovery. It is no longer displayed.
         double tauxSuccesRecouvrement = tauxSucces(performance.getFavorables(), performance.getTotal());
         double provisionsReprises = valeurOuZero(
                 decisionDefinitiveRepository.sommeProvisionsReprisesPeriode(dateDebut, dateFin, categories));
@@ -139,10 +118,7 @@ public class ReportingService {
         return (double) (favorables == null ? 0L : favorables) / total;
     }
 
-    /**
-     * {@code SUM} rend {@code null} sur un ensemble vide, non zéro : une base sans délibéré rendu
-     * ferait échouer l'autoboxing vers {@code long}.
-     */
+    /** {@code SUM} returns {@code null} on an empty set, which would break unboxing to {@code long}. */
     private long nombreOuZero(Long valeur) {
         return valeur == null ? 0L : valeur;
     }

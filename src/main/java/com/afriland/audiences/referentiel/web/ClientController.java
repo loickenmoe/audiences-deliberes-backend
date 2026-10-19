@@ -24,9 +24,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Cf. API_IMPLEMENTATION_STATUS.md §2. {@code POST /clients} est un endpoint 🆕
- * (DECISIONS_AND_OPEN_QUESTIONS.md Q-23) : absent du contrat d'API, pourtant nécessaire —
- * {@code dossier.client_id} est {@code NOT NULL} et aucune création n'était sinon possible.
+ * {@code POST /clients} is not in the API contract but is required: {@code dossier.client_id} is
+ * {@code NOT NULL} and no client could be created otherwise.
  */
 @RestController
 @RequestMapping("${api.prefix}/clients")
@@ -37,10 +36,9 @@ public class ClientController {
     private final DossierService dossierService;
 
     /**
-     * Plus récent d'abord (Q-93). Sans tri explicite, la requête paginée n'avait aucun
-     * {@code ORDER BY} : au-delà de vingt clients, celui qu'on venait de créer se retrouvait en
-     * page 2 — invisible pour son auteur — et une même ligne pouvait apparaître deux fois, ou
-     * disparaître, d'une page à l'autre.
+     * Most recent first. Without an explicit sort, the paged query had no {@code ORDER BY}: a newly
+     * created client could land on another page, and a row could appear twice or disappear between
+     * pages.
      */
     @GetMapping
     @PreAuthorize("hasRole('CONSULTATION')")
@@ -66,9 +64,8 @@ public class ClientController {
     }
 
     /**
-     * 🆕 Modifie le nom et les coordonnées d'un client. La référence reste figée — cf.
-     * {@link ModifierClientRequest}. Même garde que la création : qui peut créer un client peut en
-     * corriger une coquille.
+     * Updates a client's name and contact details. The reference stays fixed (see
+     * {@link ModifierClientRequest}). Same guard as creation: whoever can create a client can fix a typo.
      */
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('SAISIE')")

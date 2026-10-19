@@ -22,9 +22,9 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * Correspondance unique transmise par le DJ/DJA à l'avocat en réponse aux commentaires des
- * juristes sur une publication (Q-20, US 5.5, RG-INT-07) — unicité imposée par la contrainte
- * {@code UNIQUE(publication_id)} de {@code V4__publication_commentaires_correspondances.sql}.
+ * Single letter sent by the DJ/DJA to the lawyer in response to the legal officers' comments on a
+ * publication (US 5.5, RG-INT-07). Uniqueness is enforced by the {@code UNIQUE(publication_id)}
+ * database constraint.
  */
 @Getter
 @Setter

@@ -95,7 +95,7 @@ class NotificationAlerteListenerTest {
         verify(repository, never()).saveAll(any());
     }
 
-    /** Une notification ne doit jamais faire échouer l'action métier qui la provoque. */
+    /** A notification must never make the business action that triggers it fail. */
     @Test
     void un_echec_de_preparation_est_journalise_sans_remonter() {
         when(routage.pourUtilisateur(TypeAlerte.DOCUMENT_CHARGE, juriste)).thenThrow(new IllegalStateException("réglage illisible"));

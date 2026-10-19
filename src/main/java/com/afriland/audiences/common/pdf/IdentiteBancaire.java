@@ -3,22 +3,14 @@ package com.afriland.audiences.common.pdf;
 import java.util.List;
 
 /**
- * Les mentions institutionnelles portées par le papier à en-tête (Q-115 B1).
+ * Institutional mentions printed on the letterhead.
  *
- * <p><b>Pourquoi elles vivent ici, dans le dépôt, et non en variables d'environnement.</b> C'était la
- * proposition initiale, et elle était mauvaise. Une variable non renseignée disparaît **en silence** :
- * une lettre partirait chez un huissier sans son agrément ni son RC, sans que personne ne soit
- * averti. Et une valeur en {@code .env} n'est versionnée nulle part — le jour où le capital change,
- * on ne saurait ni qui l'a modifié, ni quand. Pour un numéro d'agrément ministériel, cette
- * traçabilité n'est pas un luxe.
+ * <p>Kept in source control rather than environment variables: a missing variable would disappear
+ * silently (a letter sent without its licence or registration number), and changes to legal mentions
+ * must be versioned and reviewed.
  *
- * <p>Ici, une modification est une ligne de diff qui passe par la relecture ordinaire du code. Pour
- * une mention légale, c'est une garantie, pas une lourdeur. Et ces valeurs ne changent pas : le RC
- * {@code 87R041} et l'agrément du 20 juillet 1987 sont acquis depuis quarante ans.
- *
- * <p><b>Ces mentions ne figurent que sur la correspondance.</b> Les porter sur un export de
- * calendrier ou une archive d'audit ferait passer un document de travail pour une communication
- * officielle de la banque — c'est la distinction posée en A2.
+ * <p>These mentions appear on correspondence only. On a calendar export or audit archive they would
+ * make a working document look like an official bank communication.
  */
 public final class IdentiteBancaire {
 
@@ -28,11 +20,8 @@ public final class IdentiteBancaire {
     public static final String ORGANISATION = "Afriland First Bank";
 
     /**
-     * Une ligne de la colonne latérale : un texte et sa graisse, une respiration, ou une barre.
-     *
-     * <p>La graisse n'est pas décorative : sur le papier de la banque, <b>l'intitulé est maigre et
-     * la valeur grasse</b> — « Agrément Banque » puis <b>00005/MINFI/DCE2</b>. C'est ce qui rend la
-     * colonne lisible d'un coup d'œil, et c'est relevé sur le gabarit, non inventé.
+     * A line of the side column: text with its weight, a spacer, or a rule. As on the bank's
+     * letterhead, the label is regular and the value bold.
      */
     public record Mention(String texte, boolean gras, boolean barre) {
     }
@@ -45,17 +34,16 @@ public final class IdentiteBancaire {
         return new Mention(texte, true, false);
     }
 
-    /** Une respiration entre deux groupes : elle espace, elle ne s'imprime pas. */
+    /** Spacer between two groups; prints nothing. */
     private static final Mention ESPACE = new Mention("", false, false);
 
     /**
-     * Une barre de séparation. Le papier de la banque en porte <b>exactement trois</b>, relevées au
-     * pixel : après le bloc du capital, après le SWIFT, et après l'intermédiaire MAF. Les autres
-     * groupes ne sont séparés que par du blanc.
+     * Separator rule. The bank's letterhead has exactly three: after the capital block, after SWIFT,
+     * and after the MAF intermediary. Other groups are separated by whitespace only.
      */
     private static final Mention BARRE = new Mention("", false, true);
 
-    /** La colonne latérale, dans l'ordre où elle se lit sur le papier de la banque. */
+    /** The side column, in reading order on the bank's letterhead. */
     public static final List<Mention> COLONNE = List.of(
             maigre("S.A. au Capital de"),
             grasse("F.CFA 50 000 000 000"),

@@ -3,11 +3,9 @@ package com.afriland.audiences.portail.web.dto;
 import java.util.List;
 
 /**
- * Les pièces partagées d'un dossier, et la raison de leur absence (QF-64).
- *
- * <p>{@code constitue} est porté à part, plutôt que de renvoyer une liste vide : « aucune pièce » et
- * « pas encore constitué » sont deux situations que l'avocat doit distinguer. La seconde se règle
- * par la signature d'une lettre, la première par une demande au juriste.
+ * The shared documents of a case file, and why there are none. {@code constitue} is separate from
+ * the list because "no document" and "not yet engaged" are distinct for the lawyer: the latter is
+ * resolved by signing a letter, the former by asking the legal officer.
  */
 public record PiecesDossierAvocatResponse(boolean constitue, List<PieceAvocatResponse> pieces) {
 }

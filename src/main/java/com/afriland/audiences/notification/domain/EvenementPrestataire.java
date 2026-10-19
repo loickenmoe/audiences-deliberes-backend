@@ -1,12 +1,11 @@
 package com.afriland.audiences.notification.domain;
 
 /**
- * Événements notifiés à un prestataire par un canal externe (décision D19 de
- * NOTIFICATION_ENGINE_PLAN.md). Les cinq premiers existent déjà comme alertes applicatives
- * réservées à l'avocat qui a un compte ; les quatre suivants ont été ajoutés par le porteur du projet.
+ * Events notified to a provider through an external channel. The first five also exist as in-app
+ * alerts for lawyers with an account.
  * <p>
- * Distinct de {@link com.afriland.audiences.alerte.domain.TypeAlerte} : un prestataire n'a pas
- * forcément de compte applicatif, et ces événements ne passent donc pas tous par une alerte.
+ * Distinct from {@link com.afriland.audiences.alerte.domain.TypeAlerte}: a provider may have no
+ * application account, so not all these events go through an alert.
  */
 public enum EvenementPrestataire {
     CONSTITUTION_VALIDEE,
@@ -20,28 +19,21 @@ public enum EvenementPrestataire {
     SUPPRESSION_DOCUMENT_ARBITREE,
 
     /**
-     * Une audience est passée et l'avocat n'a toujours pas déposé son compte rendu
-     * (RG-INT-11, métier du 2026-10-05). Relancé tous les {@code DELAI_RAPPEL_CR_AVOCAT}
-     * jours jusqu'au dépôt.
+     * A hearing has passed and the lawyer has not filed the report yet (RG-INT-11). Repeated every
+     * {@code DELAI_RAPPEL_CR_AVOCAT} days until filed.
      */
     COMPTE_RENDU_ATTENDU,
 
     /**
-     * La direction demande à l'avocat de s'expliquer (N7 temps 2, observation 8).
-     *
-     * <p>Distinct de {@link #COMPTE_RENDU_ATTENDU}, qui est un rappel automatique : celui-ci est
-     * écrit par quelqu'un, et appelle une réponse. C'est précisément parce que la machine a cessé
-     * d'obtenir quoi que ce soit qu'un responsable prend la plume ; les confondre viderait le
-     * second de ce qui lui donne son poids.
+     * Management asks the lawyer for an explanation. Unlike the automatic {@link #COMPTE_RENDU_ATTENDU}
+     * reminder, this one is written by a person and expects a reply.
      */
     DEMANDE_EXPLICATION,
 
     /**
-     * L'Assistante a accusé réception d'un compte rendu (RG-INT-06 amendée, 2026-10-05).
-     *
-     * <p>Distinct de {@link #PUBLICATION_ARBITREE} : celui-ci annonce une décision prise sur
-     * la pièce, ce qui n'arrive plus à un compte rendu. Dire « examinée » quand on a seulement
-     * reçu laisserait l'avocat attendre un verdict qui ne viendra pas.
+     * The assistant acknowledged receipt of a report (RG-INT-06). Distinct from
+     * {@link #PUBLICATION_ARBITREE}, which announces a decision on the document; reports receive no
+     * such decision.
      */
     COMPTE_RENDU_RECU
 }

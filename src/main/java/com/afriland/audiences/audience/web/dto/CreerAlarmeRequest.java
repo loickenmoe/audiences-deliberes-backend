@@ -6,8 +6,9 @@ import jakarta.validation.constraints.NotNull;
 
 import java.time.LocalDateTime;
 
-/** {@code dateEcheance} au futur : une alarme rappelle ce qui reste à faire (règle portée par
- * l'écran depuis l'origine, descendue ici pour qu'elle vaille aussi par l'API). */
+/**
+ * {@code dateEcheance} must be in the future: an alarm is a reminder of what remains to be done.
+ */
 public record CreerAlarmeRequest(
         @NotNull Long etapeId,
         @NotBlank String objet,

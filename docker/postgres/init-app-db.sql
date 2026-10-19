@@ -1,5 +1,5 @@
--- Exécuté automatiquement par l'image officielle PostgreSQL au premier démarrage du volume
--- (docker-entrypoint-initdb.d). Le conteneur "postgres" sert deux bases distinctes dans la
--- même instance : ${POSTGRES_DB} pour Keycloak (créée par l'image via POSTGRES_DB), et
--- audiences_app pour le backend applicatif, créée ici pour éviter tout mélange de schémas.
+-- Run automatically by the official PostgreSQL image on first volume start
+-- (docker-entrypoint-initdb.d). The "postgres" container serves two separate databases in the
+-- same instance: ${POSTGRES_DB} for Keycloak (created by the image via POSTGRES_DB), and
+-- audiences_app for the backend, created here to keep the schemas apart.
 CREATE DATABASE audiences_app;

@@ -46,11 +46,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * RG-INT-11 : l'avocat est relancé tant que le compte rendu d'une audience passée manque.
+ * RG-INT-11: the lawyer is reminded as long as the report of a past hearing is missing.
  *
- * <p>Ce qui est éprouvé ici n'est pas « un message part », mais <b>quand</b> il part et surtout
- * quand il ne part pas : la cadence, le silence entre deux relances, l'arrêt au dépôt, et les trois
- * cas où relancer serait une erreur — audience annulée, étape close, relance de trop.
+ * <p>Tests <b>when</b> a message is sent and above all when it is not: cadence, silence between
+ * reminders, stop on upload, and the three cases where reminding would be wrong (cancelled hearing,
+ * closed step, one reminder too many).
  */
 @ExtendWith(MockitoExtension.class)
 class CompteRenduAttenduSchedulerTest {
@@ -87,11 +87,11 @@ class CompteRenduAttenduSchedulerTest {
         avocat = Avocat.builder().id(99L).nom("Cabinet TAMO").build();
         lenient().when(dossierAvocatRepository.findByDossierId(DOSSIER_ID))
                 .thenReturn(List.of(DossierAvocat.builder().avocat(avocat).build()));
-        // Par défaut, personne ne doit d'explication : la relance fait son travail ordinaire.
+        // By default nobody owes an explanation: the reminder does its ordinary job.
         lenient().when(demandeExplicationRepository.avocatsEnAttenteDeReponse()).thenReturn(List.of());
     }
 
-    /** Une audience passée de {@code jours}, sur une étape en cours. */
+    /** A hearing {@code jours} days in the past, on a step in progress. */
     private Audience audiencePassee(long jours, StatutCycleVie statutEtape) {
         Dossier dossier = Dossier.builder().id(DOSSIER_ID).reference("DOS-2026-0001").build();
         EtapeProcedure etape = EtapeProcedure.builder().id(1L).statutCycleVie(statutEtape).build();
@@ -114,7 +114,7 @@ class CompteRenduAttenduSchedulerTest {
                 any(LocalDate.class), eq(StatutAudience.ANNULEE))).thenReturn(List.of(audiences));
     }
 
-    // ── Ce qui doit partir ────────────────────────────────────────────────────
+    // What must be sent
 
     @Test
     void relance_auTermeDuDelai() {
@@ -131,8 +131,8 @@ class CompteRenduAttenduSchedulerTest {
     }
 
     /**
-     * La référence change à chaque relance : c'est elle qui empêche le moteur de dédoublonner le
-     * deuxième rappel avec le premier, et donc de n'en envoyer jamais qu'un.
+     * The reference changes on each reminder: it prevents the engine from deduplicating the second
+     * reminder with the first.
      */
     @ParameterizedTest
     @ValueSource(longs = {2, 4, 6, 8, 10})
@@ -147,7 +147,7 @@ class CompteRenduAttenduSchedulerTest {
                 eq("cr-attendu-42-relance-" + (jours / 2)));
     }
 
-    /** Plusieurs avocats sur un dossier : chacun doit son compte rendu, chacun est relancé. */
+    /** Several lawyers on a case: each owes a report, each is reminded. */
     @Test
     void relance_chacunDesAvocatsAffectes() {
         Avocat second = Avocat.builder().id(100L).nom("Cabinet NANA").build();
@@ -163,7 +163,7 @@ class CompteRenduAttenduSchedulerTest {
         verify(notificationPrestataireService).notifier(any(), eq(second), anyLong(), anyString());
     }
 
-    // ── Ce qui ne doit PAS partir ─────────────────────────────────────────────
+    // What must NOT be sent
 
     @ParameterizedTest
     @ValueSource(longs = {1, 3, 5, 7})
@@ -186,7 +186,7 @@ class CompteRenduAttenduSchedulerTest {
         verify(notificationPrestataireService, never()).notifier(any(), any(), anyLong(), anyString());
     }
 
-    /** Un rejet ne vaut pas dépôt : la requête ne consulte que DEPOSE et VALIDE. */
+    /** A rejection is not an upload: the query only considers DEPOSE and VALIDE. */
     @Test
     void unCompteRenduRejete_neComptePasCommeDepose() {
         lesAudiencesPassees(audiencePassee(2, StatutCycleVie.EN_COURS));
@@ -204,7 +204,7 @@ class CompteRenduAttenduSchedulerTest {
                 .doesNotContain(StatutPublication.REJETE);
     }
 
-    /** Au-delà de cinq rappels sans réponse, le silence : ce n'est plus un oubli. */
+    /** Beyond five unanswered reminders, silence: it is no longer an oversight. */
     @Test
     void silence_passeLeNombreMaximalDeRelances() {
         lesAudiencesPassees(audiencePassee(12, StatutCycleVie.EN_COURS));
@@ -225,8 +225,8 @@ class CompteRenduAttenduSchedulerTest {
     }
 
     /**
-     * Les audiences annulées ne sont pas écartées en mémoire mais par la requête : la vérifier ici
-     * garantit que personne ne pourra élargir le chargement sans voir le test rougir.
+     * Cancelled hearings are excluded by the query, not in memory: checking it here ensures nobody can
+     * widen the loading without the test failing.
      */
     @Test
     void lesAudiencesAnnulees_sontEcarteesParLaRequete() {
@@ -249,7 +249,7 @@ class CompteRenduAttenduSchedulerTest {
         verify(notificationPrestataireService, never()).notifier(any(), any(), anyLong(), anyString());
     }
 
-    /** Une configuration illisible suspend la relance, elle ne fait pas tomber la nuit entière. */
+    /** An unreadable configuration suspends the reminder, it does not bring down the whole night run. */
     @Test
     void uneConfigurationIllisible_suspendLaRelanceSansLeverDException() {
         when(configurationService.getOrThrow("DELAI_RAPPEL_CR_AVOCAT"))
@@ -261,7 +261,7 @@ class CompteRenduAttenduSchedulerTest {
         verify(notificationPrestataireService, never()).notifier(any(), any(), anyLong(), anyString());
     }
 
-    /** Deux audiences du même dossier, l'une rendue et l'autre non : seule la seconde relance. */
+    /** Two hearings of the same case, one reported and one not: only the second triggers a reminder. */
     @Test
     void chaqueAudienceEstJugeeSeparement() {
         Audience rendue = audiencePassee(2, StatutCycleVie.EN_COURS);
@@ -281,14 +281,11 @@ class CompteRenduAttenduSchedulerTest {
                 .notifier(any(), any(), anyLong(), eq("cr-attendu-42-relance-1"));
     }
 
-    // ── N7 temps 2 : une demande d'explication suspend la relance ─────────────
+    // N7: an explanation request suspends the reminder
 
     /**
-     * La machine se tait pendant qu'un responsable ecrit.
-     *
-     * <p>Continuer a envoyer un rappel automatique tous les deux jours pendant qu'une demande
-     * d'explication attend sa reponse affaiblirait les deux : le rappel, qu'on cesse de lire, et la
-     * demande, noyee dedans.
+     * The automated reminder stays silent while a manager is writing: reminding every two days while an
+     * explanation request awaits its answer would weaken both.
      */
     @Test
     void relance_suspendue_quandUneExplicationEstAttendue() {
@@ -302,10 +299,8 @@ class CompteRenduAttenduSchedulerTest {
     }
 
     /**
-     * Et elle reprend des que l'avocat a repondu.
-     *
-     * <p>Le compte rendu manque toujours : s'etre explique n'est pas l'avoir depose, et c'est de
-     * nouveau l'affaire du rappel automatique.
+     * It resumes as soon as the lawyer has answered: the report is still missing, and explaining is not
+     * uploading.
      */
     @Test
     void relance_reprise_quandLExplicationEstDonnee() {
@@ -319,7 +314,7 @@ class CompteRenduAttenduSchedulerTest {
                 eq(EvenementPrestataire.COMPTE_RENDU_ATTENDU), eq(avocat), eq(DOSSIER_ID), anyString());
     }
 
-    /** La dispense ne vaut que pour celui qui doit une explication, pas pour ses confreres. */
+    /** The exemption only applies to the lawyer who owes an explanation, not to colleagues. */
     @Test
     void relance_suspendue_pourLeSeulAvocatConcerne() {
         Avocat confrere = Avocat.builder().id(77L).nom("Cabinet NANA").build();
@@ -337,14 +332,14 @@ class CompteRenduAttenduSchedulerTest {
                 eq(EvenementPrestataire.COMPTE_RENDU_ATTENDU), eq(confrere), eq(DOSSIER_ID), anyString());
     }
 
-    // ── N7 : deux audiences consecutives sans compte rendu remontent au DJ ────
+    // N7: two consecutive hearings without a report are escalated to the DJ
 
     private static final long AUTRE_AUDIENCE_ID = 43L;
 
     private Utilisateur directeur;
     private Utilisateur adjointe;
 
-    /** Une audience passee de {@code jours}, avec son propre identifiant. */
+    /** A hearing {@code jours} days in the past, with its own identifier. */
     private Audience audiencePassee(long identifiant, long jours) {
         Dossier dossier = Dossier.builder().id(DOSSIER_ID).reference("DOS-2026-0001").build();
         EtapeProcedure etape = EtapeProcedure.builder().id(1L).statutCycleVie(StatutCycleVie.EN_COURS).build();
@@ -358,10 +353,8 @@ class CompteRenduAttenduSchedulerTest {
     }
 
     /**
-     * La direction au complet : le Directeur Juridique et son adjointe.
-     *
-     * <p>Les deux sont avertis (metier, 2026-10-07) : l'un des deux peut etre absent le jour ou un
-     * avocat decroche, et un signalement qui attend un retour de conge n'en est plus un.
+     * Full management: the Legal Director and the deputy. Both are notified, since one may be absent
+     * when a lawyer drops out.
      */
     private void laDirectionJuridique() {
         directeur = Utilisateur.builder().id(500L).nom("Dir").prenom("Juridique").build();
@@ -389,19 +382,17 @@ class CompteRenduAttenduSchedulerTest {
         ArgumentCaptor<String> declencheur = ArgumentCaptor.forClass(String.class);
         verify(alerteService).declencher(eq(TypeAlerte.MANQUEMENT_COMPTE_RENDU), eq(DOSSIER_ID),
                 eq(directeur), declencheur.capture());
-        // L'adjointe est avertie aussi : l'absence de l'un ne doit pas retarder le signalement.
+        // The deputy is notified too: one person's absence must not delay the escalation.
         verify(alerteService).declencher(eq(TypeAlerte.MANQUEMENT_COMPTE_RENDU), eq(DOSSIER_ID),
                 eq(adjointe), anyString());
-        // Le marqueur porte la **premiere** audience de la serie : c'est lui qui evite le doublon.
+        // The marker carries the **first** hearing of the series: it prevents duplicates.
         assertThat(declencheur.getValue()).startsWith("[avocat:99;serie:42] ")
                 .contains("Cabinet TAMO").contains("2 audiences");
     }
 
     /**
-     * Une seule audience manquee ne remonte pas.
-     *
-     * <p>C'est la relance ordinaire qui s'en charge (RG-INT-11). Le metier a dit « au deuxieme
-     * manquement » : deranger le DJ au premier banaliserait l'alerte.
+     * A single missed hearing is not escalated: the ordinary reminder handles it (RG-INT-11). Escalation
+     * happens on the second miss, so as not to trivialize the alert.
      */
     @Test
     void manquement_uneSeuleAudience_neRemontePas() {
@@ -415,10 +406,8 @@ class CompteRenduAttenduSchedulerTest {
     }
 
     /**
-     * Une serie rompue par un depot ne remonte pas.
-     *
-     * <p>L'avocat a manque la plus ancienne et rendu compte de la plus recente : il s'est remis en
-     * regle, et nommer un comportement corrige ferait du bruit.
+     * A series broken by an upload is not escalated: the lawyer missed the oldest but reported the most
+     * recent, and is back in order.
      */
     @Test
     void manquement_serieRompueParUnDepot_neRemontePas() {
@@ -433,10 +422,8 @@ class CompteRenduAttenduSchedulerTest {
     }
 
     /**
-     * Une serie deja signalee ne reveille personne.
-     *
-     * <p>« Deux audiences sans compte rendu » est un **etat** : sans cette garde, le DJ recevrait
-     * la meme alerte chaque matin jusqu'au depot.
+     * An already escalated series wakes nobody. "Two hearings without a report" is a **state**: without
+     * this guard, the DJ would get the same alert every morning until upload.
      */
     @Test
     void manquement_serieDejaSignalee_neRemontePasDeuxFois() {
@@ -444,7 +431,7 @@ class CompteRenduAttenduSchedulerTest {
         lesAudiencesPassees(audiencePassee(AUDIENCE_ID, 10), audiencePassee(AUTRE_AUDIENCE_ID, 5));
         compteRenduDepose(AUDIENCE_ID, false);
         compteRenduDepose(AUTRE_AUDIENCE_ID, false);
-        // Deja signale a l'un comme a l'autre.
+        // Already escalated to both.
         when(alerteService.aDejaEteDeclenchee(eq(TypeAlerte.MANQUEMENT_COMPTE_RENDU), anyLong(),
                 anyString())).thenReturn(true);
 
@@ -454,10 +441,8 @@ class CompteRenduAttenduSchedulerTest {
     }
 
     /**
-     * L'adjointe seule suffit : le signalement part meme sans Directeur Juridique actif.
-     *
-     * <p>C'est le but de l'ouvrir aux deux. Si la liste du DJ decidait du depart, l'adjointe ne
-     * serait qu'un destinataire de plus, et non un relais.
+     * The deputy alone is enough: the escalation is sent even without an active Legal Director. She is a
+     * relay, not just an extra recipient.
      */
     @Test
     void manquement_sansDirecteurMaisAvecAdjointe_remonteQuandMeme() {
@@ -474,7 +459,7 @@ class CompteRenduAttenduSchedulerTest {
                 eq(adjointe), anyString());
     }
 
-    /** Sans personne a la direction, le traitement se tait au lieu de tomber. */
+    /** With nobody in management, the job stays silent instead of failing. */
     @Test
     void manquement_aucunDestinataireActif_neTombePas() {
         when(utilisateurRepository.findByProfilCodeAndActifTrue("DJ")).thenReturn(List.of());
@@ -483,7 +468,7 @@ class CompteRenduAttenduSchedulerTest {
         scheduler.signalerManquementsRepetes();
 
         verify(alerteService, never()).declencher(any(), anyLong(), any(), anyString());
-        // Et il ne lit meme pas les audiences : personne a prevenir, rien a calculer.
+        // It does not even read hearings: nobody to notify, nothing to compute.
         verify(audienceRepository, never()).findByDatePlanifieeBeforeAndStatutNot(any(), any());
     }
 }

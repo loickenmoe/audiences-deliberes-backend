@@ -12,11 +12,10 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Assemble {@link DossierResponse} à partir d'un {@link Dossier} et des collections associées
- * (étapes, affectations, historique), chargées séparément par le service. Composant simple plutôt
- * qu'un {@code @Mapper} MapStruct : la composition depuis plusieurs sources (pas un simple mapping
- * champ-à-champ) se prête mal à la génération automatique — cf. {@link EtapeProcedureMapper},
- * {@link AuditSeuilMapper}, {@link HistoriqueActionMapper} pour les cas où MapStruct s'applique.
+ * Builds {@link DossierResponse} from a {@link Dossier} and its related collections (steps,
+ * assignments, history), loaded separately by the service. A plain component rather than a
+ * MapStruct {@code @Mapper} because it composes several sources; see {@link EtapeProcedureMapper},
+ * {@link AuditSeuilMapper}, {@link HistoriqueActionMapper} for MapStruct cases.
  */
 @Component
 public class DossierMapper {
@@ -36,12 +35,8 @@ public class DossierMapper {
     }
 
     /**
-     * Noms rognés, vides écartés, liste jamais nulle.
-     *
-     * <p>Un nom saisi avec une espace de trop n'est pas le même à la lecture qu'à l'écriture : deux
-     * « Me TAMO » et « Me TAMO  » se retrouveraient côte à côte dans la liste des parties sans que
-     * personne voie la différence. Le nettoyage se fait au passage, à l'aller comme au retour, pour
-     * que les dossiers déjà en base soient relus proprement eux aussi.
+     * Trimmed names, blanks removed, never null. Cleaning applies both ways so that existing cases
+     * are also read back clean.
      */
     private static List<String> nettoyer(List<String> valeurs) {
         if (valeurs == null) {

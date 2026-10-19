@@ -11,8 +11,8 @@ import java.time.Duration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Q-120 : les topics de suivi ne renvoient pas notre référence. C'est l'URL de rappel qui la porte,
- * et sa signature qui empêche un tiers de déclarer une notification délivrée.
+ * Tracking topics do not return our reference. The callback URL carries it, and its signature
+ * prevents a third party from declaring a notification delivered.
  */
 class RappelsNotificationTest {
 
@@ -32,7 +32,7 @@ class RappelsNotificationTest {
         assertThat(url).doesNotContain(SECRET);
     }
 
-    /** Depuis un poste de travail, le moteur ne peut pas joindre l'application : rien n'est annoncé. */
+    /** From a workstation, the engine cannot reach the application: nothing is announced. */
     @Test
     void sans_adresse_publique_aucun_rappel_n_est_demande() {
         assertThat(rappels(null).urlPour("alerte-42:SMS")).isEmpty();
@@ -50,7 +50,7 @@ class RappelsNotificationTest {
         assertThat(rappels.signatureValide("alerte-42:SMS", null)).isFalse();
     }
 
-    /** Un autre secret produit une autre signature : le rappel n'est pas forgeable de l'extérieur. */
+    /** Another secret produces another signature: the callback cannot be forged from outside. */
     @Test
     void un_secret_different_ne_valide_pas_la_signature() {
         String signatureAutre = new RappelsNotification(new NotificationEngineProperties(true, "audience-deliberer",

@@ -4,9 +4,9 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * Une ligne du calendrier des audiences (FR-AUD-05) : juridiction, étape, juriste(s), avocat(s),
- * unité d'origine, compte client, objet (référence du dossier), risque, prochaine date
- * (= {@code datePlanifiee} de cette audience, la plus proche échéance connue pour ce dossier).
+ * A hearing calendar row (FR-AUD-05): court, step, in-house lawyer(s), lawyer(s), originating unit,
+ * client account, subject (case reference), risk, next date (= this hearing's
+ * {@code datePlanifiee}).
  */
 public record CalendrierEntreeResponse(
         Long audienceId,

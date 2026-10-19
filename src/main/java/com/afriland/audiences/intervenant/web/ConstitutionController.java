@@ -21,8 +21,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Épic 5 volet constitutions (FR-INT-06/07, US 5.6/5.7) — absents de l'OpenAPI formel, implémentés
- * selon les critères Gherkin des US, cf. API_IMPLEMENTATION_STATUS.md §7.
+ * Provider appointments (FR-INT-06/07, US 5.6/5.7), implemented from the user stories' acceptance
+ * criteria.
  */
 @RestController
 @RequiredArgsConstructor
@@ -31,11 +31,8 @@ public class ConstitutionController {
     private final ConstitutionService constitutionService;
 
     /**
-     * Sollicite un prestataire.
-     *
-     * <p>Ouvert à l'<b>Assistante</b> depuis le 2026-10-07 : elle sollicite et rédige comme un
-     * juriste. La lettre qui en naît est <b>la sienne</b> (Q-126) - elle seule y écrit, et le
-     * supérieur hiérarchique la corrige avant de la signer.
+     * Requests a provider. Open to the assistant as to a legal officer: the resulting letter belongs
+     * to its requester, who alone drafts it; the line manager may correct it before signing.
      */
     @PostMapping("${api.prefix}/constitutions/prestataires")
     @PreAuthorize("hasAnyRole('JURISTE', 'ASSISTANTE')")
@@ -43,7 +40,7 @@ public class ConstitutionController {
         return ResponseEntity.status(HttpStatus.CREATED).body(constitutionService.creerDemande(request));
     }
 
-    /** M15 (Q-68) : file de travail « constitutions à signer » du SH — endpoint 🆕. */
+    /** Line manager's "appointments to sign" work queue. */
     @org.springframework.web.bind.annotation.GetMapping("${api.prefix}/constitutions/prestataires")
     @PreAuthorize("hasAnyRole('SH', 'JURISTE', 'ASSISTANTE')")
     public com.afriland.audiences.common.web.PageResponse<DemandeConstitutionResponse> lister(
@@ -61,11 +58,8 @@ public class ConstitutionController {
     }
 
     /**
-     * La lettre d'une demande — brouillon ou pièce signée (Q-115 B2).
-     *
-     * <p>Ouverte au <b>SH comme au juriste</b> : le premier doit lire ce qu'il s'apprête à signer,
-     * le second relire ce qu'il a rédigé. C'est la même lecture, et la refuser au SH reviendrait à
-     * lui demander de signer sans voir.
+     * The letter of a request, draft or signed. Readable by the line manager (who must see what
+     * they sign) and by the drafter.
      */
     @GetMapping("${api.prefix}/constitutions/prestataires/{id}/lettre")
     @PreAuthorize("hasAnyRole('SH', 'JURISTE', 'ASSISTANTE')")
@@ -74,14 +68,9 @@ public class ConstitutionController {
     }
 
     /**
-     * La lettre signée, mise en page <b>pour le papier préimprimé</b> de la banque : sans logo,
-     * sans colonne ni mentions légales, que la feuille porte déjà.
-     *
-     * <p>Désignée par le <b>document de la GED</b> et non par la demande : c'est depuis l'onglet
-     * « Documents » du dossier que le métier la reprend pour l'imprimer.
-     *
-     * <p>Ouverte aux profils qui impriment ou vérifient la correspondance — le juriste qui l'a
-     * rédigée, le SH qui l'a signée, la direction qui en répond.
+     * The signed letter laid out for the bank's pre-printed paper (no logo, side column or legal
+     * notices). Addressed by document id rather than request id, since users print it from the
+     * case's documents tab.
      */
     @GetMapping("${api.prefix}/constitutions/lettres/par-document/{documentId}")
     @PreAuthorize("hasAnyRole('JURISTE', 'SH', 'DJ', 'DJA')")
@@ -95,27 +84,12 @@ public class ConstitutionController {
     }
 
     /**
-     * La rédaction, réservée au <b>juriste</b> (Q-115 B2).
+     * Drafts the letter. Open to the drafter and the line manager, who may correct before signing;
+     * each version records its author. A signed letter is frozen (409 for everyone).
      *
-     * <p>Le SH consulte, accepte ou rejette — il ne récrit pas. C'est ce qui préserve le sens de la
-     * seconde signature : celui qui signe n'est pas celui qui a écrit, et son refus renvoie la
-     * lettre à son auteur avec un motif.
-     */
-    /**
-     * La rédaction, ouverte au juriste <b>et au SH</b> (métier, 2026-10-06, observation 10).
-     *
-     * <p>Q-115 B2 la réservait au juriste et renvoyait un 403 au SH : « lui donner la plume viderait
-     * la seconde signature de son sens ». Le métier a tranché l'inverse - le SH corrige avant de
-     * signer, plutôt que de renvoyer la lettre. Chaque rédaction porte désormais son auteur, rendu
-     * à l'écran : ce que la séparation des rôles garantissait, la traçabilité le garantit.
-     *
-     * <p>Le gel après signature, lui, ne bouge pas : 409 pour tout le monde.
-     *
-     * <p><b>Et la lettre est à son demandeur</b> (Q-126, 2026-10-07). Ce {@code @PreAuthorize} dit
-     * seulement qui peut toucher à la fonction ; il ne peut pas dire qui peut toucher à <b>cette
-     * lettre-là</b>, qui dépend de qui l'a demandée. Le service s'en charge et répond 403 à tout
-     * autre - un droit accordé par rôle s'étendrait au DJ et à la DJA, {@code ROLE_JURISTE} étant
-     * composite (Q-81), et rouvrirait exactement le trou que le métier a demandé de fermer.
+     * <p>{@code @PreAuthorize} only gates the function: the service checks that the caller is this
+     * letter's requester (or the line manager) and returns 403 otherwise. A role-based grant would
+     * extend to DJ/DJA, since {@code ROLE_JURISTE} is composite.
      */
     @PutMapping("${api.prefix}/constitutions/prestataires/{id}/lettre")
     @PreAuthorize("hasAnyRole('JURISTE', 'SH', 'ASSISTANTE')")

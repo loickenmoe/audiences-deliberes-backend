@@ -6,17 +6,15 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Passerelle par défaut : écrit la notification dans le journal applicatif et n'envoie rien. Elle
- * garantit que les tests, l'intégration continue et les postes de développement ne déclenchent
- * jamais un vrai SMS, courriel ou message Teams tant que l'Engine n'est pas activé volontairement.
+ * Default gateway: logs the notification and sends nothing, so tests, CI and developer machines never
+ * trigger a real SMS, e-mail or Teams message unless the Engine is deliberately enabled.
  * <p>
- * Le journal ne porte ni le jeton, ni le texte du message, ni les destinataires en clair : ce sont
- * une signature et des coordonnées personnelles, qui n'ont pas à s'y trouver.
+ * The log never contains the token, the message text or clear-text recipients (secret and personal data).
  */
 @Slf4j
 public class PasserelleJournal implements PasserelleNotificationEngine {
 
-    /** Valeur inscrite dans {@code statut_engine} : la ligne a été traitée, mais rien n'est parti. */
+    /** Value written to {@code statut_engine}: the row was processed but nothing was sent. */
     public static final String NOM = "JOURNAL";
 
     @Override
@@ -33,7 +31,7 @@ public class PasserelleJournal implements PasserelleNotificationEngine {
                 .collect(Collectors.joining(", ", "{", "}"));
     }
 
-    /** Conserve les deux premiers caractères et, pour un courriel, le domaine : « pa***@afrilandfirstbank.com ». */
+    /** Keeps the first two characters and, for an e-mail, the domain: "pa***@afrilandfirstbank.com". */
     static String masquer(String destinataire) {
         if (destinataire == null || destinataire.isBlank()) {
             return "(vide)";

@@ -100,13 +100,9 @@ class DecisionDefinitiveServiceTest {
         assertThat(result.reliquat()).isEqualTo(500d);
     }
 
-    // --- Condamnation (US 8.2) ---
+    // --- Order to pay (US 8.2) ---
 
-    /**
-     * QF-66 : la condamnation se suit sur une étape clôturée, comme l'adjudication (RG-DEF-01). Ce
-     * test affirmait l'inverse - « aucune précondition d'étape » (Q-59) - jusqu'à ce que le métier
-     * tranche le 2026-10-15.
-     */
+    /** An order to pay is tracked on a closed step, like an adjudication (RG-DEF-01). */
     @Test
     void creerCondamnation_surEtapeCloturee() {
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
@@ -124,7 +120,7 @@ class DecisionDefinitiveServiceTest {
         assertThat(result.statutPaiement()).isEqualTo(StatutPaiementCondamnation.EN_ATTENTE);
     }
 
-    /** Le cas signalé : un dossier tout juste ouvert, dont l'étape n'est pas clôturée. */
+    /** A freshly opened case whose step is not closed. */
     @Test
     void creerCondamnation_refuseeHorsEtapeCloturee() {
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
@@ -137,7 +133,7 @@ class DecisionDefinitiveServiceTest {
         verify(decisionDefinitiveRepository, never()).save(any());
     }
 
-    /** Sans étape, rien ne dit qu'un juge a statué : la condamnation est refusée. */
+    /** Without a step, nothing shows that a judge has ruled: the order to pay is refused. */
     @Test
     void creerCondamnation_refuseeSansEtape() {
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));

@@ -82,7 +82,7 @@ class NotificationPrestataireServiceTest {
         assertThat(courriel.getStatut()).isEqualTo(StatutEnvoi.EN_ATTENTE);
         assertThat(courriel.getSujet()).isEqualTo("[Audiences et délibérés] Nouveau dossier confié - DOS-2026-014");
         assertThat(courriel.getCorps()).contains("http://localhost:3000/portail");
-        // Le SMS reste minimal : ni référence de dossier, ni lien.
+        // The SMS stays minimal: no case reference, no link.
         assertThat(envois.get(1).getCorps()).doesNotContain("DOS-2026-014", "http");
         assertThat(envois.get(1).getSujet()).isNull();
     }
@@ -124,7 +124,7 @@ class NotificationPrestataireServiceTest {
         assertThat(envoi.getDerniereErreur()).isEqualTo("COORDONNEE_INVALIDE");
     }
 
-    /** Une relance planifiée ou une réaffectation ne doit pas heurter la contrainte d'unicité. */
+    /** A scheduled reminder or a reassignment must not hit the uniqueness constraint. */
     @Test
     void un_evenement_deja_en_file_est_ignore() {
         router(new Route("SMS", CanalEngine.SMS, "+237600000000", null));
@@ -142,7 +142,7 @@ class NotificationPrestataireServiceTest {
         verify(repository, never()).saveAll(any());
     }
 
-    /** Une notification ne doit jamais faire échouer l'action métier qui la provoque. */
+    /** A notification must never make the business action that triggers it fail. */
     @Test
     void un_echec_de_preparation_est_journalise_sans_remonter() {
         when(routage.pourPrestataire(any(), any(CoordonneesPrestataire.class)))

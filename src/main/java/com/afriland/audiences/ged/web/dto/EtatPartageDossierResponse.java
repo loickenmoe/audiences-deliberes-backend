@@ -1,12 +1,12 @@
 package com.afriland.audiences.ged.web.dto;
 
 /**
- * Ce que le partage d'une pièce produira chez l'avocat, sur ce dossier (QF-65).
+ * What sharing a document will produce for the lawyer on this case file.
  *
- * <p>{@code avocatConstitue} est vrai si au moins un avocat <b>affecté</b> au dossier y est
- * <b>constitué</b> - la règle même qui lui ouvre les pièces (Q-139). Faux, une pièce partagée
- * attend la signature d'une lettre : celui qui partage doit le savoir, sans quoi il lit
- * « Partagé » quand l'avocat ne voit rien.
+ * <p>{@code avocatConstitue} is true if at least one lawyer <b>assigned</b> to the case file is
+ * <b>appointed</b> on it, the same rule that opens documents to them. If false, a shared document
+ * waits for a letter to be signed: the person sharing must know, otherwise they see "Shared" while
+ * the lawyer sees nothing.
  */
 public record EtatPartageDossierResponse(boolean avocatConstitue) {
 }

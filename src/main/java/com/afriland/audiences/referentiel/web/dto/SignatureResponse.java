@@ -3,11 +3,10 @@ package com.afriland.audiences.referentiel.web.dto;
 import java.time.LocalDateTime;
 
 /**
- * L'état de la signature enregistrée de l'utilisateur courant (N8).
+ * State of the current user's stored signature.
  *
- * <p>Ne porte <b>pas l'image</b> : l'écran a besoin de savoir s'il propose un dépôt ou un
- * remplacement, pas d'afficher le trait. L'image a son propre appel, pour qu'elle ne voyage pas à
- * chaque chargement.
+ * <p>Does <b>not</b> carry the image: the UI only needs to know whether to offer an upload or a
+ * replacement. The image has its own endpoint, so it is not sent on every load.
  */
 public record SignatureResponse(boolean deposee, String type, LocalDateTime deposeeLe) {
 }

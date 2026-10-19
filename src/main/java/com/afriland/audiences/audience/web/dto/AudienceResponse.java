@@ -11,13 +11,13 @@ public record AudienceResponse(
         Long etapeId,
         LocalDate datePlanifiee,
         LocalDate dateTenue,
-        /** Juridiction de l'audience, héritée du dossier faute d'indication contraire. */
+        /** Hearing court, inherited from the case unless specified. */
         String juridiction,
         String compteRendu,
         StatutAudience statut,
         LocalDateTime createdAt,
         String motifAnnulation,
         LocalDateTime dateAnnulation,
-        /** La note destinée à l'avocat constitué, distincte du compte rendu interne (QF-64). */
+        /** Note addressed to the assigned lawyer, separate from the internal report. */
         String noteAvocat) {
 }

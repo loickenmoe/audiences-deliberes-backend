@@ -10,8 +10,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class CoordonneesTest {
 
     /**
-     * Une seule écriture est enregistrée, le format international, d'où que parte la saisie : trois
-     * façons d'écrire le même numéro donneraient trois valeurs incomparables en base.
+     * A single format is stored (international), whatever the input: three ways of writing the same
+     * number would give three incomparable values in the database.
      */
     @ParameterizedTest
     @CsvSource({
@@ -28,7 +28,7 @@ class CoordonneesTest {
         assertThat(Coordonnees.telephone(saisie)).contains(attendu);
     }
 
-    /** Les mobiles Camtel commencent eux aussi par 6 : « +237 6 20 XX XX XX ». */
+    /** Camtel mobiles also start with 6: "+237 6 20 XX XX XX". */
     @ParameterizedTest
     @CsvSource({
             "'620228936', +237620228936",
@@ -40,7 +40,7 @@ class CoordonneesTest {
         assertThat(Coordonnees.telephone(saisie)).contains(attendu);
     }
 
-    /** Les lignes fixes, en 2, ne reçoivent ni SMS ni WhatsApp : elles sont écartées. */
+    /** Landlines (starting with 2) receive neither SMS nor WhatsApp: they are rejected. */
     @ParameterizedTest
     @ValueSource(strings = {"222228936", "2 22 22 89 36", "+237 2 22 22 89 36", "237222228936"})
     void telephone_lignesFixes_sontRefusees(String saisie) {
@@ -48,9 +48,9 @@ class CoordonneesTest {
     }
 
     /**
-     * Ni plus, ni moins de chiffres. Un numéro camerounais amputé ou allongé est refusé, <b>y compris
-     * écrit avec l'indicatif</b> : sans cette garde, la règle internationale le rattraperait et le
-     * message partirait vers quelqu'un d'autre.
+     * Exactly the right number of digits. A truncated or extended Cameroonian number is refused,
+     * <b>even with the country code</b>: otherwise the international rule would accept it and the message
+     * would reach someone else.
      */
     @ParameterizedTest
     @ValueSource(strings = {
@@ -62,9 +62,8 @@ class CoordonneesTest {
     }
 
     /**
-     * Les prestataires étrangers existent et le moteur délivre au-delà du Cameroun : l'indicatif est
-     * alors obligatoire. Sans lui, il faudrait le deviner — et deviner un numéro, c'est écrire à
-     * quelqu'un d'autre.
+     * Foreign providers exist and the engine delivers beyond Cameroon: the country code is then
+     * mandatory. Guessing it would mean writing to someone else.
      */
     @ParameterizedTest
     @CsvSource({

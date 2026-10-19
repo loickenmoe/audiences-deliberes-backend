@@ -26,20 +26,14 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Le détail d'un bloc rend-il <b>exactement</b> ce que son compteur compte ? (Q-137)
+ * Does a block's detail return <b>exactly</b> what its counter counts?
  *
- * <p><b>Pourquoi ce test est le seul qui compte vraiment ici.</b> Le service n'a aucune logique :
- * il choisit une requête et transforme des lignes. Le risque n'est donc pas qu'il calcule mal,
- * c'est que la liste et le compte <b>divergent</b> - un {@code DISTINCT} oublié, un prédicat
- * recopié de travers, une constante qui dérive de celle de {@link ReportingService}. Afficher
- * « 12 » puis lister neuf lignes ferait douter des deux chiffres, et c'est un doute qu'on ne
- * rattrape pas.
- *
- * <p>Un test à mocks ne peut rien dire de cela : il faut les <b>deux requêtes contre la même
- * base</b>, et comparer. La base de test est vide de données métier, donc les deux valent zéro -
- * mais la comparaison vérifie ce qui casse en pratique : que chaque requête s'exécute sur
- * PostgreSQL, que la pagination d'une projection {@code DISTINCT} est acceptée, et que les deux
- * prédicats concordent. Trois choses qui n'échouent qu'à l'exécution.
+ * <p>The service has no logic: it picks a query and maps rows. The risk is that the list and the
+ * count <b>diverge</b> (a forgotten {@code DISTINCT}, a miscopied predicate, a constant drifting from
+ * {@link ReportingService}). Only <b>both queries against the same database</b> can show it. The test
+ * database has no business data, so both are zero, but the comparison checks what breaks in practice:
+ * each query runs on PostgreSQL, {@code DISTINCT} projection pagination is accepted, and predicates
+ * match.
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -120,10 +114,9 @@ class DetailTableauDeBordIntegrationTest {
     }
 
     /**
-     * Les trois résultats d'un coup. Le compteur les produit en une seule passe, par trois
-     * {@code SUM(CASE WHEN …)} ; le détail les lit un par un. C'est exactement là qu'un prédicat
-     * peut diverger - en oubliant la restriction au recouvrement, par exemple, qui n'est écrite
-     * qu'une fois dans le compteur.
+     * The three results at once. The counter computes them in a single pass with three
+     * {@code SUM(CASE WHEN ...)}; the detail reads them one by one. This is where a predicate can diverge
+     * (e.g. forgetting the recovery restriction written only once in the counter).
      */
     @Test
     @DisplayName("litiges gagnés, perdus et mixtes : chaque liste tombe sur son décompte")
@@ -139,12 +132,9 @@ class DetailTableauDeBordIntegrationTest {
     }
 
     /**
-     * Le seul bloc dont l'invariant n'est pas un nombre de lignes : il affiche une <b>somme</b>, et
-     * c'est la somme des montants listés qui doit tomber juste.
-     *
-     * <p>La pagination ne s'applique donc pas à la vérification : on demande une page assez large
-     * pour tout tenir, ce que la base de test permet. Sur un volume réel, le total affiché reste
-     * celui du compteur - l'écran ne somme pas les lignes qu'il montre.
+     * The only block whose invariant is not a row count: it shows a <b>sum</b>, and the sum of listed
+     * amounts must match. Pagination does not apply to the check: a page large enough for everything is
+     * requested. On real volumes, the displayed total stays the counter's.
      */
     @Test
     @DisplayName("provisions reprises : la somme des montants listés fait le montant affiché")
@@ -161,9 +151,8 @@ class DetailTableauDeBordIntegrationTest {
     }
 
     /**
-     * Les deux constantes sont déclarées dans {@link ReportingService} <b>et</b> dans
-     * {@link DetailTableauDeBordService}, les premières étant privées. Une divergence silencieuse
-     * ferait rendre au détail autre chose que ce qui est compté : ce test la rend bruyante.
+     * Both constants are declared in {@link ReportingService} <b>and</b> {@link DetailTableauDeBordService}
+     * (the former private). This test makes any divergence loud.
      */
     @Test
     @DisplayName("les constantes du détail sont celles du comptage")
@@ -188,17 +177,11 @@ class DetailTableauDeBordIntegrationTest {
             java.util.List.of(CategorieDossier.EXPLOITATION_LITIGES);
 
     /**
-     * <b>L'invariant qui rend le tableau de bord recadrable crédible</b> (Q-138) :
-     * Recouvrement + Litiges d'exploitation = Toutes catégories, pour chacun des neuf indicateurs.
+     * <b>Invariant:</b> Recovery + Operating litigation = All categories, for each of the nine indicators.
      *
-     * <p>Il ne repose pas sur mon code mais sur la base : {@code dossier.categorie} est
-     * {@code NOT NULL} avec une contrainte {@code CHECK} sur ces deux valeurs exactement (V1). Les
-     * deux périmètres partitionnent donc l'ensemble, et ce test le prouve requête par requête -
-     * c'est la seule façon de savoir qu'aucune n'a oublié sa jointure sur le dossier, ce qui se
-     * verrait sinon comme un sous-total qui ne tombe pas juste.
-     *
-     * <p>Un tableau de bord dont les sous-totaux ne s'additionnent pas, personne ne le regarde deux
-     * fois.
+     * <p>It relies on the database: {@code dossier.categorie} is {@code NOT NULL} with a {@code CHECK} on
+     * exactly these two values (V1), so both scopes partition the set. Checking it query by query proves
+     * none forgot its join on the case, which would show as a subtotal that does not add up.
      */
     @Test
     @DisplayName("les deux catégories s'additionnent pour faire le total, sur les neuf indicateurs")
@@ -240,7 +223,7 @@ class DetailTableauDeBordIntegrationTest {
                     .isEqualTo(deliberes.listerParResultat(resultat, TOUTES, PREMIERE_PAGE).getTotalElements());
         }
 
-        // Le neuvième est une somme d'argent : c'est elle qui doit s'additionner, pas un décompte.
+        // The ninth is an amount of money: it must add up, not a count.
         assertThat(somme(decisions.sommeProvisionsReprises(RECOUVREMENT))
                 + somme(decisions.sommeProvisionsReprises(EXPLOITATION)))
                 .as("provisions reprises")
@@ -248,8 +231,8 @@ class DetailTableauDeBordIntegrationTest {
     }
 
     /**
-     * La concordance liste/compteur doit tenir <b>sous chaque périmètre</b>, et pas seulement sur le
-     * total : c'est sous un périmètre restreint qu'une jointure oubliée se verrait.
+     * List/counter agreement must hold <b>under each scope</b>, not only on the total: a forgotten join
+     * shows under a restricted scope.
      */
     @Test
     @DisplayName("sous chaque périmètre, chaque liste tombe encore sur son compteur")
@@ -301,9 +284,8 @@ class DetailTableauDeBordIntegrationTest {
     }
 
     /**
-     * Les trois compteurs de litiges <b>ne sont plus figés sur le recouvrement</b> (Q-138). La
-     * garantie que je dois au porteur du projet : son chiffre d'hier reste reproductible, sous le
-     * périmètre « Recouvrement ». Rien n'a été changé en silence - le périmètre a reçu un nom.
+     * The three litigation counters are <b>no longer fixed to recovery</b>. The former figure remains
+     * reproducible under the "Recouvrement" scope.
      */
     @Test
     @DisplayName("le périmètre Recouvrement reproduit exactement l'ancien comptage des litiges")
@@ -313,7 +295,7 @@ class DetailTableauDeBordIntegrationTest {
                 .listerParResultat(ResultatDelibere.FAVORABLE, RECOUVREMENT, PREMIERE_PAGE).getTotalElements();
 
         assertThat(nombre(recouvrement.getFavorables())).isEqualTo(gagnesEnRecouvrement);
-        // Et le total toutes catégories ne peut pas être inférieur : il contient celui-là.
+        // The all-categories total cannot be lower: it contains this one.
         assertThat(nombre(deliberes.calculerResultats(TOUTES).getFavorables()))
                 .isGreaterThanOrEqualTo(nombre(recouvrement.getFavorables()));
     }

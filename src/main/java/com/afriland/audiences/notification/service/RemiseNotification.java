@@ -19,19 +19,18 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * Remise d'<b>une</b> notification au Notification Engine, dans sa propre transaction : l'échec de
- * l'une n'emporte pas les autres lignes du même passage.
+ * Delivers <b>one</b> notification to the Notification Engine in its own transaction, so one failure
+ * does not affect the other rows of the pass.
  * <p>
- * Classe distincte de {@link DispatcherNotification} à dessein : appelée depuis le planificateur
- * lui-même, la transaction ne s'ouvrirait pas — Spring ne l'intercepte que lorsque l'appel traverse
- * le proxy, c'est-à-dire un autre bean.
+ * Separate from {@link DispatcherNotification} on purpose: Spring only opens the transaction when the
+ * call goes through the proxy of another bean.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class RemiseNotification {
 
-    /** Motif inscrit dans la file quand une notification est abandonnée parce qu'elle a trop vieilli. */
+    /** Reason recorded when a notification is abandoned because it is too old. */
     public static final String MOTIF_PEREMPTION = "PERIMEE";
 
     private final NotificationEnvoiRepository notificationEnvoiRepository;
@@ -54,14 +53,14 @@ public class RemiseNotification {
             return;
         }
         try {
-            // Dans le try : une redirection incomplète doit faire échouer la remise, jamais laisser
-            // partir le message vers le destinataire réel.
+            // Inside the try: incomplete redirection must fail the delivery, never send the message
+            // to the real recipient.
             if (envoi.attendSaPieceJointe() && demanderLeDepot(envoi)) {
             return;
         }
         String destinataire = redirection.cible(envoi).orElseGet(envoi::getDestinataire);
-            // Le jeton n'est signé que si un message part vraiment : la passerelle journal n'en a pas
-            // besoin, et l'exiger empêcherait de vider la file tant que le secret n'est pas renseigné.
+            // The token is only signed when a message is really sent: the logging gateway does not
+            // need it, and requiring it would block the queue while the secret is unset.
             String jeton = proprietes.actif() ? jetonEngine.signer() : null;
             PieceJointeEngine pieceJointe = envoi.getPieceJointeCle() == null ? null
                     : new PieceJointeEngine(envoi.getPieceJointeNom(), envoi.getPieceJointeMime(),
@@ -80,11 +79,11 @@ public class RemiseNotification {
     }
 
     /**
-     * Demande au moteur une adresse de dépôt pour la pièce jointe (Guide V1 §3 bis). La réponse
-     * arrivera sur un topic : la ligne patiente jusque-là.
+     * Requests an attachment upload URL from the engine (Guide V1 §3 bis). The response arrives on a
+     * topic; the row waits until then.
      *
-     * @return {@code true} si la ligne doit attendre ; {@code false} si la notification peut partir
-     *         tout de suite, faute de transport sachant demander un dépôt
+     * @return {@code true} if the row must wait; {@code false} if the notification can be sent now
+     *         because the transport cannot request uploads
      */
     private boolean demanderLeDepot(NotificationEnvoi envoi) {
         try {
@@ -92,7 +91,7 @@ public class RemiseNotification {
                     envoi.getPieceJointeNom(), envoi.getPieceJointeMime(),
                     proprietes.actif() ? jetonEngine.signer() : null, proprietes.codeService());
             if (!passerelle.demanderDepot(demande)) {
-                // Passerelle journal : rien ne part de toute façon, la pièce jointe non plus.
+                // Logging gateway: nothing is sent anyway, attachment included.
                 envoi.pieceJointeAbandonnee("DEPOT_INDISPONIBLE");
                 return false;
             }
@@ -112,7 +111,7 @@ public class RemiseNotification {
                 && envoi.getDateCreation().plus(proprietes.ageMax()).isBefore(LocalDateTime.now());
     }
 
-    /** Échéance de la tentative suivante, ou {@code null} quand elles sont épuisées (D13). */
+    /** Time of the next attempt, or {@code null} once attempts are exhausted. */
     LocalDateTime prochaineTentative(int tentativesDejaFaites) {
         List<Duration> delais = NotificationEngineProperties.DELAIS_TENTATIVES;
         if (tentativesDejaFaites + 1 >= proprietes.tentativesMax() || tentativesDejaFaites >= delais.size()) {

@@ -13,9 +13,9 @@ import java.util.List;
 @Repository
 public interface AlarmeRepository extends JpaRepository<Alarme, Long> {
 
-    /** Échéance atteinte (AlarmeEcheanceScheduler) : alarmes encore actives à traiter. */
+    /** Due date reached (AlarmeEcheanceScheduler): active alarms to process. */
     List<Alarme> findByStatutAndDateEcheanceLessThanEqual(StatutAlarme statut, LocalDateTime maintenant);
 
-    /** M15 : alarmes d'un dossier, échéance la plus proche d'abord (Q-68). */
+    /** Alarms of a case, nearest due date first. */
     Page<Alarme> findByDossierIdOrderByDateEcheanceAsc(Long dossierId, Pageable pageable);
 }

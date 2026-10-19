@@ -14,15 +14,13 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Rappel du Notification Engine après traitement d'un message ({@code callbackUrl}, Guide V1 §7.9).
+ * Notification Engine callback after a message is processed ({@code callbackUrl}, Guide V1 §7.9).
+ * This is the only way to link a receipt exactly to our send: the reference is in the URL, since the
+ * tracking topics do not return it.
  * <p>
- * <b>C'est la voie qui rattache exactement un accusé à notre envoi</b> : la référence est dans
- * l'URL, puisque les topics de suivi ne la renvoient pas (Q-120).
- * <p>
- * La route est ouverte sans authentification — le Guide n'en décrit aucune pour ce rappel — mais
- * <b>la signature de l'URL est vérifiée</b> : sans elle, n'importe qui pourrait déclarer une
- * notification délivrée. Une signature invalide reçoit 404 plutôt que 403 : inutile de confirmer à un
- * appelant non autorisé que cette référence existe.
+ * The route is unauthenticated (the Guide defines none) but <b>the URL signature is verified</b>,
+ * otherwise anyone could mark a notification delivered. An invalid signature gets 404 rather than
+ * 403 so as not to confirm the reference exists.
  */
 @Slf4j
 @RestController
