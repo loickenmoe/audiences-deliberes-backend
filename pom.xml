@@ -10,7 +10,7 @@
 	</parent>
 	<groupId>com.afriland</groupId>
 	<artifactId>audiences</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<version>1.0.0</version>
 	<name>audiences</name>
 	<description>Back end for the initial code of projects</description>
 	<url/>
