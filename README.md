@@ -183,8 +183,8 @@ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/api/v1/dossiers
 # Swagger UI → 200
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/swagger-ui/index.html
 
-# Avec un vrai jeton (récupéré automatiquement) → 404 (pas 401/403 : l'authentification passe ;
-# 404 est normal, aucun contrôleur métier n'est encore implémenté — cf. DEVELOPMENT_ROADMAP.md)
+# Avec un vrai jeton (récupéré automatiquement) → 200 : l'authentification passe et la liste
+# des dossiers est renvoyée
 # ⚠️ Ne pas coller "<token>" tel quel : c'était un espace réservé dans la doc, pas une valeur.
 # La commande ci-dessous récupère elle-même un jeton réel avant de l'utiliser.
 TOKEN=$(curl -s -X POST http://localhost:8081/realms/audiences-realm/protocol/openid-connect/token \

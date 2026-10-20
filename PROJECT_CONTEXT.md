@@ -89,8 +89,8 @@ Authentification/RBAC via Keycloak.
 
 | # | Fichier | Version / date | Rôle | Autorité |
 |---|---|---|---|---|
-| REF-01 | `cahier Audiences et Délibérés_doc1_client.pdf` | validé 22/07/2026 | Expression initiale du besoin client (**PDF scanné, 9 p.**) | Historique — **superseded** par les spécifications |
-| REF-02 | `Final_Note_Presentation_Memoire_...docx` | 28/07/2026 | Cadrage stratégique, hypothèses validées, planning | Cadrage |
+| REF-01 | `cahier Audiences et Délibérés_doc1_client.pdf` | validé 22/07/2026 | Expression initiale du besoin client (**PDF scanné, 9 p.**) | Historique, retiré du dépôt — **remplacé** par les spécifications |
+| REF-02 | `Final_Note_Presentation_Memoire_...docx` | 28/07/2026 | Cadrage stratégique, hypothèses validées, planning | Cadrage, retiré du dépôt |
 | REF-03 | `Final_Specifications_Fonctionnelles_...V1_6.docx` | V1.6 | **Exigences FR/NF, règles de gestion RG, taxonomie** | **Référence métier n°1** |
 | REF-04 | `Final_Document_Analyse_Final-...V1_3.docx` | V1.3 | UML : acteurs, UC détaillés, RG affinées, états-transitions | **Référence métier n°2** (affine REF-03) |
 | REF-05 | `Final_Document_Conception-...V1.0.docx` | V1.0 | Architecture, stack, déploiement, **script SQL** | Référence technique |
@@ -195,7 +195,7 @@ protection de ceux qui consultent autant que de ceux qui sont consultés.
 > en lecture, et le **répertoire des utilisateurs internes** (`GET /utilisateurs`, Q-69) sans lequel
 > `POST /dossiers` était inconstructible depuis une interface, son champ obligatoire
 > `juristesAffectes` attendant des `utilisateur.id` qu'aucun endpoint ne fournissait.
-> **Aucune règle métier nouvelle.** Voir `DEVELOPMENT_ROADMAP.md` §M15.
+> **Aucune règle métier nouvelle.**
 >
 > **Toutes les questions fonctionnelles sont désormais tranchées.** Q-59 (asymétrie de précondition
 > adjudication/condamnation), Q-60 (archivage d'étape non automatique) et Q-67 (`DossierResponse.
@@ -208,7 +208,7 @@ protection de ceux qui consultent autant que de ceux qui sont consultés.
 > (contexte Spring complet + PostgreSQL réel), les 56 endpoints ont été audités un par un
 > (2 écarts doc/code corrigés — Q-66), la campagne de performance tient les cibles (50 requêtes
 > simultanées : p95 ≤ 1,51 s pour une cible de 2 s), et la revue de sécurité n'a relevé aucun
-> défaut d'autorisation (un seul constat ouvert : R-08). Voir `DEVELOPMENT_ROADMAP.md` §M14.
+> défaut d'autorisation (un seul constat ouvert : R-08).
 
 - **Documentation** : complète et validée en amont (8 documents).
 - **Code métier** : modules **Dossiers + Clients** (M4, Épic 1), **Alertes + Configurations**
@@ -229,8 +229,7 @@ protection de ceux qui consultent autant que de ceux qui sont consultés.
   audiences). 2 endpoints — **100 % de la surface OpenAPI et « à proposer » du contrat désormais
   implémentés**. Validé de bout en bout (curl + JWT Keycloak réels : tableau de bord cohérent avec
   les données de test M12, rapport avec/sans activité, les 4 formats d'export, restrictions de
-  rôle) et par 4 tests automatisés dédiés. Voir `DEVELOPMENT_ROADMAP.md` §M13 et
-  `DECISIONS_AND_OPEN_QUESTIONS.md` (Q-63, Q-64).
+  rôle) et par 4 tests automatisés dédiés. Voir `DECISIONS_AND_OPEN_QUESTIONS.md` (Q-63, Q-64).
 - **Module `decision`** : ✅ posé au jalon **M12** : hiérarchie `DecisionDefinitive`/
   `Adjudication`/`CondamnationPecuniaire` (`JOINED`, même principe que `Publication`/
   `Intervenant`), entité `Jurisprudence` indépendante. Dépend de `dossier` et `ged`
@@ -246,7 +245,7 @@ protection de ceux qui consultent autant que de ceux qui sont consultés.
   `V6__decision_definitive_type_largeur.sql` élargit la colonne à `VARCHAR(30)`. Validé de bout en
   bout (curl + JWT Keycloak réels, sur un environnement Docker reconstruit en cours de session
   après redémarrage des conteneurs) et par 13 tests automatisés dédiés. Voir
-  `DEVELOPMENT_ROADMAP.md` §M12 et `DECISIONS_AND_OPEN_QUESTIONS.md` (Q-58 à Q-62).
+  `DECISIONS_AND_OPEN_QUESTIONS.md` (Q-58 à Q-62).
 - **Module `publication`** : ✅ posé au jalon **M11** : hiérarchie `Publication`/
   `CompteRenduAudience`/`AutrePublication` (`JOINED`, même principe que `Intervenant`/`Avocat`,
   M2), `CommentairePublication`, `CorrespondanceAvocat` (tables ajoutées en M11 —
@@ -262,7 +261,7 @@ protection de ceux qui consultent autant que de ceux qui sont consultés.
   bout (curl + JWT Keycloak réels : dépôt CR sur audience d'un autre dossier rejeté, validation
   généralisée aux deux sous-types, consultation avec/sans restriction d'accès, commentaire notifiant
   DJ+DJA, correspondance unique avec doublon refusé) et par 16 tests automatisés dédiés. Voir
-  `DEVELOPMENT_ROADMAP.md` §M11 et `DECISIONS_AND_OPEN_QUESTIONS.md` (Q-20, Q-25, Q-55, Q-56, Q-57).
+  `DECISIONS_AND_OPEN_QUESTIONS.md` (Q-20, Q-25, Q-55, Q-56, Q-57).
 - **Module `frais`** : ✅ posé au jalon **M10** : entités `DemandeFrais`/`ValidationFrais`
   (`@ManyToOne Dossier`/`Avocat` direct, `validation_frais` distinct pour tracer conformité,
   opportunité et les deux accords DJ/DJA de la validation conjointe — Q-05 ; dépend de `dossier`
@@ -273,7 +272,7 @@ protection de ceux qui consultent autant que de ceux qui sont consultés.
   JWT Keycloak réels : dépôt/doublon de facture, conformité, opportunité sensible/non sensible,
   validation conjointe avec double-vote refusé et refus unique, rejets avec notification de
   l'avocat, paiement, liste filtrée par profil) et par 17 tests automatisés dédiés. Voir
-  `DEVELOPMENT_ROADMAP.md` §M10 et `DECISIONS_AND_OPEN_QUESTIONS.md` (Q-05, Q-24, Q-26, Q-54, R-07).
+  `DECISIONS_AND_OPEN_QUESTIONS.md` (Q-05, Q-24, Q-26, Q-54, R-07).
 - **Module `intervenant`** : ✅ posé au jalon **M9** : entité `DemandeConstitution` (`@ManyToOne
   Dossier`/`Intervenant` polymorphe/`Document` direct — dépend de `dossier`, `delibere` et `ged`
   en plus de `referentiel`/`alerte`, cf. Q-53), `ConstitutionService` (demande → SH, approbation
@@ -283,7 +282,7 @@ protection de ceux qui consultent autant que de ceux qui sont consultés.
   endpoints du contrat (#35-37, tous hors OpenAPI formel). Validé de bout en bout (curl + JWT
   Keycloak réels : répertoire correct, circuit de constitution complet avec lettre PDF vérifiée
   dans la GED, rejet et décision déjà prise) et par 11 tests automatisés dédiés. Voir
-  `DEVELOPMENT_ROADMAP.md` §M9 et `DECISIONS_AND_OPEN_QUESTIONS.md` (Q-03, Q-28, Q-52, Q-53).
+  `DECISIONS_AND_OPEN_QUESTIONS.md` (Q-03, Q-28, Q-52, Q-53).
 - **Module `ged`** : ✅ posé au jalon **M8** : entités `Document`/`DemandeSuppression`
   (`@ManyToOne Dossier` direct — module dépendant de `dossier`/`audience`, même principe que
   `delibere` en M7), `MinioConfig`/`MinioStorageService` (bootstrap du bucket, dépôt, URL
@@ -294,8 +293,7 @@ protection de ceux qui consultent autant que de ceux qui sont consultés.
   manuelle (référence circulaire au bootstrap MinIO, conflit de gestionnaire d'exception pour les
   fichiers volumineux). Validé de bout en bout (curl + JWT Keycloak réels : rejets format/poids,
   circuit de suppression complet, relance à 72 h en conditions réelles, rapport journalier) et par
-  16 tests automatisés dédiés. Voir `DEVELOPMENT_ROADMAP.md` §M8 et
-  `DECISIONS_AND_OPEN_QUESTIONS.md` (Q-02, Q-45 à Q-51).
+  16 tests automatisés dédiés. Voir `DECISIONS_AND_OPEN_QUESTIONS.md` (Q-02, Q-45 à Q-51).
 - **Module `delibere`** : ✅ posé au jalon **M7** : entités `Delibere`/`Prorogation`
   (`@ManyToOne` directe vers `Dossier`/`EtapeProcedure` — module dépendant de `dossier`/
   `audience`, même principe que `audience` en M6), `DelibereService` (enregistrement avec
@@ -305,8 +303,7 @@ protection de ceux qui consultent autant que de ceux qui sont consultés.
   module `delibere` — jamais dans `alerte`). 5 endpoints du contrat (#18-22, dont le dernier volet
   de Q-13). Validé de bout en bout (curl + JWT Keycloak réels, seuil de prorogation franchi une
   seule fois vers DJ et DJA, cycle rabattement→nouveau délibéré, bascule `CLOTURE` observée en
-  conditions réelles) et par 15 tests automatisés dédiés. Voir `DEVELOPMENT_ROADMAP.md` §M7 et
-  `DECISIONS_AND_OPEN_QUESTIONS.md` (Q-13, Q-17, Q-18, Q-19, Q-35, Q-42, Q-43, Q-44).
+  conditions réelles) et par 15 tests automatisés dédiés. Voir `DECISIONS_AND_OPEN_QUESTIONS.md` (Q-13, Q-17, Q-18, Q-19, Q-35, Q-42, Q-43, Q-44).
 - **Module `audience`** : ✅ posé au jalon **M6** : entités `Audience`/`Alarme` (`@ManyToOne`
   directe vers `Dossier`/`EtapeProcedure` — module dépendant de `dossier`, contrairement à
   `alerte`), `AudienceService` (planification avec doublon confirmable — Q-12, compte rendu),
@@ -314,8 +311,7 @@ protection de ceux qui consultent autant que de ceux qui sont consultés.
   J-7/J-3/J-1), `AlarmeEcheanceScheduler` (alerte à l'échéance), `CalendrierExportService`
   (JSON/PDF/Excel). 5 endpoints du contrat (#13-17). Validé de bout en bout (curl + JWT Keycloak
   réels, déclenchements planifiés observés avec anti-doublon, export testé dans les 3 formats) et
-  par 24 tests automatisés dédiés. Voir `DEVELOPMENT_ROADMAP.md` §M6 et
-  `DECISIONS_AND_OPEN_QUESTIONS.md` (Q-04, Q-12, Q-13, Q-39, Q-40, Q-41).
+  par 24 tests automatisés dédiés. Voir `DECISIONS_AND_OPEN_QUESTIONS.md` (Q-04, Q-12, Q-13, Q-39, Q-40, Q-41).
 - **Module `alerte`** : ✅ posé au jalon **M5** : entité `Alerte` (référence `dossierId` libre,
   sans dépendance vers `dossier` — même principe que `HistoriqueAction`), `AlerteService`
   (déclenchement, consultation, traitement, anti-doublon, push WebSocket best-effort avec repli
@@ -323,14 +319,14 @@ protection de ceux qui consultent autant que de ceux qui sont consultés.
   `dossier`, qui dépend de `alerte` — jamais l'inverse), `ConfigurationService`/`Controller`
   (CONF01-07). 5 endpoints du contrat (#44-48). Validé de bout en bout (curl + JWT Keycloak réels,
   déclenchement planifié observé avec anti-doublon) et par 15 tests automatisés dédiés. Voir
-  `DEVELOPMENT_ROADMAP.md` §M5 et `DECISIONS_AND_OPEN_QUESTIONS.md` (Q-22, Q-32, Q-36, Q-37, Q-38).
+  `DECISIONS_AND_OPEN_QUESTIONS.md` (Q-22, Q-32, Q-36, Q-37, Q-38).
 - **Module `dossier`** : ✅ posé au jalon **M4** (commit `955aa4c`, PR #2 mergée dans `dev`) :
   entités (`Dossier`, `EtapeProcedure`, affectations juriste/avocat, `AuditSeuilDossier`),
   machine à états des étapes (`EtapeTransitionValidator`), `DossierService`
   (création/consultation/affectation/transitions/circuit de sensibilité et de dérogation de
   seuil), `DossierController` (9 endpoints) + `ClientController` (4 endpoints, dont `POST
   /clients` 🆕). Validé de bout en bout (curl + JWT Keycloak réels) et par 31 tests automatisés
-  dédiés. Voir `DEVELOPMENT_ROADMAP.md` §M4 et `DECISIONS_AND_OPEN_QUESTIONS.md`
+  dédiés. Voir `DECISIONS_AND_OPEN_QUESTIONS.md`
   (Q-01, Q-10, Q-11, Q-12, Q-23, Q-26, Q-34, Q-35) pour le détail des arbitrages.
 - **Socle technique** : ✅ assaini au jalon **M1** (commits `3025c46` / `e33f668`) :
   - squelette générique hors domaine et authentification héritée (HS256 maison) supprimés ;
@@ -373,7 +369,7 @@ protection de ceux qui consultent autant que de ceux qui sont consultés.
   code qu'ils couvrent) et `ProvisionnementLectureSeuleIntegrationTest` (2), plus 11 ajouts dans
   les classes de test existantes (listes par dossier, files de travail). Aucune régression. **Couverture JaCoCo : 85,9 % des instructions (7852/9139) et 77,7 % des branches** —
   cible REF-02 §10.2 (> 80 %) atteinte sur les instructions (DTO, entités et code généré exclus de
-  la mesure). Voir `DEVELOPMENT_ROADMAP.md` §M14 et §M15.
+  la mesure).
 - **Risques** : voir `DECISIONS_AND_OPEN_QUESTIONS.md` §Risques — R-01 (secrets exposés)
   résolu dans les fichiers versionnés, mais la rotation des secrets déjà exposés côté
   Neon/iDrive e2 reste une action utilisateur en attente ; R-02, R-03, R-04 résolus par M1 ;
@@ -393,6 +389,5 @@ protection de ceux qui consultent autant que de ceux qui sont consultés.
 |---|---|
 | Architecture cible, modules, modèle de données, sécurité | `SYSTEM_ARCHITECTURE.md` |
 | Exigence → US → UC → RG → entités → endpoints → tests | `FUNCTIONAL_MAP.md` |
-| Inventaire des endpoints et état d'implémentation | `API_IMPLEMENTATION_STATUS.md` |
+| Inventaire des endpoints | le Contrat d'API V1.1 (`Doc/`) et `/v3/api-docs` |
 | Contradictions à arbitrer, décisions validées, risques | `DECISIONS_AND_OPEN_QUESTIONS.md` |
-| Jalons, ordre d'implémentation, avancement | `DEVELOPMENT_ROADMAP.md` |

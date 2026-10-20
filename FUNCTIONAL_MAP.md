@@ -378,4 +378,4 @@ backend impose en écriture mais n'exposait pas en lecture, enfin le répertoire
 internes (`GET /utilisateurs?profil=`, Q-69) — sans lequel la « section affectation » de l'écran
 « Création de dossier » ne pouvait pas être renseignée, alors que `juristesAffectes` est
 obligatoire (RG-DOS-03). Soit **66 endpoints exposés au total** ; cf.
-`API_IMPLEMENTATION_STATUS.md` §11 et #56-#66.
+le Contrat d'API V1.1 (`Doc/`).
