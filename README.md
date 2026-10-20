@@ -1,192 +1,225 @@
-# Audiences et Délibérés Backend
+# Audiences et Délibérés - Backend
 
-## 👥 Membres du groupe
+REST API of the hearings and deliberations platform of the **Legal Department of Afriland First
+Bank Cameroon**.
+
+## 👥 Team
 - Loïc Luc KENMOE MBEUKEM
 
-## 🏗️ Stack technique
+## 🏗️ Tech stack
 - Java 21 / Spring Boot 3.3
-- PostgreSQL (conteneur Docker local — base `audiences_app` pour l'API, `audiences_db` pour Keycloak)
+- PostgreSQL 17 (local Docker container - `audiences_app` database for the API, `audiences_db` for Keycloak)
 - Keycloak 24 (IAM / OAuth2)
-- MinIO (stockage fichiers, conteneur Docker local)
-- WebSocket (STOMP, authentifié par jeton Keycloak)
+- MinIO (file storage, local Docker container)
+- WebSocket (STOMP, authenticated with the Keycloak token)
+- Flyway (database migrations)
 
-## ⚠️ Sécurité — action requise avant toute reprise du dépôt
+## 📚 Documentation
+- `Doc/` - reference documentation V1.1 (functional specifications, user stories, analysis,
+  design, data dictionary, API contract), the client's original specification and the project
+  presentation note.
+- `design-notes/` - internal design notes, in French:
 
-Des versions antérieures de `env.template` (et de l'historique git) ont contenu des **identifiants
-réels** (base PostgreSQL Neon, clés MinIO iDrive e2, secret JWT). Ces valeurs ont été retirées et
-remplacées par des placeholders locaux, mais si vous disposiez des identifiants réels exposés :
-1. **Faites-les tourner immédiatement** dans les consoles Neon et iDrive e2.
-2. Considérez une purge de l'historique git (`git filter-repo` / BFG) si le dépôt a été partagé.
+| File | Content |
+|---|---|
+| `design-notes/PROJECT_CONTEXT.md` | Project context and reference documents |
+| `design-notes/SYSTEM_ARCHITECTURE.md` | Architecture, data model, security model |
+| `design-notes/FUNCTIONAL_MAP.md` | Features mapped to the code |
+| `design-notes/DECISIONS_AND_OPEN_QUESTIONS.md` | Every business rule decided, with its rationale; open questions and risks |
+| `design-notes/NOTIFICATION_ENGINE_PLAN.md` | Integration plan of the bank's Notification Engine |
 
-Voir `DECISIONS_AND_OPEN_QUESTIONS.md` (risque R-01) pour le détail.
+## ⚠️ Security - action required before taking over the repository
 
-## 🚀 Lancement du projet
+Earlier versions of `env.template` (and the git history) contained **real credentials** (Neon
+PostgreSQL database, iDrive e2 MinIO keys, JWT secret). These values have been removed and replaced
+with local placeholders, but if you held the exposed credentials:
+1. **Rotate them immediately** in the Neon and iDrive e2 consoles.
+2. Consider purging the git history (`git filter-repo` / BFG) if the repository has been shared.
 
-### Prérequis
-- Java 21 ou supérieur
-- Maven 3.8 ou supérieur
-- Docker & Docker Compose
+See `design-notes/DECISIONS_AND_OPEN_QUESTIONS.md` (risk R-01) for details.
+
+## 🚀 Getting started
+
+### Prerequisites
+- Java 21 or later
+- Docker and Docker Compose
+- Maven is not required: the repository ships the `mvnw` wrapper.
 
 ### Installation
 
-**1. Cloner le dépôt**
+**1. Clone the repository**
 ```bash
-git clone https://github.com/votre-utilisateur/audiences-deliberes-backend.git
+git clone https://github.com/your-user/audiences-deliberes-backend.git
 cd audiences-deliberes-backend
 ```
 
-**2. Configurer l'environnement**
+**2. Configure the environment**
 
-Copier `env.template` vers `.env` :
+Copy `env.template` to `.env`:
 ```bash
 cp env.template .env
 ```
 
-Les valeurs par défaut de `env.template` pointent toutes vers l'infrastructure Docker locale
-(voir `docker-compose.yml`) — aucun service cloud externe n'est requis pour développer.
+The default values of `env.template` all point to the local Docker infrastructure (see
+`docker-compose.yml`) - no external cloud service is required for development.
 
 | Variable | Description |
 |---|---|
-| `DATABASE_URL` | PostgreSQL local — base `audiences_app` (`jdbc:postgresql://localhost:5433/audiences_app`) |
-| `DATABASE_USERNAME` / `DATABASE_PASSWORD` | Credentials PostgreSQL local |
+| `DATABASE_URL` | Local PostgreSQL - `audiences_app` database (`jdbc:postgresql://localhost:5433/audiences_app`) |
+| `DATABASE_USERNAME` / `DATABASE_PASSWORD` | Local PostgreSQL credentials |
 | `KEYCLOAK_ISSUER_URI` | `http://localhost:8081/realms/audiences-realm` |
 | `KEYCLOAK_JWK_SET_URI` | `http://localhost:8081/realms/audiences-realm/protocol/openid-connect/certs` |
-| `MINIO_API_URL` / `MINIO_USERNAME` / `MINIO_PASSWORD` | MinIO local (`http://localhost:9000`) |
-| `BACKEND_PORT` | Port de l'API (défaut : `8080`) |
+| `MINIO_API_URL` / `MINIO_USERNAME` / `MINIO_PASSWORD` | Local MinIO (`http://localhost:9000`) |
+| `BACKEND_PORT` | API port (default: `8080`) |
 
-**3. Démarrer PostgreSQL, Keycloak et MinIO (Docker)**
+The Notification Engine block at the end of the file stays commented out outside production: no
+message leaves the application while `NOTIFICATION_ENGINE_ACTIF` is `false`.
 
-> Le conteneur `postgres` héberge à la fois la base de Keycloak (`audiences_db`) et la base
-> applicative (`audiences_app`, créée automatiquement au premier démarrage). Le realm
-> `audiences-realm` est importé automatiquement par Keycloak.
+**3. Start PostgreSQL, Keycloak and MinIO (Docker)**
+
+> The `postgres` container hosts both the Keycloak database (`audiences_db`) and the application
+> database (`audiences_app`, created automatically on first start). Keycloak imports the
+> `audiences-realm` realm automatically.
 
 ```bash
-docker-compose up postgres keycloak minio -d
+docker compose up postgres keycloak minio -d
 ```
 
-Vérifier que Keycloak est prêt : `http://localhost:8081` (admin / voir `.env`)
+Check that Keycloak is ready: `http://localhost:8081` (admin / see `.env`)
 
-> **Port PostgreSQL** : le conteneur expose son port sur `5433` par défaut (`POSTGRES_PORT`),
-> plutôt que le `5432` standard, car une installation PostgreSQL native sur le poste (fréquente
-> sous Windows, ex. service `postgresql-x64-17`) occupe généralement déjà ce port. Si ce n'est
-> pas votre cas, vous pouvez définir `POSTGRES_PORT=5432` dans `.env` (et adapter `DATABASE_URL`
-> en conséquence) pour revenir au port standard.
+> **PostgreSQL port**: the container exposes its port on `5433` by default (`POSTGRES_PORT`)
+> rather than the standard `5432`, because a native PostgreSQL installation on the workstation
+> (common on Windows, e.g. the `postgresql-x64-17` service) usually already holds that port. If
+> that is not your case, set `POSTGRES_PORT=5432` in `.env` (and adapt `DATABASE_URL` accordingly).
 
-**4. Démarrer l'application Spring Boot**
+**4. Start the Spring Boot application**
 ```bash
-mvn spring-boot:run
+./mvnw spring-boot:run
 ```
+Flyway applies the migrations on startup: the database goes from empty to its full schema,
+including the branch reference data.
 
-**5. Accéder à l'API**
-- API : `http://localhost:8080`
-- Swagger UI : `http://localhost:8080/swagger-ui.html`
-- Health check (public) : `http://localhost:8080/actuator/health`
+**5. Access the API**
+- API: `http://localhost:8080`
+- Swagger UI: `http://localhost:8080/swagger-ui.html`
+- Health check (public): `http://localhost:8080/actuator/health`
 
-## 🔐 Authentification
+## 🔐 Authentication
 
-L'authentification est **exclusivement** gérée par **Keycloak** (OIDC / JWT) — le backend
-n'implémente aucune gestion de mots de passe. Pour obtenir un token :
+Authentication is handled **exclusively** by **Keycloak** (OIDC / JWT) - the backend implements no
+password management. To obtain a token:
 
 ```bash
 curl -s -X POST http://localhost:8081/realms/audiences-realm/protocol/openid-connect/token \
-  -d "client_id=audiences-api" \
+  -d "client_id=audiences-api" -d "client_secret=audiences-api-secret" \
   -d "username=juriste.test" \
   -d "password=Password1!" \
   -d "grant_type=password" | jq .access_token
 ```
 
-Utiliser le token dans les requêtes :
+Use the token in requests:
 ```bash
 curl -H "Authorization: Bearer <token>" http://localhost:8080/api/v1/...
 ```
 
-Le canal applicatif temps réel (`/ws`, STOMP) exige le même jeton, transmis dans l'en-tête
-`Authorization` de la trame STOMP `CONNECT` (pas dans la requête HTTP de négociation SockJS).
+The real-time channel (`/ws`, STOMP) requires the same token, sent in the `Authorization` header
+of the STOMP `CONNECT` frame (not in the SockJS negotiation HTTP request).
 
-### Utilisateurs de test
-| Utilisateur | Rôle(s) | Mot de passe |
+### Test users
+| User | Role(s) | Password |
 |---|---|---|
-| `juriste.test` | `ROLE_JURISTE` (+ `ROLE_SAISIE` implicite), `ROLE_CONSULTATION` | `Password1!` |
-| `dj.test` | `ROLE_DJ` (+ `ROLE_SAISIE` implicite), `ROLE_CONSULTATION` | `Password1!` |
-| `dja.test` | `ROLE_DJA` (+ `ROLE_SAISIE` implicite), `ROLE_CONSULTATION` | `Password1!` |
-| `assistante.test` | `ROLE_ASSISTANTE` (+ `ROLE_SAISIE` implicite), `ROLE_CONSULTATION` | `Password1!` |
-| `sh.test` | `ROLE_SH` (+ `ROLE_SAISIE` implicite), `ROLE_CONSULTATION` | `Password1!` |
+| `juriste.test` | `ROLE_JURISTE` (+ implicit `ROLE_SAISIE`), `ROLE_CONSULTATION` | `Password1!` |
+| `dj.test` | `ROLE_DJ` (+ implicit `ROLE_SAISIE`), `ROLE_CONSULTATION` | `Password1!` |
+| `dja.test` | `ROLE_DJA` (+ implicit `ROLE_SAISIE`), `ROLE_CONSULTATION` | `Password1!` |
+| `assistante.test` | `ROLE_ASSISTANTE` (+ implicit `ROLE_SAISIE`), `ROLE_CONSULTATION` | `Password1!` |
+| `sh.test` | `ROLE_SH` (+ implicit `ROLE_SAISIE`), `ROLE_CONSULTATION` | `Password1!` |
 | `avocat.test` | `ROLE_AVOCAT` | `Password1!` |
 
-`ROLE_SAISIE` est un rôle composite Keycloak : tout utilisateur portant JURISTE, DJ, DJA,
-ASSISTANTE ou SH le porte automatiquement dans son jeton (cf. `DECISIONS_AND_OPEN_QUESTIONS.md` Q-08).
+`ROLE_SAISIE` is a Keycloak composite role: any user holding JURISTE, DJ, DJA, ASSISTANTE or SH
+carries it automatically in their token.
 
-## 🐳 Docker Compose — services disponibles
+These are test accounts with a public password: they have no place on an environment reachable
+from outside.
+
+## 🐳 Docker Compose - available services
 
 | Service | Description | Port |
 |---|---|---|
-| `postgres` | PostgreSQL — bases `audiences_db` (Keycloak) et `audiences_app` (API) | `5433` (host, cf. `POSTGRES_PORT`) → `5432` (conteneur) |
-| `keycloak` | Serveur IAM | `8081` (host) → `8080` (conteneur) |
-| `minio` | Stockage objets (GED) | `9000` (API) / `9001` (console) |
+| `postgres` | PostgreSQL - `audiences_db` (Keycloak) and `audiences_app` (API) databases | `5433` (host, see `POSTGRES_PORT`) → `5432` (container) |
+| `keycloak` | IAM server | `8081` (host) → `8080` (container) |
+| `minio` | Object storage (document management) | `9000` (API) / `9001` (console) |
 
 ```bash
-# Démarrer l'ensemble du socle local
-docker-compose up postgres keycloak minio -d
+# Start the local infrastructure
+docker compose up postgres keycloak minio -d
 
-# Arrêter et supprimer les volumes (force un ré-import du realm au prochain démarrage)
-docker-compose down -v
+# Stop and remove the volumes (forces a realm re-import on next start)
+docker compose down -v
 ```
 
-## ✅ Checklist de validation manuelle (jalon M1)
+## 🧪 Tests
 
-Procédure complète, à exécuter dans l'ordre après un `docker-compose down -v` (redémarrage à
-froid). Chaque étape indique le résultat attendu.
-
-**1. Démarrer le socle**
 ```bash
-docker-compose up postgres keycloak minio -d
+./mvnw test
 ```
-→ `docker ps` doit afficher `postgres` et `keycloak` en `healthy` après quelques minutes
-(le premier démarrage de Keycloak, avec construction Quarkus, prend ~2 à 4 minutes ; les
-démarrages suivants sont bien plus rapides). `minio` n'a pas de healthcheck défini, il suffit
-qu'il soit `Up`.
+Integration tests use Testcontainers, which starts its own PostgreSQL: a running Docker daemon is
+required. Before any `./mvnw clean`, stop the application and check that ports 8080 and 3000 are
+free.
 
-**2. Vérifier que la base applicative a bien été créée**
+## ✅ Manual validation checklist
+
+Full procedure, to run in order after a `docker compose down -v` (cold restart). Each step gives
+the expected result.
+
+**1. Start the infrastructure**
+```bash
+docker compose up postgres keycloak minio -d
+```
+→ `docker ps` must show `postgres` and `keycloak` as `healthy` after a few minutes (Keycloak's
+first start, with its Quarkus build, takes about 2 to 4 minutes; later starts are much faster).
+`minio` has no healthcheck: `Up` is enough.
+
+**2. Check that the application database was created**
 ```bash
 docker exec -it audiences-deliberes-backend-postgres-1 psql -U audiences_user -d postgres -c "\l"
 ```
-→ la liste doit contenir **deux** bases : `audiences_db` (Keycloak) et `audiences_app` (API).
+→ the list must contain **two** databases: `audiences_db` (Keycloak) and `audiences_app` (API).
 
-**3. Vérifier Keycloak et le realm**
-- Ouvrir `http://localhost:8081` → console d'administration Keycloak accessible.
-- Obtenir un jeton pour un utilisateur de test :
+**3. Check Keycloak and the realm**
+- Open `http://localhost:8081` → the Keycloak admin console is reachable.
+- Obtain a token for a test user:
 ```bash
 curl -s -X POST http://localhost:8081/realms/audiences-realm/protocol/openid-connect/token \
   -d "client_id=audiences-api" -d "client_secret=audiences-api-secret" \
   -d "username=juriste.test" -d "password=Password1!" -d "grant_type=password"
 ```
-→ doit retourner un JSON avec `access_token`. Décoder le token (ex. sur jwt.io, ou
-`echo <partie2> | base64 -d`) et vérifier que `realm_access.roles` contient bien
-`ROLE_JURISTE`, `ROLE_SAISIE` (rôle composite, cf. Q-08) et `ROLE_CONSULTATION`.
+→ must return a JSON document with `access_token`. Decode the token (e.g. on jwt.io, or
+`echo <part2> | base64 -d`) and check that `realm_access.roles` contains `ROLE_JURISTE`,
+`ROLE_SAISIE` (composite role) and `ROLE_CONSULTATION`.
 
-**4. Démarrer l'application**
+**4. Start the application**
 ```bash
-mvn spring-boot:run
+./mvnw spring-boot:run
 ```
-→ le log doit se terminer par `Started AudiencesApplication in ... seconds`, sans exception
-(en particulier, aucune erreur `Unable to determine Dialect` ni `password authentication failed`
-— signe que la base est bien jointe sur le bon port).
+→ the log must end with `Started AudiencesApplication in ... seconds`, without exception (in
+particular no `Unable to determine Dialect` nor `password authentication failed` error - a sign
+that the database is reached on the right port).
 
-**5. Vérifier la sécurité HTTP**
+**5. Check HTTP security**
 ```bash
-# Sans jeton, endpoint public → 200
+# Without a token, public endpoint → 200
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/actuator/health
 
-# Sans jeton, endpoint quelconque de l'API → 401
+# Without a token, any API endpoint → 401
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/api/v1/dossiers
 
 # Swagger UI → 200
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/swagger-ui/index.html
 
-# Avec un vrai jeton (récupéré automatiquement) → 200 : l'authentification passe et la liste
-# des dossiers est renvoyée
-# ⚠️ Ne pas coller "<token>" tel quel : c'était un espace réservé dans la doc, pas une valeur.
-# La commande ci-dessous récupère elle-même un jeton réel avant de l'utiliser.
+# With a real token (fetched automatically) → 200: authentication passes and the list of case
+# files is returned
+# ⚠️ Do not paste "<token>" as is: it was a placeholder, not a value.
+# The command below fetches a real token itself before using it.
 TOKEN=$(curl -s -X POST http://localhost:8081/realms/audiences-realm/protocol/openid-connect/token \
   -d "client_id=audiences-api" -d "client_secret=audiences-api-secret" \
   -d "username=juriste.test" -d "password=Password1!" -d "grant_type=password" \
@@ -194,14 +227,21 @@ TOKEN=$(curl -s -X POST http://localhost:8081/realms/audiences-realm/protocol/op
 curl -s -o /dev/null -w "%{http_code}\n" -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/dossiers
 ```
 
-**6. Vérifier l'absence de secrets dans les fichiers versionnés**
+**6. Check that no secret is versioned**
 ```bash
-# README.md exclu : il documente volontairement ces motifs dans cette checklist elle-même,
-# ce qui produirait un faux positif sans rapport avec une fuite réelle.
+# README.md is excluded: it deliberately documents these patterns in this very checklist,
+# which would produce a false positive unrelated to an actual leak.
 git grep -iE "npg_|idrivee2|OKfkPo|YpruO6" -- . ':!README.md'
 ```
-→ aucun résultat.
+→ no result.
 
-Si toutes ces étapes passent, le jalon M1 peut être considéré comme validé.
+If all these steps pass, the installation is valid.
 
----
+## ⚙️ Before production
+
+- Close or restrict `/v3/api-docs` and `/swagger-ui`, open without authentication today.
+- Replace the test accounts with the bank's real Keycloak accounts.
+- Replace every password of `.env` and keep them out of the repository.
+- Organise PostgreSQL and MinIO backups.
+- Activate the Notification Engine only after a dedicated test campaign
+  (`design-notes/NOTIFICATION_ENGINE_PLAN.md`).
