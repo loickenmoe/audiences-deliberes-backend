@@ -8,7 +8,6 @@ import com.afriland.audiences.notification.service.RedacteurNotification.Context
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.springframework.web.util.HtmlUtils;
 
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -64,9 +63,8 @@ class RedacteurNotificationTest {
                     continue;
                 }
                 // The reference and link are the only inserted data; they are removed before checking the
-                // template contains nothing forbidden. HTML is decoded first: the escaped apostrophe (&#39;) is
-                // not a digit of the text.
-                String gabarit = HtmlUtils.htmlUnescape(texte).replace(REFERENCE, "").replace(LIEN, "");
+                // template contains nothing forbidden.
+                String gabarit = texte.replace(REFERENCE, "").replace(LIEN, "");
                 for (Pattern interdit : INTERDITS) {
                     assertThat(interdit.matcher(gabarit).find()).as(interdit + " dans : " + texte).isFalse();
                 }
@@ -113,15 +111,14 @@ class RedacteurNotificationTest {
     }
 
     @Test
-    void outlook_complet_en_HTML_avec_reference_et_lien() {
+    void outlook_complet_en_texte_brut_avec_reference_et_lien() {
         ContenuNotification contenu = redacteur.pourUtilisateur(TypeAlerte.RAPPEL_AUDIENCE, OUTLOOK, new Contexte(REFERENCE, LIEN));
 
         assertThat(contenu.sujet()).isEqualTo("[Audiences et délibérés] Rappel d'audience - DOS-2026-014");
         assertThat(contenu.corps())
-                .startsWith("<p>Une audience approche sur l&#39;un de vos dossiers.</p>")
-                .contains("<p>Dossier : DOS-2026-014</p>")
-                .contains("<p>Consulter dans l&#39;application : " + LIEN + "</p>")
-                .contains("merci de ne pas y répondre");
+                .doesNotContain("<p>", "</p>", "&#39;")
+                .isEqualTo("Une audience approche sur l'un de vos dossiers.\n\nDossier : DOS-2026-014\n\n"
+                        + "Consulter dans l'application : " + LIEN + "\n\nMessage automatique, merci de ne pas y répondre.");
     }
 
     @Test
@@ -148,7 +145,7 @@ class RedacteurNotificationTest {
                 new Contexte(REFERENCE, "http://localhost:3000/portail"));
 
         assertThat(contenu.sujet()).isEqualTo("[Audiences et délibérés] Nouveau dossier confié - DOS-2026-014");
-        assertThat(contenu.corps()).startsWith("<p>Bonjour,</p>")
+        assertThat(contenu.corps()).startsWith("Bonjour,\n\n").doesNotContain("<p>")
                 .contains("Retrouvez le détail dans votre espace : http://localhost:3000/portail")
                 .contains("Direction Juridique, Afriland First Bank");
     }
@@ -203,11 +200,12 @@ class RedacteurNotificationTest {
     }
 
     @Test
-    void une_reference_malveillante_est_echappee_dans_le_HTML() {
+    void une_donnee_inseree_reste_du_texte_brut() {
         ContenuNotification contenu = redacteur.pourUtilisateur(TypeAlerte.ALARME, OUTLOOK,
                 new Contexte("<script>x</script>", null));
 
-        assertThat(contenu.corps()).doesNotContain("<script>").contains("&lt;script&gt;");
+        // Plain text is not interpreted by the mail client: the value is shown as typed, never as markup.
+        assertThat(contenu.corps()).contains("Dossier : <script>x</script>").doesNotContain("&lt;", "<p>");
     }
 
     @Test

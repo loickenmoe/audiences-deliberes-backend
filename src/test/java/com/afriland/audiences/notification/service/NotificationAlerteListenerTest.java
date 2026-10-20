@@ -69,7 +69,7 @@ class NotificationAlerteListenerTest {
         assertThat(outlook.getDestinataireType()).isEqualTo(TypeDestinataire.UTILISATEUR);
         assertThat(outlook.getDestinataireRef()).isEqualTo(7L);
         assertThat(outlook.getSujet()).isEqualTo("[Audiences et délibérés] Rappel d'audience - DOS-2026-014");
-        assertThat(outlook.getCorps()).contains("http://localhost:3000/dossiers/5").startsWith("<p>");
+        assertThat(outlook.getCorps()).contains("http://localhost:3000/dossiers/5").doesNotContain("<p>");
         assertThat(envois.get(1).getCorps()).doesNotContain("<p>");
     }
 

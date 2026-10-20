@@ -2,9 +2,7 @@ package com.afriland.audiences.notification.service;
 
 import com.afriland.audiences.alerte.domain.TypeAlerte;
 import com.afriland.audiences.notification.domain.EvenementPrestataire;
-import com.afriland.audiences.notification.passerelle.CanalEngine;
 import org.springframework.stereotype.Component;
-import org.springframework.web.util.HtmlUtils;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -31,8 +29,8 @@ import java.util.Properties;
  *   <li><b>minimal</b> (SMS, WhatsApp): event name only, no reference or link, since an SMS can be
  *       read by a third party on a locked screen.</li>
  * </ul>
- * E-mails are HTML (the engine renders {@code directBody} as is), other channels plain text. Any data
- * inserted in HTML is escaped.
+ * Every channel receives plain text, paragraphs separated by a blank line: the engine delivers
+ * {@code directBody} as is, and an HTML body showed its tags to the recipient.
  */
 @Component
 public class RedacteurNotification {
@@ -59,7 +57,7 @@ public class RedacteurNotification {
         String titre = texte(evenement + ".titre");
         String phrase = texte(evenement + ".phrase");
         return switch (NiveauDetail.pour(route.reglage())) {
-            case COMPLET -> complet(titre, phrase, route.canal(), contexte);
+            case COMPLET -> complet(titre, phrase, contexte);
             case MODERE -> modere(titre, phrase, contexte);
             case MINIMAL -> new ContenuNotification(null, minimal(evenement, titre));
         };
@@ -78,7 +76,7 @@ public class RedacteurNotification {
         return texte("commun.minimal").replace("{0}", corps);
     }
 
-    private ContenuNotification complet(String titre, String phrase, CanalEngine canal, Contexte contexte) {
+    private ContenuNotification complet(String titre, String phrase, Contexte contexte) {
         List<String> lignes = new ArrayList<>();
         lignes.add(phrase);
         if (contexte.referenceDossier() != null) {
@@ -88,8 +86,7 @@ public class RedacteurNotification {
             lignes.add(texte("commun.consulter").replace("{0}", contexte.lien()));
         }
         lignes.add(texte("commun.pied"));
-        return new ContenuNotification(sujet(titre, contexte),
-                canal == CanalEngine.EMAIL ? html(lignes) : String.join("\n\n", lignes));
+        return new ContenuNotification(sujet(titre, contexte), texteBrut(lignes));
     }
 
     private ContenuNotification modere(String titre, String phrase, Contexte contexte) {
@@ -104,7 +101,7 @@ public class RedacteurNotification {
                 : texte("commun.contact"));
         lignes.add(texte("commun.emetteur"));
         lignes.add(texte("commun.pied"));
-        return new ContenuNotification(sujet(titre, contexte), html(lignes));
+        return new ContenuNotification(sujet(titre, contexte), texteBrut(lignes));
     }
 
     private String sujet(String titre, Contexte contexte) {
@@ -112,12 +109,8 @@ public class RedacteurNotification {
         return contexte.referenceDossier() == null ? sujet : sujet + " - " + contexte.referenceDossier();
     }
 
-    private static String html(List<String> lignes) {
-        StringBuilder corps = new StringBuilder();
-        for (String ligne : lignes) {
-            corps.append("<p>").append(HtmlUtils.htmlEscape(ligne, StandardCharsets.UTF_8.name())).append("</p>");
-        }
-        return corps.toString();
+    private static String texteBrut(List<String> lignes) {
+        return String.join("\n\n", lignes);
     }
 
     String texte(String cle) {
