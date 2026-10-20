@@ -136,8 +136,9 @@ class AuditServiceTest {
 
     @Test
     void consulter_refuseUneFenetreInversee() {
-        assertThatThrownBy(() -> auditService.consulter(Perimetre.TOUT, null, null, null,
-                LocalDate.of(2026, 9, 30), LocalDate.of(2026, 9, 1), 0, 10))
+        var date2 = LocalDate.of(2026, 9, 30);
+        var date3 = LocalDate.of(2026, 9, 1);
+        assertThatThrownBy(() -> auditService.consulter(Perimetre.TOUT, null, null, null, date2, date3, 0, 10))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("date de début");
     }

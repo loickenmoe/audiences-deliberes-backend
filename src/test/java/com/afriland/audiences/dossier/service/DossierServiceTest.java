@@ -151,7 +151,8 @@ class DossierServiceTest {
                 .thenReturn(Optional.of(NatureDossier.builder().categorie(CategorieDossier.RECOUVREMENT).build()));
         when(dossierRepository.existsByReference("DOS-2026-0001")).thenReturn(true);
 
-        assertThatThrownBy(() -> service.creerDossier(baseRequest(false)))
+        var requete = baseRequest(false);
+        assertThatThrownBy(() -> service.creerDossier(requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("désynchronisé")
                 .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.type(ApiException.class))
@@ -184,7 +185,8 @@ class DossierServiceTest {
     void creerDossier_rejectsUnknownClient() {
         when(clientRepository.findById(1L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.creerDossier(baseRequest(false)))
+        var requete = baseRequest(false);
+        assertThatThrownBy(() -> service.creerDossier(requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("Client introuvable");
     }
@@ -194,7 +196,8 @@ class DossierServiceTest {
         when(clientRepository.findById(1L)).thenReturn(Optional.of(client));
         when(natureDossierRepository.findByLibelleIgnoreCase("Saisie immobilière")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.creerDossier(baseRequest(false)))
+        var requete = baseRequest(false);
+        assertThatThrownBy(() -> service.creerDossier(requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("taxonomie");
     }
@@ -367,8 +370,8 @@ class DossierServiceTest {
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
         when(etapeProcedureRepository.findById(5L)).thenReturn(Optional.of(etape));
 
-        assertThatThrownBy(() -> service.modifierStatutEtape(1L, 5L,
-                new ModifierStatutEtapeRequest(StatutCycleVie.CLOTURE)))
+        var requete = new ModifierStatutEtapeRequest(StatutCycleVie.CLOTURE);
+        assertThatThrownBy(() -> service.modifierStatutEtape(1L, 5L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("non autorisée");
     }
@@ -382,8 +385,8 @@ class DossierServiceTest {
         when(etapeProcedureRepository.findById(5L)).thenReturn(Optional.of(etape));
         when(etapeProcedureRepository.save(any(EtapeProcedure.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        assertThatThrownBy(() -> service.modifierStatutEtape(1L, 5L,
-                new ModifierStatutEtapeRequest(StatutCycleVie.EN_COURS)))
+        var requete = new ModifierStatutEtapeRequest(StatutCycleVie.EN_COURS);
+        assertThatThrownBy(() -> service.modifierStatutEtape(1L, 5L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("Aucune voie de recours");
     }
@@ -398,8 +401,8 @@ class DossierServiceTest {
                         .avocat(com.afriland.audiences.referentiel.domain.Avocat.builder().id(7L).build())
                         .build()));
 
-        assertThatThrownBy(() -> service.modifierAffectation(1L,
-                new ModifierAffectationRequest(List.of(), List.of(7L)), false))
+        var requete = new ModifierAffectationRequest(List.of(), List.of(7L));
+        assertThatThrownBy(() -> service.modifierAffectation(1L, requete, false))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("déjà affecté");
     }
@@ -433,8 +436,8 @@ class DossierServiceTest {
                 .sensibiliteStatut(StatutValidation.EN_ATTENTE).build();
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
 
-        assertThatThrownBy(() -> service.validerDerogationSeuil(1L, 5L,
-                new ValiderDerogationRequest(StatutValidation.VALIDEE, null)))
+        var requete = new ValiderDerogationRequest(StatutValidation.VALIDEE, null);
+        assertThatThrownBy(() -> service.validerDerogationSeuil(1L, 5L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("validation de la diligence particulière");
         verify(auditSeuilDossierRepository, never()).save(any());
@@ -461,8 +464,8 @@ class DossierServiceTest {
                 .sensibiliteStatut(StatutValidation.EN_ATTENTE).build();
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
 
-        assertThatThrownBy(() -> service.demanderDerogationSeuil(1L,
-                new DemandeDerogationSeuilRequest(80_000_000d, "Motif")))
+        var requete = new DemandeDerogationSeuilRequest(80_000_000d, "Motif");
+        assertThatThrownBy(() -> service.demanderDerogationSeuil(1L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("diligence particulière déjà validé");
     }
@@ -509,8 +512,8 @@ class DossierServiceTest {
                 .sensibiliteStatut(StatutValidation.EN_ATTENTE).build();
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
 
-        assertThatThrownBy(() -> service.proposerSensibilite(1L,
-                new ProposerSensibiliteRequest(60_000_000d, "VIP", "Motif")))
+        var requete = new ProposerSensibiliteRequest(60_000_000d, "VIP", "Motif");
+        assertThatThrownBy(() -> service.proposerSensibilite(1L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("déjà en attente");
         verify(dossierRepository, never()).save(any());
@@ -522,8 +525,8 @@ class DossierServiceTest {
                 .sensibiliteStatut(StatutValidation.VALIDEE).build();
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
 
-        assertThatThrownBy(() -> service.proposerSensibilite(1L,
-                new ProposerSensibiliteRequest(60_000_000d, "VIP", "Motif")))
+        var requete = new ProposerSensibiliteRequest(60_000_000d, "VIP", "Motif");
+        assertThatThrownBy(() -> service.proposerSensibilite(1L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("déjà suivi");
     }
@@ -614,8 +617,8 @@ class DossierServiceTest {
                 .seuilMontant(60_000_000d).seuilOrigine(SeuilOrigine.DEROGATION).build();
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
 
-        assertThatThrownBy(() -> service.modifierSensibilite(1L,
-                new ModifierSensibiliteRequest(false, null, null, "   ")))
+        var requete = new ModifierSensibiliteRequest(false, null, null, "   ");
+        assertThatThrownBy(() -> service.modifierSensibilite(1L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("motif est obligatoire");
         verify(dossierRepository, never()).save(any());
@@ -627,8 +630,8 @@ class DossierServiceTest {
                 .sensibiliteStatut(StatutValidation.EN_ATTENTE).build();
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
 
-        assertThatThrownBy(() -> service.modifierSensibilite(1L,
-                new ModifierSensibiliteRequest(false, null, null, "Motif")))
+        var requete = new ModifierSensibiliteRequest(false, null, null, "Motif");
+        assertThatThrownBy(() -> service.modifierSensibilite(1L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("rien à retirer");
     }
@@ -640,8 +643,8 @@ class DossierServiceTest {
                 Dossier.builder().id(1L).estSensible(false)
                         .sensibiliteStatut(StatutValidation.EN_ATTENTE).build()));
 
-        assertThatThrownBy(() -> service.modifierSensibilite(1L,
-                new ModifierSensibiliteRequest(true, null, null, null)))
+        var requete = new ModifierSensibiliteRequest(true, null, null, null);
+        assertThatThrownBy(() -> service.modifierSensibilite(1L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("obligatoires pour un dossier à diligence particulière");
     }
@@ -683,8 +686,8 @@ class DossierServiceTest {
                 .sensibiliteStatut(StatutValidation.EN_ATTENTE).build();
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
 
-        assertThatThrownBy(() -> service.validerSensibilite(1L,
-                new ValiderSensibiliteRequest(StatutValidation.VALIDEE, null, null, null)))
+        var requete = new ValiderSensibiliteRequest(StatutValidation.VALIDEE, null, null, null);
+        assertThatThrownBy(() -> service.validerSensibilite(1L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("Aucune proposition");
     }
@@ -695,8 +698,8 @@ class DossierServiceTest {
                 .sensibiliteStatut(StatutValidation.EN_ATTENTE).build();
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
 
-        assertThatThrownBy(() -> service.validerSensibilite(1L,
-                new ValiderSensibiliteRequest(StatutValidation.REJETEE, null, null, null)))
+        var requete = new ValiderSensibiliteRequest(StatutValidation.REJETEE, null, null, null);
+        assertThatThrownBy(() -> service.validerSensibilite(1L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("motif est obligatoire");
     }
@@ -707,7 +710,8 @@ class DossierServiceTest {
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
         when(etapeProcedureRepository.existsByDossierIdAndType(1L, TypeEtape.INSTANCE)).thenReturn(true);
 
-        assertThatThrownBy(() -> service.creerEtape(1L, new CreerEtapeRequest(TypeEtape.INSTANCE)))
+        var requete = new CreerEtapeRequest(TypeEtape.INSTANCE);
+        assertThatThrownBy(() -> service.creerEtape(1L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("existe déjà");
     }

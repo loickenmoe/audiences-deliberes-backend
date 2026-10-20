@@ -120,7 +120,8 @@ class PublicationServiceTest {
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
         when(audienceRepository.findById(7L)).thenReturn(Optional.of(audience));
 
-        assertThatThrownBy(() -> service.deposerCompteRendu(new DeposerCompteRenduRequest(1L, 7L, "Contenu", null), null))
+        var requete = new DeposerCompteRenduRequest(1L, 7L, "Contenu", null);
+        assertThatThrownBy(() -> service.deposerCompteRendu(requete, null))
                 .isInstanceOf(ApiException.class);
     }
 
@@ -191,9 +192,10 @@ class PublicationServiceTest {
         when(currentUserService.getCurrentUser()).thenReturn(utilisateurAvocat);
         when(avocatRepository.findByCompteKeycloak("kc-avocat")).thenReturn(Optional.of(avocat));
 
+        var requete = new DeposerCompteRenduRequest(1L, 7L, "Renvoi", null);
+        var fichier = new MockMultipartFile("file", "virus.exe", "application/octet-stream", new byte[] {1});
         assertThatThrownBy(() -> service.deposerCompteRendu(
-                new DeposerCompteRenduRequest(1L, 7L, "Renvoi", null),
-                new MockMultipartFile("file", "virus.exe", "application/octet-stream", new byte[] {1})))
+                requete, fichier))
                 .isInstanceOf(ApiException.class);
         verifyNoInteractions(minioStorageService);
     }
@@ -239,7 +241,8 @@ class PublicationServiceTest {
                 .statutValidation(StatutPublication.VALIDE).build();
         when(publicationRepository.findById(100L)).thenReturn(Optional.of(publication));
 
-        assertThatThrownBy(() -> service.valider(100L, new ValiderPublicationRequest(StatutPublication.VALIDE, null)))
+        var requete = new ValiderPublicationRequest(StatutPublication.VALIDE, null);
+        assertThatThrownBy(() -> service.valider(100L, requete))
                 .isInstanceOf(ApiException.class);
     }
 
@@ -252,7 +255,8 @@ class PublicationServiceTest {
                 .statutValidation(StatutPublication.DEPOSE).build();
         when(publicationRepository.findById(100L)).thenReturn(Optional.of(publication));
 
-        assertThatThrownBy(() -> service.valider(100L, new ValiderPublicationRequest(StatutPublication.REJETE, null)))
+        var requete = new ValiderPublicationRequest(StatutPublication.REJETE, null);
+        assertThatThrownBy(() -> service.valider(100L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("motif");
     }
@@ -453,7 +457,8 @@ class PublicationServiceTest {
         when(publicationRepository.findById(100L)).thenReturn(Optional.of(publication));
         when(correspondanceAvocatRepository.existsByPublicationId(100L)).thenReturn(true);
 
-        assertThatThrownBy(() -> service.transmettreCorrespondance(100L, new CorrespondanceRequest("Réponse")))
+        var requete = new CorrespondanceRequest("Réponse");
+        assertThatThrownBy(() -> service.transmettreCorrespondance(100L, requete))
                 .isInstanceOf(ApiException.class);
     }
 
@@ -555,8 +560,9 @@ class PublicationServiceTest {
         when(currentUserService.getCurrentUser()).thenReturn(utilisateurAvocat);
         when(avocatRepository.findByCompteKeycloak("kc-avocat")).thenReturn(Optional.of(avocat));
 
+        var requete = new DeposerCompteRenduRequest(1L, 7L, "Contenu", 60L);
         assertThatThrownBy(() -> service.deposerCompteRendu(
-                new DeposerCompteRenduRequest(1L, 7L, "Contenu", 60L), null))
+                requete, null))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("ne se réserve pas");
         verify(publicationRepository, never()).save(any(Publication.class));
@@ -593,8 +599,8 @@ class PublicationServiceTest {
                 .statutValidation(StatutPublication.DEPOSE).build();
         when(publicationRepository.findById(100L)).thenReturn(Optional.of(publication));
 
-        assertThatThrownBy(() -> service.valider(100L,
-                new ValiderPublicationRequest(StatutPublication.REJETE, "Récit incomplet")))
+        var requete = new ValiderPublicationRequest(StatutPublication.REJETE, "Récit incomplet");
+        assertThatThrownBy(() -> service.valider(100L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("ne se rejette pas");
         verify(publicationRepository, never()).save(any(Publication.class));

@@ -236,7 +236,8 @@ class PartageDocumentServiceTest {
         Document document = document(true, StatutPartageAvocat.PROPOSE);
         when(currentUserService.getCurrentUser()).thenReturn(dj);
 
-        assertThatThrownBy(() -> service.arbitrer(7L, new ArbitragePartageRequest(DecisionPartage.REJETE, "  ")))
+        var requete = new ArbitragePartageRequest(DecisionPartage.REJETE, "  ");
+        assertThatThrownBy(() -> service.arbitrer(7L, requete))
                 .isInstanceOf(ApiException.class).hasMessageContaining("motif");
         assertThat(document.getPartageAvocat()).isEqualTo(StatutPartageAvocat.PROPOSE);
         verify(documentRepository, never()).save(any());
@@ -261,7 +262,8 @@ class PartageDocumentServiceTest {
     void arbitrer_horsProposition_409() {
         document(false, StatutPartageAvocat.PARTAGE);
 
-        assertThatThrownBy(() -> service.arbitrer(7L, new ArbitragePartageRequest(DecisionPartage.VALIDE, null)))
+        var requete = new ArbitragePartageRequest(DecisionPartage.VALIDE, null);
+        assertThatThrownBy(() -> service.arbitrer(7L, requete))
                 .isInstanceOf(ApiException.class);
     }
 }

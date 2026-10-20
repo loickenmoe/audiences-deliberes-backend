@@ -119,8 +119,9 @@ class AuditExportServiceTest {
         when(historiqueActionRepository.count(specification()))
                 .thenReturn((long) AuditExportService.PLAFOND_LIGNES + 1);
 
-        assertThatThrownBy(() -> auditExportService.exporter(Perimetre.TOUT, null, null, null,
-                LocalDate.of(2020, 1, 1), LocalDate.of(2030, 1, 1), FormatExportAudit.EXCEL))
+        var date = LocalDate.of(2020, 1, 1);
+        var date2 = LocalDate.of(2030, 1, 1);
+        assertThatThrownBy(() -> auditExportService.exporter(Perimetre.TOUT, null, null, null, date, date2, FormatExportAudit.EXCEL))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("Restreignez la période");
 
@@ -134,21 +135,23 @@ class AuditExportServiceTest {
      */
     @Test
     void exporter_exigeUnePeriode() {
-        assertThatThrownBy(() -> auditExportService.exporter(Perimetre.TOUT, null, null, null,
-                null, LocalDate.of(2026, 9, 30), FormatExportAudit.PDF))
+        var date = LocalDate.of(2026, 9, 30);
+        assertThatThrownBy(() -> auditExportService.exporter(Perimetre.TOUT, null, null, null, null, date, FormatExportAudit.PDF))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("exige une période");
     }
 
     @Test
     void exporter_refuseUneFenetreInverseeEtUnDossierManquant() {
-        assertThatThrownBy(() -> auditExportService.exporter(Perimetre.TOUT, null, null, null,
-                LocalDate.of(2026, 9, 30), LocalDate.of(2026, 9, 1), FormatExportAudit.PDF))
+        var date4 = LocalDate.of(2026, 9, 30);
+        var date5 = LocalDate.of(2026, 9, 1);
+        assertThatThrownBy(() -> auditExportService.exporter(Perimetre.TOUT, null, null, null, date4, date5, FormatExportAudit.PDF))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("date de début");
 
-        assertThatThrownBy(() -> auditExportService.exporter(Perimetre.UN_DOSSIER, null, null, null,
-                LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30), FormatExportAudit.PDF))
+        var date2 = LocalDate.of(2026, 9, 1);
+        var date3 = LocalDate.of(2026, 9, 30);
+        assertThatThrownBy(() -> auditExportService.exporter(Perimetre.UN_DOSSIER, null, null, null, date2, date3, FormatExportAudit.PDF))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("identifiant du dossier");
     }

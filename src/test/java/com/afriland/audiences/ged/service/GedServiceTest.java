@@ -316,7 +316,8 @@ class GedServiceTest {
         when(demandeSuppressionRepository.findByDocumentIdAndStatut(5L, StatutSuppression.EN_ATTENTE)).thenReturn(Optional.of(demande));
         when(currentUserService.getCurrentUser()).thenReturn(dj);
 
-        assertThatThrownBy(() -> service.approuverOuRejeter(5L, new ApprobationSuppressionRequest(StatutSuppression.REJETEE, null)))
+        var requete = new ApprobationSuppressionRequest(StatutSuppression.REJETEE, null);
+        assertThatThrownBy(() -> service.approuverOuRejeter(5L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("motif");
         assertThat(document.getEstSupprime()).isFalse();

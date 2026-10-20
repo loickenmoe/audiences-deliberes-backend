@@ -48,7 +48,8 @@ class RegleConfigurationTest {
             "GRILLE_NOTIFICATION_WHATSAPP, 'SMS,,RAPPEL_AUDIENCE'"
     })
     void valider_rejectsValuesThatWouldBreakAConsumer(String cle, String saisie) {
-        assertThatThrownBy(() -> RegleConfiguration.valueOf(cle).valider(saisie))
+        RegleConfiguration regle = RegleConfiguration.valueOf(cle);
+        assertThatThrownBy(() -> regle.valider(saisie))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining(cle);
     }

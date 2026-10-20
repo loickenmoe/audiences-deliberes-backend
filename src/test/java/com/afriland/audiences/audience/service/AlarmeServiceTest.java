@@ -71,8 +71,8 @@ class AlarmeServiceTest {
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
         when(etapeProcedureRepository.findById(10L)).thenReturn(Optional.of(etape));
 
-        assertThatThrownBy(() -> service.creerAlarme(1L,
-                new CreerAlarmeRequest(10L, "Relancer le client", LocalDateTime.now().minusDays(1))))
+        var requete = new CreerAlarmeRequest(10L, "Relancer le client", LocalDateTime.now().minusDays(1));
+        assertThatThrownBy(() -> service.creerAlarme(1L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("future");
     }
@@ -104,8 +104,8 @@ class AlarmeServiceTest {
                 .dateEcheance(LocalDateTime.now().minusDays(1)).statut(StatutAlarme.TRAITEE).createdBy(juriste).build();
         when(alarmeRepository.findById(3L)).thenReturn(Optional.of(traitee));
 
-        assertThatThrownBy(() -> service.reprogrammerAlarme(3L,
-                new ReprogrammerAlarmeRequest(null, LocalDateTime.now().plusDays(2))))
+        var requete = new ReprogrammerAlarmeRequest(null, LocalDateTime.now().plusDays(2));
+        assertThatThrownBy(() -> service.reprogrammerAlarme(3L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("déjà été reprogrammée");
     }
@@ -184,7 +184,8 @@ class AlarmeServiceTest {
     void listerParDossier_dossierInconnu_retourne404() {
         when(dossierRepository.existsById(999L)).thenReturn(false);
 
-        assertThatThrownBy(() -> service.listerParDossier(999L, PageRequest.of(0, 10)))
+        var pageRequest = PageRequest.of(0, 10);
+        assertThatThrownBy(() -> service.listerParDossier(999L, pageRequest))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("Dossier introuvable");
     }

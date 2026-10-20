@@ -252,7 +252,8 @@ class RemiseNotificationTest {
         NotificationEngineProperties sansSecret = new NotificationEngineProperties(false, "audience-deliberer", "court",
                 5, Duration.ofHours(2), new Redirection(false, null, null, null), new NotificationEngineProperties.Transport(NotificationEngineProperties.TypeTransport.JOURNAL, "t", "p", "u", 10, true, "attachment-upload-request"), null, "STANDARD", false, java.time.Duration.ofMinutes(5));
 
-        assertThatThrownBy(() -> new JetonEngine(sansSecret).signer())
+        JetonEngine jeton = new JetonEngine(sansSecret);
+        assertThatThrownBy(jeton::signer)
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("trop court");
     }

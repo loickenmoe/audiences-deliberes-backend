@@ -239,7 +239,9 @@ class JournalAudiencesServiceTest {
 
     @Test
     void attendus_refusentUneFenetreInversee() {
-        assertThatThrownBy(() -> service.comptesRendusAttendus(LocalDate.now(), LocalDate.now().minusDays(5), PAGE))
+        var date = LocalDate.now();
+        var date2 = LocalDate.now().minusDays(5);
+        assertThatThrownBy(() -> service.comptesRendusAttendus(date, date2, PAGE))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("précéder");
     }

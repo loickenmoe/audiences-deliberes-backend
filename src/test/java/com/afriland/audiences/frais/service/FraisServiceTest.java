@@ -106,7 +106,8 @@ class FraisServiceTest {
         when(avocatRepository.findByCompteKeycloak("kc-avocat")).thenReturn(Optional.of(avocat));
         when(dossierAvocatRepository.existsByDossierIdAndAvocatId(1L, 5L)).thenReturn(false);
 
-        assertThatThrownBy(() -> service.deposer(new DeposerFraisRequest(1L, 1_000_000d, List.of("piece.pdf"), "FAC-001")))
+        var requete = new DeposerFraisRequest(1L, 1_000_000d, List.of("piece.pdf"), "FAC-001");
+        assertThatThrownBy(() -> service.deposer(requete))
                 .isInstanceOf(ApiException.class);
     }
 
@@ -118,7 +119,8 @@ class FraisServiceTest {
         when(dossierAvocatRepository.existsByDossierIdAndAvocatId(1L, 5L)).thenReturn(true);
         when(demandeFraisRepository.existsByReferenceFacture("FAC-001")).thenReturn(true);
 
-        assertThatThrownBy(() -> service.deposer(new DeposerFraisRequest(1L, 1_000_000d, List.of("piece.pdf"), "FAC-001")))
+        var requete = new DeposerFraisRequest(1L, 1_000_000d, List.of("piece.pdf"), "FAC-001");
+        assertThatThrownBy(() -> service.deposer(requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("FAC-001");
     }
@@ -151,7 +153,8 @@ class FraisServiceTest {
                 .statutCircuit(StatutCircuitFrais.CONFORMITE).build();
         when(demandeFraisRepository.findById(100L)).thenReturn(Optional.of(demande));
 
-        assertThatThrownBy(() -> service.controlerConformite(100L, new ControleConformiteRequest(true, null)))
+        var requete = new ControleConformiteRequest(true, null);
+        assertThatThrownBy(() -> service.controlerConformite(100L, requete))
                 .isInstanceOf(ApiException.class);
     }
 
@@ -176,7 +179,8 @@ class FraisServiceTest {
         when(demandeFraisRepository.findById(100L)).thenReturn(Optional.of(demande));
         when(currentUserService.getCurrentUser()).thenReturn(assistante);
 
-        assertThatThrownBy(() -> service.controlerConformite(100L, new ControleConformiteRequest(false, null)))
+        var requete = new ControleConformiteRequest(false, null);
+        assertThatThrownBy(() -> service.controlerConformite(100L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("motif");
     }
@@ -321,7 +325,8 @@ class FraisServiceTest {
         when(validationFraisRepository.findByDemandeFraisIdAndEtape(100L, EtapeValidationFrais.CONJOINTE_DJ))
                 .thenReturn(Optional.of(com.afriland.audiences.frais.domain.ValidationFrais.builder().id(1L).build()));
 
-        assertThatThrownBy(() -> service.validerConjointement(100L, new ValidationConjointeRequest(true, null)))
+        var requete = new ValidationConjointeRequest(true, null);
+        assertThatThrownBy(() -> service.validerConjointement(100L, requete))
                 .isInstanceOf(ApiException.class);
     }
 

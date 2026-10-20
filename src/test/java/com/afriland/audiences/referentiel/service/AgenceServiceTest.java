@@ -136,7 +136,8 @@ class AgenceServiceTest {
     void creer_refuseUnCodeDejaPorte() {
         when(agenceRepository.existsByCode("00002")).thenReturn(true);
 
-        assertThatThrownBy(() -> service.creer(requete("00002", "BONANJO BIS", "Douala", null)))
+        var requete = requete("00002", "BONANJO BIS", "Douala", null);
+        assertThatThrownBy(() -> service.creer(requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("porte déjà le code 00002");
 
@@ -151,7 +152,8 @@ class AgenceServiceTest {
     void modifier_refuseLeChangementDeCode() {
         when(agenceRepository.findById(1L)).thenReturn(Optional.of(bonanjo));
 
-        assertThatThrownBy(() -> service.modifier(1L, requete("00999", "BONANJO", "Douala", true)))
+        var requete = requete("00999", "BONANJO", "Douala", true);
+        assertThatThrownBy(() -> service.modifier(1L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("ne se modifie pas");
 
@@ -181,7 +183,8 @@ class AgenceServiceTest {
     void modifier_signaleUneAgenceIntrouvable() {
         when(agenceRepository.findById(404L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.modifier(404L, requete("00002", "BONANJO", "Douala", true)))
+        var requete = requete("00002", "BONANJO", "Douala", true);
+        assertThatThrownBy(() -> service.modifier(404L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("Agence introuvable");
     }

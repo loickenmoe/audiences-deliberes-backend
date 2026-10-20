@@ -78,8 +78,8 @@ class DecisionDefinitiveServiceTest {
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
         when(etapeProcedureRepository.findById(2L)).thenReturn(Optional.of(etapeEnCours));
 
-        assertThatThrownBy(() -> service.creerAdjudication(1L,
-                new CreerAdjudicationRequest(2L, "Banque", "COMPTABILISE", true, false, false, 0d, LocalDate.now())))
+        var requete = new CreerAdjudicationRequest(2L, "Banque", "COMPTABILISE", true, false, false, 0d, LocalDate.now());
+        assertThatThrownBy(() -> service.creerAdjudication(1L, requete))
                 .isInstanceOf(ApiException.class);
     }
 
@@ -126,8 +126,8 @@ class DecisionDefinitiveServiceTest {
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
         when(etapeProcedureRepository.findById(2L)).thenReturn(Optional.of(etapeEnCours));
 
-        assertThatThrownBy(() -> service.creerCondamnation(1L,
-                new CreerCondamnationRequest(2L, SensCondamnation.BANQUE_REDEVABLE, "Dommages-intérêts", LocalDate.now())))
+        var requete = new CreerCondamnationRequest(2L, SensCondamnation.BANQUE_REDEVABLE, "Dommages-intérêts", LocalDate.now());
+        assertThatThrownBy(() -> service.creerCondamnation(1L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("CLOTURE");
         verify(decisionDefinitiveRepository, never()).save(any());
@@ -138,8 +138,8 @@ class DecisionDefinitiveServiceTest {
     void creerCondamnation_refuseeSansEtape() {
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
 
-        assertThatThrownBy(() -> service.creerCondamnation(1L,
-                new CreerCondamnationRequest(null, SensCondamnation.BANQUE_REDEVABLE, "Dommages-intérêts", LocalDate.now())))
+        var requete = new CreerCondamnationRequest(null, SensCondamnation.BANQUE_REDEVABLE, "Dommages-intérêts", LocalDate.now());
+        assertThatThrownBy(() -> service.creerCondamnation(1L, requete))
                 .isInstanceOf(ApiException.class);
         verify(decisionDefinitiveRepository, never()).save(any());
     }
@@ -148,8 +148,8 @@ class DecisionDefinitiveServiceTest {
     void modifierStatutCondamnation_rejectsUnknownId() {
         when(decisionDefinitiveRepository.findById(200L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.modifierStatutCondamnation(200L,
-                new ModifierStatutCondamnationRequest(StatutPaiementCondamnation.PAYE)))
+        var requete = new ModifierStatutCondamnationRequest(StatutPaiementCondamnation.PAYE);
+        assertThatThrownBy(() -> service.modifierStatutCondamnation(200L, requete))
                 .isInstanceOf(ApiException.class);
     }
 
@@ -158,8 +158,8 @@ class DecisionDefinitiveServiceTest {
         Adjudication adjudication = Adjudication.builder().id(100L).dossier(dossier).build();
         when(decisionDefinitiveRepository.findById(100L)).thenReturn(Optional.of(adjudication));
 
-        assertThatThrownBy(() -> service.modifierStatutCondamnation(100L,
-                new ModifierStatutCondamnationRequest(StatutPaiementCondamnation.PAYE)))
+        var requete = new ModifierStatutCondamnationRequest(StatutPaiementCondamnation.PAYE);
+        assertThatThrownBy(() -> service.modifierStatutCondamnation(100L, requete))
                 .isInstanceOf(ApiException.class);
     }
 

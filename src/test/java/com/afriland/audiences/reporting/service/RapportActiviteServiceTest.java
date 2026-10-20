@@ -237,8 +237,8 @@ class RapportActiviteServiceTest {
     void leDetailEstTenuParLeMemePerimetre() {
         when(currentUserService.getCurrentUser()).thenReturn(personne(7L, "Awa", "Ndiaye", "JURISTE"));
 
-        assertThatThrownBy(() -> service.detailler(9L, null, TypeActionHistorique.DOSSIER_CREE, DEBUT, FIN,
-                org.springframework.data.domain.PageRequest.of(0, 20)))
+        var valeur = org.springframework.data.domain.PageRequest.of(0, 20);
+        assertThatThrownBy(() -> service.detailler(9L, null, TypeActionHistorique.DOSSIER_CREE, DEBUT, FIN, valeur))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("votre propre activité");
     }
@@ -246,8 +246,8 @@ class RapportActiviteServiceTest {
     @Test
     @DisplayName("on ne détaille pas une nature que la fiche ne compte pas")
     void pasDeDetailSurUneNatureExclue() {
-        assertThatThrownBy(() -> service.detailler(null, null, TypeActionHistorique.AUDIT_CONSULTE, DEBUT, FIN,
-                org.springframework.data.domain.PageRequest.of(0, 20)))
+        var valeur = org.springframework.data.domain.PageRequest.of(0, 20);
+        assertThatThrownBy(() -> service.detailler(null, null, TypeActionHistorique.AUDIT_CONSULTE, DEBUT, FIN, valeur))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("n'est pas comptée");
         // The refusal happens before any read: no need to know who asks to say no.

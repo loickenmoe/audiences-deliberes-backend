@@ -211,7 +211,8 @@ class RedacteurNotificationTest {
     @Test
     void un_canal_regle_inconnu_est_refuse() {
         Route inconnue = new Route("PIGEON", CanalEngine.EMAIL, "a@b.cm", null);
-        assertThatThrownBy(() -> redacteur.pourUtilisateur(TypeAlerte.ALARME, inconnue, new Contexte(null, null)))
+        var contexte = new Contexte(null, null);
+        assertThatThrownBy(() -> redacteur.pourUtilisateur(TypeAlerte.ALARME, inconnue, contexte))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

@@ -56,8 +56,9 @@ class JurisprudenceServiceTest {
     void creer_rejectsEmptyFile() {
         MockMultipartFile vide = new MockMultipartFile("file", "", "application/pdf", new byte[0]);
 
-        assertThatThrownBy(() -> service.creer(null, TypeArchiveJurisprudence.GROSSE, List.of("saisie"),
-                "Recouvrement", "TGI Douala", LocalDate.now(), vide))
+        List<String> motsCles = List.of("saisie");
+        var date = LocalDate.now();
+        assertThatThrownBy(() -> service.creer(null, TypeArchiveJurisprudence.GROSSE, motsCles, "Recouvrement", "TGI Douala", date, vide))
                 .isInstanceOf(ApiException.class);
     }
 
@@ -66,8 +67,9 @@ class JurisprudenceServiceTest {
         MockMultipartFile fichier = new MockMultipartFile("file", "decision.docx",
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document", new byte[]{1, 2, 3});
 
-        assertThatThrownBy(() -> service.creer(null, TypeArchiveJurisprudence.GROSSE, List.of("saisie"),
-                "Recouvrement", "TGI Douala", LocalDate.now(), fichier))
+        List<String> motsCles = List.of("saisie");
+        var date = LocalDate.now();
+        assertThatThrownBy(() -> service.creer(null, TypeArchiveJurisprudence.GROSSE, motsCles, "Recouvrement", "TGI Douala", date, fichier))
                 .isInstanceOf(ApiException.class);
     }
 
@@ -76,8 +78,9 @@ class JurisprudenceServiceTest {
         byte[] gros = new byte[11 * 1024 * 1024];
         MockMultipartFile fichier = new MockMultipartFile("file", "decision.pdf", "application/pdf", gros);
 
-        assertThatThrownBy(() -> service.creer(null, TypeArchiveJurisprudence.GROSSE, List.of("saisie"),
-                "Recouvrement", "TGI Douala", LocalDate.now(), fichier))
+        List<String> motsCles = List.of("saisie");
+        var date = LocalDate.now();
+        assertThatThrownBy(() -> service.creer(null, TypeArchiveJurisprudence.GROSSE, motsCles, "Recouvrement", "TGI Douala", date, fichier))
                 .isInstanceOf(ApiException.class);
     }
 
@@ -85,8 +88,9 @@ class JurisprudenceServiceTest {
     void creer_rejectsEmptyMotsCles() {
         MockMultipartFile fichier = new MockMultipartFile("file", "decision.pdf", "application/pdf", new byte[]{1, 2, 3});
 
-        assertThatThrownBy(() -> service.creer(null, TypeArchiveJurisprudence.GROSSE, List.of(),
-                "Recouvrement", "TGI Douala", LocalDate.now(), fichier))
+        List<String> motsCles = List.of();
+        var date = LocalDate.now();
+        assertThatThrownBy(() -> service.creer(null, TypeArchiveJurisprudence.GROSSE, motsCles, "Recouvrement", "TGI Douala", date, fichier))
                 .isInstanceOf(ApiException.class);
     }
 
@@ -144,8 +148,9 @@ class JurisprudenceServiceTest {
         when(etapeProcedureRepository.existsByDossierIdAndStatutCycleVieNotIn(1L, StatutCycleVie.FERMES))
                 .thenReturn(true);
 
-        assertThatThrownBy(() -> service.creer(1L, TypeArchiveJurisprudence.EXPEDITION, List.of("hypotheque"),
-                "Recouvrement", "TGI Douala", LocalDate.now(), fichier))
+        List<String> motsCles = List.of("hypotheque");
+        var date = LocalDate.now();
+        assertThatThrownBy(() -> service.creer(1L, TypeArchiveJurisprudence.EXPEDITION, motsCles, "Recouvrement", "TGI Douala", date, fichier))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("encore une étape en cours")
                 .hasMessageContaining("définitive");

@@ -67,14 +67,16 @@ class WebSocketAuthInterceptorTest {
 
     @Test
     void connectSansEnteteAuthorization_estRefuse() {
-        assertThatThrownBy(() -> interceptor.preSend(trame(StompCommand.CONNECT, null), channel))
+        var trame = trame(StompCommand.CONNECT, null);
+        assertThatThrownBy(() -> interceptor.preSend(trame, channel))
                 .isInstanceOf(AccessDeniedException.class)
                 .hasMessageContaining("Authorization");
     }
 
     @Test
     void connectAvecSchemaNonBearer_estRefuse() {
-        assertThatThrownBy(() -> interceptor.preSend(trame(StompCommand.CONNECT, "Basic dXNlcjpwYXNz"), channel))
+        var trame = trame(StompCommand.CONNECT, "Basic dXNlcjpwYXNz");
+        assertThatThrownBy(() -> interceptor.preSend(trame, channel))
                 .isInstanceOf(AccessDeniedException.class);
     }
 
@@ -82,13 +84,15 @@ class WebSocketAuthInterceptorTest {
     void connectAvecJetonInvalide_estRefuse() {
         when(jwtDecoder.decode("faux")).thenThrow(new JwtException("signature invalide"));
 
-        assertThatThrownBy(() -> interceptor.preSend(trame(StompCommand.CONNECT, "Bearer faux"), channel))
+        var trame = trame(StompCommand.CONNECT, "Bearer faux");
+        assertThatThrownBy(() -> interceptor.preSend(trame, channel))
                 .isInstanceOf(AccessDeniedException.class);
     }
 
     @Test
     void trameNonConnectSansSessionAuthentifiee_estRefusee() {
-        assertThatThrownBy(() -> interceptor.preSend(trame(StompCommand.SUBSCRIBE, null), channel))
+        var trame = trame(StompCommand.SUBSCRIBE, null);
+        assertThatThrownBy(() -> interceptor.preSend(trame, channel))
                 .isInstanceOf(AccessDeniedException.class)
                 .hasMessageContaining("non authentifiée");
     }

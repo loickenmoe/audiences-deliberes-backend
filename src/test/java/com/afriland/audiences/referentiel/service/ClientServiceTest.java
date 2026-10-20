@@ -123,7 +123,8 @@ class ClientServiceTest {
     void creerClient_signaleUneReferenceAttribueeDejaPortee() {
         when(clientRepository.findByReference("CLI-2026-0001")).thenReturn(Optional.of(client));
 
-        assertThatThrownBy(() -> service.creerClient(new CreerClientRequest("Autre", null, null)))
+        var requete = new CreerClientRequest("Autre", null, null);
+        assertThatThrownBy(() -> service.creerClient(requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("désynchronisé")
                 .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.type(ApiException.class))
@@ -212,7 +213,8 @@ class ClientServiceTest {
     void modifierClientInexistant_renvoie404() {
         when(clientRepository.findById(99L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.modifierClient(99L, new ModifierClientRequest("X", null, null)))
+        var requete = new ModifierClientRequest("X", null, null);
+        assertThatThrownBy(() -> service.modifierClient(99L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("Client introuvable");
         verifyNoInteractions(historiqueActionService);

@@ -67,8 +67,9 @@ class SignatureServiceTest {
      */
     @Test
     void deposer_refuseUnFormatQueLaLettreNeSauraitApposer() {
+        var fichier2 = new MockMultipartFile("fichier", "sig.svg", "image/svg+xml", PNG);
         assertThatThrownBy(() -> service.deposer(
-                new MockMultipartFile("fichier", "sig.svg", "image/svg+xml", PNG)))
+                fichier2))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("PNG ou en JPEG");
 
@@ -80,8 +81,9 @@ class SignatureServiceTest {
     void deposer_refuseUneImageTropLourde() {
         byte[] tropGros = new byte[200_001];
 
+        var fichier2 = new MockMultipartFile("fichier", "sig.png", "image/png", tropGros);
         assertThatThrownBy(() -> service.deposer(
-                new MockMultipartFile("fichier", "sig.png", "image/png", tropGros)))
+                fichier2))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("200 Ko");
 
@@ -90,8 +92,9 @@ class SignatureServiceTest {
 
     @Test
     void deposer_refuseUnFichierVide() {
+        var fichier2 = new MockMultipartFile("fichier", "sig.png", "image/png", new byte[0]);
         assertThatThrownBy(() -> service.deposer(
-                new MockMultipartFile("fichier", "sig.png", "image/png", new byte[0])))
+                fichier2))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("Aucun fichier");
     }

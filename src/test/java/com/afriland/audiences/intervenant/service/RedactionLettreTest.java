@@ -147,7 +147,8 @@ class RedactionLettreTest {
                 .thenReturn(Utilisateur.builder().id(77L).nom("Autre").prenom("Juriste")
                         .profil(Profil.builder().code("JURISTE").build()).build());
 
-        assertThatThrownBy(() -> service.redigerLettre(100L, requete(null)))
+        var requete = requete(null);
+        assertThatThrownBy(() -> service.redigerLettre(100L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("appartient au demandeur");
         // The refusal is total: nothing is saved, nothing is logged.
@@ -181,7 +182,8 @@ class RedactionLettreTest {
         gelee.setDateGeneration(LocalDateTime.now());
         when(lettreConstitutionRepository.findByDemandeId(100L)).thenReturn(Optional.of(gelee));
 
-        assertThatThrownBy(() -> service.redigerLettre(100L, requete(34)))
+        var requete = requete(34);
+        assertThatThrownBy(() -> service.redigerLettre(100L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("ne peut plus être modifiée");
         // Nothing is saved: the refusal must be total, not partial.
@@ -195,7 +197,8 @@ class RedactionLettreTest {
         when(lettreConstitutionRepository.findByDemandeId(100L)).thenReturn(Optional.of(brouillon()));
         when(lettreConstitutionRepository.existsByNumero(33)).thenReturn(true);
 
-        assertThatThrownBy(() -> service.redigerLettre(100L, requete(33)))
+        var requete = requete(33);
+        assertThatThrownBy(() -> service.redigerLettre(100L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("déjà porté");
     }

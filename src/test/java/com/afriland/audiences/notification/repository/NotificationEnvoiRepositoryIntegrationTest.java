@@ -88,8 +88,9 @@ class NotificationEnvoiRepositoryIntegrationTest {
     void un_eventId_deja_present_est_refuse_par_la_base() {
         repository.saveAndFlush(NotificationEnvoi.aRemettre(origine("alerte-4"), CanalEngine.EMAIL, "a@b.cm", "s", "x"));
 
+        var aRemettre = NotificationEnvoi.aRemettre(origine("alerte-4"), CanalEngine.EMAIL, "c@d.cm", "s", "y");
         assertThatThrownBy(() -> repository.saveAndFlush(
-                NotificationEnvoi.aRemettre(origine("alerte-4"), CanalEngine.EMAIL, "c@d.cm", "s", "y")))
+                aRemettre))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 

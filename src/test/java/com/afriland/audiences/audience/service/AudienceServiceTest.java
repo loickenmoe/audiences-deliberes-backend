@@ -90,8 +90,8 @@ class AudienceServiceTest {
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
         when(etapeProcedureRepository.findById(10L)).thenReturn(Optional.of(etapeOuverture));
 
-        assertThatThrownBy(() -> service.planifierAudience(1L,
-                new PlanifierAudienceRequest(10L, LocalDate.now().plusDays(5), null), false))
+        var requete = new PlanifierAudienceRequest(10L, LocalDate.now().plusDays(5), null);
+        assertThatThrownBy(() -> service.planifierAudience(1L, requete, false))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("EN_COURS");
     }
@@ -198,8 +198,8 @@ class AudienceServiceTest {
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
         when(etapeProcedureRepository.findById(10L)).thenReturn(Optional.of(etapeEnCours));
 
-        assertThatThrownBy(() -> service.planifierAudience(1L,
-                new PlanifierAudienceRequest(10L, dossier.getCreatedAt().toLocalDate().minusDays(1), null), false))
+        var requete = new PlanifierAudienceRequest(10L, dossier.getCreatedAt().toLocalDate().minusDays(1), null);
+        assertThatThrownBy(() -> service.planifierAudience(1L, requete, false))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("ouverture du dossier");
     }
@@ -210,8 +210,8 @@ class AudienceServiceTest {
         when(etapeProcedureRepository.findById(10L)).thenReturn(Optional.of(etapeEnCours));
         when(audienceRepository.existsByEtapeIdAndDatePlanifieeAndStatutNot(10L, LocalDate.now().plusDays(5), StatutAudience.ANNULEE)).thenReturn(true);
 
-        assertThatThrownBy(() -> service.planifierAudience(1L,
-                new PlanifierAudienceRequest(10L, LocalDate.now().plusDays(5), null), false))
+        var requete = new PlanifierAudienceRequest(10L, LocalDate.now().plusDays(5), null);
+        assertThatThrownBy(() -> service.planifierAudience(1L, requete, false))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("existe déjà");
         verify(alerteService, never()).declencher(any(), any(), any(), any());
@@ -262,7 +262,8 @@ class AudienceServiceTest {
                 .statut(StatutAudience.PLANIFIEE).build();
         when(audienceRepository.findById(5L)).thenReturn(Optional.of(audience));
 
-        assertThatThrownBy(() -> service.enregistrerCompteRendu(5L, new EnregistrerCompteRenduRequest("Compte rendu")))
+        var requete = new EnregistrerCompteRenduRequest("Compte rendu");
+        assertThatThrownBy(() -> service.enregistrerCompteRendu(5L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("après la tenue");
     }
@@ -319,7 +320,8 @@ class AudienceServiceTest {
     void listerParDossier_dossierInconnu_retourne404() {
         when(dossierRepository.findById(999L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.listerParDossier(999L, PageRequest.of(0, 10)))
+        var pageRequest = PageRequest.of(0, 10);
+        assertThatThrownBy(() -> service.listerParDossier(999L, pageRequest))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("Dossier introuvable");
         verify(audienceRepository, never()).findByDossierIdOrderByDatePlanifieeDesc(any(), any());
@@ -347,7 +349,8 @@ class AudienceServiceTest {
                 .statut(StatutAudience.TENUE).build();
         when(audienceRepository.findById(5L)).thenReturn(Optional.of(tenue));
 
-        assertThatThrownBy(() -> service.annulerAudience(5L, new AnnulerAudienceRequest("Erreur")))
+        var requete = new AnnulerAudienceRequest("Erreur");
+        assertThatThrownBy(() -> service.annulerAudience(5L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("Seule une audience planifiée");
         verify(audienceRepository, never()).save(any());
@@ -359,7 +362,8 @@ class AudienceServiceTest {
                 .statut(StatutAudience.ANNULEE).motifAnnulation("Renvoi").dateAnnulation(LocalDateTime.now()).build();
         when(audienceRepository.findById(5L)).thenReturn(Optional.of(annulee));
 
-        assertThatThrownBy(() -> service.enregistrerCompteRendu(5L, new EnregistrerCompteRenduRequest("CR")))
+        var requete = new EnregistrerCompteRenduRequest("CR");
+        assertThatThrownBy(() -> service.enregistrerCompteRendu(5L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("annulée");
         verify(audienceRepository, never()).save(any());

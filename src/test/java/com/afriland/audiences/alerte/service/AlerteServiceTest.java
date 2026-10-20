@@ -211,8 +211,10 @@ class AlerteServiceTest {
 
     @Test
     void statistiquesDiffusion_refuseUneFenetreInversee() {
+        var date2 = LocalDate.of(2026, 9, 30);
+        var date3 = LocalDate.of(2026, 9, 1);
         assertThatThrownBy(() -> alerteService.statistiquesDiffusion(
-                LocalDate.of(2026, 9, 30), LocalDate.of(2026, 9, 1)))
+                date2, date3))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("date de début");
     }

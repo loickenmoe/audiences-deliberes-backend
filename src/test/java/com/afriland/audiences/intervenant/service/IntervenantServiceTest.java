@@ -71,8 +71,8 @@ class IntervenantServiceTest {
 
     @Test
     void creerAvocat_sansCompteKeycloak_estRefuse() {
-        assertThatThrownBy(() -> service.creer(new CreerIntervenantRequest(
-                TypeIntervenant.AVOCAT, "Me Fotso", null, null, "  ", null)))
+        var requete = new CreerIntervenantRequest( TypeIntervenant.AVOCAT, "Me Fotso", null, null, "  ", null);
+        assertThatThrownBy(() -> service.creer(requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("compte Keycloak");
         verify(avocatRepository, never()).save(any());
@@ -83,8 +83,8 @@ class IntervenantServiceTest {
         when(avocatRepository.findByCompteKeycloak("kc-1"))
                 .thenReturn(Optional.of(Avocat.builder().id(9L).compteKeycloak("kc-1").build()));
 
-        assertThatThrownBy(() -> service.creer(new CreerIntervenantRequest(
-                TypeIntervenant.AVOCAT, "Me Doublon", null, null, "kc-1", null)))
+        var requete = new CreerIntervenantRequest( TypeIntervenant.AVOCAT, "Me Doublon", null, null, "kc-1", null);
+        assertThatThrownBy(() -> service.creer(requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("déjà rattaché")
                 .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.type(ApiException.class))
@@ -122,8 +122,8 @@ class IntervenantServiceTest {
 
     @Test
     void creerAutrePrestataire_avecCompteKeycloak_estRefuse() {
-        assertThatThrownBy(() -> service.creer(new CreerIntervenantRequest(
-                TypeIntervenant.AUTRE_PRESTATAIRE, "Notaire", null, null, "kc-3", null)))
+        var requete = new CreerIntervenantRequest( TypeIntervenant.AUTRE_PRESTATAIRE, "Notaire", null, null, "kc-3", null);
+        assertThatThrownBy(() -> service.creer(requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("aucun compte");
     }
@@ -187,8 +187,8 @@ class IntervenantServiceTest {
      */
     @Test
     void creerAvocat_auTelephoneHorsFormat_estRefuse() {
-        assertThatThrownBy(() -> service.creer(new CreerIntervenantRequest(
-                TypeIntervenant.AVOCAT, "Me Fotso", null, "0699887766", "kc-tel2", null)))
+        var requete = new CreerIntervenantRequest( TypeIntervenant.AVOCAT, "Me Fotso", null, "0699887766", "kc-tel2", null);
+        assertThatThrownBy(() -> service.creer(requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("Numéro de téléphone invalide");
         verify(avocatRepository, never()).save(any());
@@ -196,8 +196,8 @@ class IntervenantServiceTest {
 
     @Test
     void creerAutrePrestataire_auCourrielSansDomaine_estRefuse() {
-        assertThatThrownBy(() -> service.creer(new CreerIntervenantRequest(
-                TypeIntervenant.AUTRE_PRESTATAIRE, "Notaire Kamga", "notaire@etude", null, null, true)))
+        var requete = new CreerIntervenantRequest( TypeIntervenant.AUTRE_PRESTATAIRE, "Notaire Kamga", "notaire@etude", null, null, true);
+        assertThatThrownBy(() -> service.creer(requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("courriel invalide");
         verify(intervenantRepository, never()).save(any());
@@ -212,8 +212,8 @@ class IntervenantServiceTest {
                 new ModifierIntervenantRequest("Me Fotso", "me@cab.cm", "+237 699 88 77 66", true));
         assertThat(corrige.telephone()).isEqualTo("+237699887766");
 
-        assertThatThrownBy(() -> service.modifier(7L,
-                new ModifierIntervenantRequest("Me Fotso", "me@cab.cm", "12345", true)))
+        var requete = new ModifierIntervenantRequest("Me Fotso", "me@cab.cm", "12345", true);
+        assertThatThrownBy(() -> service.modifier(7L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("Numéro de téléphone invalide");
     }
@@ -309,7 +309,8 @@ class IntervenantServiceTest {
     void modifierIntervenantInexistant_renvoie404() {
         when(intervenantRepository.findById(99L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.modifier(99L, new ModifierIntervenantRequest("X", null, null, null)))
+        var requete = new ModifierIntervenantRequest("X", null, null, null);
+        assertThatThrownBy(() -> service.modifier(99L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("Intervenant introuvable");
     }

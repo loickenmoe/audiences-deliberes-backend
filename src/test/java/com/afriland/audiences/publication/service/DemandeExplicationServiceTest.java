@@ -129,8 +129,9 @@ class DemandeExplicationServiceTest {
         when(demandeExplicationRepository.existsByAvocatIdAndDateReponseIsNull(AVOCAT_ID))
                 .thenReturn(true);
 
+        var requete = new DemanderExplicationRequest(AVOCAT_ID, null, "Encore une.");
         assertThatThrownBy(() -> service.demander(
-                new DemanderExplicationRequest(AVOCAT_ID, null, "Encore une.")))
+                requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("déjà en attente");
 
@@ -159,8 +160,9 @@ class DemandeExplicationServiceTest {
     void demande_avocatInconnu() {
         when(intervenantRepository.findById(AVOCAT_ID)).thenReturn(Optional.empty());
 
+        var requete = new DemanderExplicationRequest(AVOCAT_ID, null, "Expliquez-vous.");
         assertThatThrownBy(() -> service.demander(
-                new DemanderExplicationRequest(AVOCAT_ID, null, "Expliquez-vous.")))
+                requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("Aucun avocat");
     }
@@ -204,7 +206,8 @@ class DemandeExplicationServiceTest {
         when(compteAvocatService.avocatDe(compteTiers))
                 .thenReturn(Optional.of(Avocat.builder().id(77L).nom("Cabinet NANA").build()));
 
-        assertThatThrownBy(() -> service.repondre(1L, new RepondreExplicationRequest("Ce n'est pas moi.")))
+        var requete = new RepondreExplicationRequest("Ce n'est pas moi.");
+        assertThatThrownBy(() -> service.repondre(1L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("ne vous est pas adressée");
 
@@ -226,7 +229,8 @@ class DemandeExplicationServiceTest {
         when(currentUserService.getCurrentUser()).thenReturn(compteAvocat);
         when(compteAvocatService.avocatDe(compteAvocat)).thenReturn(Optional.of(avocat));
 
-        assertThatThrownBy(() -> service.repondre(1L, new RepondreExplicationRequest("Je me reprends.")))
+        var requete = new RepondreExplicationRequest("Je me reprends.");
+        assertThatThrownBy(() -> service.repondre(1L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("déjà répondu");
 
@@ -241,7 +245,8 @@ class DemandeExplicationServiceTest {
         when(currentUserService.getCurrentUser()).thenReturn(orphelin);
         when(compteAvocatService.avocatDe(orphelin)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.repondre(1L, new RepondreExplicationRequest("Bonjour.")))
+        var requete = new RepondreExplicationRequest("Bonjour.");
+        assertThatThrownBy(() -> service.repondre(1L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("Aucun avocat du référentiel");
     }

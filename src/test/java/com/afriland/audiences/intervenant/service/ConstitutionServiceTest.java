@@ -127,7 +127,8 @@ class ConstitutionServiceTest {
                 .statut(StatutConstitution.VALIDEE).build();
         when(demandeConstitutionRepository.findById(100L)).thenReturn(Optional.of(demande));
 
-        assertThatThrownBy(() -> service.valider(100L, new ValiderConstitutionRequest(StatutConstitution.VALIDEE, null)))
+        var requete = new ValiderConstitutionRequest(StatutConstitution.VALIDEE, null);
+        assertThatThrownBy(() -> service.valider(100L, requete))
                 .isInstanceOf(ApiException.class);
     }
 
@@ -138,7 +139,8 @@ class ConstitutionServiceTest {
         when(demandeConstitutionRepository.findById(100L)).thenReturn(Optional.of(demande));
         when(currentUserService.getCurrentUser()).thenReturn(sh);
 
-        assertThatThrownBy(() -> service.valider(100L, new ValiderConstitutionRequest(StatutConstitution.REJETEE, null)))
+        var requete = new ValiderConstitutionRequest(StatutConstitution.REJETEE, null);
+        assertThatThrownBy(() -> service.valider(100L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("motif");
     }

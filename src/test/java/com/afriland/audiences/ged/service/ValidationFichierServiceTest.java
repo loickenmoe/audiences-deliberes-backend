@@ -83,14 +83,16 @@ class ValidationFichierServiceTest {
 
     @Test
     void valider_refuseUnFormatInconnu() {
-        assertThatThrownBy(() -> service.valider(fichier("texte.odt")))
+        var fichier = fichier("texte.odt");
+        assertThatThrownBy(() -> service.valider(fichier))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("non conforme");
     }
 
     @Test
     void valider_refuseUnFichierSansExtension() {
-        assertThatThrownBy(() -> service.valider(fichier("conclusions")))
+        var fichier = fichier("conclusions");
+        assertThatThrownBy(() -> service.valider(fichier))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("extension");
     }
@@ -101,7 +103,8 @@ class ValidationFichierServiceTest {
         when(configurationService.getOrThrow("FORMATS_GED"))
                 .thenReturn(ConfigurationSysteme.builder().valeur("PDF,PNG,JPG").build());
 
-        assertThatThrownBy(() -> service.valider(fichier("conclusions.docx")))
+        var fichier = fichier("conclusions.docx");
+        assertThatThrownBy(() -> service.valider(fichier))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("désactivé");
     }
@@ -111,7 +114,8 @@ class ValidationFichierServiceTest {
         when(configurationService.getOrThrow("TAILLE_MAX_GED"))
                 .thenReturn(ConfigurationSysteme.builder().valeur("2").build());
 
-        assertThatThrownBy(() -> service.valider(fichier("conclusions.docx")))
+        var fichier = fichier("conclusions.docx");
+        assertThatThrownBy(() -> service.valider(fichier))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("supérieur au maximum");
     }
