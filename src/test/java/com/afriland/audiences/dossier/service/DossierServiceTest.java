@@ -782,7 +782,9 @@ class DossierServiceTest {
         FiltresDossiers filtres = new FiltresDossiers(null, null, null, null, null, null, null, null, null,
                 LocalDate.of(2026, 9, 30), LocalDate.of(2026, 9, 1));
 
-        assertThatThrownBy(() -> service.listerDossiers(filtres, false, PageRequest.of(0, 10)))
+        PageRequest premiere = PageRequest.of(0, 10);
+
+        assertThatThrownBy(() -> service.listerDossiers(filtres, false, premiere))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("La date de début doit précéder la date de fin");
     }
@@ -790,8 +792,9 @@ class DossierServiceTest {
     @Test
     void historique_dossierInexistant() {
         when(dossierRepository.findById(404L)).thenReturn(Optional.empty());
+        PageRequest premiere = PageRequest.of(0, 10);
 
-        assertThatThrownBy(() -> service.historique(404L, PageRequest.of(0, 10)))
+        assertThatThrownBy(() -> service.historique(404L, premiere))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("Dossier introuvable : 404");
     }
@@ -812,7 +815,9 @@ class DossierServiceTest {
                 .thenReturn(List.of(DossierJuriste.builder().utilisateur(juriste).build()));
         when(dossierAvocatRepository.findByDossierId(5L)).thenReturn(List.of());
 
-        assertThatThrownBy(() -> service.modifierAffectation(5L, new ModifierAffectationRequest(List.of(10L), null), false))
+        ModifierAffectationRequest memeJuriste = new ModifierAffectationRequest(List.of(10L), null);
+
+        assertThatThrownBy(() -> service.modifierAffectation(5L, memeJuriste, false))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("forcer=true");
         verify(dossierJuristeRepository, never()).save(any());
@@ -825,7 +830,9 @@ class DossierServiceTest {
         when(etapeProcedureRepository.findById(77L)).thenReturn(Optional.of(EtapeProcedure.builder().id(77L)
                 .dossier(autre).type(TypeEtape.INSTANCE).statutCycleVie(StatutCycleVie.EN_COURS).build()));
 
-        assertThatThrownBy(() -> service.modifierStatutEtape(5L, 77L, new ModifierStatutEtapeRequest(StatutCycleVie.EN_DELIBERE)))
+        ModifierStatutEtapeRequest miseEnDelibere = new ModifierStatutEtapeRequest(StatutCycleVie.EN_DELIBERE);
+
+        assertThatThrownBy(() -> service.modifierStatutEtape(5L, 77L, miseEnDelibere))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("Étape introuvable pour ce dossier : 77");
     }
@@ -834,7 +841,9 @@ class DossierServiceTest {
     void derogation_seTrancheParLaValidationTantQueLaDiligenceEstEnAttente() {
         when(dossierRepository.findById(5L)).thenReturn(Optional.of(dossierSensible(StatutValidation.EN_ATTENTE)));
 
-        assertThatThrownBy(() -> service.validerDerogationSeuil(5L, 1L, new ValiderDerogationRequest(StatutValidation.VALIDEE, null)))
+        ValiderDerogationRequest validation = new ValiderDerogationRequest(StatutValidation.VALIDEE, null);
+
+        assertThatThrownBy(() -> service.validerDerogationSeuil(5L, 1L, validation))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("pas comme une dérogation");
     }
@@ -883,11 +892,15 @@ class DossierServiceTest {
         when(typeClientSensibleRepository.findByCodeIgnoreCase("INCONNU")).thenReturn(Optional.empty());
         when(typeClientSensibleRepository.findByCodeIgnoreCase("VIP")).thenReturn(Optional.of(new TypeClientSensible()));
 
-        assertThatThrownBy(() -> service.modifierSensibilite(5L, new ModifierSensibiliteRequest(true, null, "VIP", null)))
+        ModifierSensibiliteRequest sansSeuil = new ModifierSensibiliteRequest(true, null, "VIP", null);
+        ModifierSensibiliteRequest typeInconnu = new ModifierSensibiliteRequest(true, 1_000d, "INCONNU", null);
+        ModifierSensibiliteRequest complete = new ModifierSensibiliteRequest(true, 1_000d, "VIP", null);
+
+        assertThatThrownBy(() -> service.modifierSensibilite(5L, sansSeuil))
                 .hasMessageContaining("seuilMontant et typeClientSensible sont obligatoires");
-        assertThatThrownBy(() -> service.modifierSensibilite(5L, new ModifierSensibiliteRequest(true, 1_000d, "INCONNU", null)))
+        assertThatThrownBy(() -> service.modifierSensibilite(5L, typeInconnu))
                 .hasMessageContaining("Type de client inconnu du référentiel : INCONNU");
-        assertThatThrownBy(() -> service.modifierSensibilite(5L, new ModifierSensibiliteRequest(true, 1_000d, "VIP", null)))
+        assertThatThrownBy(() -> service.modifierSensibilite(5L, complete))
                 .hasMessageContaining("déjà suivi en diligence particulière");
         verify(dossierRepository, never()).save(any());
     }

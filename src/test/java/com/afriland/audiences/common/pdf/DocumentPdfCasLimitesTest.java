@@ -41,12 +41,12 @@ class DocumentPdfCasLimitesTest {
 
     @Test
     void paragrapheAbsent_neLaisseRien_etUnLongParagraphe_continueSurLaPageSuivante() throws Exception {
-        String long_ = String.join(" ", java.util.Collections.nCopies(1200, "audience")) + " FIN-DU-PARAGRAPHE";
+        String paragrapheLong = String.join(" ", java.util.Collections.nCopies(1200, "audience")) + " FIN-DU-PARAGRAPHE";
         byte[] pdf;
         try (DocumentPdf doc = new DocumentPdf(PDRectangle.A4, "Note", "Sous-titre", "Auteur", Locale.FRENCH)) {
             doc.nouvellePage();
             doc.paragraphe(null, 10f);
-            doc.paragraphe(long_, 10f);
+            doc.paragraphe(paragrapheLong, 10f);
             pdf = doc.finaliser();
         }
 
