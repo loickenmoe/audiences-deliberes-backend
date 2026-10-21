@@ -27,7 +27,11 @@ public final class Coordonnees {
     private static final Pattern CAMEROUN = Pattern.compile("(?:\\+?237)?(6\\d{8})");
     /** International form: country code of at least one digit, eight to fifteen digits in total. */
     private static final Pattern INTERNATIONAL = Pattern.compile("\\+[1-9]\\d{7,14}");
-    private static final Pattern COURRIEL = Pattern.compile("[^@\\s]+@[^@\\s]+\\.[^@\\s]+");
+    /**
+     * Local part, at sign, then a domain holding a dot that is neither its first nor its last
+     * character. Reaching that dot through dot-free characters keeps matching linear (no backtracking).
+     */
+    private static final Pattern COURRIEL = Pattern.compile("[^@\\s]+@[^@\\s][^@\\s.]*\\.[^@\\s]+");
 
     public static final String INDICATIF_CAMEROUN = "+237";
 

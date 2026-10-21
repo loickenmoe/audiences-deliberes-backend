@@ -1,11 +1,15 @@
 package com.afriland.audiences.notification.service;
 
+import java.time.Duration;
+
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 class CoordonneesTest {
 
@@ -100,5 +104,24 @@ class CoordonneesTest {
     @ValueSource(strings = {"sans-arobase", "a@b", "a b@c.cm", "a@@b.cm"})
     void courriel_refuseUneAdresseMalFormee(String saisie) {
         assertThat(Coordonnees.courriel(saisie)).isEmpty();
+    }
+
+    /** Edge cases of the domain part, pinned so the expression keeps accepting exactly the same set. */
+    @ParameterizedTest
+    @ValueSource(strings = {"x@.a.b", "x@a..", "x@a.b.c", "x@a..b", "x@a-b.c", "x.y@a.b"})
+    void courriel_domaineAvecUnPointNiInitialNiFinal_estAccepte(String saisie) {
+        assertThat(Coordonnees.courriel(saisie)).contains(saisie);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"x@a.", "x@.a", "x@.", "x@..", "x@ab", "@a.b", "x@a.b@c", "x@a.\tb"})
+    void courriel_domaineSansPointInterieur_estRefuse(String saisie) {
+        assertThat(Coordonnees.courriel(saisie)).isEmpty();
+    }
+
+    @Test
+    void courriel_longueSaisieMalFormee_estTraiteeEnTempsLineaire() {
+        String saisie = "a@" + "a.".repeat(50_000) + "@";
+        assertTimeoutPreemptively(Duration.ofSeconds(1), () -> assertThat(Coordonnees.courriel(saisie)).isEmpty());
     }
 }
