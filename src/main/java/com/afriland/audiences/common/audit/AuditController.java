@@ -47,7 +47,8 @@ public class AuditController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFin,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        return auditService.consulter(perimetre, dossierId, utilisateurId, code, dateDebut, dateFin, page, size);
+        return auditService.consulter(new FiltresAudit(perimetre, dossierId, utilisateurId, code, dateDebut, dateFin),
+                page, size);
     }
 
     /**

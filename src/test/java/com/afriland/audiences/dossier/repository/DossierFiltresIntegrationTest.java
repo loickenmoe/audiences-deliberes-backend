@@ -8,6 +8,7 @@ import com.afriland.audiences.dossier.domain.EtapeProcedure;
 import com.afriland.audiences.dossier.domain.StatutCycleVie;
 import com.afriland.audiences.dossier.domain.TypeEtape;
 import com.afriland.audiences.dossier.service.DossierSpecifications;
+import com.afriland.audiences.dossier.service.FiltresDossiers;
 import com.afriland.audiences.referentiel.domain.CategorieDossier;
 import com.afriland.audiences.referentiel.domain.Client;
 import com.afriland.audiences.referentiel.repository.ClientRepository;
@@ -211,8 +212,7 @@ class DossierFiltresIntegrationTest {
 
     private Page<Dossier> page(TypeEtape type, StatutCycleVie statut, LocalDate debut, LocalDate fin) {
         return dossierRepository.findAll(
-                DossierSpecifications.withFilters(null, null, null, null, null, null, null, null,
-                        type, statut, debut, fin),
+                DossierSpecifications.withFilters(new FiltresDossiers(null, null, null, null, null, null, null, type, statut, debut, fin), null),
                 PageRequest.of(0, 20));
     }
 

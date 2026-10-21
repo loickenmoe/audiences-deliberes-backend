@@ -85,7 +85,7 @@ class TransportsTest {
                 .thenReturn(CompletableFuture.completedFuture(null));
 
         PasserelleKafka passerelle = new PasserelleKafka(template, new ObjectMapper(), "notification-send-request", "attachment-upload-request", 10,
-                "kafka-pubsub", "audience-deliberer", false);
+                new PasserelleKafka.Enveloppe("kafka-pubsub", "audience-deliberer", false));
 
         assertThat(passerelle.publier(MESSAGE)).isEqualTo("KAFKA");
         org.mockito.ArgumentCaptor<String> charge = org.mockito.ArgumentCaptor.forClass(String.class);
@@ -105,7 +105,7 @@ class TransportsTest {
         when(template.send(anyString(), anyString(), anyString())).thenReturn(CompletableFuture.completedFuture(null));
 
         new PasserelleKafka(template, new ObjectMapper(), "notification-send-request", "attachment-upload-request", 10,
-                "kafka-pubsub", "audience-deliberer", true).publier(MESSAGE);
+                new PasserelleKafka.Enveloppe("kafka-pubsub", "audience-deliberer", true)).publier(MESSAGE);
 
         org.mockito.ArgumentCaptor<String> charge = org.mockito.ArgumentCaptor.forClass(String.class);
         org.mockito.Mockito.verify(template).send(anyString(), anyString(), charge.capture());
@@ -131,7 +131,7 @@ class TransportsTest {
                 .thenReturn(CompletableFuture.failedFuture(new IllegalStateException("courtier injoignable")));
 
         PasserelleKafka passerelle = new PasserelleKafka(template, new ObjectMapper(), "topic", "depot", 1,
-                "pubsub", "audience-deliberer", true);
+                new PasserelleKafka.Enveloppe("pubsub", "audience-deliberer", true));
 
         assertThatThrownBy(() -> passerelle.publier(MESSAGE))
                 .isInstanceOf(IllegalStateException.class)

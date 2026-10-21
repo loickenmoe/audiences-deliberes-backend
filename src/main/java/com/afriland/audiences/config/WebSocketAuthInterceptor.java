@@ -34,7 +34,9 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
     private final JwtDecoder jwtDecoder;
     private final JwtAuthenticationConverter jwtAuthenticationConverter;
 
+    // Signature imposed by ChannelInterceptor: java:S2638 flags its generic type argument (false positive).
     @Override
+    @SuppressWarnings("java:S2638")
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
         StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
         if (accessor == null) {

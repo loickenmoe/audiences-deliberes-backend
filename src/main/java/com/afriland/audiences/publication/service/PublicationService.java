@@ -61,6 +61,10 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class PublicationService {
 
+    private static final String CLE_PUBLICATION_ID = "publicationId";
+    private static final String PROFIL_ASSISTANTE = "ASSISTANTE";
+    private static final String MESSAGE_SUFFIXE_RG_INT_07 = " (RG-INT-07).";
+
     private final PublicationRepository publicationRepository;
     private final CommentairePublicationRepository commentairePublicationRepository;
     private final CorrespondanceAvocatRepository correspondanceAvocatRepository;
@@ -83,7 +87,7 @@ public class PublicationService {
      * centralise exchanges with the lawyer (RG-INT-07). The access restriction, which designates a
      * reader (RG-INT-06), does not apply to them.
      */
-    private static final Set<String> PROFILS_INSTRUCTEURS = Set.of("ASSISTANTE", "DJ", "DJA");
+    private static final Set<String> PROFILS_INSTRUCTEURS = Set.of(PROFIL_ASSISTANTE, "DJ", "DJA");
 
     /** FR-INT-09/US 5.1: the hearing must belong to the given case file (404 otherwise). */
     @Transactional
@@ -128,9 +132,9 @@ public class PublicationService {
         publication = publicationRepository.save(publication);
 
         historiqueActionService.enregistrer(dossier.getId(), TypeActionHistorique.PUBLICATION_CR_DEPOSE,
-                Map.of("publicationId", publication.getId(), "audienceId", audience.getId(),
+                Map.of(CLE_PUBLICATION_ID, publication.getId(), "audienceId", audience.getId(),
                         "pieceJointe", cle != null));
-        notifierProfil("ASSISTANTE", dossier.getId(), "Nouveau compte rendu d'audience déposé sur le dossier "
+        notifierProfil(PROFIL_ASSISTANTE, dossier.getId(), "Nouveau compte rendu d'audience déposé sur le dossier "
                 + dossier.getReference() + " (RG-INT-09), en attente de validation.");
 
         // RG-INT-06 (amended): the case file's legal officers are notified at the same time as the
@@ -164,8 +168,8 @@ public class PublicationService {
         publication = publicationRepository.save(publication);
 
         historiqueActionService.enregistrer(dossier.getId(), TypeActionHistorique.PUBLICATION_AUTRE_DEPOSEE,
-                Map.of("publicationId", publication.getId(), "typeDocument", typeDocument.name()));
-        notifierProfil("ASSISTANTE", dossier.getId(), "Nouvelle publication (" + typeDocument
+                Map.of(CLE_PUBLICATION_ID, publication.getId(), "typeDocument", typeDocument.name()));
+        notifierProfil(PROFIL_ASSISTANTE, dossier.getId(), "Nouvelle publication (" + typeDocument
                 + ") déposée sur le dossier " + dossier.getReference() + " (RG-INT-06), en attente de validation.");
 
         return publicationMapper.toResponse(publication);
@@ -237,7 +241,7 @@ public class PublicationService {
                 "publication-" + id + (compteRendu ? "-reception" : "-arbitrage"));
 
         historiqueActionService.enregistrer(publication.getDossier().getId(), TypeActionHistorique.PUBLICATION_ARBITREE,
-                Map.of("publicationId", id, "statut", request.statut().name()));
+                Map.of(CLE_PUBLICATION_ID, id, "statut", request.statut().name()));
 
         return publicationMapper.toResponse(publication);
     }
@@ -270,7 +274,7 @@ public class PublicationService {
         if (!valide || restriction != null) {
             Utilisateur utilisateur = currentUserService.getCurrentUser();
             String profil = utilisateur != null && utilisateur.getProfil() != null ? utilisateur.getProfil().getCode() : null;
-            if (!valide && !"ASSISTANTE".equals(profil)) {
+            if (!valide && !PROFIL_ASSISTANTE.equals(profil)) {
                 throw ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE, "Publication introuvable ou non consultable : " + id);
             }
             // Set.of(...).contains(null) throws: an unknown profile does not investigate.
@@ -313,11 +317,11 @@ public class PublicationService {
                 .build());
 
         historiqueActionService.enregistrer(publication.getDossier().getId(), TypeActionHistorique.PUBLICATION_COMMENTEE,
-                Map.of("publicationId", id, "commentaireId", commentaire.getId()));
+                Map.of(CLE_PUBLICATION_ID, id, "commentaireId", commentaire.getId()));
         notifierProfil("DJ", publication.getDossier().getId(), "Nouveau commentaire du juriste sur la publication "
-                + id + " du dossier " + publication.getDossier().getReference() + " (RG-INT-07).");
+                + id + " du dossier " + publication.getDossier().getReference() + MESSAGE_SUFFIXE_RG_INT_07);
         notifierProfil("DJA", publication.getDossier().getId(), "Nouveau commentaire du juriste sur la publication "
-                + id + " du dossier " + publication.getDossier().getReference() + " (RG-INT-07).");
+                + id + " du dossier " + publication.getDossier().getReference() + MESSAGE_SUFFIXE_RG_INT_07);
 
         return versReponse(id, commentaire);
     }
@@ -338,10 +342,10 @@ public class PublicationService {
                 .build());
 
         historiqueActionService.enregistrer(publication.getDossier().getId(), TypeActionHistorique.PUBLICATION_CORRESPONDANCE_TRANSMISE,
-                Map.of("publicationId", id, "correspondanceId", correspondance.getId()));
+                Map.of(CLE_PUBLICATION_ID, id, "correspondanceId", correspondance.getId()));
         compteAvocatService.utilisateurDe(publication.getAvocat())
                 .ifPresent(u -> alerteService.declencher(TypeAlerte.NOUVELLE_PUBLICATION, publication.getDossier().getId(), u,
-                        "Une correspondance a été transmise concernant votre publication " + id + " (RG-INT-07)."));
+                        "Une correspondance a été transmise concernant votre publication " + id + MESSAGE_SUFFIXE_RG_INT_07));
         notificationPrestataireService.notifier(EvenementPrestataire.CORRESPONDANCE_TRANSMISE, publication.getAvocat(),
                 publication.getDossier().getId(), "correspondance-" + correspondance.getId());
 

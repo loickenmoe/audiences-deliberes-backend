@@ -64,19 +64,23 @@ public class NotificationAccuse {
     @Column(name = "notification_envoi_id")
     private Long notificationEnvoiId;
 
-    public static NotificationAccuse de(String notificationId, TypeAccuse type, String serviceId, String canal,
-                                        String fournisseur, String messageErreur, Boolean definitif,
+    public static NotificationAccuse de(String notificationId, TypeAccuse type, String serviceId,
                                         LocalDateTime dateEvenement) {
         NotificationAccuse accuse = new NotificationAccuse();
         accuse.notificationId = notificationId;
         accuse.type = type;
         accuse.serviceId = serviceId;
-        accuse.canal = canal;
-        accuse.fournisseur = fournisseur;
-        accuse.messageErreur = tronquer(messageErreur);
-        accuse.definitif = definitif;
         accuse.dateEvenement = dateEvenement;
         return accuse;
+    }
+
+    /** What the engine reports about the delivery; all optional. */
+    public NotificationAccuse avecDetails(String canal, String fournisseur, String messageErreur, Boolean definitif) {
+        this.canal = canal;
+        this.fournisseur = fournisseur;
+        this.messageErreur = tronquer(messageErreur);
+        this.definitif = definitif;
+        return this;
     }
 
     /** Links the receipt to a queue row, once the engine provides the means to do so. */

@@ -50,6 +50,24 @@ public class AuditExportService {
 
     /** The produced file and the record that seals it. */
     public record Extraction(byte[] contenu, ExportAudit archive, String nomFichier) {
+
+        @Override
+        public boolean equals(Object autre) {
+            return autre instanceof Extraction(byte[] autreContenu, ExportAudit autreArchive, String autreNom)
+                    && java.util.Arrays.equals(contenu, autreContenu) && java.util.Objects.equals(archive, autreArchive)
+                    && java.util.Objects.equals(nomFichier, autreNom);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * java.util.Arrays.hashCode(contenu) + java.util.Objects.hash(archive, nomFichier);
+        }
+
+        @Override
+        public String toString() {
+            return "Extraction[contenu=" + (contenu == null ? "null" : contenu.length + " octets")
+                    + ", archive=" + archive + ", nomFichier=" + nomFichier + "]";
+        }
     }
 
     @Transactional
@@ -110,8 +128,8 @@ public class AuditExportService {
                 .build());
 
         historiqueActionService.enregistrer(null, TypeActionHistorique.AUDIT_EXPORTE, criteres(
-                perimetre, dossierId, utilisateurId, code, dateDebut, dateFin, format, lignes.size(), empreinte,
-                reference));
+                new FiltresAudit(perimetre, dossierId, utilisateurId, code, dateDebut, dateFin), format,
+                lignes.size(), empreinte, reference));
 
         return new Extraction(contenu, archive, nomFichier);
     }
@@ -180,21 +198,19 @@ public class AuditExportService {
         return complet.isEmpty() ? String.valueOf(utilisateur.getId()) : complet;
     }
 
-    private Map<String, Object> criteres(Perimetre perimetre, Long dossierId, Long utilisateurId,
-                                            TypeActionHistorique code, LocalDate dateDebut, LocalDate dateFin,
-                                            FormatExportAudit format, int lignes, String empreinte,
-                                            String reference) {
+    private Map<String, Object> criteres(FiltresAudit filtres, FormatExportAudit format, int lignes,
+                                            String empreinte, String reference) {
         Map<String, Object> criteres = new LinkedHashMap<>();
         criteres.put("reference", reference);
-        criteres.put("perimetre", perimetre.name());
+        criteres.put("perimetre", filtres.perimetre().name());
         criteres.put("format", format.name());
-        criteres.put("dateDebut", dateDebut.toString());
-        criteres.put("dateFin", dateFin.toString());
+        criteres.put("dateDebut", filtres.dateDebut().toString());
+        criteres.put("dateFin", filtres.dateFin().toString());
         criteres.put("lignes", lignes);
         criteres.put("empreinte", empreinte);
-        if (dossierId != null) criteres.put("dossierId", dossierId);
-        if (utilisateurId != null) criteres.put("auteurRecherche", utilisateurId);
-        if (code != null) criteres.put("codeRecherche", code.name());
+        if (filtres.dossierId() != null) criteres.put("dossierId", filtres.dossierId());
+        if (filtres.utilisateurId() != null) criteres.put("auteurRecherche", filtres.utilisateurId());
+        if (filtres.code() != null) criteres.put("codeRecherche", filtres.code().name());
         return criteres;
     }
 

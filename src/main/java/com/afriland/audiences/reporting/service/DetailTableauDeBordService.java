@@ -3,7 +3,10 @@ package com.afriland.audiences.reporting.service;
 import com.afriland.audiences.alerte.domain.StatutAlerte;
 import com.afriland.audiences.alerte.domain.TypeAlerte;
 import com.afriland.audiences.alerte.repository.AlerteRepository;
+import com.afriland.audiences.audience.domain.Audience;
 import com.afriland.audiences.audience.domain.StatutAudience;
+import com.afriland.audiences.decision.domain.Adjudication;
+import com.afriland.audiences.frais.domain.DemandeFrais;
 import com.afriland.audiences.audience.repository.AudienceRepository;
 import com.afriland.audiences.decision.repository.DecisionDefinitiveRepository;
 import com.afriland.audiences.delibere.domain.ResultatDelibere;
@@ -70,38 +73,50 @@ public class DetailTableauDeBordService {
                     .map(DetailTableauDeBordService::versLigneDossier);
             case AUDIENCES_PLANIFIEES -> audienceRepository
                     .listerParStatut(StatutAudience.PLANIFIEE, categories, pageable)
-                    .map(audience -> new DetailIndicateurResponse(
-                            audience.getId(),
-                            audience.getDossier() == null ? null : audience.getDossier().getId(),
-                            audience.getDossier() == null ? null : audience.getDossier().getReference(),
-                            audience.getJuridiction(),
-                            nomDuClient(audience.getDossier()),
-                            audience.getDatePlanifiee(),
-                            null));
+                    .map(DetailTableauDeBordService::versLigneAudience);
             case FRAIS_EN_ATTENTE -> demandeFraisRepository
                     .listerNonSoldees(FRAIS_SOLDES, categories, pageable)
-                    .map(demande -> new DetailIndicateurResponse(
-                            demande.getId(),
-                            demande.getDossier() == null ? null : demande.getDossier().getId(),
-                            demande.getDossier() == null ? null : demande.getDossier().getReference(),
-                            demande.getReferenceFacture(),
-                            demande.getAvocat() == null ? null : demande.getAvocat().getNom(),
-                            demande.getCreatedAt() == null ? null : demande.getCreatedAt().toLocalDate(),
-                            demande.getMontant()));
+                    .map(DetailTableauDeBordService::versLigneFrais);
             case PROROGATIONS_ALERTE -> versLignesAlertes(categories, pageable);
             case LITIGES_GAGNES -> versLignesDeliberes(ResultatDelibere.FAVORABLE, categories, pageable);
             case LITIGES_PERDUS -> versLignesDeliberes(ResultatDelibere.DEFAVORABLE, categories, pageable);
             case DECISIONS_MIXTES -> versLignesDeliberes(ResultatDelibere.MIXTE, categories, pageable);
             case PROVISIONS_REPRISES -> decisionDefinitiveRepository.listerProvisionsReprises(categories, pageable)
-                    .map(adjudication -> new DetailIndicateurResponse(
-                            adjudication.getId(),
-                            adjudication.getDossier() == null ? null : adjudication.getDossier().getId(),
-                            adjudication.getDossier() == null ? null : adjudication.getDossier().getReference(),
-                            adjudication.getBeneficiaire(),
-                            nomDuClient(adjudication.getDossier()),
-                            adjudication.getDateDecision(),
-                            adjudication.getReliquat()));
+                    .map(DetailTableauDeBordService::versLigneAdjudication);
         };
+    }
+
+    private static DetailIndicateurResponse versLigneAudience(Audience audience) {
+        return new DetailIndicateurResponse(
+                audience.getId(),
+                audience.getDossier() == null ? null : audience.getDossier().getId(),
+                audience.getDossier() == null ? null : audience.getDossier().getReference(),
+                audience.getJuridiction(),
+                nomDuClient(audience.getDossier()),
+                audience.getDatePlanifiee(),
+                null);
+    }
+
+    private static DetailIndicateurResponse versLigneFrais(DemandeFrais demande) {
+        return new DetailIndicateurResponse(
+                demande.getId(),
+                demande.getDossier() == null ? null : demande.getDossier().getId(),
+                demande.getDossier() == null ? null : demande.getDossier().getReference(),
+                demande.getReferenceFacture(),
+                demande.getAvocat() == null ? null : demande.getAvocat().getNom(),
+                demande.getCreatedAt() == null ? null : demande.getCreatedAt().toLocalDate(),
+                demande.getMontant());
+    }
+
+    private static DetailIndicateurResponse versLigneAdjudication(Adjudication adjudication) {
+        return new DetailIndicateurResponse(
+                adjudication.getId(),
+                adjudication.getDossier() == null ? null : adjudication.getDossier().getId(),
+                adjudication.getDossier() == null ? null : adjudication.getDossier().getReference(),
+                adjudication.getBeneficiaire(),
+                nomDuClient(adjudication.getDossier()),
+                adjudication.getDateDecision(),
+                adjudication.getReliquat());
     }
 
     private Page<DetailIndicateurResponse> versLignesDeliberes(ResultatDelibere resultat,

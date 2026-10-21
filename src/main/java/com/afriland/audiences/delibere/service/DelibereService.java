@@ -53,6 +53,8 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class DelibereService {
 
+    private static final String CLE_DELIBERE_ID = "delibereId";
+
     private final DelibereRepository delibereRepository;
     private final ProrogationRepository prorogationRepository;
     private final DossierRepository dossierRepository;
@@ -99,13 +101,13 @@ public class DelibereService {
 
         if (request.resultat() == null) {
             historiqueActionService.enregistrer(dossierId, TypeActionHistorique.DELIBERE_MISE_EN_DELIBERE,
-                    Map.of("delibereId", delibere.getId(), "dateDeliberee", request.dateDeliberee().toString()));
+                    Map.of(CLE_DELIBERE_ID, delibere.getId(), "dateDeliberee", request.dateDeliberee().toString()));
             return versReponse(delibere);
         }
 
         appliquerResultat(delibere, request.resultat(), request.dateEcheanceRecours());
         historiqueActionService.enregistrer(dossierId, TypeActionHistorique.DELIBERE_ENREGISTRE,
-                Map.of("delibereId", delibere.getId(), "resultat", request.resultat().name()));
+                Map.of(CLE_DELIBERE_ID, delibere.getId(), "resultat", request.resultat().name()));
         return versReponse(delibere);
     }
 
@@ -118,7 +120,7 @@ public class DelibereService {
 
         appliquerResultat(delibere, request.resultat(), request.dateEcheanceRecours());
         historiqueActionService.enregistrer(delibere.getDossier().getId(), TypeActionHistorique.DELIBERE_VIDE,
-                Map.of("delibereId", delibereId, "resultat", request.resultat().name()));
+                Map.of(CLE_DELIBERE_ID, delibereId, "resultat", request.resultat().name()));
         return versReponse(delibere);
     }
 
@@ -196,7 +198,7 @@ public class DelibereService {
         delibereRepository.save(delibere);
 
         historiqueActionService.enregistrer(delibere.getDossier().getId(), TypeActionHistorique.DELIBERE_PROROGE,
-                Map.of("delibereId", delibereId, "compteur", compteur, "date", request.date().toString()));
+                Map.of(CLE_DELIBERE_ID, delibereId, "compteur", compteur, "date", request.date().toString()));
 
         boolean alerte = compteur > seuilProrogations();
         if (alerte) {
@@ -256,7 +258,7 @@ public class DelibereService {
         etape = etapeProcedureRepository.save(etape);
 
         historiqueActionService.enregistrer(delibere.getDossier().getId(), TypeActionHistorique.DELIBERE_RABATTU,
-                Map.of("delibereId", delibereId, "date", request.date().toString(), "motif", motif));
+                Map.of(CLE_DELIBERE_ID, delibereId, "date", request.date().toString(), "motif", motif));
 
         return etapeProcedureMapper.toResponse(etape);
     }
@@ -300,7 +302,7 @@ public class DelibereService {
         delibere = delibereRepository.save(delibere);
 
         historiqueActionService.enregistrer(delibere.getDossier().getId(), TypeActionHistorique.DELIBERE_EXPEDITION_MODIFIEE,
-                Map.of("delibereId", delibereId, "ancienStatut", ancien.name(), "nouveauStatut", request.statutExpedition().name()));
+                Map.of(CLE_DELIBERE_ID, delibereId, "ancienStatut", ancien.name(), "nouveauStatut", request.statutExpedition().name()));
 
         return versReponse(delibere);
     }
@@ -320,10 +322,15 @@ public class DelibereService {
     }
 
     /** The state is derived, never stored, so it cannot diverge from the data it is based on. */
+    private static EtatDelibere etatDe(Delibere delibere) {
+        if (delibere.getDateRabattement() != null) {
+            return EtatDelibere.RABATTU;
+        }
+        return delibere.getResultat() != null ? EtatDelibere.VIDE : EtatDelibere.EN_ATTENTE;
+    }
+
     private DelibereResponse versReponse(Delibere delibere) {
-        EtatDelibere etat = delibere.getDateRabattement() != null ? EtatDelibere.RABATTU
-                : delibere.getResultat() != null ? EtatDelibere.VIDE
-                : EtatDelibere.EN_ATTENTE;
+        EtatDelibere etat = etatDe(delibere);
         return new DelibereResponse(
                 delibere.getId(),
                 delibere.getDossier() != null ? delibere.getDossier().getId() : null,

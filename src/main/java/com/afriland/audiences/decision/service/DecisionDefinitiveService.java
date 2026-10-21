@@ -31,6 +31,8 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class DecisionDefinitiveService {
 
+    private static final String CLE_DECISION_ID = "decisionId";
+
     private final DecisionDefinitiveRepository decisionDefinitiveRepository;
     private final DossierRepository dossierRepository;
     private final EtapeProcedureRepository etapeProcedureRepository;
@@ -70,22 +72,18 @@ public class DecisionDefinitiveService {
                 .build());
 
         historiqueActionService.enregistrer(dossierId, TypeActionHistorique.ADJUDICATION_ENREGISTREE,
-                Map.of("decisionId", adjudication.getId(), "beneficiaire", request.beneficiaire()));
+                Map.of(CLE_DECISION_ID, adjudication.getId(), "beneficiaire", request.beneficiaire()));
 
         return adjudicationMapper.toResponse(adjudication);
     }
 
     /**
      * FR-DEF-02/RG-DEF-03/04: records a monetary judgment. As for the adjudication (RG-DEF-01), the
-     * step is required and must be {@code CLOTURE}.
+     * step is required (validated on the request) and must be {@code CLOTURE}.
      */
     @Transactional
     public CondamnationResponse creerCondamnation(Long dossierId, CreerCondamnationRequest request) {
         Dossier dossier = getDossierOrThrow(dossierId);
-        if (request.etapeId() == null) {
-            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
-                    "Une condamnation se rattache à l'étape clôturée qui l'a prononcée (QF-66)");
-        }
         EtapeProcedure etape = getEtapeOrThrow(dossierId, request.etapeId());
         if (etape.getStatutCycleVie() != StatutCycleVie.CLOTURE) {
             throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
@@ -101,7 +99,7 @@ public class DecisionDefinitiveService {
                 .build());
 
         historiqueActionService.enregistrer(dossierId, TypeActionHistorique.CONDAMNATION_ENREGISTREE,
-                Map.of("decisionId", condamnation.getId(), "sens", request.sens().name()));
+                Map.of(CLE_DECISION_ID, condamnation.getId(), "sens", request.sens().name()));
 
         return condamnationMapper.toResponse(condamnation);
     }
@@ -118,7 +116,7 @@ public class DecisionDefinitiveService {
         condamnation = (CondamnationPecuniaire) decisionDefinitiveRepository.save(condamnation);
 
         historiqueActionService.enregistrer(condamnation.getDossier().getId(), TypeActionHistorique.CONDAMNATION_STATUT_MODIFIE,
-                Map.of("decisionId", id, "statutPaiement", request.statutPaiement().name()));
+                Map.of(CLE_DECISION_ID, id, "statutPaiement", request.statutPaiement().name()));
 
         return condamnationMapper.toResponse(condamnation);
     }

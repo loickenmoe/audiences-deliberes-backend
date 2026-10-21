@@ -75,7 +75,7 @@ public class PortailAvocatService {
     /** US 4.1, US 5.1: enough to identify the lawyer's case files, nothing more. */
     @Transactional(readOnly = true)
     public PageResponse<DossierAvocatResponse> mesDossiers(Pageable pageable) {
-        return mesDossiers(null, pageable);
+        return listerMesDossiers(null, pageable);
     }
 
     /**
@@ -84,6 +84,10 @@ public class PortailAvocatService {
      */
     @Transactional(readOnly = true)
     public PageResponse<DossierAvocatResponse> mesDossiers(String reference, Pageable pageable) {
+        return listerMesDossiers(reference, pageable);
+    }
+
+    private PageResponse<DossierAvocatResponse> listerMesDossiers(String reference, Pageable pageable) {
         Avocat avocat = avocatCourant();
         Page<Dossier> dossiers = reference == null || reference.isBlank()
                 ? dossierRepository.findDossiersDeLAvocat(avocat.getId(), pageable)
@@ -104,8 +108,8 @@ public class PortailAvocatService {
         // The note is only shown to an engaged lawyer: the mandate, not the assignment, opens
         // communication. Read once for the whole list.
         boolean constitue = estConstitue(dossierId, avocat);
-        // Deliberately unpaged: this list feeds the hearing selector of the filing form, not a table;
-        // paging would silently truncate the lawyer's choice.
+        // Deliberately unpaged: this list feeds the hearing selector of the filing form, not a table.
+        // Paging would silently truncate the lawyer's choice.
         return audienceRepository.findByDossierIdOrderByDatePlanifieeDesc(dossierId, Pageable.unpaged()).stream()
                 .map(audience -> new AudienceAvocatResponse(audience.getId(), audience.getDatePlanifiee(),
                         audience.getDateTenue(), audience.getJuridiction(), audience.getStatut(),

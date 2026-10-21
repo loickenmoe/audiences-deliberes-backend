@@ -98,7 +98,7 @@ public class ReportingController {
 
     @GetMapping("${api.prefix}/rapports")
     @PreAuthorize("hasRole('JURISTE')")
-    public ResponseEntity<?> rapports(@RequestParam TypeRapport type,
+    public ResponseEntity<Object> rapports(@RequestParam TypeRapport type,
                                         @RequestParam LocalDate dateDebut,
                                         @RequestParam LocalDate dateFin,
                                         @RequestParam(required = false) CategorieDossier categorie,

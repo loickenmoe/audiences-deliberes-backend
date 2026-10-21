@@ -28,6 +28,8 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class SignatureService {
 
+    private static final String MESSAGE_UTILISATEUR_INTROUVABLE = "Utilisateur introuvable";
+
     /**
      * The only two types the PDF can embed.
      *
@@ -52,7 +54,7 @@ public class SignatureService {
     public Optional<SignatureDeposee> mienne() {
         Utilisateur moi = utilisateurRepository.findById(currentUserService.getCurrentUser().getId())
                 .orElseThrow(() -> ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE,
-                        "Utilisateur introuvable"));
+                        MESSAGE_UTILISATEUR_INTROUVABLE));
         return lire(moi);
     }
 
@@ -89,7 +91,7 @@ public class SignatureService {
 
         Utilisateur moi = utilisateurRepository.findById(currentUserService.getCurrentUser().getId())
                 .orElseThrow(() -> ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE,
-                        "Utilisateur introuvable"));
+                        MESSAGE_UTILISATEUR_INTROUVABLE));
         try {
             moi.setSignature(fichier.getBytes());
         } catch (java.io.IOException erreur) {
@@ -112,7 +114,7 @@ public class SignatureService {
     public void retirer() {
         Utilisateur moi = utilisateurRepository.findById(currentUserService.getCurrentUser().getId())
                 .orElseThrow(() -> ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE,
-                        "Utilisateur introuvable"));
+                        MESSAGE_UTILISATEUR_INTROUVABLE));
         moi.setSignature(null);
         moi.setSignatureType(null);
         moi.setSignatureDeposeeLe(null);
@@ -130,5 +132,23 @@ public class SignatureService {
 
     /** A stored signature: its image, type and upload date. */
     public record SignatureDeposee(byte[] image, String type, LocalDateTime deposeeLe) {
+
+        @Override
+        public boolean equals(Object autre) {
+            return autre instanceof SignatureDeposee(byte[] autreImage, String autreType, LocalDateTime autreDate)
+                    && java.util.Arrays.equals(image, autreImage) && java.util.Objects.equals(type, autreType)
+                    && java.util.Objects.equals(deposeeLe, autreDate);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * java.util.Arrays.hashCode(image) + java.util.Objects.hash(type, deposeeLe);
+        }
+
+        @Override
+        public String toString() {
+            return "SignatureDeposee[image=" + (image == null ? "null" : image.length + " octets")
+                    + ", type=" + type + ", deposeeLe=" + deposeeLe + "]";
+        }
     }
 }

@@ -21,6 +21,9 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.fail;
+
 /**
  * <b>Manual probe</b>, not a regression test: it talks to the DEV Notification Engine. Runs only if
  * {@code SONDE_ENGINE} is set, and sends <b>no notification to anyone</b>: it only requests a file
@@ -96,6 +99,7 @@ class SondeAttachmentUpload {
                     if (requestId.equals(donnees.path("requestId").asText())) {
                         System.out.println("[sonde] réponse reçue pour notre demande, status="
                                 + donnees.path("status").asText());
+                        assertThat(donnees.path("status").asText()).as("statut de la réponse").isNotBlank();
                         if ("READY".equals(donnees.path("status").asText())) {
                             deposer(donnees.path("presignedPutUrl").asText());
                         }
@@ -103,7 +107,7 @@ class SondeAttachmentUpload {
                     }
                 }
             }
-            System.out.println("[sonde] aucune réponse pour notre demande. Messages lus sur le topic : " + lus);
+            fail("[sonde] aucune réponse pour notre demande en " + ATTENTE.toSeconds() + " s. Messages lus sur le topic : " + lus);
         }
     }
 

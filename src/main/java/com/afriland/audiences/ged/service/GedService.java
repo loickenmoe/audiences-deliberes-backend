@@ -52,6 +52,8 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class GedService {
 
+    private static final String CLE_DOCUMENT_ID = "documentId";
+
     private final DocumentRepository documentRepository;
     private final DemandeSuppressionRepository demandeSuppressionRepository;
     private final DossierRepository dossierRepository;
@@ -89,7 +91,7 @@ public class GedService {
                 .build());
 
         historiqueActionService.enregistrerPour(auteur, dossierId, TypeActionHistorique.DOCUMENT_CHARGE,
-                Map.of("documentId", document.getId(), "nomFichier", document.getNomFichier()));
+                Map.of(CLE_DOCUMENT_ID, document.getId(), "nomFichier", document.getNomFichier()));
 
         signalerDocumentCharge(dossier, document);
 
@@ -147,7 +149,7 @@ public class GedService {
                 .build());
 
         historiqueActionService.enregistrerPour(utilisateur, document.getDossier().getId(),
-                TypeActionHistorique.DOCUMENT_SUPPRESSION_DEMANDEE, Map.of("documentId", documentId, "demandeId", demande.getId()));
+                TypeActionHistorique.DOCUMENT_SUPPRESSION_DEMANDEE, Map.of(CLE_DOCUMENT_ID, documentId, "demandeId", demande.getId()));
 
         signalerDemandeSuppression(document, "Une demande de suppression a été soumise pour le document « "
                 + document.getNomFichier() + "» (dossier " + document.getDossier().getReference() + ").");
@@ -171,7 +173,7 @@ public class GedService {
                 });
 
         historiqueActionService.enregistrerPour(validePar, document.getDossier().getId(),
-                TypeActionHistorique.DOCUMENT_SUPPRIME_DIRECTEMENT, Map.of("documentId", document.getId()));
+                TypeActionHistorique.DOCUMENT_SUPPRIME_DIRECTEMENT, Map.of(CLE_DOCUMENT_ID, document.getId()));
 
         alerteService.declencher(TypeAlerte.SUPPRESSION_DOCUMENT, document.getDossier().getId(), document.getAuteurChargement(),
                 "Votre document « " + document.getNomFichier() + " » a été supprimé directement par "
@@ -231,7 +233,7 @@ public class GedService {
 
         historiqueActionService.enregistrerPour(validateur, document.getDossier().getId(),
                 TypeActionHistorique.DOCUMENT_SUPPRESSION_ARBITREE,
-                Map.of("documentId", documentId, "decision", request.decision().name()));
+                Map.of(CLE_DOCUMENT_ID, documentId, "decision", request.decision().name()));
 
         return demandeSuppressionMapper.toResponse(demande);
     }

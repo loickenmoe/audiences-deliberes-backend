@@ -11,7 +11,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -33,14 +32,13 @@ public class AuditService {
     private final HistoriqueActionService historiqueActionService;
 
     @Transactional
-    public AuditResponse consulter(Perimetre perimetre, Long dossierId, Long utilisateurId,
-                                      TypeActionHistorique code, LocalDate dateDebut, LocalDate dateFin,
-                                      int page, int size) {
-        if (perimetre == Perimetre.UN_DOSSIER && dossierId == null) {
+    public AuditResponse consulter(FiltresAudit filtres, int page, int size) {
+        if (filtres.perimetre() == Perimetre.UN_DOSSIER && filtres.dossierId() == null) {
             throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
                     "Le périmètre « un dossier » exige l'identifiant du dossier");
         }
-        if (dateDebut != null && dateFin != null && dateDebut.isAfter(dateFin)) {
+        if (filtres.dateDebut() != null && filtres.dateFin() != null
+                && filtres.dateDebut().isAfter(filtres.dateFin())) {
             throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
                     "La date de début ne peut pas être postérieure à la date de fin");
         }
@@ -51,12 +49,12 @@ public class AuditService {
          */
         if (page == 0) {
             historiqueActionService.enregistrer(null, TypeActionHistorique.AUDIT_CONSULTE,
-                    criteres(perimetre, dossierId, utilisateurId, code, dateDebut, dateFin));
+                    criteres(filtres));
         }
 
         Page<HistoriqueAction> resultat = historiqueActionRepository.findAll(
-                HistoriqueActionSpecifications.withFilters(perimetre, dossierId, utilisateurId, code,
-                        dateDebut, dateFin),
+                HistoriqueActionSpecifications.withFilters(filtres.perimetre(), filtres.dossierId(),
+                        filtres.utilisateurId(), filtres.code(), filtres.dateDebut(), filtres.dateFin()),
                 PageRequest.of(page, size, TRI));
 
         return new AuditResponse(
@@ -69,16 +67,15 @@ public class AuditService {
     }
 
     /** The criteria used, as given; absent filters are omitted. */
-    private Map<String, Object> criteres(Perimetre perimetre, Long dossierId, Long utilisateurId,
-                                            TypeActionHistorique code, LocalDate dateDebut, LocalDate dateFin) {
+    private Map<String, Object> criteres(FiltresAudit filtres) {
         Map<String, Object> criteres = new LinkedHashMap<>();
-        criteres.put("perimetre", perimetre.name());
-        if (dossierId != null) criteres.put("dossierId", dossierId);
+        criteres.put("perimetre", filtres.perimetre().name());
+        if (filtres.dossierId() != null) criteres.put("dossierId", filtres.dossierId());
         // Named `auteurRecherche`, not `utilisateurId`, which already identifies the consulting user.
-        if (utilisateurId != null) criteres.put("auteurRecherche", utilisateurId);
-        if (code != null) criteres.put("codeRecherche", code.name());
-        if (dateDebut != null) criteres.put("dateDebut", dateDebut.toString());
-        if (dateFin != null) criteres.put("dateFin", dateFin.toString());
+        if (filtres.utilisateurId() != null) criteres.put("auteurRecherche", filtres.utilisateurId());
+        if (filtres.code() != null) criteres.put("codeRecherche", filtres.code().name());
+        if (filtres.dateDebut() != null) criteres.put("dateDebut", filtres.dateDebut().toString());
+        if (filtres.dateFin() != null) criteres.put("dateFin", filtres.dateFin().toString());
         return criteres;
     }
 }

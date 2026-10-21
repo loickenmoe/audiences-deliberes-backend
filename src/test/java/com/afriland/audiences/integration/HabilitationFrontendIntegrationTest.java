@@ -789,19 +789,19 @@ class HabilitationFrontendIntegrationTest {
         RequestPostProcessor dj = role("kc-dj-m15", "ROLE_DJ", "ROLE_CONSULTATION", "ROLE_SAISIE");
         long n = COMPTEUR.incrementAndGet();
         String compte = "kc-q117-" + n;
-        long avocatId = extraireId(mockMvc.perform(post(api("/intervenants")).with(dj)
+        long avocatDuTestId = extraireId(mockMvc.perform(post(api("/intervenants")).with(dj)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("type", "AVOCAT", "nom", "Me Coquile " + n, "compteKeycloak", compte))))
                 .andExpect(status().isCreated()).andReturn());
         // The legal officer reads the reference data but does not modify it.
-        mockMvc.perform(put(api("/intervenants/" + avocatId))
+        mockMvc.perform(put(api("/intervenants/" + avocatDuTestId))
                         .with(role("kc-juriste-m15", "ROLE_JURISTE", "ROLE_SAISIE", "ROLE_CONSULTATION"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("nom", "Intrusion"))))
                 .andExpect(status().isForbidden());
 
         // The body carries another type and account: they are ignored.
-        mockMvc.perform(put(api("/intervenants/" + avocatId)).with(dj).contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(put(api("/intervenants/" + avocatDuTestId)).with(dj).contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("type", "AUTRE_PRESTATAIRE", "nom", "Me Corrigé " + n,
                                 "email", "corrige@cab.cm", "compteKeycloak", compte + "-bis"))))
                 .andExpect(status().isOk())
@@ -814,7 +814,7 @@ class HabilitationFrontendIntegrationTest {
                         .param("code", "INTERVENANT_MODIFIE").param("size", "1")
                         .with(role("kc-dj-m15", "ROLE_DJ", "ROLE_CONSULTATION")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content[0].details.prestataireId").value(avocatId))
+                .andExpect(jsonPath("$.content[0].details.prestataireId").value(avocatDuTestId))
                 .andExpect(jsonPath("$.content[0].details.nouveauNom").value("Me Corrigé " + n))
                 .andExpect(jsonPath("$.content[0].details.nouvelEmail").value("corrige@cab.cm"))
                 .andExpect(jsonPath("$.content[0].details.nouveauCompteKeycloak").doesNotExist());
@@ -1292,7 +1292,6 @@ class HabilitationFrontendIntegrationTest {
     @DisplayName("QF-21 : un conflit de champ nomme le champ, un conflit d'état n'en nomme aucun")
     void conflit_nommeLeChampFautif() throws Exception {
         int n = COMPTEUR.incrementAndGet();
-        String reference = "CLI-QF21-" + n;
         RequestPostProcessor juriste = role("kc-juriste-qf21", "ROLE_JURISTE", "ROLE_SAISIE");
 
         String compte = "kc-avocat-qf21-" + n;
@@ -1343,7 +1342,7 @@ class HabilitationFrontendIntegrationTest {
         // creating a client is not enough, a read going through getCurrentUser is needed.
         mockMvc.perform(get(api("/alertes/mes-notifications")).with(juriste)).andExpect(status().isOk());
         Long juristeId = utilisateurRepository.findByKeycloakId("kc-juriste-m16").orElseThrow().getId();
-        long avocatId = avocatRepository.save(Avocat.builder().nom("Me M16 " + n)
+        long avocatDuTestId = avocatRepository.save(Avocat.builder().nom("Me M16 " + n)
                 .compteKeycloak("kc-avocat-m16-nature-" + n).build()).getId();
 
         /*
@@ -1366,7 +1365,7 @@ class HabilitationFrontendIntegrationTest {
                                 Map.entry("seuilMontant", 60_000_000),
                                 Map.entry("typeClientSensible", "VIP"),
                                 Map.entry("juristesAffectes", List.of(juristeId)),
-                                Map.entry("avocatsAffectes", List.of(avocatId)),
+                                Map.entry("avocatsAffectes", List.of(avocatDuTestId)),
                                 // Mandatory.
                                 Map.entry("parties", Map.of(
                                         "demandeurs", List.of("AFRILAND FIRST BANK"),
@@ -1397,7 +1396,7 @@ class HabilitationFrontendIntegrationTest {
         // creating a client is not enough, a read going through getCurrentUser is needed.
         mockMvc.perform(get(api("/alertes/mes-notifications")).with(juriste)).andExpect(status().isOk());
         Long juristeId = utilisateurRepository.findByKeycloakId("kc-juriste-m16b").orElseThrow().getId();
-        long avocatId = avocatRepository.save(Avocat.builder().nom("Me M16b " + n)
+        long avocatDuTestId = avocatRepository.save(Avocat.builder().nom("Me M16b " + n)
                 .compteKeycloak("kc-avocat-m16b-" + n).build()).getId();
 
         mockMvc.perform(post(api("/dossiers"))
@@ -1413,7 +1412,7 @@ class HabilitationFrontendIntegrationTest {
                                 Map.entry("seuilMontant", 60_000_000),
                                 Map.entry("typeClientSensible", "VIPP"),
                                 Map.entry("juristesAffectes", List.of(juristeId)),
-                                Map.entry("avocatsAffectes", List.of(avocatId)),
+                                Map.entry("avocatsAffectes", List.of(avocatDuTestId)),
                                 // Mandatory.
                                 Map.entry("parties", Map.of(
                                         "demandeurs", List.of("AFRILAND FIRST BANK"),
@@ -1441,7 +1440,7 @@ class HabilitationFrontendIntegrationTest {
         // creating a client is not enough, a read going through getCurrentUser is needed.
         mockMvc.perform(get(api("/alertes/mes-notifications")).with(juriste)).andExpect(status().isOk());
         Long juristeId = utilisateurRepository.findByKeycloakId("kc-juriste-m16c").orElseThrow().getId();
-        long avocatId = avocatRepository.save(Avocat.builder().nom("Me M16c " + n)
+        long avocatDuTestId = avocatRepository.save(Avocat.builder().nom("Me M16c " + n)
                 .compteKeycloak("kc-avocat-m16c-" + n).build()).getId();
 
         String reference = extraireReference(mockMvc.perform(post(api("/dossiers"))
@@ -1454,7 +1453,7 @@ class HabilitationFrontendIntegrationTest {
                                 Map.entry("dossierCreditOrigine", "CRD-" + n),
                                 Map.entry("pvTransfert", "PV-" + n),
                                 Map.entry("juristesAffectes", List.of(juristeId)),
-                                Map.entry("avocatsAffectes", List.of(avocatId)),
+                                Map.entry("avocatsAffectes", List.of(avocatDuTestId)),
                                 // Mandatory.
                                 Map.entry("parties", Map.of(
                                         "demandeurs", List.of("AFRILAND FIRST BANK"),
@@ -1510,7 +1509,7 @@ class HabilitationFrontendIntegrationTest {
                 .andReturn());
         mockMvc.perform(get(api("/alertes/mes-notifications")).with(juriste)).andExpect(status().isOk());
         Long juristeId = utilisateurRepository.findByKeycloakId("kc-juriste-q74").orElseThrow().getId();
-        long avocatId = avocatRepository.save(Avocat.builder().nom("Me Q74 " + n)
+        long avocatDuTestId = avocatRepository.save(Avocat.builder().nom("Me Q74 " + n)
                 .compteKeycloak("kc-avocat-q74-" + n).build()).getId();
 
         long dossierId = extraireId(mockMvc.perform(post(api("/dossiers"))
@@ -1526,7 +1525,7 @@ class HabilitationFrontendIntegrationTest {
                                 Map.entry("seuilMontant", 60_000_000),
                                 Map.entry("typeClientSensible", "VIP"),
                                 Map.entry("juristesAffectes", List.of(juristeId)),
-                                Map.entry("avocatsAffectes", List.of(avocatId)),
+                                Map.entry("avocatsAffectes", List.of(avocatDuTestId)),
                                 // Mandatory.
                                 Map.entry("parties", Map.of(
                                         "demandeurs", List.of("AFRILAND FIRST BANK"),
@@ -1764,7 +1763,9 @@ class HabilitationFrontendIntegrationTest {
                         .param("statut", "EN_ATTENTE").with(dj))
                 .andExpect(status().isOk())
                 .andReturn());
-        assertThat(enAttente.findValues("documentId").stream().map(JsonNode::asLong).toList()).doesNotContain(documentId);
+        // An empty queue is a valid outcome here: only the absence of this document matters.
+        assertThat(enAttente.findValues("documentId").stream().map(JsonNode::asLong).toList())
+                .noneMatch(id -> id.equals(documentId));
 
         /*
          * Explicit `size`: the queue is paginated and this test looks for **one** specific request in the

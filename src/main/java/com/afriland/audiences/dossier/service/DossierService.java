@@ -67,7 +67,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -76,6 +75,10 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class DossierService {
+
+    private static final String CLE_MOTIF = "motif";
+    private static final String CLE_DECISION = "decision";
+    private static final String CLE_ETAPE = "etape";
 
     private final DossierRepository dossierRepository;
     private final EtapeProcedureRepository etapeProcedureRepository;
@@ -280,16 +283,12 @@ public class DossierService {
     // ------------------------------------------------------------------ Consultation
 
     @Transactional(readOnly = true)
-    public PageResponse<DossierResponse> listerDossiers(String nature, CategorieDossier categorie,
-                                                          String juridiction, String reference,
-                                                          Long clientId, boolean mesDossiers,
-                                                          Boolean estSensible, StatutValidation sensibiliteStatut,
-                                                          TypeEtape typeEtape, StatutCycleVie statutEtape,
-                                                          LocalDate dateDebut, LocalDate dateFin,
+    public PageResponse<DossierResponse> listerDossiers(FiltresDossiers filtres, boolean mesDossiers,
                                                           Pageable pageable) {
         // A reversed window would return nothing: reject it rather than suggest no hearing took
         // place.
-        if (dateDebut != null && dateFin != null && dateDebut.isAfter(dateFin)) {
+        if (filtres.dateDebut() != null && filtres.dateFin() != null
+                && filtres.dateDebut().isAfter(filtres.dateFin())) {
             throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
                     "La date de début doit précéder la date de fin");
         }
@@ -297,9 +296,7 @@ public class DossierService {
         // cannot expose a colleague's portfolio.
         Long juristeId = mesDossiers ? currentUserService.getCurrentUser().getId() : null;
         var page = dossierRepository.findAll(
-                DossierSpecifications.withFilters(nature, categorie, juridiction, reference, clientId, juristeId,
-                        estSensible, sensibiliteStatut, typeEtape, statutEtape, dateDebut, dateFin),
-                pageable);
+                DossierSpecifications.withFilters(filtres, juristeId), pageable);
         // Three queries for the whole page, not three per row.
         return new PageResponse<>(construireReponses(page.getContent()), page.getTotalPages(), page.getTotalElements());
     }
@@ -463,7 +460,7 @@ public class DossierService {
         // The step goes into `details` so it can be queried (e.g. all moves to EN_DELIBERE in a
         // quarter).
         historiqueActionService.enregistrer(dossierId, TypeActionHistorique.ETAPE_STATUT_MODIFIE,
-                Map.of("etape", etape.getType().name(), "ancienStatut", ancien.name(), "nouveauStatut", nouveau.name()));
+                Map.of(CLE_ETAPE, etape.getType().name(), "ancienStatut", ancien.name(), "nouveauStatut", nouveau.name()));
 
         if (transitionValidator.estExerciceDeRecours(ancien, nouveau)) {
             ouvrirEtapeSuivante(dossier, etape);
@@ -506,7 +503,7 @@ public class DossierService {
         }
         EtapeProcedure nouvelle = creerEtapeInterne(dossier, suivante, StatutCycleVie.OUVERTURE);
         historiqueActionService.enregistrer(dossier.getId(), TypeActionHistorique.ETAPE_OUVERTE_AUTOMATIQUEMENT,
-                Map.of("etape", suivante.name(), "etapeId", nouvelle.getId()));
+                Map.of(CLE_ETAPE, suivante.name(), "etapeId", nouvelle.getId()));
     }
 
     @Transactional
@@ -525,7 +522,7 @@ public class DossierService {
         }
         EtapeProcedure etape = creerEtapeInterne(dossier, request.type(), StatutCycleVie.OUVERTURE);
         historiqueActionService.enregistrer(dossierId, TypeActionHistorique.ETAPE_POSITIONNEE_DIRECTEMENT,
-                Map.of("etape", request.type().name(), "etapeId", etape.getId()));
+                Map.of(CLE_ETAPE, request.type().name(), "etapeId", etape.getId()));
         return etapeProcedureMapper.toResponse(etape);
     }
 
@@ -576,7 +573,7 @@ public class DossierService {
                 .build();
         audit = auditSeuilDossierRepository.save(audit);
         historiqueActionService.enregistrerPour(auteur, dossier.getId(), TypeActionHistorique.DEROGATION_SEUIL_DEMANDEE,
-                Map.of("nouveauSeuil", nouveauSeuil, "motif", motif));
+                Map.of("nouveauSeuil", nouveauSeuil, CLE_MOTIF, motif));
         return audit;
     }
 
@@ -630,8 +627,8 @@ public class DossierService {
         // The decision outcome is stored as data so that, e.g., all rejected overrides can be
         // queried.
         historiqueActionService.enregistrerPour(validateur, dossierId, TypeActionHistorique.DEROGATION_SEUIL_ARBITREE,
-                Map.of("decision", request.statut().name(), "auditId", auditId,
-                        "motif", Optional.ofNullable(request.motif()).orElse("")));
+                Map.of(CLE_DECISION, request.statut().name(), "auditId", auditId,
+                        CLE_MOTIF, Optional.ofNullable(request.motif()).orElse("")));
 
         return auditSeuilMapper.toResponse(audit);
     }
@@ -678,7 +675,7 @@ public class DossierService {
         historiqueActionService.enregistrerPour(auteur, dossierId, TypeActionHistorique.SENSIBILITE_PROPOSEE,
                 Map.of("seuilMontant", request.seuilMontant(),
                         "typeClientSensible", request.typeClientSensible(),
-                        "motif", request.motif()));
+                        CLE_MOTIF, request.motif()));
 
         return construireReponseComplete(dossier);
     }
@@ -732,11 +729,11 @@ public class DossierService {
 
             historiqueActionService.enregistrerPour(decideur, dossierId,
                     TypeActionHistorique.SENSIBILITE_ARBITREE,
-                    Map.of("decision", StatutValidation.VALIDEE.name(),
+                    Map.of(CLE_DECISION, StatutValidation.VALIDEE.name(),
                             "origine", "DIRECTE",
                             "seuilMontant", request.seuilMontant(),
                             "typeClientSensible", request.typeClientSensible(),
-                            "motif", Optional.ofNullable(request.motif()).orElse("")));
+                            CLE_MOTIF, Optional.ofNullable(request.motif()).orElse("")));
             return construireReponseComplete(dossier);
         }
 
@@ -767,7 +764,7 @@ public class DossierService {
         dossier = dossierRepository.save(dossier);
 
         historiqueActionService.enregistrerPour(decideur, dossierId, TypeActionHistorique.SENSIBILITE_RETIREE,
-                Map.of("motif", request.motif()));
+                Map.of(CLE_MOTIF, request.motif()));
 
         return construireReponseComplete(dossier);
     }
@@ -823,7 +820,7 @@ public class DossierService {
         dossier = dossierRepository.save(dossier);
 
         historiqueActionService.enregistrerPour(validateur, dossierId, TypeActionHistorique.SENSIBILITE_ARBITREE,
-                Map.of("decision", request.statut().name(),
+                Map.of(CLE_DECISION, request.statut().name(),
                         "motifRejet", Optional.ofNullable(request.motifRejet()).orElse("")));
 
         List<EtapeProcedure> etapes = etapeProcedureRepository.findByDossierIdOrderByTypeAsc(dossierId);

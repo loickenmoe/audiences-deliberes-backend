@@ -32,12 +32,17 @@ public class HistoriqueActionService {
     @Transactional
     public HistoriqueAction enregistrer(Long dossierId, TypeActionHistorique code, Map<String, Object> details) {
         Utilisateur utilisateur = currentUserService.getCurrentUser();
-        return enregistrerPour(utilisateur, dossierId, code, details);
+        return creerTrace(utilisateur, dossierId, code, details);
     }
 
     /** Variant with an explicit author (e.g. a scheduled job acting on behalf of a user). */
     @Transactional
     public HistoriqueAction enregistrerPour(Utilisateur utilisateur, Long dossierId, TypeActionHistorique code,
+                                             Map<String, Object> details) {
+        return creerTrace(utilisateur, dossierId, code, details);
+    }
+
+    private HistoriqueAction creerTrace(Utilisateur utilisateur, Long dossierId, TypeActionHistorique code,
                                              Map<String, Object> details) {
         HistoriqueAction entry = HistoriqueAction.builder()
                 .dossierId(dossierId)

@@ -28,21 +28,26 @@ public class PasserelleKafka implements PasserelleNotificationEngine {
     private final String topic;
     private final String topicDepot;
     private final long attenteSecondes;
-    private final String pubsub;
-    private final String source;
-    private final boolean cloudEvents;
+    private final Enveloppe enveloppe;
+
+    /**
+     * How messages are wrapped.
+     *
+     * @param pubsub      Dapr pub/sub component named in the CloudEvents envelope
+     * @param source      CloudEvents {@code source}: this service's code
+     * @param cloudEvents {@code true} to wrap messages in a CloudEvents envelope, {@code false} for raw JSON
+     */
+    public record Enveloppe(String pubsub, String source, boolean cloudEvents) {
+    }
 
     public PasserelleKafka(KafkaTemplate<String, String> kafkaTemplate, ObjectMapper objectMapper, String topic,
-                           String topicDepot, long attenteSecondes, String pubsub, String source,
-                           boolean cloudEvents) {
+                           String topicDepot, long attenteSecondes, Enveloppe enveloppe) {
         this.kafkaTemplate = kafkaTemplate;
         this.objectMapper = objectMapper;
         this.topic = topic;
         this.topicDepot = topicDepot;
         this.attenteSecondes = attenteSecondes;
-        this.pubsub = pubsub;
-        this.source = source;
-        this.cloudEvents = cloudEvents;
+        this.enveloppe = enveloppe;
     }
 
     @Override
@@ -63,8 +68,8 @@ public class PasserelleKafka implements PasserelleNotificationEngine {
 
     private String serialiser(Object contenu, String topicVise) {
         try {
-            return objectMapper.writeValueAsString(cloudEvents
-                    ? EnveloppeCloudEvents.autour(contenu, source, pubsub, topicVise)
+            return objectMapper.writeValueAsString(enveloppe.cloudEvents()
+                    ? EnveloppeCloudEvents.autour(contenu, enveloppe.source(), enveloppe.pubsub(), topicVise)
                     : contenu);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("Message illisible par le sérialiseur JSON", e);

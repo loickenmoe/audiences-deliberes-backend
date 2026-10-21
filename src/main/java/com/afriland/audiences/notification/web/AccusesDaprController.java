@@ -34,6 +34,10 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AccusesDaprController {
 
+    private static final String DAPR_PUBSUBNAME = "pubsubname";
+    private static final String DAPR_ROUTE = "route";
+    private static final String DAPR_TOPIC = "topic";
+
     static final String ROUTE_SUCCES = "/notifications/accuses/envoyes";
     static final String ROUTE_ECHEC = "/notifications/accuses/echecs";
     static final String ROUTE_DEPOT = "/notifications/accuses/depots";
@@ -47,9 +51,9 @@ public class AccusesDaprController {
     public List<Map<String, String>> abonnements() {
         String pubsub = proprietes.transport().pubsub();
         return List.of(
-                Map.of("pubsubname", pubsub, "topic", "notification-sent", "route", ROUTE_SUCCES),
-                Map.of("pubsubname", pubsub, "topic", "notification-failed", "route", ROUTE_ECHEC),
-                Map.of("pubsubname", pubsub, "topic", "attachment-upload-response", "route", ROUTE_DEPOT));
+                Map.of(DAPR_PUBSUBNAME, pubsub, DAPR_TOPIC, "notification-sent", DAPR_ROUTE, ROUTE_SUCCES),
+                Map.of(DAPR_PUBSUBNAME, pubsub, DAPR_TOPIC, "notification-failed", DAPR_ROUTE, ROUTE_ECHEC),
+                Map.of(DAPR_PUBSUBNAME, pubsub, DAPR_TOPIC, "attachment-upload-response", DAPR_ROUTE, ROUTE_DEPOT));
     }
 
     @PostMapping(ROUTE_SUCCES)

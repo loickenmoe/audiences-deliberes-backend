@@ -42,6 +42,8 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AudienceService {
 
+    private static final String CLE_AUDIENCE_ID = "audienceId";
+
     private final AudienceRepository audienceRepository;
     private final DossierRepository dossierRepository;
     private final EtapeProcedureRepository etapeProcedureRepository;
@@ -86,14 +88,14 @@ public class AudienceService {
                 .dossier(dossier)
                 .etape(etape)
                 .datePlanifiee(request.datePlanifiee())
-                // By default the hearing takes place where the case was filed (first instance);
-                // appeals or cassation specify their own court.
+                // By default the hearing takes place where the case was filed (first instance).
+                // Appeals or cassation specify their own court.
                 .juridiction(juridictionOuCelleDuDossier(request.juridiction(), dossier))
                 .statut(StatutAudience.PLANIFIEE)
                 .build());
 
         historiqueActionService.enregistrer(dossierId, TypeActionHistorique.AUDIENCE_PLANIFIEE,
-                Map.of("audienceId", audience.getId(), "datePlanifiee", request.datePlanifiee().toString()));
+                Map.of(CLE_AUDIENCE_ID, audience.getId(), "datePlanifiee", request.datePlanifiee().toString()));
 
         if (doublon) {
             signalerDoublonAudience(dossier, audience);
@@ -114,7 +116,7 @@ public class AudienceService {
         destinataires.forEach(dj -> alerteService.declencher(TypeAlerte.DOUBLON_AUDIENCE,
                 dossier.getId(), dj, declencheur));
         historiqueActionService.enregistrer(dossier.getId(), TypeActionHistorique.AUDIENCE_DOUBLON_CONFIRME,
-                Map.of("audienceId", audience.getId()));
+                Map.of(CLE_AUDIENCE_ID, audience.getId()));
     }
 
     /**
@@ -130,7 +132,7 @@ public class AudienceService {
         audience.setNoteAvocat(note);
         audience = audienceRepository.save(audience);
         historiqueActionService.enregistrer(audience.getDossier().getId(),
-                TypeActionHistorique.AUDIENCE_NOTE_AVOCAT_MODIFIEE, Map.of("audienceId", audience.getId()));
+                TypeActionHistorique.AUDIENCE_NOTE_AVOCAT_MODIFIEE, Map.of(CLE_AUDIENCE_ID, audience.getId()));
         return audienceMapper.toResponse(audience);
     }
 
@@ -155,7 +157,7 @@ public class AudienceService {
         audience = audienceRepository.save(audience);
 
         historiqueActionService.enregistrer(audience.getDossier().getId(), TypeActionHistorique.AUDIENCE_COMPTE_RENDU_ENREGISTRE,
-                Map.of("audienceId", audience.getId()));
+                Map.of(CLE_AUDIENCE_ID, audience.getId()));
 
         return audienceMapper.toResponse(audience);
     }
@@ -180,7 +182,7 @@ public class AudienceService {
         audience = audienceRepository.save(audience);
 
         historiqueActionService.enregistrer(audience.getDossier().getId(), TypeActionHistorique.AUDIENCE_ANNULEE,
-                Map.of("audienceId", audience.getId(), "datePlanifiee", audience.getDatePlanifiee().toString(),
+                Map.of(CLE_AUDIENCE_ID, audience.getId(), "datePlanifiee", audience.getDatePlanifiee().toString(),
                         "motif", motif));
 
         return audienceMapper.toResponse(audience);

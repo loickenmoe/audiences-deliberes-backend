@@ -154,6 +154,22 @@ public class LettreConstitutionService {
      * @param image stored image, or {@code null} to print the name alone for handwritten signature
      */
     public record Signataire(byte[] image, String nom) {
+
+        @Override
+        public boolean equals(Object autre) {
+            return autre instanceof Signataire(byte[] autreImage, String autreNom)
+                    && java.util.Arrays.equals(image, autreImage) && java.util.Objects.equals(nom, autreNom);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * java.util.Arrays.hashCode(image) + java.util.Objects.hashCode(nom);
+        }
+
+        @Override
+        public String toString() {
+            return "Signataire[image=" + (image == null ? "null" : image.length + " octets") + ", nom=" + nom + "]";
+        }
     }
 
     private static byte[] image(Signataire signataire) {

@@ -46,8 +46,8 @@ public class NotificationEngineConfig {
                     transport.pubsub(), transport.topic(), transport.topicDepot());
             case KAFKA -> new PasserelleKafka(exigerKafka(kafkaTemplate),
                     objectMapper.getIfAvailable(ObjectMapper::new), transport.topic(), transport.topicDepot(),
-                    transport.attenteSecondes(), transport.pubsub(), proprietes.codeService(),
-                    transport.cloudEvents());
+                    transport.attenteSecondes(), new PasserelleKafka.Enveloppe(transport.pubsub(),
+                            proprietes.codeService(), transport.cloudEvents()));
         };
     }
 

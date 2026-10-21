@@ -58,6 +58,9 @@ import java.util.stream.Stream;
 @RequiredArgsConstructor
 public class FraisService {
 
+    private static final String CLE_DEMANDE_ID = "demandeId";
+    private static final String MESSAGE_SUR_LE_DOSSIER = " sur le dossier ";
+
     private static final String CLE_SEUIL_MONTANT_DEFAUT = "SEUIL_MONTANT_DEFAUT";
 
     private final DemandeFraisRepository demandeFraisRepository;
@@ -103,7 +106,7 @@ public class FraisService {
                 .build());
 
         historiqueActionService.enregistrer(dossier.getId(), TypeActionHistorique.FRAIS_DEMANDE_DEPOSEE,
-                Map.of("demandeId", demande.getId(), "montant", request.montant()));
+                Map.of(CLE_DEMANDE_ID, demande.getId(), "montant", request.montant()));
 
         notifierProfil("ASSISTANTE", dossier.getId(), TypeAlerte.NOUVELLE_DEMANDE_FRAIS,
                 "Nouvelle demande de frais déposée sur le dossier " + dossier.getReference()
@@ -131,7 +134,7 @@ public class FraisService {
         }
 
         historiqueActionService.enregistrer(demande.getDossier().getId(), TypeActionHistorique.FRAIS_CONFORMITE_CONTROLEE,
-                Map.of("demandeId", demandeId, "conforme", request.conforme()));
+                Map.of(CLE_DEMANDE_ID, demandeId, "conforme", request.conforme()));
 
         return versReponse(demande);
     }
@@ -164,7 +167,7 @@ public class FraisService {
         }
 
         historiqueActionService.enregistrer(demande.getDossier().getId(), TypeActionHistorique.FRAIS_OPPORTUNITE_CONTROLEE,
-                Map.of("demandeId", demandeId, "accord", request.accord()));
+                Map.of(CLE_DEMANDE_ID, demandeId, "accord", request.accord()));
 
         return versReponse(demande);
     }
@@ -199,7 +202,7 @@ public class FraisService {
         }
 
         historiqueActionService.enregistrer(demande.getDossier().getId(), TypeActionHistorique.FRAIS_VALIDATION_CONJOINTE,
-                Map.of("demandeId", demandeId, "etape", etape.name(), "accord", request.accord()));
+                Map.of(CLE_DEMANDE_ID, demandeId, "etape", etape.name(), "accord", request.accord()));
 
         return versReponse(demande);
     }
@@ -218,9 +221,9 @@ public class FraisService {
         DemandeFrais payee = demandeFraisRepository.save(demande);
         Long dossierId = payee.getDossier().getId();
 
-        historiqueActionService.enregistrer(dossierId, TypeActionHistorique.FRAIS_PAIEMENT_ENREGISTRE, Map.of("demandeId", demandeId));
+        historiqueActionService.enregistrer(dossierId, TypeActionHistorique.FRAIS_PAIEMENT_ENREGISTRE, Map.of(CLE_DEMANDE_ID, demandeId));
 
-        String message = "Le paiement de votre demande de frais " + demandeId + " sur le dossier "
+        String message = "Le paiement de votre demande de frais " + demandeId + MESSAGE_SUR_LE_DOSSIER
                 + payee.getDossier().getReference() + " a été effectué (RG-INT-04).";
         compteAvocatService.utilisateurDe(payee.getAvocat())
                 .ifPresent(u -> alerteService.declencher(TypeAlerte.PAIEMENT_EFFECTUE, dossierId, u, message));
@@ -294,7 +297,7 @@ public class FraisService {
         demande.setMotifRejet(motif);
         demandeFraisRepository.save(demande);
 
-        String message = "Votre demande de frais " + demande.getId() + " sur le dossier "
+        String message = "Votre demande de frais " + demande.getId() + MESSAGE_SUR_LE_DOSSIER
                 + demande.getDossier().getReference() + " a été rejetée : " + motif;
         compteAvocatService.utilisateurDe(demande.getAvocat())
                 .ifPresent(u -> alerteService.declencher(TypeAlerte.NOUVELLE_DEMANDE_FRAIS, demande.getDossier().getId(), u, message));
@@ -316,7 +319,7 @@ public class FraisService {
 
     /** RG-ALR: tells the DJ and the DJA that a joint approval is required (FR-INT-03, sensitive case or amount &gt; threshold). */
     private void signalerValidationConjointeRequise(DemandeFrais demande) {
-        String message = "La demande de frais " + demande.getId() + " sur le dossier "
+        String message = "La demande de frais " + demande.getId() + MESSAGE_SUR_LE_DOSSIER
                 + demande.getDossier().getReference() + " requiert une validation conjointe DJ+DJA (RG-INT-03).";
         notifierProfil("DJ", demande.getDossier().getId(), TypeAlerte.VALIDATION_CONJOINTE_REQUISE, message);
         notifierProfil("DJA", demande.getDossier().getId(), TypeAlerte.VALIDATION_CONJOINTE_REQUISE, message);

@@ -36,11 +36,15 @@ public class CurrentUserService {
     /** Returns the user of the current request's token, creating it on its first authenticated request. */
     @Transactional(readOnly = true)
     public Utilisateur getCurrentUser() {
-        return resolveOrProvision(extractJwt());
+        return resoudreOuProvisionner(extractJwt());
     }
 
     @Transactional(readOnly = true)
     public Utilisateur resolveOrProvision(Jwt jwt) {
+        return resoudreOuProvisionner(jwt);
+    }
+
+    private Utilisateur resoudreOuProvisionner(Jwt jwt) {
         return utilisateurRepository.findByKeycloakId(jwt.getSubject())
                 .map(utilisateur -> synchroniserIdentifiant(utilisateur, jwt))
                 .orElseGet(() -> provisioningService.provisionner(jwt));

@@ -51,6 +51,8 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class ConstitutionService {
 
+    private static final String CLE_DEMANDE_ID = "demandeId";
+
     /**
      * Document type of a signed letter in the GED. {@code typeDocument} is free text, so this
      * constant is the single source of its value; the UI relies on it to offer pre-printed paper
@@ -101,7 +103,7 @@ public class ConstitutionService {
         lettreConstitutionRepository.save(lettreConstitutionService.brouillonPour(demande, null));
 
         historiqueActionService.enregistrerPour(demandeur, dossier.getId(), TypeActionHistorique.CONSTITUTION_DEMANDEE,
-                Map.of("demandeId", demande.getId(), "prestataireId", prestataire.getId()));
+                Map.of(CLE_DEMANDE_ID, demande.getId(), "prestataireId", prestataire.getId()));
 
         String declencheur = "Demande de constitution du prestataire « " + prestataire.getNom()
                 + " » sur le dossier " + dossier.getReference() + " (RG-INT-08).";
@@ -140,7 +142,7 @@ public class ConstitutionService {
         demande = demandeConstitutionRepository.save(demande);
 
         historiqueActionService.enregistrerPour(sh, demande.getDossier().getId(), TypeActionHistorique.CONSTITUTION_ARBITREE,
-                Map.of("demandeId", demandeId, "decision", request.decision().name()));
+                Map.of(CLE_DEMANDE_ID, demandeId, "decision", request.decision().name()));
 
         return versReponse(demande);
     }
@@ -230,7 +232,7 @@ public class ConstitutionService {
         // manager may also edit it.
         historiqueActionService.enregistrerPour(redacteur,
                 lettre.getDemande().getDossier().getId(), TypeActionHistorique.LETTRE_CONSTITUTION_REDIGEE,
-                Map.of("demandeId", demandeId,
+                Map.of(CLE_DEMANDE_ID, demandeId,
                         // `Map.of` rejects nulls; the subject and the profile may both be missing.
                         "objet", Optional.ofNullable(requete.objet()).orElse(""),
                         "profilRedacteur", Optional.ofNullable(profil(redacteur)).orElse("")));
@@ -301,11 +303,6 @@ public class ConstitutionService {
         }
         byte[] image = signatureService.pour(utilisateur.getId()).map(s -> s.image()).orElse(null);
         return new LettreConstitutionService.Signataire(image, nomDu(utilisateur));
-    }
-
-    /** The id, or null: an unvalidated request has no signatory. */
-    private static Long idDu(Utilisateur utilisateur) {
-        return utilisateur == null ? null : utilisateur.getId();
     }
 
     /** Full name, or null (a draft exists before anyone has written it). */

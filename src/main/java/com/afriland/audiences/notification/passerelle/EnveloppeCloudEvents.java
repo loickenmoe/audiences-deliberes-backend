@@ -35,7 +35,7 @@ public record EnveloppeCloudEvents(
         Object data) {
 
     /** Type Dapr gives to messages published through its API. */
-    public static final String TYPE = "com.dapr.event.sent";
+    public static final String TYPE_DAPR = "com.dapr.event.sent";
     public static final String SPEC_VERSION = "1.0";
     public static final String CONTENT_TYPE = "application/json";
 
@@ -44,7 +44,7 @@ public record EnveloppeCloudEvents(
         String horodatage = OffsetDateTime.now().truncatedTo(ChronoUnit.SECONDS)
                 .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
         String trace = nouveauTraceparent();
-        return new EnveloppeCloudEvents(UUID.randomUUID().toString(), source, TYPE, SPEC_VERSION, CONTENT_TYPE,
+        return new EnveloppeCloudEvents(UUID.randomUUID().toString(), source, TYPE_DAPR, SPEC_VERSION, CONTENT_TYPE,
                 topic, pubsub, horodatage, trace, trace, "", message);
     }
 

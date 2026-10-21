@@ -56,6 +56,8 @@ import java.util.stream.Stream;
 @RequiredArgsConstructor
 public class PartageDocumentService {
 
+    private static final String CLE_DOCUMENT_ID = "documentId";
+
     /** Profiles that decide on a sensitive case file. Read from the profile, never from the role. */
     private static final Set<String> DIRECTION = Set.of("DJ", "DJA");
 
@@ -113,7 +115,7 @@ public class PartageDocumentService {
             trace = TypeActionHistorique.DOCUMENT_PARTAGE_AVOCAT;
         }
         document = documentRepository.save(document);
-        historiqueActionService.enregistrer(document.getDossier().getId(), trace, Map.of("documentId", document.getId()));
+        historiqueActionService.enregistrer(document.getDossier().getId(), trace, Map.of(CLE_DOCUMENT_ID, document.getId()));
         return versReponse(document);
     }
 
@@ -133,7 +135,7 @@ public class PartageDocumentService {
         reinitialiser(document);
         document = documentRepository.save(document);
         historiqueActionService.enregistrer(document.getDossier().getId(), TypeActionHistorique.DOCUMENT_PARTAGE_RETIRE,
-                Map.of("documentId", document.getId(), "ancienStatut", ancien.name()));
+                Map.of(CLE_DOCUMENT_ID, document.getId(), "ancienStatut", ancien.name()));
         return versReponse(document);
     }
 
@@ -164,7 +166,7 @@ public class PartageDocumentService {
         document = documentRepository.save(document);
 
         Map<String, Object> details = new LinkedHashMap<>();
-        details.put("documentId", document.getId());
+        details.put(CLE_DOCUMENT_ID, document.getId());
         details.put("decision", request.decision().name());
         if (request.decision() == DecisionPartage.REJETE) {
             details.put("motif", motif);

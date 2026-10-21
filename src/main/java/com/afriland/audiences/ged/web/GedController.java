@@ -62,7 +62,7 @@ public class GedController {
 
     @DeleteMapping("${api.prefix}/ged/documents/{id}")
     @PreAuthorize("hasAnyRole('JURISTE', 'DJ', 'DJA')")
-    public ResponseEntity<?> supprimerOuDemander(@PathVariable Long id) {
+    public ResponseEntity<Object> supprimerOuDemander(@PathVariable Long id) {
         SuppressionResult resultat = gedService.supprimerOuDemander(id);
         return resultat.immediate()
                 ? ResponseEntity.ok(resultat.document())

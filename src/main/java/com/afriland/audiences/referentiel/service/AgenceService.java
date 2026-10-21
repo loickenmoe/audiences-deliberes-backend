@@ -28,6 +28,8 @@ import java.util.Locale;
 @RequiredArgsConstructor
 public class AgenceService {
 
+    private static final String MESSAGE_AGENCE_INTROUVABLE = "Agence introuvable : ";
+
     private final AgenceRepository agenceRepository;
 
     @Transactional(readOnly = true)
@@ -66,7 +68,7 @@ public class AgenceService {
     public AgenceResponse modifier(Long id, AgenceRequest request) {
         Agence agence = agenceRepository.findById(id)
                 .orElseThrow(() -> ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE,
-                        "Agence introuvable : " + id));
+                        MESSAGE_AGENCE_INTROUVABLE + id));
         if (!agence.getCode().equals(request.code().trim())) {
             throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
                     "Le code d'une agence ne se modifie pas : les dossiers le portent en clair. "
@@ -87,7 +89,7 @@ public class AgenceService {
     public AgenceResponse desactiver(Long id) {
         Agence agence = agenceRepository.findById(id)
                 .orElseThrow(() -> ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE,
-                        "Agence introuvable : " + id));
+                        MESSAGE_AGENCE_INTROUVABLE + id));
         agence.setActif(false);
         return toResponse(agenceRepository.save(agence));
     }
@@ -105,7 +107,7 @@ public class AgenceService {
     public AgenceResponse reactiver(Long id) {
         Agence agence = agenceRepository.findById(id)
                 .orElseThrow(() -> ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE,
-                        "Agence introuvable : " + id));
+                        MESSAGE_AGENCE_INTROUVABLE + id));
         agence.setActif(true);
         return toResponse(agenceRepository.save(agence));
     }

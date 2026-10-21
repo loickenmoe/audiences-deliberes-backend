@@ -67,8 +67,7 @@ class AuditServiceTest {
     void consulter_historiseLaConsultationAvecSesCriteres() {
         lectureVide();
 
-        auditService.consulter(Perimetre.TOUT, null, 42L, TypeActionHistorique.DOCUMENT_CHARGE,
-                LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30), 0, 10);
+        auditService.consulter(new FiltresAudit(Perimetre.TOUT, null, 42L, TypeActionHistorique.DOCUMENT_CHARGE, LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30)), 0, 10);
 
         ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
         verify(historiqueActionService).enregistrer(
@@ -88,7 +87,7 @@ class AuditServiceTest {
     void consulter_neConsignePasLesCriteresAbsents() {
         lectureVide();
 
-        auditService.consulter(Perimetre.TOUT, null, null, null, null, null, 0, 10);
+        auditService.consulter(new FiltresAudit(Perimetre.TOUT, null, null, null, null, null), 0, 10);
 
         ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
         verify(historiqueActionService).enregistrer(any(), eq(TypeActionHistorique.AUDIT_CONSULTE), captor.capture());
@@ -103,7 +102,7 @@ class AuditServiceTest {
     void consulter_neTracePasLeFeuilletage() {
         lectureVide();
 
-        auditService.consulter(Perimetre.TOUT, null, null, null, null, null, 3, 10);
+        auditService.consulter(new FiltresAudit(Perimetre.TOUT, null, null, null, null, null), 3, 10);
 
         verify(historiqueActionService, never()).enregistrer(any(), any(), any());
     }
@@ -112,7 +111,7 @@ class AuditServiceTest {
     void consulter_litDuPlusRecentAuPlusAncien_idDepartageant() {
         lectureVide();
 
-        auditService.consulter(Perimetre.TOUT, null, null, null, null, null, 0, 10);
+        auditService.consulter(new FiltresAudit(Perimetre.TOUT, null, null, null, null, null), 0, 10);
 
         ArgumentCaptor<PageRequest> captor = ArgumentCaptor.forClass(PageRequest.class);
         verify(historiqueActionRepository).findAll(specification(), captor.capture());
@@ -127,7 +126,8 @@ class AuditServiceTest {
      */
     @Test
     void consulter_refuseUnPerimetreDossierSansDossier() {
-        assertThatThrownBy(() -> auditService.consulter(Perimetre.UN_DOSSIER, null, null, null, null, null, 0, 10))
+        var filtres = new FiltresAudit(Perimetre.UN_DOSSIER, null, null, null, null, null);
+        assertThatThrownBy(() -> auditService.consulter(filtres, 0, 10))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("identifiant du dossier");
 
@@ -138,7 +138,8 @@ class AuditServiceTest {
     void consulter_refuseUneFenetreInversee() {
         var date2 = LocalDate.of(2026, 9, 30);
         var date3 = LocalDate.of(2026, 9, 1);
-        assertThatThrownBy(() -> auditService.consulter(Perimetre.TOUT, null, null, null, date2, date3, 0, 10))
+        var filtres = new FiltresAudit(Perimetre.TOUT, null, null, null, date2, date3);
+        assertThatThrownBy(() -> auditService.consulter(filtres, 0, 10))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("date de début");
     }
@@ -154,8 +155,7 @@ class AuditServiceTest {
         when(historiqueActionRepository.actionsPresentes()).thenReturn(List.of(
                 TypeActionHistorique.DOSSIER_CREE, TypeActionHistorique.DOCUMENT_CHARGE));
 
-        AuditResponse audit = auditService.consulter(Perimetre.TOUT, null, null,
-                TypeActionHistorique.DOSSIER_CREE, null, null, 0, 10);
+        AuditResponse audit = auditService.consulter(new FiltresAudit(Perimetre.TOUT, null, null, TypeActionHistorique.DOSSIER_CREE, null, null), 0, 10);
 
         assertThat(audit.actionsDisponibles())
                 .extracting(AuditResponse.OptionAction::libelle)

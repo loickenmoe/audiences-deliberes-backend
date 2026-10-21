@@ -45,11 +45,15 @@ public class ClientService {
 
     @Transactional(readOnly = true)
     public ClientResponse consulterClient(Long id) {
-        return clientMapper.toResponse(getClientOrThrow(id));
+        return clientMapper.toResponse(chargerClient(id));
     }
 
     @Transactional(readOnly = true)
     public Client getClientOrThrow(Long id) {
+        return chargerClient(id);
+    }
+
+    private Client chargerClient(Long id) {
         return clientRepository.findById(id)
                 .orElseThrow(() -> ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE, "Client introuvable : " + id));
     }
@@ -82,7 +86,7 @@ public class ClientService {
      */
     @Transactional
     public ClientResponse modifierClient(Long id, ModifierClientRequest request) {
-        Client client = getClientOrThrow(id);
+        Client client = chargerClient(id);
         String nom = request.nom().trim();
         String email = videEnNull(request.email());
         String telephone = videEnNull(request.telephone());

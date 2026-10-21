@@ -52,8 +52,8 @@ public class AccuseNotificationService {
             return false;
         }
         NotificationAccuse enregistre = notificationAccuseRepository.save(NotificationAccuse.de(
-                accuse.notificationId(), type, accuse.serviceId(), accuse.channel(), accuse.provider(),
-                accuse.errorMessage(), accuse.permanent(), accuse.instant()));
+                        accuse.notificationId(), type, accuse.serviceId(), accuse.instant())
+                .avecDetails(accuse.channel(), accuse.provider(), accuse.errorMessage(), accuse.permanent()));
 
         if (type == TypeAccuse.FAILED) {
             log.warn("Le moteur signale un échec sur le canal {} (fournisseur {}) : {}",
@@ -110,10 +110,12 @@ public class AccuseNotificationService {
         if (notificationAccuseRepository.existsByNotificationIdAndType(notificationId, type)) {
             return;
         }
-        NotificationAccuse enregistre = notificationAccuseRepository.save(NotificationAccuse.de(notificationId, type,
-                proprietes.codeService(), accuse == null ? null : accuse.channel(), accuse == null ? null : accuse.provider(),
-                accuse == null ? null : accuse.errorMessage(), accuse == null ? null : accuse.permanent(),
-                accuse == null ? LocalDateTime.now() : accuse.instant()));
+        NotificationAccuse nouveau = NotificationAccuse.de(notificationId, type, proprietes.codeService(),
+                accuse == null ? LocalDateTime.now() : accuse.instant());
+        if (accuse != null) {
+            nouveau.avecDetails(accuse.channel(), accuse.provider(), accuse.errorMessage(), accuse.permanent());
+        }
+        NotificationAccuse enregistre = notificationAccuseRepository.save(nouveau);
         enregistre.rattacherA(envoiId);
     }
 

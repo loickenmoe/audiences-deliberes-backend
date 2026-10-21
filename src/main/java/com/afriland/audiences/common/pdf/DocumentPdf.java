@@ -74,7 +74,7 @@ public final class DocumentPdf implements AutoCloseable {
      * Logo bytes, loaded once. The PDFBox image object is bound to a document, so it is created per
      * document.
      */
-    private static final byte[] LOGO = chargerLogo();
+    private static final byte[] LOGO_OCTETS = chargerLogo();
 
     private final PDDocument document = new PDDocument();
     private final PDRectangle format;
@@ -196,21 +196,26 @@ public final class DocumentPdf implements AutoCloseable {
             String ligneSource = TextePdf.replier(ligneBrute);
             if (ligneSource.isBlank()) {
                 y -= taille * 0.9f;
-                continue;
+            } else {
+                ecrireLigneRepliee(ligneSource, taille);
             }
-            StringBuilder courante = new StringBuilder();
-            for (String mot : ligneSource.split(" ")) {
-                String essai = courante.isEmpty() ? mot : courante + " " + mot;
-                if (!courante.isEmpty() && largeurDe(essai, normale, taille) > largeurUtile()) {
-                    ecrireEtDescendre(courante.toString(), taille);
-                    courante = new StringBuilder(mot);
-                } else {
-                    courante = new StringBuilder(essai);
-                }
-            }
-            if (!courante.isEmpty()) {
+        }
+    }
+
+    /** Folds one source line word by word on the usable width. */
+    private void ecrireLigneRepliee(String ligneSource, float taille) {
+        StringBuilder courante = new StringBuilder();
+        for (String mot : ligneSource.split(" ")) {
+            String essai = courante.isEmpty() ? mot : courante + " " + mot;
+            if (!courante.isEmpty() && largeurDe(essai, normale, taille) > largeurUtile()) {
                 ecrireEtDescendre(courante.toString(), taille);
+                courante = new StringBuilder(mot);
+            } else {
+                courante = new StringBuilder(essai);
             }
+        }
+        if (!courante.isEmpty()) {
+            ecrireEtDescendre(courante.toString(), taille);
         }
     }
 
@@ -363,31 +368,39 @@ public final class DocumentPdf implements AutoCloseable {
         }
         dessinerEnTeteTableau(entetes, largeurs);
         for (List<String> ligne : lignes) {
-            List<List<String>> cellules = new ArrayList<>();
-            int hauteur = 1;
-            for (int i = 0; i < largeurs.length; i++) {
-                String cellule = i < ligne.size() ? ligne.get(i) : "";
-                List<String> morceaux = replier
-                        ? replierCellule(cellule, largeurs[i] - 6)
-                        : List.of(couper(cellule, largeurs[i] - 6, normale, 8f));
-                cellules.add(morceaux);
-                hauteur = Math.max(hauteur, morceaux.size());
-            }
-            float besoin = HAUTEUR_LIGNE + (hauteur - 1) * INTERLIGNE_CELLULE;
+            List<List<String>> cellules = decouperLigne(ligne, largeurs, replier);
+            int hauteur = cellules.stream().mapToInt(List::size).max().orElse(1);
+            float besoin = HAUTEUR_LIGNE + (Math.max(hauteur, 1) - 1) * INTERLIGNE_CELLULE;
             // For a single-line row this is equivalent to y < MARGE + PIED + HAUTEUR_LIGNE.
             if (y - besoin < MARGE + PIED) {
                 nouvellePage();
                 dessinerEnTeteTableau(entetes, largeurs);
             }
-            float x = margeGauche();
-            for (int i = 0; i < largeurs.length; i++) {
-                List<String> morceaux = cellules.get(i);
-                for (int k = 0; k < morceaux.size(); k++) {
-                    ecrire(morceaux.get(k), x + 3, y - k * INTERLIGNE_CELLULE, normale, 8f, ANTHRACITE);
-                }
-                x += largeurs[i];
-            }
+            ecrireLigne(cellules, largeurs);
             y -= besoin;
+        }
+    }
+
+    /** The lines of each cell of a row: folded when {@code replier}, otherwise cut to fit. */
+    private List<List<String>> decouperLigne(List<String> ligne, float[] largeurs, boolean replier) {
+        List<List<String>> cellules = new ArrayList<>();
+        for (int i = 0; i < largeurs.length; i++) {
+            String cellule = i < ligne.size() ? ligne.get(i) : "";
+            cellules.add(replier
+                    ? replierCellule(cellule, largeurs[i] - 6)
+                    : List.of(couper(cellule, largeurs[i] - 6, normale, 8f)));
+        }
+        return cellules;
+    }
+
+    private void ecrireLigne(List<List<String>> cellules, float[] largeurs) {
+        float x = margeGauche();
+        for (int i = 0; i < largeurs.length; i++) {
+            List<String> morceaux = cellules.get(i);
+            for (int k = 0; k < morceaux.size(); k++) {
+                ecrire(morceaux.get(k), x + 3, y - k * INTERLIGNE_CELLULE, normale, 8f, ANTHRACITE);
+            }
+            x += largeurs[i];
         }
     }
 
@@ -470,9 +483,9 @@ public final class DocumentPdf implements AutoCloseable {
             return;
         }
         float hautDuBloc = y;
-        if (LOGO.length > 0) {
+        if (LOGO_OCTETS.length > 0) {
             if (logo == null) {
-                logo = PDImageXObject.createFromByteArray(document, LOGO, "logo");
+                logo = PDImageXObject.createFromByteArray(document, LOGO_OCTETS, "logo");
             }
             float largeur = HAUTEUR_LOGO * logo.getWidth() / logo.getHeight();
             flux.drawImage(logo, MARGE, hautDuBloc - HAUTEUR_LOGO, largeur, HAUTEUR_LOGO);
@@ -506,11 +519,11 @@ public final class DocumentPdf implements AutoCloseable {
      */
     private void dessinerPapierEnTete() throws IOException {
         float haut = format.getHeight() - MARGE;
-        if (LOGO.length > 0) {
+        if (LOGO_OCTETS.length > 0) {
             float hauteur = 30f;
             if (dessinerGabarit) {
                 if (logo == null) {
-                    logo = PDImageXObject.createFromByteArray(document, LOGO, "logo");
+                    logo = PDImageXObject.createFromByteArray(document, LOGO_OCTETS, "logo");
                 }
                 float largeur = hauteur * logo.getWidth() / logo.getHeight();
                 flux.drawImage(logo, (format.getWidth() - largeur) / 2, haut - hauteur, largeur, hauteur);

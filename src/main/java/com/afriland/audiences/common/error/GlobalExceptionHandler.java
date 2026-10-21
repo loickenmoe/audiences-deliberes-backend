@@ -88,7 +88,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     // Standard Spring MVC exceptions (via ResponseEntityExceptionHandler)
 
+    // Signature imposed by ResponseEntityExceptionHandler: java:S2638 flags its generic type argument (false positive).
     @Override
+    @SuppressWarnings("java:S2638")
     protected ResponseEntity<Object> handleMethodArgumentNotValid(
             MethodArgumentNotValidException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
         String details = ex.getBindingResult().getFieldErrors().stream()
@@ -98,21 +100,27 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 .body(new ErrorResponse(ErrorCodes.REQUETE_INVALIDE, "Requête invalide", details));
     }
 
+    // Signature imposed by ResponseEntityExceptionHandler: java:S2638 flags its generic type argument (false positive).
     @Override
+    @SuppressWarnings("java:S2638")
     protected ResponseEntity<Object> handleHttpMessageNotReadable(
             HttpMessageNotReadableException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
         return ResponseEntity.badRequest()
                 .body(new ErrorResponse(ErrorCodes.REQUETE_INVALIDE, "Corps de requête illisible ou mal formé", null));
     }
 
+    // Signature imposed by ResponseEntityExceptionHandler: java:S2638 flags its generic type argument (false positive).
     @Override
+    @SuppressWarnings("java:S2638")
     protected ResponseEntity<Object> handleMissingServletRequestParameter(
             MissingServletRequestParameterException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
         return ResponseEntity.badRequest()
                 .body(new ErrorResponse(ErrorCodes.REQUETE_INVALIDE, "Paramètre requis manquant", ex.getParameterName()));
     }
 
+    // Signature imposed by ResponseEntityExceptionHandler: java:S2638 flags its generic type argument (false positive).
     @Override
+    @SuppressWarnings("java:S2638")
     protected ResponseEntity<Object> handleHttpRequestMethodNotSupported(
             HttpRequestMethodNotSupportedException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
         return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
@@ -133,7 +141,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
      * Implemented as an override of the parent's dedicated hook: a separate {@code @ExceptionHandler}
      * would be ambiguous with {@link ResponseEntityExceptionHandler}'s generic handler.
      */
+    // Signature imposed by ResponseEntityExceptionHandler: java:S2638 flags its generic type argument (false positive).
     @Override
+    @SuppressWarnings("java:S2638")
     protected ResponseEntity<Object> handleMaxUploadSizeExceededException(
             MaxUploadSizeExceededException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
         return ResponseEntity.badRequest()

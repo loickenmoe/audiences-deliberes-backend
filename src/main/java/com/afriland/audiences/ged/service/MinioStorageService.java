@@ -28,6 +28,8 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 public class MinioStorageService {
 
+    private static final String MESSAGE_FICHIER_ILLISIBLE = "Fichier illisible : ";
+
     private static final int EXPIRATION_URL_MINUTES = 10;
 
     private final MinioClient minioClient;
@@ -43,7 +45,7 @@ public class MinioStorageService {
         try (InputStream flux = fichier.getInputStream()) {
             return deposer("dossiers/" + dossierId, fichier.getOriginalFilename(), fichier.getContentType(), flux, fichier.getSize());
         } catch (IOException e) {
-            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE, "Fichier illisible : " + e.getMessage());
+            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE, MESSAGE_FICHIER_ILLISIBLE + e.getMessage());
         }
     }
 
@@ -64,7 +66,7 @@ public class MinioStorageService {
         try (InputStream flux = fichier.getInputStream()) {
             return deposer("jurisprudence", fichier.getOriginalFilename(), fichier.getContentType(), flux, fichier.getSize());
         } catch (IOException e) {
-            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE, "Fichier illisible : " + e.getMessage());
+            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE, MESSAGE_FICHIER_ILLISIBLE + e.getMessage());
         }
     }
 
@@ -78,7 +80,7 @@ public class MinioStorageService {
             return deposer(PREFIXE_PIECES_FRAIS, fichier.getOriginalFilename(), fichier.getContentType(),
                     flux, fichier.getSize());
         } catch (IOException e) {
-            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE, "Fichier illisible : " + e.getMessage());
+            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE, MESSAGE_FICHIER_ILLISIBLE + e.getMessage());
         }
     }
 

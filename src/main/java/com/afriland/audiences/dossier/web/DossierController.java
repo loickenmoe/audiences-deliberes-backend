@@ -1,6 +1,7 @@
 package com.afriland.audiences.dossier.web;
 
 import com.afriland.audiences.common.web.PageResponse;
+import com.afriland.audiences.dossier.service.FiltresDossiers;
 import com.afriland.audiences.dossier.service.DossierService;
 import com.afriland.audiences.dossier.web.dto.AuditSeuilResponse;
 import com.afriland.audiences.dossier.web.dto.CreerDossierRequest;
@@ -83,9 +84,9 @@ public class DossierController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         // Most recent first by default; other orders are those listed in `TriDossiers`.
-        return dossierService.listerDossiers(nature, categorie, juridiction, reference, clientId,
-                mesDossiers, estSensible, sensibiliteStatut, typeEtape, statutEtape, dateDebut, dateFin,
-                PageRequest.of(page, size, tri.sort()));
+        var filtres = new FiltresDossiers(nature, categorie, juridiction, reference, clientId,
+                estSensible, sensibiliteStatut, typeEtape, statutEtape, dateDebut, dateFin);
+        return dossierService.listerDossiers(filtres, mesDossiers, PageRequest.of(page, size, tri.sort()));
     }
 
     @GetMapping("/{id}")

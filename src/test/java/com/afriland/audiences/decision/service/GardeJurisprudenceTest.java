@@ -42,7 +42,7 @@ class GardeJurisprudenceTest {
         List<StatutCycleVie> fermes = java.util.Arrays.stream(StatutCycleVie.values())
                 .filter(StatutCycleVie::estFerme).toList();
 
-        assertThat(StatutCycleVie.FERMES).isEqualTo(fermes);
+        assertThat(fermes).isEqualTo(StatutCycleVie.FERMES);
     }
 
     /** A status added later without an explicit decision counts as open: the safe default. */

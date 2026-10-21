@@ -90,7 +90,7 @@ public class AudienceController {
 
     @GetMapping("${api.prefix}/audiences/calendrier")
     @PreAuthorize("hasAnyRole('JURISTE', 'DJ')")
-    public ResponseEntity<?> calendrier(@RequestParam PeriodeCalendrier periode,
+    public ResponseEntity<Object> calendrier(@RequestParam PeriodeCalendrier periode,
                                          @RequestParam LocalDate dateDebut,
                                          @RequestParam(defaultValue = "JSON") FormatExport format) {
         List<CalendrierEntreeResponse> entrees = audienceService.calendrier(periode, dateDebut);

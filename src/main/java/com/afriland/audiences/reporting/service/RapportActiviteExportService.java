@@ -101,7 +101,8 @@ public class RapportActiviteExportService {
                 .replaceAll("\\p{M}+", "")
                 .toLowerCase(java.util.Locale.ROOT)
                 .replaceAll("[^a-z0-9]+", "-")
-                .replaceAll("(^-|-$)", "");
+                .replaceFirst("^-", "")
+                .replaceFirst("-$", "");
     }
 
     /** File name built from the person and the period, so downloaded sheets are distinguishable. */

@@ -7,7 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -30,10 +30,15 @@ public class DispatcherNotification {
 
     private final NotificationEnvoiRepository notificationEnvoiRepository;
     private final RemiseNotification remiseNotification;
+    /**
+     * Opens the transaction explicitly: {@code @Transactional} on a method of this same class would be
+     * ignored, Spring only applies it to calls coming through the proxy.
+     */
+    private final TransactionTemplate transactions;
 
     @Scheduled(fixedDelayString = "${notification.engine.dispatcher.interval-ms:60000}")
     public void remettreLesNotificationsEnAttente() {
-        abandonnerLesPiecesJointesSansReponse();
+        transactions.executeWithoutResult(statut -> abandonnerLesPiecesJointesSansReponse());
         for (Long id : aRemettre()) {
             try {
                 remiseNotification.remettre(id);
@@ -44,17 +49,17 @@ public class DispatcherNotification {
         }
     }
 
-    @Transactional(readOnly = true)
-    public List<Long> aRemettre() {
+    /** A single repository query: Spring Data runs it in its own read-only transaction. */
+    List<Long> aRemettre() {
         return notificationEnvoiRepository.trouverARemettre(LocalDateTime.now(), PageRequest.of(0, LOT));
     }
 
     /**
      * A failed attachment upload must not hold the notification back: after the delay it is sent
-     * without the document and the cause is recorded.
+     * without the document and the cause is recorded. Runs inside {@link #transactions}, so the change
+     * of each row is flushed.
      */
-    @Transactional
-    public void abandonnerLesPiecesJointesSansReponse() {
+    void abandonnerLesPiecesJointesSansReponse() {
         List<NotificationEnvoi> attentes = notificationEnvoiRepository
                 .trouverEnAttenteDePieceJointe(LocalDateTime.now(), PageRequest.of(0, LOT));
         for (NotificationEnvoi envoi : attentes) {

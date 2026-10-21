@@ -37,6 +37,10 @@ public class ConfigurationService {
 
     @Transactional(readOnly = true)
     public ConfigurationSysteme getOrThrow(String cle) {
+        return chargerConfiguration(cle);
+    }
+
+    private ConfigurationSysteme chargerConfiguration(String cle) {
         return configurationSystemeRepository.findByCle(cle)
                 .orElseThrow(() -> ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE,
                         "Clé de configuration introuvable : " + cle));
@@ -49,7 +53,7 @@ public class ConfigurationService {
      */
     @Transactional
     public ConfigurationResponse modifier(String cle, String nouvelleValeur) {
-        ConfigurationSysteme configuration = getOrThrow(cle);
+        ConfigurationSysteme configuration = chargerConfiguration(cle);
         String valeurRetenue = RegleConfiguration.pour(cle)
                 .map(regle -> regle.valider(nouvelleValeur))
                 .orElseGet(() -> exigerNonVide(cle, nouvelleValeur));
