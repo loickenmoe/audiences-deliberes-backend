@@ -5,6 +5,7 @@ import com.afriland.audiences.common.audit.TypeActionHistorique;
 import com.afriland.audiences.common.error.ApiException;
 import com.afriland.audiences.common.error.ErrorCodes;
 import com.afriland.audiences.common.web.PageResponse;
+import com.afriland.audiences.notification.service.Coordonnees;
 import com.afriland.audiences.referentiel.domain.Client;
 import com.afriland.audiences.referentiel.mapper.ClientMapper;
 import com.afriland.audiences.referentiel.repository.ClientRepository;
@@ -73,6 +74,7 @@ public class ClientService {
         }
         Client client = clientMapper.toEntity(request);
         client.setReference(reference);
+        client.setTelephone(telephoneValide(request.telephone()));
         client = clientRepository.save(client);
         return clientMapper.toResponse(client);
     }
@@ -89,7 +91,7 @@ public class ClientService {
         Client client = chargerClient(id);
         String nom = request.nom().trim();
         String email = videEnNull(request.email());
-        String telephone = videEnNull(request.telephone());
+        String telephone = telephoneValide(request.telephone());
 
         Map<String, Object> details = new LinkedHashMap<>();
         details.put("reference", client.getReference());
@@ -118,5 +120,20 @@ public class ClientService {
     /** An optional field cleared on screen arrives as an empty string: it is stored as absent. */
     private static String videEnNull(String valeur) {
         return StringUtils.hasText(valeur) ? valeur.trim() : null;
+    }
+
+    /**
+     * Same rule as an intervenant's phone: checked and stored in international format, so a client's
+     * number is entered once in a form the notification module can use. Empty means absent.
+     */
+    private static String telephoneValide(String saisie) {
+        String telephone = videEnNull(saisie);
+        if (telephone == null) {
+            return null;
+        }
+        return Coordonnees.telephone(telephone).orElseThrow(() -> ApiException.badRequestSurChamp(
+                ErrorCodes.REQUETE_INVALIDE,
+                "Numéro de téléphone invalide : attendu 6XXXXXXXX, 237XXXXXXXXX ou +237XXXXXXXXX",
+                "telephone"));
     }
 }

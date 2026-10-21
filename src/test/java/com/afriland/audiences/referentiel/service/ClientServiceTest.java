@@ -159,10 +159,11 @@ class ClientServiceTest {
     @Test
     void modifierClient_metAJourEtNHistoriseQueLesChampsChanges() {
         client.setEmail("ancien@banque.cm");
-        client.setTelephone("+237 600 000 000");
+        client.setTelephone("+237600000000");
         when(clientRepository.findById(1L)).thenReturn(Optional.of(client));
         when(clientRepository.save(any(Client.class))).thenAnswer(inv -> inv.getArgument(0));
 
+        // The phone is entered with spaces but normalizes to the stored value: unchanged.
         ClientResponse result = service.modifierClient(1L,
                 new ModifierClientRequest("Banque Test", "nouveau@banque.cm", "+237 600 000 000"));
 
@@ -218,5 +219,73 @@ class ClientServiceTest {
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("Client introuvable");
         verifyNoInteractions(historiqueActionService);
+    }
+
+    // Phone: same rule as an intervenant's (Coordonnees.telephone), checked by the server.
+
+    private ApiException refus(Runnable appel) {
+        try {
+            appel.run();
+        } catch (ApiException e) {
+            return e;
+        }
+        throw new AssertionError("refus attendu");
+    }
+
+    @Test
+    void creerClient_telephoneCamerounais_enregistreAuFormatInternational() {
+        when(clientRepository.findByReference("CLI-2026-0001")).thenReturn(Optional.empty());
+        when(clientRepository.save(any(Client.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ClientResponse result = service.creerClient(new CreerClientRequest("Client SA", null, "650 22 89 36"));
+
+        assertThat(result.telephone()).isEqualTo("+237650228936");
+    }
+
+    @Test
+    void creerClient_sansTelephone_resteAbsent() {
+        when(clientRepository.findByReference("CLI-2026-0001")).thenReturn(Optional.empty());
+        when(clientRepository.save(any(Client.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThat(service.creerClient(new CreerClientRequest("Client SA", null, "   ")).telephone()).isNull();
+    }
+
+    @Test
+    void creerClient_telephoneHorsFormat_estRefuseSurLeChamp() {
+        when(clientRepository.findByReference("CLI-2026-0001")).thenReturn(Optional.empty());
+        var fixe = new CreerClientRequest("Client SA", null, "2 22 45 67 89");
+        var etrangerSansIndicatif = new CreerClientRequest("Client SA", null, "33612345678");
+
+        ApiException refusFixe = refus(() -> service.creerClient(fixe));
+        ApiException refusEtranger = refus(() -> service.creerClient(etrangerSansIndicatif));
+
+        assertThat(refusFixe.getChamp()).isEqualTo("telephone");
+        assertThat(refusFixe.getMessage()).contains("Numéro de téléphone invalide");
+        assertThat(refusEtranger.getChamp()).isEqualTo("telephone");
+        verify(clientRepository, never()).save(any());
+    }
+
+    @Test
+    void modifierClient_telephoneHorsFormat_estRefuseSansRienEcrire() {
+        when(clientRepository.findById(1L)).thenReturn(Optional.of(client));
+        var requete = new ModifierClientRequest("Banque Test", null, "12345");
+
+        assertThat(refus(() -> service.modifierClient(1L, requete)).getChamp()).isEqualTo("telephone");
+        verify(clientRepository, never()).save(any());
+        verifyNoInteractions(historiqueActionService);
+    }
+
+    @Test
+    void modifierClient_ancienFormat_estNormaliseEtTrace() {
+        client.setTelephone("+237 600 000 000");
+        when(clientRepository.findById(1L)).thenReturn(Optional.of(client));
+        when(clientRepository.save(any(Client.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ClientResponse result = service.modifierClient(1L, new ModifierClientRequest("Banque Test", null, "+237 600 000 000"));
+
+        // A number stored before the rule is rewritten in the single stored format, and the change is traced.
+        assertThat(result.telephone()).isEqualTo("+237600000000");
+        assertThat(detailsHistorises()).containsEntry("ancienTelephone", "+237 600 000 000")
+                .containsEntry("nouveauTelephone", "+237600000000");
     }
 }
