@@ -19,7 +19,7 @@ public class RepertoireController {
     private final RepertoireAvocatsService repertoireAvocatsService;
 
     @GetMapping("${api.prefix}/repertoire/avocats")
-    @PreAuthorize("hasAnyRole('JURISTE', 'ASSISTANTE')")
+    @PreAuthorize("hasAnyRole('JURISTE', 'ASSISTANTE', 'SH')")
     public PageResponse<AvocatRepertoireResponse> lister(@RequestParam(required = false) String nom,
                                                            @RequestParam(defaultValue = "0") int page,
                                                            @RequestParam(defaultValue = "10") int size) {

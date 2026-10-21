@@ -67,11 +67,11 @@ public class ReportingController {
     }
 
     /**
-     * Hearing journal for a given day. Open to legal officers as well as management, since they
-     * use it daily and write the reports themselves.
+     * Hearing journal for a given day. Open to legal officers and management, who use it daily and
+     * write the reports, and in consultation to the Assistant and the SH (2026-10-21).
      */
     @GetMapping("${api.prefix}/audiences/journal")
-    @PreAuthorize("hasAnyRole('JURISTE', 'DJ', 'DJA')")
+    @PreAuthorize("hasAnyRole('JURISTE', 'DJ', 'DJA', 'ASSISTANTE', 'SH')")
     public PageResponse<AudienceDuJourResponse> journalDesAudiences(
             @RequestParam LocalDate date,
             @RequestParam(defaultValue = "0") int page,
@@ -84,7 +84,7 @@ public class ReportingController {
      * stays bounded; oldest first, as they are the most urgent.
      */
     @GetMapping("${api.prefix}/audiences/comptes-rendus-attendus")
-    @PreAuthorize("hasAnyRole('JURISTE', 'DJ', 'DJA')")
+    @PreAuthorize("hasAnyRole('JURISTE', 'DJ', 'DJA', 'ASSISTANTE', 'SH')")
     public PageResponse<CompteRenduAttenduResponse> comptesRendusAttendus(
             @RequestParam LocalDate dateDebut,
             @RequestParam LocalDate dateFin,
@@ -95,7 +95,7 @@ public class ReportingController {
     }
 
     @GetMapping("${api.prefix}/rapports")
-    @PreAuthorize("hasRole('JURISTE')")
+    @PreAuthorize("hasAnyRole('JURISTE', 'ASSISTANTE', 'SH')")
     public ResponseEntity<Object> rapports(@RequestParam TypeRapport type,
                                         @RequestParam LocalDate dateDebut,
                                         @RequestParam LocalDate dateFin,

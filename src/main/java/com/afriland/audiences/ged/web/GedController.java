@@ -86,11 +86,11 @@ public class GedController {
     }
 
     /**
-     * "Any legal officer" (FR-GED-04): the DJ and DJA have all of a legal officer's rights, and the
-     * Assistant is assigned this report, so all three are named explicitly.
+     * "Any legal officer" (FR-GED-04): the DJ and DJA have all of a legal officer's rights, the
+     * Assistant is assigned this report, and the SH consults it (2026-10-21): all are named explicitly.
      */
     @GetMapping("${api.prefix}/ged/rapport-journalier")
-    @PreAuthorize("hasAnyRole('JURISTE', 'DJ', 'DJA', 'ASSISTANTE')")
+    @PreAuthorize("hasAnyRole('JURISTE', 'DJ', 'DJA', 'ASSISTANTE', 'SH')")
     public RapportJournalierResponse rapportJournalier(@RequestParam(required = false) LocalDate date) {
         return gedService.rapportJournalier(date != null ? date : LocalDate.now());
     }

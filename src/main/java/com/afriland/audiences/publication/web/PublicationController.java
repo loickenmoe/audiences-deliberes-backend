@@ -94,7 +94,7 @@ public class PublicationController {
      * screen; {@code dossierId} feeds the publications tab of a case file.
      */
     @GetMapping
-    @PreAuthorize("hasAnyRole('ASSISTANTE', 'JURISTE', 'DJ', 'DJA')")
+    @PreAuthorize("hasAnyRole('ASSISTANTE', 'JURISTE', 'DJ', 'DJA', 'SH')")
     public com.afriland.audiences.common.web.PageResponse<PublicationResponse> lister(
             @RequestParam(required = false) Long dossierId,
             @RequestParam(required = false) com.afriland.audiences.publication.domain.StatutPublication statut,

@@ -596,7 +596,10 @@ class HabilitationFrontendIntegrationTest {
                         .with(role("kc-assistante-m15", "ROLE_ASSISTANTE")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content").isArray());
+        // The SH consults the publications too (2026-10-21), without validating them.
         mockMvc.perform(get(api("/publications")).with(role("kc-sh-m15", "ROLE_SH")))
+                .andExpect(status().isOk());
+        mockMvc.perform(get(api("/publications")).with(role("kc-avocat-m15", "ROLE_AVOCAT")))
                 .andExpect(status().isForbidden());
 
         // Deletion requests: DJ/DJA
@@ -1789,16 +1792,43 @@ class HabilitationFrontendIntegrationTest {
     }
 
     @Test
-    @DisplayName("M16 : le rapport journalier est servi au juriste, au DJ, à la DJA et à l'Assistante, refusé au SH (Q-80)")
-    void rapportJournalier_ouvertAuxQuatreProfils() throws Exception {
-        for (String roleProfil : List.of("ROLE_JURISTE", "ROLE_DJ", "ROLE_DJA", "ROLE_ASSISTANTE")) {
+    @DisplayName("M16 : le rapport journalier est servi aux cinq profils internes (Q-80, ouvert au SH le 2026-10-21)")
+    void rapportJournalier_ouvertAuxCinqProfils() throws Exception {
+        for (String roleProfil : List.of("ROLE_JURISTE", "ROLE_DJ", "ROLE_DJA", "ROLE_ASSISTANTE", "ROLE_SH")) {
             mockMvc.perform(get(api("/ged/rapport-journalier")).param("date", "2020-01-02")
                             .with(role("kc-rapport-" + roleProfil, roleProfil)))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.piecesAjoutees").value(0));
         }
-        mockMvc.perform(get(api("/ged/rapport-journalier")).with(role("kc-sh-m15", "ROLE_SH")))
+        mockMvc.perform(get(api("/ged/rapport-journalier")).with(role("kc-avocat-m15", "ROLE_AVOCAT")))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("L'Assistante et le SH consultent calendrier, journal, rapports et répertoire ; l'avocat non (2026-10-21)")
+    void assistanteEtSh_consultentLesEcransOuverts() throws Exception {
+        for (String roleProfil : List.of("ROLE_ASSISTANTE", "ROLE_SH")) {
+            String compte = "kc-consultation-" + roleProfil;
+            mockMvc.perform(get(api("/audiences/calendrier")).param("periode", "MENSUELLE").param("dateDebut", "2020-01-01")
+                            .with(role(compte, roleProfil)))
+                    .andExpect(status().isOk());
+            mockMvc.perform(get(api("/audiences/journal")).param("date", "2020-01-02").with(role(compte, roleProfil)))
+                    .andExpect(status().isOk());
+            mockMvc.perform(get(api("/audiences/comptes-rendus-attendus")).param("dateDebut", "2020-01-01")
+                            .param("dateFin", "2020-01-31").with(role(compte, roleProfil)))
+                    .andExpect(status().isOk());
+            // An empty period answers 204: the report itself is reached.
+            mockMvc.perform(get(api("/rapports")).param("type", "MENSUEL").param("dateDebut", "2020-01-01")
+                            .param("dateFin", "2020-01-31").with(role(compte, roleProfil)))
+                    .andExpect(status().is2xxSuccessful());
+            mockMvc.perform(get(api("/repertoire/avocats")).with(role(compte, roleProfil)))
+                    .andExpect(status().isOk());
+        }
+        for (String chemin : List.of("/audiences/journal?date=2020-01-02", "/repertoire/avocats",
+                "/rapports?type=MENSUEL&dateDebut=2020-01-01&dateFin=2020-01-31")) {
+            mockMvc.perform(get(api(chemin)).with(role("kc-avocat-m15", "ROLE_AVOCAT")))
+                    .andExpect(status().isForbidden());
+        }
     }
 
     /**

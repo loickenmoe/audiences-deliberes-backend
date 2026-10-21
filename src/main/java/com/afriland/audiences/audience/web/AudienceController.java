@@ -89,7 +89,7 @@ public class AudienceController {
     }
 
     @GetMapping("${api.prefix}/audiences/calendrier")
-    @PreAuthorize("hasAnyRole('JURISTE', 'DJ')")
+    @PreAuthorize("hasAnyRole('JURISTE', 'DJ', 'ASSISTANTE', 'SH')")
     public ResponseEntity<Object> calendrier(@RequestParam PeriodeCalendrier periode,
                                          @RequestParam LocalDate dateDebut,
                                          @RequestParam(defaultValue = "JSON") FormatExport format) {
