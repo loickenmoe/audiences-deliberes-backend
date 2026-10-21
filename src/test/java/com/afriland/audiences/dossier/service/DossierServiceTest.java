@@ -1,5 +1,8 @@
 package com.afriland.audiences.dossier.service;
 
+import org.springframework.data.domain.PageRequest;
+import java.time.LocalDate;
+import com.afriland.audiences.dossier.domain.DossierJuriste;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -765,5 +768,127 @@ class DossierServiceTest {
                     action.getId(), action.getUtilisateur() != null ? action.getUtilisateur().getId() : null,
                     action.getCode(), action.getAction(), action.getDetails(), action.getDateAction());
         }
+    }
+
+    // Refusals and missing resources: each check below answers with its own message, before any write.
+
+    private Dossier dossierSensible(StatutValidation statut) {
+        return Dossier.builder().id(5L).reference("DOS-2026-0005").client(client)
+                .estSensible(true).sensibiliteStatut(statut).build();
+    }
+
+    @Test
+    void lister_fenetreInversee_estRefusee() {
+        FiltresDossiers filtres = new FiltresDossiers(null, null, null, null, null, null, null, null, null,
+                LocalDate.of(2026, 9, 30), LocalDate.of(2026, 9, 1));
+
+        assertThatThrownBy(() -> service.listerDossiers(filtres, false, PageRequest.of(0, 10)))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("La date de début doit précéder la date de fin");
+    }
+
+    @Test
+    void historique_dossierInexistant() {
+        when(dossierRepository.findById(404L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.historique(404L, PageRequest.of(0, 10)))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("Dossier introuvable : 404");
+    }
+
+    @Test
+    void vueClient_clientInexistant() {
+        when(clientRepository.findById(404L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.vueConsolideeParClient(404L))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("Client introuvable : 404");
+    }
+
+    @Test
+    void affectation_enDouble_demandeConfirmation() {
+        when(dossierRepository.findById(5L)).thenReturn(Optional.of(dossierSensible(StatutValidation.VALIDEE)));
+        when(dossierJuristeRepository.findByDossierId(5L))
+                .thenReturn(List.of(DossierJuriste.builder().utilisateur(juriste).build()));
+        when(dossierAvocatRepository.findByDossierId(5L)).thenReturn(List.of());
+
+        assertThatThrownBy(() -> service.modifierAffectation(5L, new ModifierAffectationRequest(List.of(10L), null), false))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("forcer=true");
+        verify(dossierJuristeRepository, never()).save(any());
+    }
+
+    @Test
+    void statutEtape_etapeDUnAutreDossier() {
+        Dossier autre = Dossier.builder().id(6L).build();
+        when(dossierRepository.findById(5L)).thenReturn(Optional.of(dossierSensible(StatutValidation.VALIDEE)));
+        when(etapeProcedureRepository.findById(77L)).thenReturn(Optional.of(EtapeProcedure.builder().id(77L)
+                .dossier(autre).type(TypeEtape.INSTANCE).statutCycleVie(StatutCycleVie.EN_COURS).build()));
+
+        assertThatThrownBy(() -> service.modifierStatutEtape(5L, 77L, new ModifierStatutEtapeRequest(StatutCycleVie.EN_DELIBERE)))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("Étape introuvable pour ce dossier : 77");
+    }
+
+    @Test
+    void derogation_seTrancheParLaValidationTantQueLaDiligenceEstEnAttente() {
+        when(dossierRepository.findById(5L)).thenReturn(Optional.of(dossierSensible(StatutValidation.EN_ATTENTE)));
+
+        assertThatThrownBy(() -> service.validerDerogationSeuil(5L, 1L, new ValiderDerogationRequest(StatutValidation.VALIDEE, null)))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("pas comme une dérogation");
+    }
+
+    @Test
+    void derogation_introuvable_dejaTraitee_ouRejeteeSansMotif() {
+        Dossier dossier = dossierSensible(StatutValidation.VALIDEE);
+        when(dossierRepository.findById(5L)).thenReturn(Optional.of(dossier));
+        AuditSeuilDossier traitee = AuditSeuilDossier.builder().id(2L).dossier(dossier).statut(StatutValidation.VALIDEE).build();
+        AuditSeuilDossier enAttente = AuditSeuilDossier.builder().id(3L).dossier(dossier).statut(StatutValidation.EN_ATTENTE).build();
+        AuditSeuilDossier autreDossier = AuditSeuilDossier.builder().id(4L).dossier(Dossier.builder().id(6L).build())
+                .statut(StatutValidation.EN_ATTENTE).build();
+        when(auditSeuilDossierRepository.findById(2L)).thenReturn(Optional.of(traitee));
+        when(auditSeuilDossierRepository.findById(3L)).thenReturn(Optional.of(enAttente));
+        when(auditSeuilDossierRepository.findById(4L)).thenReturn(Optional.of(autreDossier));
+        ValiderDerogationRequest validation = new ValiderDerogationRequest(StatutValidation.VALIDEE, null);
+        ValiderDerogationRequest rejetSansMotif = new ValiderDerogationRequest(StatutValidation.REJETEE, " ");
+
+        assertThatThrownBy(() -> service.validerDerogationSeuil(5L, 4L, validation))
+                .hasMessageContaining("Demande de dérogation introuvable : 4");
+        assertThatThrownBy(() -> service.validerDerogationSeuil(5L, 2L, validation))
+                .hasMessageContaining("déjà été traitée");
+        assertThatThrownBy(() -> service.validerDerogationSeuil(5L, 3L, rejetSansMotif))
+                .hasMessageContaining("Le motif est obligatoire en cas de rejet");
+        verify(auditSeuilDossierRepository, never()).save(any());
+    }
+
+    @Test
+    void validationDiligence_sansPropositionEnAttente_ouRejetSansMotif() {
+        when(dossierRepository.findById(5L))
+                .thenReturn(Optional.of(dossierSensible(StatutValidation.VALIDEE)))
+                .thenReturn(Optional.of(dossierSensible(StatutValidation.EN_ATTENTE)));
+        ValiderSensibiliteRequest validation = new ValiderSensibiliteRequest(StatutValidation.VALIDEE, null, null, null);
+        ValiderSensibiliteRequest rejetSansMotif = new ValiderSensibiliteRequest(StatutValidation.REJETEE, "", null, null);
+
+        assertThatThrownBy(() -> service.validerSensibilite(5L, validation))
+                .hasMessageContaining("Aucune proposition de diligence particulière en attente");
+        assertThatThrownBy(() -> service.validerSensibilite(5L, rejetSansMotif))
+                .hasMessageContaining("Le motif est obligatoire en cas de rejet");
+        verify(dossierRepository, never()).save(any());
+    }
+
+    @Test
+    void miseEnDiligence_exigeSeuilEtTypeConnus_surUnDossierPasDejaSuivi() {
+        when(dossierRepository.findById(5L)).thenReturn(Optional.of(dossierSensible(StatutValidation.VALIDEE)));
+        when(typeClientSensibleRepository.findByCodeIgnoreCase("INCONNU")).thenReturn(Optional.empty());
+        when(typeClientSensibleRepository.findByCodeIgnoreCase("VIP")).thenReturn(Optional.of(new TypeClientSensible()));
+
+        assertThatThrownBy(() -> service.modifierSensibilite(5L, new ModifierSensibiliteRequest(true, null, "VIP", null)))
+                .hasMessageContaining("seuilMontant et typeClientSensible sont obligatoires");
+        assertThatThrownBy(() -> service.modifierSensibilite(5L, new ModifierSensibiliteRequest(true, 1_000d, "INCONNU", null)))
+                .hasMessageContaining("Type de client inconnu du référentiel : INCONNU");
+        assertThatThrownBy(() -> service.modifierSensibilite(5L, new ModifierSensibiliteRequest(true, 1_000d, "VIP", null)))
+                .hasMessageContaining("déjà suivi en diligence particulière");
+        verify(dossierRepository, never()).save(any());
     }
 }

@@ -1,16 +1,19 @@
 package com.afriland.audiences.reporting.service;
 
 import com.afriland.audiences.common.audit.HistoriqueActionRepository;
+import com.afriland.audiences.common.audit.HistoriqueAction;
 import com.afriland.audiences.common.audit.TypeActionHistorique;
 import com.afriland.audiences.common.error.ApiException;
 import com.afriland.audiences.common.security.CurrentUserService;
 import com.afriland.audiences.dossier.repository.DossierRepository;
+import com.afriland.audiences.dossier.domain.Dossier;
 import com.afriland.audiences.referentiel.domain.Avocat;
 import com.afriland.audiences.referentiel.domain.Profil;
 import com.afriland.audiences.referentiel.repository.AvocatRepository;
 import com.afriland.audiences.referentiel.domain.Utilisateur;
 import com.afriland.audiences.referentiel.repository.UtilisateurRepository;
 import com.afriland.audiences.referentiel.service.CompteAvocatService;
+import com.afriland.audiences.reporting.web.dto.ActionDetailleeResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,6 +21,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -380,5 +385,79 @@ class RapportActiviteServiceTest {
                 .hasMessageContaining("pas les deux");
         // The refusal happens before any read: no need to know who asks to say no.
         verify(currentUserService, never()).getCurrentUser();
+    }
+
+    @Test
+    @DisplayName("le détail d'un décompte donne chaque action avec la référence de son dossier, lue en une fois")
+    void detailAvecReferences() {
+        when(currentUserService.getCurrentUser()).thenReturn(personne(7L, "Awa", "Ndiaye", "JURISTE"));
+        LocalDateTime quand = DEBUT.atTime(9, 0);
+        var premiere = HistoriqueAction.builder().id(1L).code(TypeActionHistorique.DOSSIER_CREE).action("Création")
+                .dateAction(quand).dossierId(70L).build();
+        var memeDossier = HistoriqueAction.builder().id(2L).code(TypeActionHistorique.DOSSIER_CREE).action("Création")
+                .dateAction(quand).dossierId(70L).build();
+        var horsDossier = HistoriqueAction.builder().id(3L).code(TypeActionHistorique.DOSSIER_CREE).action("Création")
+                .dateAction(quand).build();
+        when(historiqueActionRepository.listerActionsDe(eq(7L), eq(TypeActionHistorique.DOSSIER_CREE),
+                eq(DEBUT.atStartOfDay()), eq(FIN.plusDays(1).atStartOfDay()), any()))
+                .thenReturn(new PageImpl<>(List.of(premiere, memeDossier, horsDossier)));
+        when(dossierRepository.findAllById(List.of(70L)))
+                .thenReturn(List.of(Dossier.builder().id(70L).reference("DOS-2026-0070").build()));
+
+        var detail = service.detailler(null, null, TypeActionHistorique.DOSSIER_CREE, DEBUT, FIN, PageRequest.of(0, 20));
+
+        assertThat(detail.getContent()).containsExactly(
+                new ActionDetailleeResponse(1L, TypeActionHistorique.DOSSIER_CREE, "Création", quand, 70L, "DOS-2026-0070"),
+                new ActionDetailleeResponse(2L, TypeActionHistorique.DOSSIER_CREE, "Création", quand, 70L, "DOS-2026-0070"),
+                new ActionDetailleeResponse(3L, TypeActionHistorique.DOSSIER_CREE, "Création", quand, null, null));
+    }
+
+    @Test
+    @DisplayName("des actions hors dossier n'interrogent pas les dossiers")
+    void detailSansDossier() {
+        when(currentUserService.getCurrentUser()).thenReturn(personne(7L, "Awa", "Ndiaye", "JURISTE"));
+        var action = HistoriqueAction.builder().id(4L).code(TypeActionHistorique.DOSSIER_CREE).build();
+        when(historiqueActionRepository.listerActionsDe(any(), any(), any(), any(), any()))
+                .thenReturn(new PageImpl<>(List.of(action)));
+
+        assertThat(service.detailler(null, null, TypeActionHistorique.DOSSIER_CREE, DEBUT, FIN, PageRequest.of(0, 20))
+                .getContent()).hasSize(1);
+        verify(dossierRepository, never()).findAllById(any());
+    }
+
+    @Test
+    @DisplayName("un avocat inconnu du répertoire est signalé introuvable")
+    void avocatIntrouvable() {
+        when(currentUserService.getCurrentUser()).thenReturn(personne(2L, "Marie", "Directrice", "DJ"));
+        when(avocatRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.produire(null, 99L, DEBUT, FIN))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("Avocat introuvable : 99");
+    }
+
+    @Test
+    @DisplayName("la direction qui demande un utilisateur inexistant reçoit « introuvable »")
+    void utilisateurIntrouvable() {
+        when(currentUserService.getCurrentUser()).thenReturn(personne(2L, "Marie", "Directrice", "DJA"));
+        when(utilisateurRepository.findById(404L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.produire(404L, null, DEBUT, FIN))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("Utilisateur introuvable : 404");
+    }
+
+    @Test
+    @DisplayName("une personne sans nom ni profil reste désignée sans texte inventé")
+    void personneSansNomNiProfil() {
+        when(currentUserService.getCurrentUser()).thenReturn(personne(9L, null, null, null));
+        when(historiqueActionRepository.compterActivitesDe(any(), anyCollection(), any(), any())).thenReturn(List.of());
+
+        var rapport = service.produire(null, null, DEBUT, FIN);
+
+        assertThat(rapport.nom()).isNull();
+        assertThat(rapport.profil()).isNull();
+        assertThat(rapport.delaiMoyenSaisieCompteRendu()).isNull();
+        verify(historiqueActionRepository, never()).delaiMoyenDeSaisieDe(anyLong(), any(), any());
     }
 }

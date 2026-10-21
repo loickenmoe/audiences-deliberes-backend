@@ -211,9 +211,9 @@
 				</configuration>
 			</plugin>
 			<!--
-			  Coverage measurement (target > 80 %, REF-02 §10.2). DTOs/entities (records,
-			  Lombok classes) and generated code (MapStruct) are excluded: they hold no logic
-			  and would skew the measure of the testable code.
+			  Coverage measurement (target > 80 %, REF-02 §10.2). Only generated code (MapStruct)
+			  and the bootstrap class are excluded. DTOs and entities stay measured: SonarQube
+			  analyses them as sources, and a file absent from this report counts as uncovered.
 			-->
 			<plugin>
 				<groupId>org.jacoco</groupId>
@@ -221,8 +221,6 @@
 				<version>0.8.12</version>
 				<configuration>
 					<excludes>
-						<exclude>**/web/dto/**</exclude>
-						<exclude>**/domain/**</exclude>
 						<exclude>**/*MapperImpl.class</exclude>
 						<exclude>**/AudiencesApplication.class</exclude>
 					</excludes>
