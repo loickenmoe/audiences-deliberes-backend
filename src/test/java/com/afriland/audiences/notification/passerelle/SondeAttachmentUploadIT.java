@@ -33,10 +33,10 @@ import static org.assertj.core.api.Assertions.fail;
  * {@code attachment-upload-request}, response on {@code attachment-upload-response}. If this topic
  * is silent, the file must be attached to the message itself.
  * <p>
- * Run: {@code SONDE_ENGINE=1 ./mvnw test -Dtest=SondeAttachmentUpload}
+ * Run: {@code SONDE_ENGINE=1 ./mvnw test -Dtest=SondeAttachmentUploadIT}
  */
 @EnabledIfEnvironmentVariable(named = "SONDE_ENGINE", matches = ".+")
-class SondeAttachmentUpload {
+class SondeAttachmentUploadIT {
 
     private static final String COURTIER = System.getenv().getOrDefault("KAFKA_BOOTSTRAP_SERVERS", "172.21.88.31:32092");
     private static final String TOPIC_DEMANDE = "attachment-upload-request";

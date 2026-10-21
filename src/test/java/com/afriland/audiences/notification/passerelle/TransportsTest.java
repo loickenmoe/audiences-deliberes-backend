@@ -79,7 +79,7 @@ class TransportsTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    void kafka_depose_le_message_serialise_avec_l_eventId_en_cle() throws Exception {
+    void kafka_depose_le_message_serialise_avec_l_eventId_en_cle() {
         KafkaTemplate<String, String> template = mock(KafkaTemplate.class);
         when(template.send(eq("notification-send-request"), eq("alerte-5-SMS"), anyString()))
                 .thenReturn(CompletableFuture.completedFuture(null));

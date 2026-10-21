@@ -3,7 +3,6 @@ package com.afriland.audiences.audience.service;
 import com.afriland.audiences.audience.web.dto.CalendrierEntreeResponse;
 import com.afriland.audiences.common.pdf.DocumentPdf;
 import com.afriland.audiences.common.pdf.LibellesPdf;
-import com.afriland.audiences.common.pdf.MetadonneesPdf;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.xssf.usermodel.XSSFSheet;

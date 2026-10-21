@@ -485,7 +485,7 @@ Livrée, en attente du commit de l'utilisateur.
 Livrée, en attente du commit de l'utilisateur.
 
 **Sondé avant d'être écrit.** Les topics de suivi étant muets (Q-121), rien ne disait que celui des
-pièces jointes répondrait. Une sonde manuelle (`SondeAttachmentUpload`, désactivée sauf variable
+pièces jointes répondrait. Une sonde manuelle (`SondeAttachmentUploadIT`, désactivée sauf variable
 d'environnement) a tranché en quelques minutes : demande acceptée, réponse `READY`, dépôt du fichier
 en HTTP 200. **Le moteur publie donc bien sur certains topics** — le silence du suivi est une affaire
 de configuration, pas une panne générale.

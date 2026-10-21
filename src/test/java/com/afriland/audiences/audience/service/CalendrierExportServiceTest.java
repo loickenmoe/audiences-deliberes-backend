@@ -46,11 +46,11 @@ class CalendrierExportServiceTest {
         // The seven headers, accents included: accented headers go through the TextePdf fallback, which
         // is exactly where a character can be lost unnoticed.
         assertThat(texte).contains("Référence").contains("Juridiction").contains("Étape")
-                .contains("Client").contains("Agence d'origine").contains("Risque encouru").contains("Date");
-        assertThat(texte).contains("DOS-2026-001").contains("Client Test").contains("AG01");
-        // The branding and the page numbering.
-        assertThat(texte).contains("Afriland First Bank").contains("Direction Juridique");
-        assertThat(texte).contains("Page 1 sur 1");
+                .contains("Client").contains("Agence d'origine").contains("Risque encouru").contains("Date")
+                .contains("DOS-2026-001").contains("Client Test").contains("AG01")
+                // The branding and the page numbering.
+                .contains("Afriland First Bank").contains("Direction Juridique")
+                .contains("Page 1 sur 1");
     }
 
     @Test

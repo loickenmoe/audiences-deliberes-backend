@@ -42,20 +42,20 @@ class RapportExportServiceTest {
     void exportPdf_contientLesIndicateurs() throws Exception {
         String texte = LecturePdf.texte(service.exportPdf(rapport));
 
-        assertThat(texte).contains("MENSUEL").contains("2026-09-01").contains("2026-09-30");
-        /*
-         * Indicators are shown as a **table** (A2), not "label: value": check that each value stays on its
-         * label's line, which is what matters and still reads in the extracted text.
-         */
-        assertThat(texte).containsPattern("Nouveaux dossiers\s+4");
-        assertThat(texte).containsPattern("Audiences tenues\s+3");
-        assertThat(texte).containsPattern("Litiges gagn.s\s+3");
-        assertThat(texte).containsPattern("Litiges perdus\s+1");
-        assertThat(texte).containsPattern("D.cisions mixtes\s+0");
-        // Numbers, not a percentage: the rate has left the export.
-        assertThat(texte).doesNotContain("Taux de succ");
-        // The branding is on the page, and the page is numbered.
-        assertThat(texte).contains("Afriland First Bank").contains("Page 1 sur 1");
+        assertThat(texte).contains("MENSUEL").contains("2026-09-01").contains("2026-09-30")
+                /*
+                 * Indicators are shown as a **table** (A2), not "label: value": check that each value stays on its
+                 * label's line, which is what matters and still reads in the extracted text.
+                 */
+                .containsPattern("Nouveaux dossiers\s+4")
+                .containsPattern("Audiences tenues\s+3")
+                .containsPattern("Litiges gagn.s\s+3")
+                .containsPattern("Litiges perdus\s+1")
+                .containsPattern("D.cisions mixtes\s+0")
+                // Numbers, not a percentage: the rate has left the export.
+                .doesNotContain("Taux de succ")
+                // The branding is on the page, and the page is numbered.
+                .contains("Afriland First Bank").contains("Page 1 sur 1");
     }
 
     @Test
@@ -80,18 +80,18 @@ class RapportExportServiceTest {
     void exportCsv_contientLEnteteEtTousLesIndicateurs() {
         String csv = new String(service.exportCsv(rapport), StandardCharsets.UTF_8);
 
-        assertThat(csv).startsWith("Indicateur,Valeur");
-        assertThat(csv).contains("Nouveaux dossiers,4");
-        assertThat(csv).contains("Audiences tenues,3");
-        assertThat(csv).contains("Demandes de frais déposées,2");
-        assertThat(csv).contains("Délibérés enregistrés,1");
-        assertThat(csv).contains("Provisions reprises,150000.0");
-        // Numbers, not a percentage: the business reads the export as is.
-        assertThat(csv).contains("Litiges gagnés,3");
-        assertThat(csv).contains("Litiges perdus,1");
-        assertThat(csv).contains("Décisions mixtes,0");
-        assertThat(csv).doesNotContain("Taux de succès");
-        assertThat(csv).doesNotContain("%");
+        assertThat(csv).startsWith("Indicateur,Valeur")
+                .contains("Nouveaux dossiers,4")
+                .contains("Audiences tenues,3")
+                .contains("Demandes de frais déposées,2")
+                .contains("Délibérés enregistrés,1")
+                .contains("Provisions reprises,150000.0")
+                // Numbers, not a percentage: the business reads the export as is.
+                .contains("Litiges gagnés,3")
+                .contains("Litiges perdus,1")
+                .contains("Décisions mixtes,0")
+                .doesNotContain("Taux de succès")
+                .doesNotContain("%");
     }
 
     @Test

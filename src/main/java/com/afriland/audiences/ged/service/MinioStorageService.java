@@ -54,7 +54,7 @@ public class MinioStorageService {
      * {@link MultipartFile} upload.
      */
     public String deposer(Long dossierId, String nomFichier, String contentType, byte[] contenu) {
-        return deposer("dossiers/" + dossierId, nomFichier, contentType, new ByteArrayInputStream(contenu), (long) contenu.length);
+        return deposer("dossiers/" + dossierId, nomFichier, contentType, new ByteArrayInputStream(contenu), contenu.length);
     }
 
     /**
@@ -91,7 +91,7 @@ public class MinioStorageService {
      * nor a case file lifecycle. Their only way out is the download endpoint, which logs every retrieval.
      */
     public String deposerArchiveAudit(String nomFichier, String contentType, byte[] contenu) {
-        return deposer("audit", nomFichier, contentType, new ByteArrayInputStream(contenu), (long) contenu.length);
+        return deposer("audit", nomFichier, contentType, new ByteArrayInputStream(contenu), contenu.length);
     }
 
     private String deposer(String prefixe, String nomFichier, String contentType, InputStream flux, long taille) {

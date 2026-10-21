@@ -55,11 +55,11 @@ class LettreConstitutionServiceTest {
     void generer_contientLesMentionsDeLaLettre() throws Exception {
         String texte = LecturePdf.texte(service.generer(lettre()));
 
-        assertThat(texte).contains("N° 4 /First Bank/DAJR/DR/CM/ABN/18");
-        assertThat(texte).contains("Me Fotso").contains("Huissier de Justice");
-        assertThat(texte).contains("DOSSIER DOS-2026-001");
-        assertThat(texte).contains("Lettre de constitution contenant transmission de pièces.");
-        assertThat(texte).contains("La Direction Juridique");
+        assertThat(texte).contains("N° 4 /First Bank/DAJR/DR/CM/ABN/18")
+                .contains("Me Fotso").contains("Huissier de Justice")
+                .contains("DOSSIER DOS-2026-001")
+                .contains("Lettre de constitution contenant transmission de pièces.")
+                .contains("La Direction Juridique");
     }
 
     /**
@@ -71,10 +71,10 @@ class LettreConstitutionServiceTest {
     void generer_porteLaColonneLaterale() throws Exception {
         String texte = LecturePdf.texte(service.generer(lettre()));
 
-        assertThat(texte).contains("RC N° : 87R041");
-        assertThat(texte).contains("00005/MINFI/DCE2");
-        assertThat(texte).contains("CCEI CMCX");
-        assertThat(texte).contains("www.afrilandfirstbank.com");
+        assertThat(texte).contains("RC N° : 87R041")
+                .contains("00005/MINFI/DCE2")
+                .contains("CCEI CMCX")
+                .contains("www.afrilandfirstbank.com");
     }
 
     /**
@@ -87,10 +87,10 @@ class LettreConstitutionServiceTest {
     void preimprime_neDessinePasLeGabarit() throws Exception {
         String texte = LecturePdf.texte(service.generer(lettre(), true));
 
-        assertThat(texte).doesNotContain("RC N° : 87R041");
-        assertThat(texte).doesNotContain("00005/MINFI/DCE2");
-        assertThat(texte).doesNotContain("CCEI CMCX");
-        assertThat(texte).doesNotContain("www.afrilandfirstbank.com");
+        assertThat(texte).doesNotContain("RC N° : 87R041")
+                .doesNotContain("00005/MINFI/DCE2")
+                .doesNotContain("CCEI CMCX")
+                .doesNotContain("www.afrilandfirstbank.com");
     }
 
     @Test
@@ -98,12 +98,12 @@ class LettreConstitutionServiceTest {
     void preimprime_gardeLeContenu() throws Exception {
         String texte = LecturePdf.texte(service.generer(lettre(), true));
 
-        assertThat(texte).contains("N° 4 /First Bank/DAJR/DR/CM/ABN/18");
-        assertThat(texte).contains("Me Fotso").contains("Huissier de Justice");
-        assertThat(texte).contains("DOSSIER DOS-2026-001");
-        assertThat(texte).contains("Lettre de constitution contenant transmission de pièces.");
-        assertThat(texte).contains("La Direction Juridique");
-        assertThat(texte).contains("Dans le cadre de notre collaboration");
+        assertThat(texte).contains("N° 4 /First Bank/DAJR/DR/CM/ABN/18")
+                .contains("Me Fotso").contains("Huissier de Justice")
+                .contains("DOSSIER DOS-2026-001")
+                .contains("Lettre de constitution contenant transmission de pièces.")
+                .contains("La Direction Juridique")
+                .contains("Dans le cadre de notre collaboration");
     }
 
     /**
@@ -143,9 +143,9 @@ class LettreConstitutionServiceTest {
          * Short fragments: the body wraps on its own, and an assertion spanning a line break would fail on
          * layout instead of checking content.
          */
-        assertThat(texte).contains("Dans le cadre de notre collaboration");
-        assertThat(texte).contains("constituons par les").contains("Ladite saisie");
-        assertThat(texte).contains("..........");
+        assertThat(texte).contains("Dans le cadre de notre collaboration")
+                .contains("constituons par les").contains("Ladite saisie")
+                .contains("..........");
     }
 
     /**
@@ -174,7 +174,7 @@ class LettreConstitutionServiceTest {
 
         String texte = LecturePdf.texte(service.generer(sansDestinataire));
 
-        assertThat(texte).doesNotContain("null");
-        assertThat(texte).contains("Maître ..........");
+        assertThat(texte).doesNotContain("null")
+                .contains("Maître ..........");
     }
 }

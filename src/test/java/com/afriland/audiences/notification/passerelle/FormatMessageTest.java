@@ -72,8 +72,8 @@ class FormatMessageTest {
     void l_horodatage_suit_la_forme_observee() throws Exception {
         String temps = publier(null).get("time").asText();
 
-        assertThat(temps).matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}([+-]\\d{2}:\\d{2}|Z)");
-        assertThat(temps).doesNotContain(".");
+        assertThat(temps).matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}([+-]\\d{2}:\\d{2}|Z)")
+                .doesNotContain(".");
     }
 
     /** W3C trace context: version, 32-char trace, 16-char span, flags. */

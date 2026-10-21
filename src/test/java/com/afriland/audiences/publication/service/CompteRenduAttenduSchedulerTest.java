@@ -143,8 +143,8 @@ class CompteRenduAttenduSchedulerTest {
         scheduler.verifier();
 
         verify(notificationPrestataireService).notifier(
-                eq(EvenementPrestataire.COMPTE_RENDU_ATTENDU), eq(avocat), eq(DOSSIER_ID),
-                eq("cr-attendu-42-relance-" + (jours / 2)));
+                EvenementPrestataire.COMPTE_RENDU_ATTENDU, avocat, DOSSIER_ID,
+                "cr-attendu-42-relance-" + (jours / 2));
     }
 
     /** Several lawyers on a case: each owes a report, each is reminded. */

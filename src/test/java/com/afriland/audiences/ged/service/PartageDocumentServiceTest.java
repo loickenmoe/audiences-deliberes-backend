@@ -29,7 +29,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -253,8 +252,8 @@ class PartageDocumentServiceTest {
 
         assertThat(reponse.partageAvocat()).isEqualTo(StatutPartageAvocat.NON);
         assertThat(document.getPartagePar()).isNull();
-        verify(historiqueActionService).enregistrer(eq(3L), eq(TypeActionHistorique.DOCUMENT_PARTAGE_ARBITRE),
-                eq(Map.of("documentId", 7L, "decision", "REJETE", "motif", "Pièce couverte par le secret bancaire")));
+        verify(historiqueActionService).enregistrer(3L, TypeActionHistorique.DOCUMENT_PARTAGE_ARBITRE,
+                Map.of("documentId", 7L, "decision", "REJETE", "motif", "Pièce couverte par le secret bancaire"));
     }
 
     /** An already shared document has nothing left to validate: asking again is a UI error. */

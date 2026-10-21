@@ -1,6 +1,5 @@
 package com.afriland.audiences.referentiel.repository;
 
-import com.afriland.audiences.referentiel.domain.Avocat;
 import com.afriland.audiences.referentiel.domain.Intervenant;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

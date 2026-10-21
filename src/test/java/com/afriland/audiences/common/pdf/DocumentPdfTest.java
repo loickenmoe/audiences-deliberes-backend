@@ -66,13 +66,13 @@ class DocumentPdfTest {
         assertThat(pages).as("120 lignes ne tiennent pas sur une page").isGreaterThan(1);
 
         String contenu = texte(pdf);
-        assertThat(contenu).contains("Afriland First Bank").contains("Direction Juridique");
-        assertThat(contenu).contains("Calendrier des audiences");
-        assertThat(contenu).contains("Du 2026-09-01 au 2026-09-30");
-        // The footer attributes: it states a fact, not a pending signature.
-        assertThat(contenu).contains("Édité par Marie Directrice");
-        // The numbering knows the total, which requires writing the footer last.
-        assertThat(contenu).contains("Page 1 sur " + pages).contains("Page " + pages + " sur " + pages);
+        assertThat(contenu).contains("Afriland First Bank").contains("Direction Juridique")
+                .contains("Calendrier des audiences")
+                .contains("Du 2026-09-01 au 2026-09-30")
+                // The footer attributes: it states a fact, not a pending signature.
+                .contains("Édité par Marie Directrice")
+                // The numbering knows the total, which requires writing the footer last.
+                .contains("Page 1 sur " + pages).contains("Page " + pages + " sur " + pages);
     }
 
     /**
@@ -124,8 +124,8 @@ class DocumentPdfTest {
         }
 
         String contenu = texte(pdf);
-        assertThat(contenu).contains("...");
-        assertThat(contenu).doesNotContain("soixante points de large");
+        assertThat(contenu).contains("...")
+                .doesNotContain("soixante points de large");
     }
 
     /** A document with no rows must still be a valid document. */

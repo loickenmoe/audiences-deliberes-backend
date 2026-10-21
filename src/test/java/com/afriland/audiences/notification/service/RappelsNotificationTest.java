@@ -28,8 +28,8 @@ class RappelsNotificationTest {
     void l_url_porte_la_reference_et_sa_signature() {
         String url = rappels("https://audiences.afriland.cm/").urlPour("alerte-42:SMS").orElseThrow();
 
-        assertThat(url).startsWith("https://audiences.afriland.cm/notifications/accuses/rappel/alerte-42%3ASMS?signature=");
-        assertThat(url).doesNotContain(SECRET);
+        assertThat(url).startsWith("https://audiences.afriland.cm/notifications/accuses/rappel/alerte-42%3ASMS?signature=")
+                .doesNotContain(SECRET);
     }
 
     /** From a workstation, the engine cannot reach the application: nothing is announced. */

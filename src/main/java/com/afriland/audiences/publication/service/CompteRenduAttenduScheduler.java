@@ -113,27 +113,30 @@ public class CompteRenduAttenduScheduler {
         for (Audience audience : audienceRepository.findByDatePlanifieeBeforeAndStatutNot(
                 aujourdHui, StatutAudience.ANNULEE)) {
             long jours = ChronoUnit.DAYS.between(audience.getDatePlanifiee(), aujourdHui);
-            // First reminder at the end of the delay, then at each multiple: in between, there is
-            // nothing to do.
-            if (jours < delai || jours % delai != 0) {
-                continue;
+            if (estARelancer(audience, jours, delai)) {
+                relancer(audience, jours / delai, jours, dispenses);
             }
-            long rang = jours / delai;
-            if (rang > RELANCES_MAX) {
-                continue;
-            }
-            // A closed or archived step means the procedure moved on without this report; reminding
-            // the lawyer about a finished case file would only confuse them.
-            if (audience.getEtape() != null && audience.getEtape().getStatutCycleVie() != null
-                    && audience.getEtape().getStatutCycleVie().estFerme()) {
-                continue;
-            }
-            if (compteRenduAudienceRepository.existsByAudienceIdAndStatutValidationIn(
-                    audience.getId(), DEPOSE_OU_VALIDE)) {
-                continue;
-            }
-            relancer(audience, rang, jours, dispenses);
         }
+    }
+
+    /** Checks run in this order, cheapest first: the database is queried last, only when needed. */
+    private boolean estARelancer(Audience audience, long jours, int delai) {
+        // First reminder at the end of the delay, then at each multiple: in between, there is
+        // nothing to do.
+        if (jours < delai || jours % delai != 0) {
+            return false;
+        }
+        if (jours / delai > RELANCES_MAX) {
+            return false;
+        }
+        // A closed or archived step means the procedure moved on without this report; reminding
+        // the lawyer about a finished case file would only confuse them.
+        if (audience.getEtape() != null && audience.getEtape().getStatutCycleVie() != null
+                && audience.getEtape().getStatutCycleVie().estFerme()) {
+            return false;
+        }
+        return !compteRenduAudienceRepository.existsByAudienceIdAndStatutValidationIn(
+                audience.getId(), DEPOSE_OU_VALIDE);
     }
 
     private void relancer(Audience audience, long rang, long joursEcoules, Set<Long> dispenses) {

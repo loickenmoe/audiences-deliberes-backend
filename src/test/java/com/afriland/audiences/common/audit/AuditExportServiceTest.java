@@ -166,8 +166,8 @@ class AuditExportServiceTest {
         String url = auditExportService.telecharger(7L);
 
         assertThat(url).isEqualTo("https://minio/x");
-        verify(historiqueActionService).enregistrer(eq(null), eq(TypeActionHistorique.ARCHIVE_TELECHARGEE),
-                eq(Map.of("exportId", 7L, "empreinte", "abc")));
+        verify(historiqueActionService).enregistrer(null, TypeActionHistorique.ARCHIVE_TELECHARGEE,
+                Map.of("exportId", 7L, "empreinte", "abc"));
     }
 
     @Test

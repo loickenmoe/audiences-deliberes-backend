@@ -621,8 +621,8 @@ class PublicationServiceTest {
         service.valider(100L, new ValiderPublicationRequest(StatutPublication.VALIDE, null));
 
         verify(notificationPrestataireService).notifier(
-                eq(EvenementPrestataire.COMPTE_RENDU_RECU), eq(avocat), eq(1L),
-                eq("publication-100-reception"));
+                EvenementPrestataire.COMPTE_RENDU_RECU, avocat, 1L,
+                "publication-100-reception");
     }
 
     /** Another publication is indeed arbitrated: the former event remains. */
@@ -638,8 +638,8 @@ class PublicationServiceTest {
         service.valider(100L, new ValiderPublicationRequest(StatutPublication.VALIDE, null));
 
         verify(notificationPrestataireService).notifier(
-                eq(EvenementPrestataire.PUBLICATION_ARBITREE), eq(avocat), eq(1L),
-                eq("publication-100-arbitrage"));
+                EvenementPrestataire.PUBLICATION_ARBITREE, avocat, 1L,
+                "publication-100-arbitrage");
     }
 
     /** Rejection remains on another publication, whose compliance is checked. */

@@ -25,7 +25,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
-import java.util.List;
 
 /**
  * GED endpoints (FR-GED-01/02/03/04). {@code PUT /ged/documents/{id}/approbation-suppression} is not

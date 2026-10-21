@@ -61,7 +61,7 @@ public final class TextePdf {
          */
         String decompose = Normalizer.normalize(String.valueOf(Character.toChars(point)), Normalizer.Form.NFD);
         StringBuilder base = new StringBuilder(1);
-        decompose.codePoints().filter(TextePdf::estEcrivable).forEach(c -> base.appendCodePoint(c));
+        decompose.codePoints().filter(TextePdf::estEcrivable).forEach(base::appendCodePoint);
         return base.isEmpty() ? "?" : base.toString();
     }
 

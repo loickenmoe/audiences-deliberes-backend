@@ -8,7 +8,6 @@ import com.afriland.audiences.dossier.service.ReferencesDossierJpa;
 import com.afriland.audiences.notification.domain.EvenementPrestataire;
 import com.afriland.audiences.notification.domain.NotificationEnvoi;
 import com.afriland.audiences.notification.domain.StatutEnvoi;
-import com.afriland.audiences.notification.passerelle.CanalEngine;
 import com.afriland.audiences.notification.passerelle.MessageEngine;
 import com.afriland.audiences.notification.passerelle.PasserelleNotificationEngine;
 import com.afriland.audiences.notification.repository.NotificationEnvoiRepository;
@@ -73,7 +72,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ChaineNotificationIntegrationTest {
 
     @Container
-    static PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17")
+    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17")
             .withDatabaseName("audiences_chaine")
             .withUsername("test")
             .withPassword("test");

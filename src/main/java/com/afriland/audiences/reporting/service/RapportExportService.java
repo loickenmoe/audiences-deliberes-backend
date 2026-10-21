@@ -1,7 +1,5 @@
 package com.afriland.audiences.reporting.service;
 
-import com.afriland.audiences.common.pdf.MetadonneesPdf;
-import com.afriland.audiences.common.pdf.TextePdf;
 import com.afriland.audiences.common.pdf.DocumentPdf;
 import com.afriland.audiences.common.pdf.LibellesPdf;
 import com.afriland.audiences.reporting.web.dto.RapportResponse;

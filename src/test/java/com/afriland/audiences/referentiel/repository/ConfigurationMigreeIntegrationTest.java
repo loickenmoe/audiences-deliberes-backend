@@ -28,7 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ConfigurationMigreeIntegrationTest {
 
     @Container
-    static PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17")
+    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17")
             .withDatabaseName("audiences_configuration")
             .withUsername("test")
             .withPassword("test");

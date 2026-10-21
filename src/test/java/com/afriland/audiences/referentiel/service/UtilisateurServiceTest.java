@@ -37,8 +37,8 @@ class UtilisateurServiceTest {
     void lister_sansFiltre_neRetourneQueLesComptesActifs() {
         List<UtilisateurResponse> result = service.lister(null, false);
 
-        assertThat(result).hasSize(3);
-        assertThat(result).noneMatch(u -> Boolean.FALSE.equals(u.actif()));
+        assertThat(result).hasSize(3)
+                .noneMatch(u -> Boolean.FALSE.equals(u.actif()));
     }
 
     @Test

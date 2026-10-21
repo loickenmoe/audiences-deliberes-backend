@@ -113,7 +113,7 @@ public class DecisionDefinitiveService {
                 .orElseThrow(() -> ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE, "Condamnation introuvable : " + id));
 
         condamnation.setStatutPaiement(request.statutPaiement());
-        condamnation = (CondamnationPecuniaire) decisionDefinitiveRepository.save(condamnation);
+        condamnation = decisionDefinitiveRepository.save(condamnation);
 
         historiqueActionService.enregistrer(condamnation.getDossier().getId(), TypeActionHistorique.CONDAMNATION_STATUT_MODIFIE,
                 Map.of(CLE_DECISION_ID, id, "statutPaiement", request.statutPaiement().name()));

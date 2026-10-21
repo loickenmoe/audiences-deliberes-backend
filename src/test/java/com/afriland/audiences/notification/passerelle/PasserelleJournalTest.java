@@ -32,8 +32,8 @@ class PasserelleJournalTest {
                 "TEAMS", "juriste.test@afrilandfirstbank.com",
                 "SMS", "+237600000000"));
 
-        assertThat(masque).isEqualTo("{SMS=+2***, TEAMS=ju***@afrilandfirstbank.com}");
-        assertThat(masque).doesNotContain("600000000", "juriste.test");
+        assertThat(masque).isEqualTo("{SMS=+2***, TEAMS=ju***@afrilandfirstbank.com}")
+                .doesNotContain("600000000", "juriste.test");
     }
 
     /** The token carries the service signature: it must never be logged. */

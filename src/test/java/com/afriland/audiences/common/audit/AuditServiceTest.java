@@ -76,10 +76,10 @@ class AuditServiceTest {
         assertThat(criteres).containsEntry("perimetre", "TOUT")
                 .containsEntry("codeRecherche", "DOCUMENT_CHARGE")
                 .containsEntry("dateDebut", "2026-09-01")
-                .containsEntry("dateFin", "2026-09-30");
-        // Named `auteurRecherche` because `utilisateurId` already designates, on the history row, the
-        // person who consulted. Mixing them up would make the log unreadable.
-        assertThat(criteres).containsEntry("auteurRecherche", 42L);
+                .containsEntry("dateFin", "2026-09-30")
+                // Named `auteurRecherche` because `utilisateurId` already designates, on the history row, the
+                // person who consulted. Mixing them up would make the log unreadable.
+                .containsEntry("auteurRecherche", 42L);
     }
 
     /** An absent filter is not logged: a trace full of "null" is harder to read. */

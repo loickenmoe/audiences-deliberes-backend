@@ -1,5 +1,6 @@
 package com.afriland.audiences.reporting.service;
 
+import com.afriland.audiences.alerte.domain.Alerte;
 import com.afriland.audiences.alerte.domain.StatutAlerte;
 import com.afriland.audiences.alerte.domain.TypeAlerte;
 import com.afriland.audiences.alerte.repository.AlerteRepository;
@@ -142,7 +143,7 @@ public class DetailTableauDeBordService {
         var alertes = alerteRepository.listerParTypeEtStatut(
                 TypeAlerte.PROROGATION, StatutAlerte.DECLENCHEE, categories, pageable);
         List<Long> dossiers = alertes.getContent().stream()
-                .map(alerte -> alerte.getDossierId())
+                .map(Alerte::getDossierId)
                 .filter(java.util.Objects::nonNull)
                 .distinct()
                 .toList();
