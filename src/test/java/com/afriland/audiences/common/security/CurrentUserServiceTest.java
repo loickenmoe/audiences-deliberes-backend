@@ -26,10 +26,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Depuis M15, ce service ne fait plus que <b>résoudre</b> l'utilisateur : la création est déléguée
- * à {@link UtilisateurProvisioningService} pour qu'elle s'exécute dans sa propre transaction en
- * écriture (correctif R-06). Les règles de dérivation du profil sont donc testées dans
- * {@link UtilisateurProvisioningServiceTest} ; ici, seule la délégation est vérifiée.
+ * This service only <b>resolves</b> the user; creation is delegated to
+ * {@link UtilisateurProvisioningService} so that it runs in its own read-write transaction. Profile
+ * derivation rules are tested in {@link UtilisateurProvisioningServiceTest}; only the delegation is
+ * checked here.
  */
 @ExtendWith(MockitoExtension.class)
 class CurrentUserServiceTest {

@@ -6,17 +6,12 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 /**
- * Transport documenté par le Guide V1 : le message est publié sur le sidecar Dapr, qui le dépose sur
- * le topic Kafka du Notification Engine.
+ * Transport documented by Guide V1: the message is published to the Dapr sidecar, which puts it on the
+ * Notification Engine's Kafka topic. The engine consumes through Dapr (CloudEvents envelope), and a
+ * rejected message gives no feedback (Guide §4 bis), so the documented path is preferred.
  * <p>
- * <b>Pourquoi cette voie d'abord.</b> Le moteur consomme ses topics par Dapr, qui enveloppe chaque
- * message au format CloudEvents. Publier par Dapr, c'est produire exactement ce qu'il attend. Un
- * message rejeté ne donne aucun retour (Guide §4 bis) : mieux vaut suivre le chemin documenté que
- * deviner l'enveloppe.
- * <p>
- * Aucune bibliothèque Dapr n'est nécessaire : le sidecar expose une API HTTP locale.
- * Une réponse 2xx signifie que le sidecar a accepté le message, pas qu'il a été délivré — la
- * délivrance se lit sur les topics de suivi (étape 9).
+ * No Dapr library is needed: the sidecar exposes a local HTTP API. A 2xx means the sidecar accepted
+ * the message, not that it was delivered; delivery is read from the tracking topics.
  */
 @Slf4j
 public class PasserelleDapr implements PasserelleNotificationEngine {
@@ -58,7 +53,7 @@ public class PasserelleDapr implements PasserelleNotificationEngine {
                     .retrieve()
                     .toBodilessEntity();
         } catch (RestClientException e) {
-            // Remontée telle quelle : le dispatcher la compte comme une tentative et replanifie.
+            // Rethrown as is: the dispatcher counts it as an attempt and reschedules.
             throw new IllegalStateException("Publication Dapr refusée (" + pubsub + "/" + topicVise + ") : "
                     + e.getMessage(), e);
         }

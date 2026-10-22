@@ -19,17 +19,14 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * Épic 8 partiel (FR-DEF-01/02, US 8.1/8.2) — cf. FUNCTIONAL_MAP.md §8,
- * API_IMPLEMENTATION_STATUS.md §10. Endpoints « à proposer » (absents de l'OpenAPI formel).
- */
+/** Final decisions (FR-DEF-01/02, US 8.1/8.2). These endpoints are not in the formal OpenAPI contract. */
 @RestController
 @RequiredArgsConstructor
 public class DecisionDefinitiveController {
 
     private final DecisionDefinitiveService decisionDefinitiveService;
 
-    /** 🆕 M16 (Q-88) : décisions d'un dossier, symétrique de #56/#57/#58. */
+    /** Final decisions of a case file. */
     @GetMapping("${api.prefix}/dossiers/{id}/decisions")
     @PreAuthorize("hasRole('CONSULTATION')")
     public DecisionsDossierResponse lister(@PathVariable Long id) {

@@ -6,13 +6,11 @@ import java.time.LocalDateTime;
 import java.util.Map;
 
 /**
- * Une ligne d'historique.
+ * A history entry.
  *
- * @param code    nature typée de l'action (Q-111). C'est elle qui fait foi et sur laquelle portent
- *                les filtres ; {@code action} n'en est que la formulation lisible, non traduisible
- *                en l'état (QF-24).
- * @param details détails structurés — y compris ce qui figurait autrefois dans la phrase : nom de
- *                l'étape, sens d'une décision, clé de configuration
+ * @param code    typed nature of the action; authoritative and used by filters. {@code action} is
+ * only its readable wording.
+ * @param details structured details: step name, decision outcome, configuration key
  */
 public record HistoriqueActionResponse(
         Long id,

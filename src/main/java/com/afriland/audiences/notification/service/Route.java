@@ -5,13 +5,13 @@ import com.afriland.audiences.notification.passerelle.CanalEngine;
 import java.util.Objects;
 
 /**
- * Un canal retenu par le routage pour un destinataire. Sans destinataire utilisable, la route reste
- * listée avec son motif : elle deviendra une ligne NON_JOIGNABLE, visible en supervision (D14).
+ * A channel selected by routing for a recipient. Without a usable address the route is kept with its
+ * reason and becomes a NON_JOIGNABLE row, visible in monitoring.
  *
- * @param reglage     canal tel que le DJ le règle (OUTLOOK, TEAMS, COURRIEL_PERSONNEL, SMS, WHATSAPP)
- * @param canal       canal du Notification Engine correspondant
- * @param destinataire adresse ou numéro mis en forme ; {@code null} si non joignable
- * @param motif       raison de l'absence de destinataire ; {@code null} si joignable
+ * @param reglage     channel as configured (OUTLOOK, TEAMS, COURRIEL_PERSONNEL, SMS, WHATSAPP)
+ * @param canal       matching Notification Engine channel
+ * @param destinataire formatted address or number; {@code null} if unreachable
+ * @param motif       why there is no recipient; {@code null} if reachable
  */
 public record Route(String reglage, CanalEngine canal, String destinataire, MotifNonJoignable motif) {
 
@@ -28,9 +28,9 @@ public record Route(String reglage, CanalEngine canal, String destinataire, Moti
     }
 
     public enum MotifNonJoignable {
-        /** Aucune coordonnée enregistrée pour ce canal. */
+        /** No contact detail recorded for this channel. */
         COORDONNEE_ABSENTE,
-        /** Une coordonnée existe, mais dans une forme que le Notification Engine n'accepte pas. */
+        /** A contact detail exists, but in a format the Notification Engine rejects. */
         COORDONNEE_INVALIDE
     }
 }

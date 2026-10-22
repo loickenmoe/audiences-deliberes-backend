@@ -8,7 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.Collection;
 import java.util.List;
 
-/** Les demandes d'explication, et la question qui gouverne la relance : qui en a une sans réponse ? */
+/** Requests for explanation, and the question that drives reminders: who has one unanswered? */
 public interface DemandeExplicationRepository extends JpaRepository<DemandeExplication, Long> {
 
     Page<DemandeExplication> findByOrderByDateDemandeDesc(Pageable pageable);
@@ -18,11 +18,10 @@ public interface DemandeExplicationRepository extends JpaRepository<DemandeExpli
     Page<DemandeExplication> findByDateReponseIsNullOrderByDateDemandeDesc(Pageable pageable);
 
     /**
-     * Les avocats qui doivent une explication.
+     * Lawyers who owe an explanation.
      *
-     * <p>Interrogé une fois par passage de la relance, et non une fois par audience : le
-     * planificateur parcourt des centaines d'audiences, et poser la question à chacune multiplierait
-     * les allers-retours pour une réponse qui ne change pas d'une ligne à l'autre.
+     * <p>Queried once per reminder run, not once per hearing: the scheduler goes through hundreds of
+     * hearings and the answer does not change from one row to the next.
      */
     @org.springframework.data.jpa.repository.Query(
             "select distinct d.avocat.id from DemandeExplication d where d.dateReponse is null")

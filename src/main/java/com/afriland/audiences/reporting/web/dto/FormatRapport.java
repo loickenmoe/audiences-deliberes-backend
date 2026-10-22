@@ -1,8 +1,8 @@
 package com.afriland.audiences.reporting.web.dto;
 
 /**
- * Format de sortie d'un rapport (FR-REP-01). Distinct de {@code audience.web.dto.FormatExport}
- * (Épic 2, 3 valeurs sans CSV) — le contrat en exige ici 4.
+ * Report output format (FR-REP-01). Distinct from {@code audience.web.dto.FormatExport}, which has
+ * no CSV value; the reporting contract requires all four.
  */
 public enum FormatRapport {
     JSON,

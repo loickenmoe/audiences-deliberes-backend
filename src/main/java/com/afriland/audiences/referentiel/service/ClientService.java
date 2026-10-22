@@ -5,6 +5,7 @@ import com.afriland.audiences.common.audit.TypeActionHistorique;
 import com.afriland.audiences.common.error.ApiException;
 import com.afriland.audiences.common.error.ErrorCodes;
 import com.afriland.audiences.common.web.PageResponse;
+import com.afriland.audiences.notification.service.Coordonnees;
 import com.afriland.audiences.referentiel.domain.Client;
 import com.afriland.audiences.referentiel.mapper.ClientMapper;
 import com.afriland.audiences.referentiel.repository.ClientRepository;
@@ -45,11 +46,15 @@ public class ClientService {
 
     @Transactional(readOnly = true)
     public ClientResponse consulterClient(Long id) {
-        return clientMapper.toResponse(getClientOrThrow(id));
+        return clientMapper.toResponse(chargerClient(id));
     }
 
     @Transactional(readOnly = true)
     public Client getClientOrThrow(Long id) {
+        return chargerClient(id);
+    }
+
+    private Client chargerClient(Long id) {
         return clientRepository.findById(id)
                 .orElseThrow(() -> ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE, "Client introuvable : " + id));
     }
@@ -57,10 +62,9 @@ public class ClientService {
     @Transactional
     public ClientResponse creerClient(CreerClientRequest request) {
         /*
-         * La référence est attribuée par le système (métier, 2026-09-29). Le contrôle qui suit a
-         * changé de sens : il ne sanctionne plus une saisie — il n'y en a plus — mais détecte un
-         * compteur désynchronisé (V36), seul cas où une référence attribuée pourrait être déjà
-         * portée. Aucun champ n'est nommé : il n'y en a plus à corriger à l'écran.
+         * The reference is assigned by the system, so this check detects a desynchronised counter (V36),
+         * the only case where an assigned reference could already be in use. No field is named, since
+         * there is none to correct on screen.
          */
         String reference = generateurReference.prochaine(FamilleReference.CLIENT);
         if (clientRepository.findByReference(reference).isPresent()) {
@@ -70,24 +74,24 @@ public class ClientService {
         }
         Client client = clientMapper.toEntity(request);
         client.setReference(reference);
+        client.setTelephone(telephoneValide(request.telephone()));
         client = clientRepository.save(client);
         return clientMapper.toResponse(client);
     }
 
     /**
-     * Modifie le nom et les coordonnées d'un client. La référence n'est pas modifiable : elle est
-     * l'identifiant du client (cf. {@link ModifierClientRequest}).
+     * Updates a client's name and contact details. The reference cannot be changed: it is the
+     * client's identifier (see {@link ModifierClientRequest}).
      *
-     * <p>Seuls les champs <b>réellement changés</b> sont historisés, avec leur valeur d'avant et
-     * d'après. Une requête qui ne change rien n'écrit aucune ligne : ce n'est pas une modification, et
-     * un journal qui en garderait trace mentirait sur ce qui s'est passé.
+     * <p>Only fields that <b>actually changed</b> are recorded in the history, with their before and
+     * after values. A request that changes nothing writes no line.
      */
     @Transactional
     public ClientResponse modifierClient(Long id, ModifierClientRequest request) {
-        Client client = getClientOrThrow(id);
+        Client client = chargerClient(id);
         String nom = request.nom().trim();
         String email = videEnNull(request.email());
-        String telephone = videEnNull(request.telephone());
+        String telephone = telephoneValide(request.telephone());
 
         Map<String, Object> details = new LinkedHashMap<>();
         details.put("reference", client.getReference());
@@ -113,8 +117,23 @@ public class ClientService {
         }
     }
 
-    /** Un champ facultatif vidé à l'écran arrive en chaîne vide : il est enregistré comme absent. */
+    /** An optional field cleared on screen arrives as an empty string: it is stored as absent. */
     private static String videEnNull(String valeur) {
         return StringUtils.hasText(valeur) ? valeur.trim() : null;
+    }
+
+    /**
+     * Same rule as an intervenant's phone: checked and stored in international format, so a client's
+     * number is entered once in a form the notification module can use. Empty means absent.
+     */
+    private static String telephoneValide(String saisie) {
+        String telephone = videEnNull(saisie);
+        if (telephone == null) {
+            return null;
+        }
+        return Coordonnees.telephone(telephone).orElseThrow(() -> ApiException.badRequestSurChamp(
+                ErrorCodes.REQUETE_INVALIDE,
+                "Numéro de téléphone invalide : attendu 6XXXXXXXX, 237XXXXXXXXX ou +237XXXXXXXXX",
+                "telephone"));
     }
 }

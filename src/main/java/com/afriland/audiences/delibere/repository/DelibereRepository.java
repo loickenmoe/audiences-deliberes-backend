@@ -21,21 +21,19 @@ import java.util.Optional;
 @Repository
 public interface DelibereRepository extends JpaRepository<Delibere, Long> {
 
-    /** Délibérés dont le délai de recours est échu et dont l'étape est toujours DELIBERE_VIDE (aucun recours exercé) — DelaiRecoursScheduler. */
+    /** Deliberations whose appeal deadline has passed and whose step is still DELIBERE_VIDE (no appeal lodged); used by DelaiRecoursScheduler. */
     List<Delibere> findByDateEcheanceRecoursNotNullAndDateEcheanceRecoursLessThanEqualAndEtapeStatutCycleVie(
             LocalDateTime maintenant, StatutCycleVie statutCycleVie);
 
     /**
-     * Indicateur de performance par avocat (RG-INT-01, `GET /repertoire/avocats`, M9) : nombre de
-     * délibérés {@code FAVORABLE} rapporté au nombre total de délibérés rendus sur les dossiers où
-     * l'avocat est affecté — seule mesure de « succès » disponible avant le module Décisions
-     * définitives (M12, Q-52).
+     * Per-lawyer performance indicator (RG-INT-01, {@code GET /repertoire/avocats}): number of
+     * {@code FAVORABLE} deliberations over all deliberations rendered on the cases the lawyer is assigned to.
      */
     @Query("SELECT da.avocat.id AS avocatId, "
             + "SUM(CASE WHEN d.resultat = com.afriland.audiences.delibere.domain.ResultatDelibere.FAVORABLE THEN 1L ELSE 0L END) AS favorables, "
             + "COUNT(d) AS total "
             + "FROM Delibere d JOIN com.afriland.audiences.dossier.domain.DossierAvocat da ON da.dossier = d.dossier "
-            // Q-78 : un délibéré en attente ou rabattu n'est ni un succès ni un échec.
+            // A pending or reopened deliberation is neither a success nor a failure.
             + "WHERE d.resultat IS NOT NULL "
             + "GROUP BY da.avocat.id")
     List<PerformanceAvocat> calculerPerformanceParAvocat();
@@ -49,12 +47,10 @@ public interface DelibereRepository extends JpaRepository<Delibere, Long> {
     }
 
     /**
-     * FR-REP-02 (tableau de bord, M13) : la performance en recouvrement, toutes périodes confondues.
+     * FR-REP-02 (dashboard): debt-recovery performance over all periods.
      *
-     * <p><b>Les trois résultats sont comptés séparément</b> (métier, 2026-10-03, observation 12). Le
-     * décompte ne portait que les favorables et le total ; « perdus » n'est pas
-     * « total moins gagnés », car un délibéré {@code MIXTE} n'est ni l'un ni l'autre - le déduire
-     * aurait compté les affaires partiellement gagnées comme des échecs.
+     * <p>The three results are counted separately: "lost" is not "total minus won", because a
+     * {@code MIXTE} deliberation is neither; deducing it would count partial wins as failures.
      */
     @Query("SELECT SUM(CASE WHEN d.resultat = com.afriland.audiences.delibere.domain.ResultatDelibere.FAVORABLE THEN 1L ELSE 0L END) AS favorables, "
             + "SUM(CASE WHEN d.resultat = com.afriland.audiences.delibere.domain.ResultatDelibere.DEFAVORABLE THEN 1L ELSE 0L END) AS defavorables, "
@@ -65,14 +61,10 @@ public interface DelibereRepository extends JpaRepository<Delibere, Long> {
     PerformanceGlobale calculerResultats(@Param("categories") List<CategorieDossier> categories);
 
     /**
-     * Les délibérés que {@link #calculerTauxSuccesRecouvrement} compte, pour un résultat donné
-     * (Q-137).
+     * The deliberations counted by {@link #calculerTauxSuccesRecouvrement}, for a given result.
      *
-     * <p><b>Les deux restrictions du compteur sont reprises telles quelles</b> : catégorie
-     * {@code RECOUVREMENT} et résultat renseigné. La première surprendra peut-être - l'écran dit
-     * « Litiges gagnés » sans la mentionner -, mais le détail doit rendre ce que le compteur compte,
-     * pas ce que son libellé laisse croire. L'écart entre les deux est signalé pour arbitrage,
-     * il ne se corrige pas ici en silence.
+     * <p>Applies the same two restrictions as the counter ({@code RECOUVREMENT} category and a result
+     * set), so that the detail shows exactly what the counter counts.
      */
     @Query("SELECT d FROM Delibere d "
             + "WHERE d.dossier.categorie IN :categories "
@@ -82,7 +74,7 @@ public interface DelibereRepository extends JpaRepository<Delibere, Long> {
                                      @Param("categories") List<CategorieDossier> categories,
                                      Pageable pageable);
 
-    /** FR-REP-01 (rapport périodique, M13) : mêmes indicateurs, restreints aux délibérés rendus dans la période. */
+    /** FR-REP-01 (periodic report): same indicators, restricted to deliberations rendered within the period. */
     @Query("SELECT SUM(CASE WHEN d.resultat = com.afriland.audiences.delibere.domain.ResultatDelibere.FAVORABLE THEN 1L ELSE 0L END) AS favorables, "
             + "SUM(CASE WHEN d.resultat = com.afriland.audiences.delibere.domain.ResultatDelibere.DEFAVORABLE THEN 1L ELSE 0L END) AS defavorables, "
             + "SUM(CASE WHEN d.resultat = com.afriland.audiences.delibere.domain.ResultatDelibere.MIXTE THEN 1L ELSE 0L END) AS mixtes, "
@@ -96,21 +88,21 @@ public interface DelibereRepository extends JpaRepository<Delibere, Long> {
     interface PerformanceGlobale {
         Long getFavorables();
 
-        /** Les délibérés défavorables : les litiges <b>perdus</b>, et eux seuls. */
+        /** Unfavourable deliberations: the cases <b>lost</b>, and only those. */
         Long getDefavorables();
 
-        /** Ni gagnés ni perdus. Les compter à part est la seule façon de ne pas les attribuer. */
+        /** Neither won nor lost. Counting them separately is the only way not to misattribute them. */
         Long getMixtes();
 
         Long getTotal();
     }
 
-    /** FR-REP-01 (rapport périodique, M13) : délibérés rendus dans la période — hors mises en délibéré en attente (Q-78). */
+    /** FR-REP-01 (periodic report): deliberations rendered within the period, excluding pending ones. */
     long countByDateDelibereeBetweenAndResultatIsNotNull(LocalDate debut, LocalDate fin);
 
     /**
-     * FR-REP-01, recadré par catégorie (Q-138). Une mise en délibéré sans résultat n'est pas un
-     * délibéré rendu (Q-78) : la condition sur le résultat reste.
+     * FR-REP-01, by category. A deliberation without a result has not been rendered, hence the
+     * condition on the result.
      */
     @Query("SELECT COUNT(d) FROM Delibere d WHERE d.resultat IS NOT NULL "
             + "AND d.dateDeliberee BETWEEN :debut AND :fin AND d.dossier.categorie IN :categories")
@@ -118,18 +110,18 @@ public interface DelibereRepository extends JpaRepository<Delibere, Long> {
                             @Param("fin") LocalDate fin,
                             @Param("categories") List<CategorieDossier> categories);
 
-    /** M15 : onglet « Délibérés » de la fiche dossier (Q-68), plus récent d'abord. */
+    /** Case file "Deliberations" tab, most recent first. */
     List<Delibere> findByDossierIdOrderByDateDelibereeDesc(Long dossierId);
 
-    /** Q-78 : au plus un délibéré en attente (ni vidé, ni rabattu) par étape. */
+    /** At most one pending deliberation (neither delivered nor reopened) per step. */
     boolean existsByEtapeIdAndResultatIsNullAndDateRabattementIsNull(Long etapeId);
 
     /**
-     * Le dernier délibéré <b>rendu</b> sur une étape (2026-09-29).
+     * The last <b>rendered</b> deliberation on a step.
      *
-     * <p>Une étape peut en porter plusieurs — prorogée, rabattue, remise en délibéré. C est le
-     * dernier rendu qui décide de ce qui peut suivre : recours ou clôture. Tri par identifiant
-     * décroissant, soit l ordre de création — et non par date délibérée, qu une prorogation déplace.
+     * <p>A step may carry several (extended, reopened, re-deliberated); the last rendered one decides
+     * what may follow: appeal or closure. Sorted by descending id (creation order), not by
+     * deliberation date, which an extension can move.
      */
     Optional<Delibere> findFirstByEtapeIdAndResultatIsNotNullOrderByIdDesc(Long etapeId);
 }

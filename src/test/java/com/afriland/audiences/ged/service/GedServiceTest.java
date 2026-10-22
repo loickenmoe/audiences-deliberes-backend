@@ -102,11 +102,9 @@ class GedServiceTest {
         dj = Utilisateur.builder().id(20L).profil(Profil.builder().code("DJ").build()).build();
     }
 
-    // ------------------------------------------------------------------ uploaderDocument
-
     @Test
     void uploaderDocument_rejectsUnsupportedFormat() {
-        // Extension inconnue de FormatDocument (échoue avant même la consultation de FORMATS_GED).
+        // Extension unknown to FormatDocument (fails before FORMATS_GED is even consulted).
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
         MockMultipartFile fichier = new MockMultipartFile("file", "malware.exe", "application/octet-stream", new byte[]{1, 2, 3});
 
@@ -169,8 +167,6 @@ class GedServiceTest {
         verify(alerteService).declencher(eq(TypeAlerte.DOCUMENT_CHARGE), eq(1L), eq(juriste), any());
     }
 
-    // ------------------------------------------------------------------ obtenirDocument
-
     @Test
     void obtenirDocument_notFoundWhenDeleted() {
         Document document = Document.builder().id(5L).dossier(dossier).estSupprime(true).build();
@@ -192,8 +188,6 @@ class GedServiceTest {
         assertThat(result.urlTelechargement()).isEqualTo("http://minio/presigned");
     }
 
-    // ------------------------------------------------------------------ supprimerOuDemander
-
     @Test
     void supprimerOuDemander_djDeletesImmediately() {
         Document document = Document.builder().id(5L).dossier(dossier).nomFichier("piece.pdf")
@@ -210,7 +204,7 @@ class GedServiceTest {
         verify(alerteService).declencher(eq(TypeAlerte.SUPPRESSION_DOCUMENT), eq(1L), eq(juriste), any());
     }
 
-    /** Q-79 : sans cela, la demande restait EN_ATTENTE, indécidable (404) et relancée toutes les 72 h. */
+    /** Otherwise the request stayed EN_ATTENTE, undecidable (404) and reminded every 72 h. */
     @Test
     void supprimerOuDemander_suppressionDirecteFermeLaDemandeEnAttente() {
         Document document = Document.builder().id(5L).dossier(dossier).nomFichier("piece.pdf")
@@ -231,7 +225,7 @@ class GedServiceTest {
         verify(demandeSuppressionRepository).save(enAttente);
     }
 
-    /** Q-79 : la file dit quoi supprimer — le fichier et son dossier, pas un identifiant. */
+    /** The queue says what to delete: the file and its case, not an identifier. */
     @Test
     void listerDemandesSuppression_nommeLeDocumentEtLeDossier() {
         Document document = Document.builder().id(1L).dossier(dossier).nomFichier("pv-transfert.pdf")
@@ -293,8 +287,6 @@ class GedServiceTest {
         assertThatThrownBy(() -> service.supprimerOuDemander(5L)).isInstanceOf(ApiException.class);
     }
 
-    // ------------------------------------------------------------------ approuverOuRejeter
-
     @Test
     void approuverOuRejeter_approvalDeletesDocument() {
         Document document = Document.builder().id(5L).dossier(dossier).nomFichier("piece.pdf")
@@ -324,7 +316,8 @@ class GedServiceTest {
         when(demandeSuppressionRepository.findByDocumentIdAndStatut(5L, StatutSuppression.EN_ATTENTE)).thenReturn(Optional.of(demande));
         when(currentUserService.getCurrentUser()).thenReturn(dj);
 
-        assertThatThrownBy(() -> service.approuverOuRejeter(5L, new ApprobationSuppressionRequest(StatutSuppression.REJETEE, null)))
+        var requete = new ApprobationSuppressionRequest(StatutSuppression.REJETEE, null);
+        assertThatThrownBy(() -> service.approuverOuRejeter(5L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("motif");
         assertThat(document.getEstSupprime()).isFalse();
@@ -349,8 +342,6 @@ class GedServiceTest {
         verify(minioStorageService, never()).supprimer(any());
     }
 
-    // ------------------------------------------------------------------ rapportJournalier
-
     @Test
     void rapportJournalier_returnsZeroesWhenNoData() {
         LocalDate date = LocalDate.of(2026, 9, 6);
@@ -366,8 +357,6 @@ class GedServiceTest {
         assertThat(result.affairesNouvelles()).isZero();
         assertThat(result.planificationActes()).isEmpty();
     }
-
-    // ------------------------------------------------------------------ listerDemandesSuppression (M15, Q-68)
 
     @Test
     void listerDemandesSuppression_filtreParStatut() {

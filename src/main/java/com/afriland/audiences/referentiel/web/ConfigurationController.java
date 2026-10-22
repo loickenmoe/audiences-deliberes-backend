@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-/** CONF01-07 (US §11.2) — cf. API_IMPLEMENTATION_STATUS.md §9 (#47, #48). */
+/** System parameters CONF01-07 (US §11.2). */
 @RestController
 @RequestMapping("${api.prefix}/configurations")
 @RequiredArgsConstructor
@@ -30,17 +30,14 @@ public class ConfigurationController {
     }
 
     /**
-     * Écriture des paramètres système — <strong>DJ et DJA</strong> (Q-108).
+     * Writing system parameters: <strong>DJ and DJA</strong>.
      *
-     * <p>Ouverte à la DJA sur décision du porteur du projet. Le motif est la <strong>continuité de
-     * service</strong> : le DJ absent, plus personne ne pouvait relever un seuil de prorogation ou la
-     * taille maximale d'un document, alors qu'un Adjoint existe précisément pour suppléer. La
-     * traçabilité n'y perd rien — {@link ConfigurationService#modifier} historise chaque écriture
-     * avec son auteur.
+     * <p>Open to the DJA for service continuity: when the DJ is absent, the Deputy can still adjust a
+     * parameter. Traceability is preserved: {@link ConfigurationService#modifier} records each change
+     * with its author.
      *
-     * <p><strong>L'ouverture reste à sens unique</strong> : le contrôle d'opportunité des frais
-     * demeure réservé à la DJA ({@code hasRole('DJA')}), sans quoi RG-INT-03 perdrait la séparation
-     * de ses deux étapes.
+     * <p>The expense opportunity check remains reserved to the DJA ({@code hasRole('DJA')}), otherwise
+     * RG-INT-03 would lose the separation of its two steps.
      */
     @PutMapping("/{cle}")
     @PreAuthorize("hasAnyRole('DJ', 'DJA')")

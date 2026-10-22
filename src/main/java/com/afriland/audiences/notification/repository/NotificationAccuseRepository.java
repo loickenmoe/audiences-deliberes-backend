@@ -8,6 +8,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface NotificationAccuseRepository extends JpaRepository<NotificationAccuse, Long> {
 
-    /** Livraison au moins une fois : le même accusé peut arriver deux fois, il ne compte qu'une. */
+    /** At-least-once delivery: the same receipt may arrive twice but only counts once. */
     boolean existsByNotificationIdAndType(String notificationId, TypeAccuse type);
 }

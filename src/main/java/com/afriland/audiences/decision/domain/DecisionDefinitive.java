@@ -28,9 +28,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
- * Décision devenue définitive sur un dossier : {@link Adjudication} (US 8.1) ou
- * {@link CondamnationPecuniaire} (US 8.2) — hiérarchie {@code JOINED} identique à
- * {@code Publication}/{@code Intervenant} (M9/M11). Cf. FUNCTIONAL_MAP.md §8, P5.
+ * Final decision on a case file: {@link Adjudication} (US 8.1) or {@link CondamnationPecuniaire}
+ * (US 8.2), mapped as a {@code JOINED} hierarchy like {@code Publication}/{@code Intervenant}.
  */
 @Getter
 @Setter
@@ -52,7 +51,7 @@ public abstract class DecisionDefinitive {
     @JoinColumn(name = "dossier_id", nullable = false)
     private Dossier dossier;
 
-    /** Nullable au schéma (Q-59) : requise pour {@link Adjudication} (FR-DEF-01), optionnelle pour {@link CondamnationPecuniaire}. */
+    /** Nullable in the schema: required for {@link Adjudication} (FR-DEF-01), optional for {@link CondamnationPecuniaire}. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "etape_id")
     private EtapeProcedure etape;

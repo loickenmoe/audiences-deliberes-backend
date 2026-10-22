@@ -3,13 +3,12 @@ package com.afriland.audiences.alerte.domain;
 import com.afriland.audiences.referentiel.domain.Utilisateur;
 
 /**
- * Publié par {@code AlerteService.declencher} une fois l'alerte enregistrée, <b>dans la transaction de
- * l'action métier</b>. Les modules qui prolongent une alerte (les notifications externes, étape 6 de
- * NOTIFICATION_ENGINE_PLAN.md) l'écoutent sans que le module alerte ait à les connaître : il reste le
- * socle transversal décrit dans la Javadoc d'{@link Alerte}.
+ * Published by {@code AlerteService.declencher} once the alert is saved, <b>within the business
+ * action's transaction</b>. Modules that extend an alert (external notifications) listen to it
+ * without the alert module knowing them.
  * <p>
- * Le texte {@code declencheur} n'y figure pas à dessein : écrit pour l'écran, il peut contenir un
- * motif, un nom ou un marqueur technique, et n'a pas à circuler au-delà du canal applicatif.
+ * The {@code declencheur} text is deliberately left out: written for the screen, it may contain a
+ * reason, a name or a technical marker, and must not travel beyond the in-app channel.
  */
 public record AlerteDeclenchee(Long alerteId, TypeAlerte type, Long dossierId, Utilisateur destinataire) {
 }

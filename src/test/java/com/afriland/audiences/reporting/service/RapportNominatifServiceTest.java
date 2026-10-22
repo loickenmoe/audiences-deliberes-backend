@@ -29,11 +29,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * L'activité de chacun sur une période (observation 14, N6).
+ * Each person's activity over a period (N6).
  *
- * <p>Ce qui est éprouvé : que le rapport **compte ce qui a été fait**, qu'il ne fabrique rien là où
- * l'historique est muet, et qu'il refuse les deux tentations d'un rapport nominatif - classer, et
- * additionner des gestes qui ne s'additionnent pas.
+ * <p>Checks that the report **counts what was done**, invents nothing where history is silent, and
+ * resists the two temptations of a named report: ranking, and adding up actions that do not add up.
  */
 @ExtendWith(MockitoExtension.class)
 class RapportNominatifServiceTest {
@@ -98,10 +97,8 @@ class RapportNominatifServiceTest {
     }
 
     /**
-     * Les frais comptent **deux** gestes.
-     *
-     * <p>Conformité et opportunité sont deux contrôles distincts sur la même demande : n'en retenir
-     * qu'un rendrait invisible la moitié du travail de celui qui fait les deux.
+     * Fees count **two** actions: compliance and opportunity are distinct reviews of the same request.
+     * Keeping only one would hide half the work of someone doing both.
      */
     @Test
     @DisplayName("les deux contrôles de frais s'additionnent en un seul chiffre")
@@ -120,10 +117,8 @@ class RapportNominatifServiceTest {
     }
 
     /**
-     * Sans compte rendu saisi, pas de délai : **nul**, et non zéro.
-     *
-     * <p>Zéro se lirait comme une saisie le jour même de l'audience, c'est-à-dire comme la
-     * meilleure performance possible. L'absence de mesure n'est pas une mesure excellente.
+     * Without an entered report, no delay: **null**, not zero. Zero would read as same-day entry, the
+     * best possible performance.
      */
     @Test
     @DisplayName("le délai moyen est nul quand aucun compte rendu n'a été saisi")
@@ -140,11 +135,8 @@ class RapportNominatifServiceTest {
     }
 
     /**
-     * Le rapport est trié par **nom**, jamais par volume.
-     *
-     * <p>Classer par nombre d'actions ferait du rapport un palmarès, et le premier de la liste
-     * passerait pour le meilleur - alors que trente dossiers simples ne valent pas deux affaires
-     * difficiles. L'application compte ; le responsable apprécie.
+     * The report is sorted by **name**, never by volume. Ranking by number of actions would turn it into
+     * a leaderboard, while thirty simple cases are not worth two difficult ones.
      */
     @Test
     @DisplayName("les lignes suivent l'ordre des noms, et non celui des volumes")
@@ -164,7 +156,7 @@ class RapportNominatifServiceTest {
                 .containsExactly("Alice Abena", "Zoe Zamba");
     }
 
-    /** Période sans activité : rien à dire, et le contrôleur rendra 204. */
+    /** Period without activity: nothing to report, the controller will return 204. */
     @Test
     @DisplayName("une période vide ne produit aucune ligne, et n'interroge pas les délais")
     void periodeVide() {
@@ -174,16 +166,14 @@ class RapportNominatifServiceTest {
         var rapport = service.produire(DEBUT, FIN);
 
         assertThat(rapport.estVide()).isTrue();
-        // Inutile de calculer des délais pour personne.
+        // No point computing delays for nobody.
         verify(historiqueActionRepository, never()).delaiMoyenDeSaisieParPersonne(any(), any());
         verify(utilisateurRepository, never()).findAllById(any());
     }
 
     /**
-     * La fin de période est **incluse**.
-     *
-     * <p>Un rapport « du 1er au 30 » doit compter le 30. Les bornes sont des dates, les actions des
-     * instants : s'arrêter au 30 à minuit perdrait la journée entière sans que personne le voie.
+     * The end of the period is **inclusive**. Bounds are dates, actions are instants: stopping at
+     * midnight on the 30th would silently lose the whole day.
      */
     @Test
     @DisplayName("la borne haute va jusqu'au lendemain de la date de fin")
@@ -201,10 +191,8 @@ class RapportNominatifServiceTest {
     }
 
     /**
-     * Les natures suivies sont **celles-là**, et pas d'autres.
-     *
-     * <p>Ce test fige la liste arrêtée avec le métier : l'y ajouter une nature sans le dire ferait
-     * apparaître un indicateur que personne n'a demandé, dans un rapport qui nomme des personnes.
+     * The tracked natures are **these**, and no others. Adding one silently would show an indicator
+     * nobody asked for, in a report that names people.
      */
     @Test
     @DisplayName("seules les sept natures arrêtées avec le métier sont comptées")
@@ -227,7 +215,7 @@ class RapportNominatifServiceTest {
                 TypeActionHistorique.FRAIS_OPPORTUNITE_CONTROLEE);
     }
 
-    /** Un compte retiré du référentiel laisse ses traces : elles ne deviennent pas anonymes. */
+    /** An account removed from the reference data keeps its traces: they do not become anonymous. */
     @Test
     @DisplayName("une personne absente du référentiel garde sa ligne, sans nom inventé")
     void personneAbsenteDuReferentiel() {
@@ -268,10 +256,9 @@ class RapportNominatifServiceTest {
     }
 
     /**
-     * **Le tableau que le porteur du projet a reclame le 2026-10-13.** « Activite par personne » ne
-     * montrait que les profils internes, et c'etait exact : ses six colonnes comptent des natures de
-     * production interne qu'un avocat n'accomplit jamais. Il **depose** ; c'est le juriste qui
-     * enregistre. Un second tableau, avec ses propres colonnes, plutot qu'une ligne de zeros.
+     * Lawyer activity table. The internal table's six columns count internal production natures a
+     * lawyer never performs (they **upload**; the legal officer records), hence a second table with its
+     * own columns rather than a row of zeros.
      */
     @Test
     @DisplayName("compte les dépôts de chaque avocat, et le nomme depuis le répertoire")
@@ -291,11 +278,11 @@ class RapportNominatifServiceTest {
         var rapport = service.produireAvocats(DEBUT, FIN);
 
         assertThat(rapport.lignes()).hasSize(2);
-        // Par nom : « Cabinet… » avant « Me Nkolo ».
+        // By name: "Cabinet..." before "Me Nkolo".
         var premier = rapport.lignes().get(0);
         assertThat(premier.nom()).isEqualTo("Cabinet Fotso & Associés");
-        // Le nom du **répertoire**, pas celui du compte : c'est sous celui-là que la direction le
-        // connaît, et c'est lui qui figure sur les lettres de constitution.
+        // The **directory** name, not the account's: it is the name management knows and the one on
+        // retainer letters.
         assertThat(premier.avocatId()).isEqualTo(5L);
         assertThat(premier.utilisateurId()).isEqualTo(21L);
         assertThat(premier.comptesRendusDeposes()).isEqualTo(6);
@@ -305,9 +292,8 @@ class RapportNominatifServiceTest {
     }
 
     /**
-     * Les quatre natures comptees sont exclusives a l'avocat - les trois depots et la reponse a une
-     * demande d'explication sont tous `hasRole('AVOCAT')`. Grouper sur elles suffit donc, sans
-     * condition sur le profil : une condition de moins a garder d'accord avec les habilitations.
+     * The four counted natures are exclusive to lawyers (the three uploads and the explanation answer
+     * are all `hasRole('AVOCAT')`). Grouping on them is enough, without a profile condition.
      */
     @Test
     @DisplayName("n'interroge que les quatre natures qu'un avocat accomplit")
@@ -326,7 +312,7 @@ class RapportNominatifServiceTest {
                 TypeActionHistorique.FRAIS_DEMANDE_DEPOSEE,
                 TypeActionHistorique.PUBLICATION_AUTRE_DEPOSEE,
                 TypeActionHistorique.EXPLICATION_REPONDUE);
-        // Aucune des six natures du tableau interne : un avocat n'en accomplit aucune.
+        // None of the six natures of the internal table: a lawyer performs none.
         assertThat(codes.getValue()).doesNotContain(
                 TypeActionHistorique.DOSSIER_CREE,
                 TypeActionHistorique.AUDIENCE_COMPTE_RENDU_ENREGISTRE,
@@ -344,9 +330,8 @@ class RapportNominatifServiceTest {
     }
 
     /**
-     * Une inscription retiree du repertoire ne fait pas disparaitre ce que l'avocat a depose. L'ecran
-     * l'ouvre alors par son compte, faute d'inscription a designer - d'ou un `avocatId` nul, qui est
-     * une information et non un trou.
+     * A directory entry removed does not erase what the lawyer uploaded. The screen then opens it via the
+     * account, hence a null `avocatId`, which is information rather than a gap.
      */
     @Test
     @DisplayName("un avocat retiré du répertoire garde ses dépôts, sous le nom de son compte")

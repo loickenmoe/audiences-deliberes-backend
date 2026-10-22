@@ -25,10 +25,10 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * Utilisateur interne ou externe du système, authentifié via Keycloak. Provisionné à la première
- * requête authentifiée à partir des claims du jeton (cf. module {@code common}, prévu en M3) —
- * aucune gestion de mot de passe n'est implémentée ici (REF-05 §1.3).
- * Cf. dictionnaire des données §2.4.1 (table {@code utilisateur}).
+ * Internal or external system user, authenticated via Keycloak. Provisioned on the first
+ * authenticated request from the token claims (see {@code common} module); no password management
+ * is implemented here (REF-05 §1.3).
+ * See data dictionary §2.4.1 (table {@code utilisateur}).
  */
 @Getter
 @Setter
@@ -49,8 +49,8 @@ public class Utilisateur {
     private String keycloakId;
 
     /**
-     * Q-84 : identifiant de connexion ({@code preferred_username}) — celui que le DJ saisit comme
-     * compte d'un avocat. Nul pour un utilisateur provisionné avant Q-84 jusqu'à sa requête suivante.
+     * Login identifier ({@code preferred_username}), the one the DJ enters as a lawyer's account.
+     * May be null for a previously provisioned user until their next request.
      */
     @Size(max = 255)
     @Column(unique = true)
@@ -81,21 +81,19 @@ public class Utilisateur {
     private Boolean actif = true;
 
     /**
-     * Image de la signature manuscrite, déposée par son <b>seul titulaire</b> (métier, 2026-10-06).
+     * Image of the handwritten signature, uploaded by its <b>holder only</b>.
      *
-     * <p><b>Confort de présentation, non valeur probante.</b> La lettre de constitution part avec
-     * l'image au lieu d'un nom à signer à la main. Ce qui fait preuve reste la trace horodatée de
-     * qui a signé - {@code demande_constitution.valide_par} et l'historique - et non cette image :
-     * l'effacer ne retirerait rien à la preuve, la falsifier n'en créerait aucune.
+     * <p><b>A presentation convenience, not evidence.</b> The appointment letter carries the image
+     * instead of a name to sign by hand. Evidence remains the timestamped record of who signed
+     * ({@code demande_constitution.valide_par} and the history), not this image.
      *
-     * <p>{@code LAZY} : quelques dizaines de kilo-octets qu'aucune liste d'utilisateurs n'a besoin
-     * de charger. Sans cela, l'annuaire les transérerait tous à chaque appel.
+     * <p>{@code LAZY}: a few dozen kilobytes that no user list needs to load.
      */
     @Basic(fetch = FetchType.LAZY)
     @Column(name = "signature")
     private byte[] signature;
 
-    /** {@code image/png} ou {@code image/jpeg} : les seuls types que le PDF sait apposer. */
+    /** {@code image/png} or {@code image/jpeg}: the only types the PDF can embed. */
     @Size(max = 50)
     @Column(name = "signature_type", length = 50)
     private String signatureType;

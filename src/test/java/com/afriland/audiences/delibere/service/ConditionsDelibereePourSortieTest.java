@@ -21,13 +21,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 /**
- * Les conditions de sortie d'un délibéré (métier, 2026-09-29).
+ * Exit conditions of a deliberation.
  *
- * <p>Le cas central est celui du <b>recours contre un jugement gagné</b> : la règle était écrite
- * dans {@code ResultatDelibere} depuis M7 — « seuls DEFAVORABLE et MIXTE ouvrent une voie de
- * recours » — et n'était appliquée nulle part. Comme cette transition ouvre automatiquement l'étape
- * suivante, un jugement favorable pouvait faire naître une instance d'appel que personne n'avait
- * décidée.
+ * <p>The central case is an <b>appeal against a won judgment</b>: since this transition
+ * automatically opens the next step, a favourable judgment could otherwise start an appeal nobody
+ * decided on.
  */
 @ExtendWith(MockitoExtension.class)
 class ConditionsDelibereePourSortieTest {
@@ -58,7 +56,7 @@ class ConditionsDelibereePourSortieTest {
                 .thenReturn(Optional.empty());
     }
 
-    // ------------------------------------------------------------------ Le champ d'application
+    // ------------------------------------------------------------------ Scope
 
     @Test
     void les_conditions_de_recours_ne_valent_que_pour_la_reouverture() {
@@ -71,9 +69,9 @@ class ConditionsDelibereePourSortieTest {
         assertThat(clotureAvecResultat.concerne(StatutCycleVie.DELIBERE_VIDE, StatutCycleVie.EN_COURS)).isFalse();
     }
 
-    // ------------------------------------------------------------------ Le recours
+    // ------------------------------------------------------------------ Appeal
 
-    /** Le défaut que la règle vise : on ne fait pas appel d'un procès gagné. */
+    /** The defect the rule targets: no appeal against a won case. */
     @Test
     void un_jugement_favorable_interdit_le_recours() {
         dernierDelibere(ResultatDelibere.FAVORABLE, null);
@@ -106,7 +104,7 @@ class ConditionsDelibereePourSortieTest {
                 .hasValueSatisfying(motif -> assertThat(motif).contains("Aucun délibéré rendu"));
     }
 
-    // ------------------------------------------------------------------ Le délai
+    // ------------------------------------------------------------------ Deadline
 
     @Test
     void un_delai_expire_interdit_de_rouvrir_l_etape() {
@@ -127,9 +125,9 @@ class ConditionsDelibereePourSortieTest {
     }
 
     /**
-     * Un jugement favorable n'a pas d'échéance — {@code validerEcheanceRecours} l'interdit. Cette
-     * condition se tait alors, et c'est l'autre qui refuse : deux règles, deux motifs, jamais un
-     * message sur une date absente.
+     * A favourable judgment has no deadline ({@code validerEcheanceRecours} forbids it). This condition
+     * stays silent and the other one refuses: two rules, two reasons, never a message about a
+     * missing date.
      */
     @Test
     void sans_echeance_cette_condition_se_tait() {
@@ -138,7 +136,7 @@ class ConditionsDelibereePourSortieTest {
         assertThat(recoursDansLeDelai.empechement(etape)).isEmpty();
     }
 
-    // ------------------------------------------------------------------ La clôture
+    // ------------------------------------------------------------------ Closure
 
     @Test
     void la_cloture_exige_que_le_delibere_soit_rendu() {

@@ -11,30 +11,20 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 
 /**
- * Requête de création d'un dossier (FR-DOS-01, US 1.1).
+ * Case creation request (FR-DOS-01, US 1.1).
  * <p>
- * <b>La référence n'est pas dans cette requête</b> : le système l'attribue (métier, 2026-09-29 —
- * « les champs Référence doivent être automatiquement remplis par le système »). Elle est absente
- * du corps plutôt qu'ignorée, comme {@code ModifierClientRequest} le fait depuis Q-116 : un champ
- * qu'on accepte sans l'utiliser laisse croire qu'il sert. Un client qui l'enverrait malgré tout la
- * verrait simplement ignorée par la désérialisation.
+ * <b>The reference is not part of this request</b>: the system assigns it. It is absent rather than
+ * ignored, so that the contract does not suggest it is used.
  * <p>
- * {@code categorie} est optionnelle : dérivée du référentiel {@code nature_dossier} à partir de
- * {@code nature} (RG-DOS-02) ; si fournie, elle doit être cohérente avec cette dérivation, sinon
- * 400.
+ * {@code categorie} is optional: derived from {@code nature} via {@code nature_dossier}
+ * (RG-DOS-02); if provided it must match, otherwise 400.
  * <p>
- * {@code dossierCreditOrigine}, {@code pvTransfert}, {@code incidentCompteReference} et
- * {@code elementsJustificatifs} sont <b>facultatifs depuis le 2026-09-29</b> (amendement de Q-11).
- * Le métier a déplacé l'obligation du texte vers la <b>pièce jointe</b> : « ce sont les pièces
- * jointes qui sont obligatoires, pas leur texte associé ». Ces références restent utiles — elles
- * nomment la pièce et servent à retrouver un dossier — mais ne conditionnent plus la création. US
- * 1.1 et US 1.5, qui les exigeaient, sont amendées d'autant ; la contrainte SQL
- * {@code chk_categorie_coherence} a été levée en V35 pour la même raison.
+ * {@code dossierCreditOrigine}, {@code pvTransfert}, {@code incidentCompteReference} and
+ * {@code elementsJustificatifs} are <b>optional</b>: the attachments are mandatory, not their text.
  * <p>
- * {@code seuilMontant}/{@code typeClientSensible} ne sont pertinents que si {@code estSensible} est
- * vrai : ils constituent la <b>proposition</b> du juriste, soumise à validation DJ/DJA
- * (RG-DOS-09) — ils ne sont jamais écrits directement dans {@code dossier.seuil_montant}
- * (cf. DECISIONS_AND_OPEN_QUESTIONS.md Q-10, Q-26).
+ * {@code seuilMontant}/{@code typeClientSensible} only matter when {@code estSensible} is true:
+ * they are the in-house lawyer's <b>proposal</b>, subject to DJ/DJA validation (RG-DOS-09), and
+ * never written directly to {@code dossier.seuil_montant}.
  */
 public record CreerDossierRequest(
         @NotBlank @Size(max = 255) String nature,
@@ -45,8 +35,7 @@ public record CreerDossierRequest(
         @NotNull @PositiveOrZero Double risqueEncouru,
         String recoursExerces,
         @Size(max = 255) String motifRenvoi,
-        // Obligatoire depuis le 2026-10-05 (observation 2) ; l'existence est vérifiée
-        // par le service, qui seul peut interroger le référentiel.
+        // Mandatory; existence is checked by the service, which alone can query the reference data.
         @NotBlank @Size(max = 20) String codeAgenceOrigine,
         @Size(max = 20) String codeAgenceContentieuse,
         @Size(max = 50) String dossierCreditOrigine,

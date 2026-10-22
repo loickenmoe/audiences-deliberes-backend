@@ -20,78 +20,61 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * La charte des documents produits par le système (Q-115 A2).
+ * Shared layout for documents produced by the system: logo and organisation name in the header, a
+ * red rule, and a footer with page numbering and attribution. Legal mentions belong only to the
+ * correspondence letterhead.
  *
- * <p><b>Ce qu'elle remplace.</b> Chaque générateur réinventait ses marges, sa police et son pas
- * vertical, et aucun ne portait la moindre marque : quatre documents anonymes, dont un partait chez
- * un prestataire. Rien n'était partagé — pas même l'idée qu'une page puisse être numérotée.
+ * <p>Tables span pages: headers are redrawn on each page and cells are cut at the measured font
+ * width, not a character count (Helvetica is proportional).
  *
- * <p><b>Ce qu'elle porte.</b> Le logo et la dénomination en tête, un filet rouge, un pied qui
- * numérote et attribue. Pas les mentions légales : celles-ci appartiennent au <b>papier à en-tête</b>
- * de la correspondance, et les porter sur un export de calendrier ferait passer un tableau de
- * travail pour une communication officielle de la banque.
- *
- * <p><b>Le tableau sait franchir les pages.</b> C'est l'essentiel de ce que la charte apporte : les
- * en-têtes sont redessinés à chaque page, et les cellules sont coupées à la <b>largeur mesurée</b> de
- * la police et non à un nombre de caractères. Helvetica étant proportionnelle, « IIIIIIII » et
- * « WWWWWWWW » n'occupent pas la même place ; compter les caractères revenait à déborder sur la
- * colonne voisine ou à tronquer trop tôt.
- *
- * <p><b>Le pied ne peut être écrit qu'à la fin</b> : « Page 2 sur 7 » suppose de connaître 7, ce
- * qu'on ignore tant que la dernière ligne n'est pas posée. Les pages sont donc reprises une seconde
- * fois, en ajout, au moment de {@link #finaliser()}.
+ * <p>Footers are written in {@link #finaliser()}, since "Page 2 of 7" requires the total page count.
  */
 public final class DocumentPdf implements AutoCloseable {
 
-    /** Rouge Afriland — réservé au filet d'en-tête, jamais au texte : il ne tient pas le AA. */
+    /** Afriland red, for the header rule only, never for text: it does not meet AA contrast. */
     private static final float[] ROUGE = {237 / 255f, 28 / 255f, 36 / 255f};
     private static final float[] ANTHRACITE = {35 / 255f, 31 / 255f, 32 / 255f};
     private static final float[] GRIS = {95 / 255f, 90 / 255f, 91 / 255f};
     private static final float[] TRAME = {237 / 255f, 238 / 255f, 241 / 255f};
     /**
-     * Le fond de la colonne du papier à en-tête. Teinte distincte de {@link #TRAME} bien
-     * qu'elles coïncident aujourd'hui : le bandeau d'une lettre et la trame d'un tableau n'ont
-     * aucune raison d'évoluer ensemble, et ajuster l'un ne doit pas changer l'allure du
-     * calendrier, du rapport et de l'archive d'audit.
+     * Letterhead column background. Kept distinct from {@link #TRAME} although identical today, so
+     * adjusting the letter does not change the look of the working documents.
      */
     private static final float[] FOND_COLONNE = {208 / 255f, 211 / 255f, 217 / 255f};
 
     private static final float MARGE = 40f;
     /*
-     * La colonne latérale, **relevée au pixel sur le papier de la banque** (AFB, 1141 px de large) :
-     * son aplat s'arrête à x=157, soit 13,76 % de la largeur — 82 pt sur A4. Les mentions y
-     * commencent à 5,5 pt du bord, et la plus large (« N° COSUMAF-LMFAC-01/2015 ») occupe 68,9 pt,
-     * ce qui impose une police de 5 pt : à 6,5 pt elle en réclamerait 91,4 et déborderait.
+     * Side column measured on the bank's letterhead: the fill ends at 13.76% of the page width (82 pt
+     * on A4). Mentions start 5.5 pt from the edge; the widest one ("N° COSUMAF-LMFAC-01/2015") needs
+     * a 5 pt font to fit.
      *
-     * {@code COLONNE} est la largeur **totale** de l'aplat depuis le bord gauche de la feuille,
-     * bord perdu compris — et non la largeur du texte à partir de {@link #MARGE}.
+     * {@code COLONNE} is the total fill width from the sheet's left edge (bleed included), not the
+     * text width from {@link #MARGE}.
      */
     private static final float COLONNE = 82f;
-    /** Marge interne gauche de la colonne : le texte y commence presque au bord. */
+    /** Left padding of the column: text starts almost at the edge. */
     private static final float MARGE_COLONNE = 5.5f;
-    /** Corps de la police des mentions — contraint par la largeur de la colonne. */
+    /** Font size of the mentions, constrained by the column width. */
     private static final float TAILLE_COLONNE = 5f;
-    /** Souffle entre l'aplat et le texte : le corps commence à 102 pt sur le contrat. */
+    /** Gap between the column fill and the body text (body starts at 102 pt). */
     private static final float ECART_COLONNE = 20f;
-    /** La gouttière entre les deux colonnes de signature : assez pour qu'on ne les confonde pas. */
+    /** Gutter between the two signature columns. */
     private static final float ECART_SIGNATURES = 24f;
-    /** La taille du nom sous une signature, alignée sur celle du corps de la lettre. */
+    /** Size of the name under a signature, matching the letter body. */
     private static final float TAILLE_SIGNATAIRE = 10f;
     private static final float HAUTEUR_LOGO = 26f;
     private static final float HAUTEUR_LIGNE = 14f;
-    /** Interligne à l'intérieur d'une cellule repliée : le corps de 8 pt, plus une respiration. */
+    /** Line spacing inside a wrapped cell: 8 pt font plus some breathing room. */
     private static final float INTERLIGNE_CELLULE = 10f;
     private static final float PIED = 34f;
 
     private static final DateTimeFormatter JOUR = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     /**
-     * Le logo, lu une fois pour toutes au chargement de la classe.
-     *
-     * <p>L'objet image PDFBox, lui, est lié à un document : il se crée par document, jamais une fois
-     * pour toutes. Ce sont les octets qu'on garde.
+     * Logo bytes, loaded once. The PDFBox image object is bound to a document, so it is created per
+     * document.
      */
-    private static final byte[] LOGO = chargerLogo();
+    private static final byte[] LOGO_OCTETS = chargerLogo();
 
     private final PDDocument document = new PDDocument();
     private final PDRectangle format;
@@ -105,20 +88,14 @@ public final class DocumentPdf implements AutoCloseable {
     private final PDType1Font grasse = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
 
     /**
-     * Vrai pour la correspondance : colonne latérale des mentions légales, logo centré, pas de
-     * bandeau de titre. Faux pour les documents de travail — un export de calendrier portant
-     * l'agrément ministériel se ferait passer pour une communication officielle de la banque.
+     * True for correspondence: legal mentions side column, centered logo, no title banner. False for
+     * working documents, which must not look like an official bank communication.
      */
     private final boolean papierEnTete;
 
     /**
-     * Faux pour le tirage destiné au <b>papier préimprimé</b> de la banque : le gabarit garde
-     * exactement sa place — mêmes marges, même hauteur réservée en tête — mais n'est pas dessiné.
-     * Le contenu tombe donc pile dans les zones laissées libres par la feuille imprimée d'avance.
-     * <p>
-     * Retirer le gabarit <b>sans</b> conserver sa géométrie aurait fait remonter le texte dans le
-     * logo et courir les paragraphes sous la colonne : la page seule aurait paru correcte, et
-     * l'impression aurait été illisible.
+     * False when printing on the bank's pre-printed paper: the template keeps its exact geometry
+     * (margins, header height) but is not drawn, so content lands in the free areas of the sheet.
      */
     private final boolean dessinerGabarit;
 
@@ -127,11 +104,10 @@ public final class DocumentPdf implements AutoCloseable {
     private float y;
 
     /**
-     * @param titre     ce que le document est ; il figure en tête, dans le pied et dans les
-     *                  propriétés du fichier
-     * @param sousTitre la période couverte, ou ce qui précise la portée ; peut être {@code null}
-     * @param auteur    qui a demandé le document ; {@code null} quand l'appelant l'ignore
-     * @param langue    langue des libellés ; {@code null} vaut français
+     * @param titre     what the document is; shown in the header, footer and file properties
+     * @param sousTitre period covered or scope details; may be {@code null}
+     * @param auteur    requester; {@code null} when unknown
+     * @param langue    label language; {@code null} means French
      */
     public DocumentPdf(PDRectangle format, String titre, String sousTitre, String auteur, Locale langue) {
         this(format, titre, sousTitre, auteur, langue, false, true);
@@ -149,40 +125,37 @@ public final class DocumentPdf implements AutoCloseable {
     }
 
     /**
-     * Le papier à en-tête de la banque, pour la correspondance (B1).
-     *
-     * <p>Le titre ne s'imprime pas sur la page — une lettre n'en porte pas — mais il nomme le
-     * fichier et son pied : il reste donc utile.
+     * The bank's letterhead, for correspondence. The title is not printed on the page but still names
+     * the file.
      */
     public static DocumentPdf papierEnTete(String titre, String auteur, Locale langue) {
         return new DocumentPdf(PDRectangle.A4, titre, null, auteur, langue, true, true);
     }
 
     /**
-     * Le même document, <b>pour le papier préimprimé</b> de la banque : logo, aplat de la colonne et
-     * mentions légales ne sont pas dessinés, puisque la feuille les porte déjà. Tout le reste est
-     * identique — c'est la condition pour que le texte se pose au bon endroit une fois imprimé.
+     * Same document for the bank's pre-printed paper: logo, column fill and legal mentions are not
+     * drawn, everything else is identical so text lands in the right place once printed.
      */
     public static DocumentPdf gabaritPreimprime(String titre, String auteur, Locale langue) {
         return new DocumentPdf(PDRectangle.A4, titre, null, auteur, langue, true, false);
     }
 
-    /** L'abscisse où le contenu commence : après la colonne latérale, s'il y en a une. */
+    /** X coordinate where content starts: after the side column, if any. */
     private float margeGauche() {
         return papierEnTete ? COLONNE + ECART_COLONNE : MARGE;
     }
 
-    /** La largeur utile pour du texte, entre la marge gauche et la marge droite. */
+    /** Usable text width between the left and right margins. */
     public float largeurUtile() {
         return format.getWidth() - margeGauche() - MARGE;
     }
 
-    /** A4 à l'italienne — pour les tableaux larges, que le portrait comprime. */
+    /** Landscape A4, for wide tables. */
     public static PDRectangle paysage() {
         return new PDRectangle(PDRectangle.A4.getHeight(), PDRectangle.A4.getWidth());
     }
 
-    /** Ouvre une page neuve, dessine l'en-tête, et rend l'ordonnée où le contenu peut commencer. */
+    /** Opens a new page, draws the header and returns the Y coordinate where content can start. */
     public float nouvellePage() {
         try {
             if (flux != null) {
@@ -200,56 +173,49 @@ public final class DocumentPdf implements AutoCloseable {
         }
     }
 
-    /** Écrit une ligne de texte et descend d'un pas. */
+    /** Writes one line of text and moves down one step. */
     public void ligne(String texte, boolean gras, float taille) {
         ecrire(texte, margeGauche(), y, gras ? grasse : normale, taille, ANTHRACITE);
         y -= HAUTEUR_LIGNE;
     }
 
     /**
-     * Écrit un paragraphe en le repliant sur la largeur utile (B1).
-     *
-     * <p>C'est ce qu'une lettre exige et qu'un tableau n'a jamais demandé : un texte long doit
-     * revenir à la ligne de lui-même. Le repli se fait sur la <b>largeur mesurée</b>, mot à mot ; les
-     * retours à la ligne déjà présents dans le texte sont respectés, ce qui permet à un rédacteur de
-     * décider lui-même où couper.
-     *
-     * <p>Un mot plus long que la ligne entière — une référence, une adresse électronique — est écrit
-     * tel quel plutôt que tronqué : dans une lettre, mieux vaut un débordement visible qu'une
-     * information amputée en silence.
+     * Writes a paragraph wrapped word by word on the measured usable width. Existing line breaks are
+     * kept. A word longer than the whole line is written as is rather than truncated.
      */
     public void paragraphe(String texte, float taille) {
         if (texte == null) {
             return;
         }
         /*
-         * On découpe **avant** de replier, et non l'inverse. `TextePdf.replier` transforme les
-         * caractères de contrôle en espaces — sauts de ligne compris, puisque PDFBox les refuse : le
-         * replier d'abord écraserait les paragraphes du texte en un seul bloc. Défaut trouvé par le
-         * test, qui rendait le gabarit en un pavé continu là où il compte trois paragraphes.
-         *
-         * `lines()` traite aussi bien les fins de ligne Windows qu'Unix, et conserve les lignes
-         * vides qui séparent les paragraphes.
+         * Split into lines before folding: `TextePdf.replier` turns control characters (including
+         * line breaks) into spaces, which would merge paragraphs. `lines()` handles both Windows and
+         * Unix line endings and keeps blank separator lines.
          */
         for (String ligneBrute : texte.lines().toList()) {
             String ligneSource = TextePdf.replier(ligneBrute);
             if (ligneSource.isBlank()) {
                 y -= taille * 0.9f;
-                continue;
+            } else {
+                ecrireLigneRepliee(ligneSource, taille);
             }
-            StringBuilder courante = new StringBuilder();
-            for (String mot : ligneSource.split(" ")) {
-                String essai = courante.isEmpty() ? mot : courante + " " + mot;
-                if (!courante.isEmpty() && largeurDe(essai, normale, taille) > largeurUtile()) {
-                    ecrireEtDescendre(courante.toString(), taille);
-                    courante = new StringBuilder(mot);
-                } else {
-                    courante = new StringBuilder(essai);
-                }
-            }
-            if (!courante.isEmpty()) {
+        }
+    }
+
+    /** Folds one source line word by word on the usable width. */
+    private void ecrireLigneRepliee(String ligneSource, float taille) {
+        StringBuilder courante = new StringBuilder();
+        for (String mot : ligneSource.split(" ")) {
+            String essai = courante.isEmpty() ? mot : courante + " " + mot;
+            if (!courante.isEmpty() && largeurDe(essai, normale, taille) > largeurUtile()) {
                 ecrireEtDescendre(courante.toString(), taille);
+                courante = new StringBuilder(mot);
+            } else {
+                courante = new StringBuilder(essai);
             }
+        }
+        if (!courante.isEmpty()) {
+            ecrireEtDescendre(courante.toString(), taille);
         }
     }
 
@@ -262,23 +228,13 @@ public final class DocumentPdf implements AutoCloseable {
     }
 
     /**
-     * Les <b>deux signataires</b> d'une lettre, côte à côte : le rédacteur à gauche, celui qui
-     * valide à droite (métier, 2026-10-07).
+     * The two signatories of a letter side by side: drafter on the left, approver on the right, below
+     * the issuing department's name.
      *
-     * <p><b>Pourquoi deux, et pourquoi là.</b> La lettre porte d'abord le nom du <i>service</i> qui
-     * écrit - « La Direction Juridique ». Ce n'est pas une personne : rien ne se signe au-dessus.
-     * Les deux personnes qui engagent la banque signent <b>dessous</b>, chacune sous son trait, à la
-     * place que la lecture attend : celui qui a rédigé à gauche, celui qui a validé à droite.
+     * <p>Both names stay aligned even if only one signature image exists (the image band has the same
+     * height on both sides). Image aspect ratio is preserved; an image too wide is scaled down.
      *
-     * <p><b>Les deux noms restent alignés</b> même quand une seule signature est déposée : la bande
-     * réservée à l'image a la même hauteur des deux côtés, remplie ou non. Sans cela, le nom du
-     * signataire sans image remonterait et la lettre paraîtrait bancale - alors que ne pas avoir
-     * déposé d'image est un cas normal, pas un défaut.
-     *
-     * <p>Le rapport de chaque image est <b>conservé</b> : une signature étirée ne ressemble plus à
-     * rien. Trop large pour sa colonne, elle est réduite plutôt que de mordre sur l'autre.
-     *
-     * @param hauteur la hauteur de la bande réservée à chaque signature, en points.
+     * @param hauteur height of the band reserved for each signature, in points
      */
     public void deuxSignatures(byte[] imageGauche, String nomGauche,
                                byte[] imageDroite, String nomDroite, float hauteur) {
@@ -297,17 +253,11 @@ public final class DocumentPdf implements AutoCloseable {
     }
 
     /**
-     * Appose une image dans sa colonne, posée sur le bas de la bande.
+     * Places a signature image at the bottom of its band.
      *
-     * <p><b>Une image illisible ne fait pas échouer la lettre.</b> Un fichier corrompu ou d'un
-     * format que PDFBox refuse est ignoré : la lettre part avec le nom seul, à signer à la main.
-     * Perdre la lettre pour une vignette serait disproportionné - l'image est un confort, la lettre
-     * est la pièce.
-     *
-     * <p>Le filet est large à dessein. Les décodeurs d'image de PDFBox ne se contentent pas de
-     * lever des {@code IOException} sur une entrée mal formée : un PNG tronqué produit un
-     * {@code ArrayIndexOutOfBoundsException}, constaté en conditions réelles. Un filet étroit
-     * faisait tomber la lettre entière - une pièce officielle perdue pour une vignette.
+     * <p>An unreadable image never fails the letter: it is skipped and the letter is signed by hand.
+     * The catch is deliberately broad because PDFBox decoders can throw runtime exceptions (e.g.
+     * {@code ArrayIndexOutOfBoundsException} on a truncated PNG), not just {@code IOException}.
      */
     private void apposer(byte[] image, float centre, float sommet, float largeurMax, float hauteur) {
         if (image == null || image.length == 0) {
@@ -321,14 +271,14 @@ public final class DocumentPdf implements AutoCloseable {
                 largeur = largeurMax;
                 haute = largeur * vignette.getHeight() / vignette.getWidth();
             }
-            // Posée sur le bas de la bande : le trait touche le nom, comme une signature manuscrite.
+            // Placed at the bottom of the band so the stroke touches the name, like a handwritten signature.
             flux.drawImage(vignette, centre - largeur / 2, sommet - hauteur, largeur, haute);
         } catch (java.io.IOException | RuntimeException erreur) {
-            // Voir le bloc de documentation : la lettre prime sur la vignette.
+            // Intentionally ignored: the letter takes precedence over the image (see Javadoc).
         }
     }
 
-    /** Un nom centré sur l'axe de sa colonne. Absent, rien n'est écrit - et rien ne décale. */
+    /** Name centered on its column axis. If absent, nothing is written and nothing shifts. */
     private void centrerSur(String texte, float centre, float ordonnee) {
         if (texte == null || texte.isBlank()) {
             return;
@@ -337,7 +287,7 @@ public final class DocumentPdf implements AutoCloseable {
                 grasse, TAILLE_SIGNATAIRE, ANTHRACITE);
     }
 
-    /** Écrit un texte centré sur la largeur utile — le bloc de signature, notamment. */
+    /** Writes text centered on the usable width (e.g. the signature block). */
 
     public void centre(String texte, boolean gras, float taille) {
         PDType1Font police = gras ? grasse : normale;
@@ -347,10 +297,8 @@ public final class DocumentPdf implements AutoCloseable {
     }
 
     /**
-     * Écrit deux textes sur **une même ligne** : l'un au fil de la marge, l'autre aligné à droite.
-     *
-     * C'est la première ligne du papier de la banque — le numéro à gauche, le lieu et la date à
-     * droite, à la même hauteur. Les écrire l'un après l'autre les décalait d'un interligne.
+     * Writes two texts on the same line: one at the left margin, the other right-aligned (e.g. the
+     * reference number and the place and date on the bank's letter).
      */
     public void ligneGaucheEtDroite(String gauche, String droite, float taille) {
         ecrire(gauche, margeGauche(), y, normale, taille, ANTHRACITE);
@@ -359,22 +307,22 @@ public final class DocumentPdf implements AutoCloseable {
         y -= taille * 1.6f;
     }
 
-    /** Écrit un texte aligné à droite de la largeur utile — « Yaoundé, le … ». */
+    /** Writes right-aligned text (e.g. the place and date line). */
     public void ligneADroite(String texte, float taille) {
         float x = format.getWidth() - MARGE - largeurDe(texte, normale, taille);
         ecrire(texte, x, y, normale, taille, ANTHRACITE);
         y -= taille * 1.6f;
     }
 
-    /** Écrit un texte à une abscisse choisie, sans descendre — le bloc destinataire, en retrait. */
+    /** Writes text at a given indent (e.g. the recipient block). */
     public void ligneEnRetrait(String texte, float retrait, boolean gras, float taille) {
         ecrire(texte, margeGauche() + retrait, y, gras ? grasse : normale, taille, ANTHRACITE);
         y -= taille * 1.35f;
     }
 
     /**
-     * Écrit une étiquette soulignée suivie de sa valeur : « <u>Objet:</u> Lettre de constitution… ».
-     * Le soulignement est tracé, non simulé par des tirets — c'est ainsi que le gabarit le porte.
+     * Writes an underlined label followed by its value. The underline is drawn, not simulated with
+     * dashes, as on the template.
      */
     public void etiquetteEtValeur(String etiquette, String valeur, float taille) {
         try {
@@ -393,32 +341,26 @@ public final class DocumentPdf implements AutoCloseable {
         }
     }
 
-    /** Descend sans rien écrire — une respiration entre deux blocs. */
+    /** Moves down without writing anything. */
     public void espace(float hauteur) {
         y -= hauteur;
     }
 
     /**
-     * Dessine un tableau, en ouvrant autant de pages qu'il en faut.
+     * Draws a table, opening as many pages as needed.
      *
-     * @param entetes  libellés de colonnes, redessinés en tête de chaque page
-     * @param largeurs largeur de chaque colonne, en points ; même longueur que {@code entetes}
-     * @param lignes   les données, déjà mises en texte par l'appelant
+     * @param entetes  column labels, redrawn at the top of each page
+     * @param largeurs width of each column in points; same length as {@code entetes}
+     * @param lignes   data, already converted to text by the caller
      */
     public void tableau(List<String> entetes, float[] largeurs, List<List<String>> lignes) {
         tableau(entetes, largeurs, lignes, false);
     }
 
     /**
-     * Variante où une cellule trop longue <b>passe à la ligne</b>, la rangée s'agrandissant d'autant,
-     * au lieu d'être coupée par « ... ».
-     *
-     * <p>Réservée aux documents où rien ne doit se perdre : l'archive d'audit, pièce remise à un
-     * contrôleur, dont la colonne « Détails » était tronquée. Le calendrier et le rapport gardent une
-     * rangée par ligne : ce sont des vues de travail, et leur allure ne change pas.
-     *
-     * <p>Une rangée qui tient sur une ligne est dessinée <b>exactement</b> comme sans repli. Une rangée
-     * repliée ne se coupe pas entre deux pages : le saut se décide sur sa hauteur réelle.
+     * Variant where an overlong cell wraps (the row grows) instead of being cut with "...". Used where
+     * nothing may be lost, such as the audit archive. A single-line row renders exactly as without
+     * wrapping, and a wrapped row is never split across pages.
      */
     public void tableau(List<String> entetes, float[] largeurs, List<List<String>> lignes, boolean replier) {
         if (entetes.size() != largeurs.length) {
@@ -426,38 +368,45 @@ public final class DocumentPdf implements AutoCloseable {
         }
         dessinerEnTeteTableau(entetes, largeurs);
         for (List<String> ligne : lignes) {
-            List<List<String>> cellules = new ArrayList<>();
-            int hauteur = 1;
-            for (int i = 0; i < largeurs.length; i++) {
-                String cellule = i < ligne.size() ? ligne.get(i) : "";
-                List<String> morceaux = replier
-                        ? replierCellule(cellule, largeurs[i] - 6)
-                        : List.of(couper(cellule, largeurs[i] - 6, normale, 8f));
-                cellules.add(morceaux);
-                hauteur = Math.max(hauteur, morceaux.size());
-            }
-            float besoin = HAUTEUR_LIGNE + (hauteur - 1) * INTERLIGNE_CELLULE;
-            // Pour une rangée d'une ligne, c'est la condition d'origine : y < MARGE + PIED + HAUTEUR_LIGNE.
+            List<List<String>> cellules = decouperLigne(ligne, largeurs, replier);
+            int hauteur = cellules.stream().mapToInt(List::size).max().orElse(1);
+            float besoin = HAUTEUR_LIGNE + (Math.max(hauteur, 1) - 1) * INTERLIGNE_CELLULE;
+            // For a single-line row this is equivalent to y < MARGE + PIED + HAUTEUR_LIGNE.
             if (y - besoin < MARGE + PIED) {
                 nouvellePage();
                 dessinerEnTeteTableau(entetes, largeurs);
             }
-            float x = margeGauche();
-            for (int i = 0; i < largeurs.length; i++) {
-                List<String> morceaux = cellules.get(i);
-                for (int k = 0; k < morceaux.size(); k++) {
-                    ecrire(morceaux.get(k), x + 3, y - k * INTERLIGNE_CELLULE, normale, 8f, ANTHRACITE);
-                }
-                x += largeurs[i];
-            }
+            ecrireLigne(cellules, largeurs);
             y -= besoin;
         }
     }
 
+    /** The lines of each cell of a row: folded when {@code replier}, otherwise cut to fit. */
+    private List<List<String>> decouperLigne(List<String> ligne, float[] largeurs, boolean replier) {
+        List<List<String>> cellules = new ArrayList<>();
+        for (int i = 0; i < largeurs.length; i++) {
+            String cellule = i < ligne.size() ? ligne.get(i) : "";
+            cellules.add(replier
+                    ? replierCellule(cellule, largeurs[i] - 6)
+                    : List.of(couper(cellule, largeurs[i] - 6, normale, 8f)));
+        }
+        return cellules;
+    }
+
+    private void ecrireLigne(List<List<String>> cellules, float[] largeurs) {
+        float x = margeGauche();
+        for (int i = 0; i < largeurs.length; i++) {
+            List<String> morceaux = cellules.get(i);
+            for (int k = 0; k < morceaux.size(); k++) {
+                ecrire(morceaux.get(k), x + 3, y - k * INTERLIGNE_CELLULE, normale, 8f, ANTHRACITE);
+            }
+            x += largeurs[i];
+        }
+    }
+
     /**
-     * Découpe une cellule en lignes qui tiennent dans {@code largeurMax}, mot à mot. Un mot plus large
-     * que la colonne entière — une empreinte, une adresse — est coupé au caractère : il passe sur
-     * plusieurs lignes, mais n'est jamais perdu.
+     * Splits a cell into lines fitting {@code largeurMax}, word by word. A word wider than the column
+     * (a hash, an address) is cut by character across lines, never lost.
      */
     private List<String> replierCellule(String texte, float largeurMax) {
         String replie = TextePdf.replier(texte);
@@ -490,7 +439,7 @@ public final class DocumentPdf implements AutoCloseable {
         return lignes;
     }
 
-    /** Referme les flux, écrit les pieds de page puis les propriétés, et rend les octets. */
+    /** Closes streams, writes footers and properties, and returns the bytes. */
     public byte[] finaliser() {
         try (ByteArrayOutputStream sortie = new ByteArrayOutputStream()) {
             if (flux != null) {
@@ -504,9 +453,8 @@ public final class DocumentPdf implements AutoCloseable {
             }
             dessinerPieds();
             /*
-             * Le titre du **fichier** reprend la portée, là où celui de la **page** s'en dispense :
-             * sur la page, la période est juste en dessous ; dans un explorateur ou une messagerie,
-             * « Rapport MENSUEL » ne distinguerait pas deux mois.
+             * The file title includes the scope, unlike the page title: in a file explorer, "Monthly
+             * report" alone would not distinguish two months.
              */
             String titreFichier = sousTitre == null || sousTitre.isBlank() ? titre : titre + " - " + sousTitre;
             MetadonneesPdf.appliquer(document, titreFichier, auteur);
@@ -529,22 +477,20 @@ public final class DocumentPdf implements AutoCloseable {
         }
     }
 
-    // ───────────────────────────────────────────────────────────────────────────────────────────
-
     private void dessinerEnTete() throws IOException {
         if (papierEnTete) {
             dessinerPapierEnTete();
             return;
         }
         float hautDuBloc = y;
-        if (LOGO.length > 0) {
+        if (LOGO_OCTETS.length > 0) {
             if (logo == null) {
-                logo = PDImageXObject.createFromByteArray(document, LOGO, "logo");
+                logo = PDImageXObject.createFromByteArray(document, LOGO_OCTETS, "logo");
             }
             float largeur = HAUTEUR_LOGO * logo.getWidth() / logo.getHeight();
             flux.drawImage(logo, MARGE, hautDuBloc - HAUTEUR_LOGO, largeur, HAUTEUR_LOGO);
         }
-        // Dénomination à droite : la marque tient la page même là où le logo ne se voit pas.
+        // Organisation name on the right, so branding remains even without the logo.
         String organisation = libelles.texte("organisation");
         String direction = libelles.texte("direction");
         ecrireADroite(organisation, hautDuBloc - 10, grasse, 9f, ANTHRACITE);
@@ -557,7 +503,7 @@ public final class DocumentPdf implements AutoCloseable {
             ecrire(sousTitre, MARGE, y, normale, 9f, GRIS);
             y -= 11;
         }
-        // Le filet rouge sépare l'identité du contenu : c'est la seule couleur de la page.
+        // The red rule separates identity from content; it is the page's only color.
         y -= 4;
         flux.setStrokingColor(ROUGE[0], ROUGE[1], ROUGE[2]);
         flux.setLineWidth(1f);
@@ -568,38 +514,31 @@ public final class DocumentPdf implements AutoCloseable {
     }
 
     /**
-     * Le papier à en-tête : logo centré, puis la colonne des mentions légales à gauche.
-     *
-     * <p>C'est la disposition réelle de la banque, relevée sur sa correspondance — et non une
-     * invention. La colonne se lit de haut en bas comme un bandeau, posé sur un <b>aplat de fond
-     * gris</b> qui court du bord gauche de la feuille jusqu'au bord bas, bien au-delà de la dernière
-     * mention : sur le papier de la banque, c'est le fond qui borne la colonne, pas un filet.
+     * Letterhead: centered logo, then the legal mentions column on the left, on a grey fill running
+     * from the left edge down to the bottom of the sheet, as on the bank's actual correspondence.
      */
     private void dessinerPapierEnTete() throws IOException {
         float haut = format.getHeight() - MARGE;
-        if (LOGO.length > 0) {
+        if (LOGO_OCTETS.length > 0) {
             float hauteur = 30f;
             if (dessinerGabarit) {
                 if (logo == null) {
-                    logo = PDImageXObject.createFromByteArray(document, LOGO, "logo");
+                    logo = PDImageXObject.createFromByteArray(document, LOGO_OCTETS, "logo");
                 }
                 float largeur = hauteur * logo.getWidth() / logo.getHeight();
                 flux.drawImage(logo, (format.getWidth() - largeur) / 2, haut - hauteur, largeur, hauteur);
             }
-            // La hauteur est retranchée dans les deux cas : c'est elle qui réserve l'en-tête.
+            // Height is reserved in both cases: it keeps the header space.
             haut -= hauteur + 24;
         }
 
         /*
-         * L'aplat de la colonne. Son bord haut tombe **juste sous la ligne du numéro** — le haut de
-         * la feuille reste blanc sur toute sa largeur — et il descend jusqu'au bord bas, en fond
-         * perdu à gauche, bien au-delà de la dernière mention. C'est ce que fait le papier de la
-         * banque, relevé au pixel. Dessiné avant les mentions, sans quoi il les
-         * recouvrirait.
+         * Column fill: its top edge sits just below the reference-number line and it bleeds down to
+         * the bottom edge. Drawn before the mentions so it does not cover them.
          */
         float hautAplat = haut - 20f;
         if (!dessinerGabarit) {
-            // La colonne reste réservée par `margeGauche()` : rien à dessiner, rien à décaler.
+            // The column stays reserved by `margeGauche()`: nothing to draw, nothing to shift.
             y = haut;
             return;
         }
@@ -610,8 +549,8 @@ public final class DocumentPdf implements AutoCloseable {
         float yColonne = hautAplat - 10f;
         for (IdentiteBancaire.Mention mention : IdentiteBancaire.COLONNE) {
             if (mention.barre()) {
-                // Les trois barres du gabarit : elles courent sur la largeur de la colonne, moins
-                // la respiration de droite, et se posent a mi-interligne.
+                // The template's three rules span the column width minus right padding, at
+                // half line spacing.
                 flux.setStrokingColor(ANTHRACITE[0], ANTHRACITE[1], ANTHRACITE[2]);
                 flux.setLineWidth(0.6f);
                 flux.moveTo(MARGE_COLONNE, yColonne + 2f);
@@ -650,17 +589,9 @@ public final class DocumentPdf implements AutoCloseable {
 
     private void dessinerPieds() throws IOException {
         /*
-         * **Le papier à en-tête n'en porte pas.** Le gabarit de la banque s'arrête au bloc de
-         * signature : ni numérotation, ni mention d'édition. Un pied y traverserait d'ailleurs
-         * l'aplat de la colonne, que rien ne borne à gauche.
-         *
-         * Ce que cela coûte, et qui est assumé : une lettre de plusieurs feuillets ne dira plus
-         * « Page 1 sur 2 », si bien qu'un destinataire ne verra pas qu'il en manque une. C'est le
-         * choix du papier réel, pas un oubli.
-         *
-         * Les documents de travail — calendrier, rapport, archive d'audit — gardent le leur : ils
-         * se lisent à l'écran ou s'impriment en liasse, et la pagination y est la seule garantie
-         * qu'on tient le document entier (A2).
+         * The letterhead has no footer, matching the bank's template (it would also cross the column
+         * fill). A multi-page letter therefore shows no "Page 1 of 2". Working documents keep their
+         * footer, since pagination is the only guarantee the document is complete.
          */
         if (papierEnTete) {
             return;
@@ -712,7 +643,7 @@ public final class DocumentPdf implements AutoCloseable {
         cible.endText();
     }
 
-    /** Largeur réelle d'un texte, telle que la police la produira. */
+    /** Actual text width as rendered by the font. */
     private static float largeurDe(String texte, PDType1Font police, float taille) {
         try {
             return police.getStringWidth(TextePdf.replier(texte)) / 1000 * taille;
@@ -722,9 +653,8 @@ public final class DocumentPdf implements AutoCloseable {
     }
 
     /**
-     * Coupe un texte pour qu'il tienne dans une largeur donnée, en le terminant par des points de
-     * suspension. On mesure au lieu de compter : c'est la seule façon de ne pas empiéter sur la
-     * colonne voisine.
+     * Cuts a text to fit a width, ending with an ellipsis. Measured rather than counted, so it never
+     * spills into the next column.
      */
     private static String couper(String texte, float largeurMax, PDType1Font police, float taille) {
         String replie = TextePdf.replier(texte);
@@ -744,11 +674,7 @@ public final class DocumentPdf implements AutoCloseable {
     }
 
     /**
-     * Le logo, ou rien.
-     *
-     * <p>Un logo introuvable ne doit pas empêcher un document de sortir : un calendrier sans image
-     * reste utilisable, un calendrier qui n'existe pas ne l'est pas. L'absence se voit assez pour
-     * être signalée sans avoir à lever.
+     * The logo, or an empty array. A missing logo must not prevent a document from being produced.
      */
     private static byte[] chargerLogo() {
         try (InputStream flux = DocumentPdf.class.getResourceAsStream("/marque/logo-afriland.png")) {

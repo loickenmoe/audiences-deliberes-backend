@@ -59,13 +59,13 @@ class AlerteServiceTest {
     private SimpMessagingTemplate messagingTemplate;
 
     /**
-     * Q-109 — sans lui, la mesure de délivrance mentirait :
-     * {@code convertAndSendToUser} réussit même quand personne n'écoute.
+     * Without it, the delivery metric would lie: {@code convertAndSendToUser} succeeds even when
+     * nobody is listening.
      */
     @Mock
     private SimpUserRegistry simpUserRegistry;
 
-    /** Q-118 — les notifications externes écoutent l'alerte ; ce service ne les connaît pas. */
+    /** External notifications listen to the alert; this service does not know about them. */
     @Mock
     private ApplicationEventPublisher evenements;
 
@@ -96,7 +96,7 @@ class AlerteServiceTest {
         assertThat(saved.getStatut()).isEqualTo(StatutAlerte.DECLENCHEE);
         assertThat(result.getId()).isEqualTo(1L);
         verify(messagingTemplate).convertAndSendToUser(eq("kc-5"), eq("/queue/alertes"), any(AlerteResponse.class));
-        // Q-118 : l'événement porte ce qu'il faut aux canaux externes, et pas le texte de l'alerte.
+        // The event carries what external channels need, not the alert text.
         verify(evenements).publishEvent(new AlerteDeclenchee(1L, TypeAlerte.DOUBLON_AFFECTATION, 99L, destinataire));
     }
 
@@ -114,18 +114,15 @@ class AlerteServiceTest {
 
         assertThat(result).isNotNull();
         assertThat(result.getStatut()).isEqualTo(StatutAlerte.DECLENCHEE);
-        // Q-109 : la rupture du canal est désormais enregistrée, pas seulement journalisée.
+        // A channel failure is recorded, not just logged.
         assertThat(result.getStatutDiffusion()).isEqualTo(StatutDiffusion.ECHEC);
         assertThat(result.getDateDiffusion()).isNotNull();
     }
 
     /**
-     * Q-109 — le cœur de la mesure, et la raison pour laquelle un booléen ne suffisait pas.
-     *
-     * <p>{@code convertAndSendToUser} ne lève <b>aucune</b> exception quand le destinataire est
-     * déconnecté : elle route vers une file sans abonné et retourne normalement. Ces deux tests
-     * vérifient que les deux situations sont distinguées, sans quoi le taux afficherait 100 % en
-     * permanence — panne comprise.
+     * Core of the delivery metric, and why a boolean was not enough: {@code convertAndSendToUser}
+     * throws <b>no</b> exception when the recipient is disconnected. These tests check that both
+     * situations are distinguished; otherwise the rate would always show 100%, outages included.
      */
     @Test
     void declencher_marqueDiffuseeQuandLeDestinataireEstConnecte() {
@@ -153,14 +150,14 @@ class AlerteServiceTest {
 
         Alerte result = alerteService.declencher(TypeAlerte.RAPPEL_AUDIENCE, null, destinataire, "J-7");
 
-        // Pas un échec : le repli garanti reste ouvert, seule la remise est plus tardive.
+        // Not a failure: the guaranteed fallback remains, only delivery is delayed.
         assertThat(result.getStatutDiffusion()).isEqualTo(StatutDiffusion.DIFFEREE);
         verify(messagingTemplate).convertAndSendToUser(eq("kc-5"), eq("/queue/alertes"), any(AlerteResponse.class));
     }
 
     /**
-     * Q-109 — une alerte remise plus tard reste délivrée au sens de NF-ALR-02 : le canal applicatif
-     * comprend la liste des notifications. Seuls les échecs comptent contre nous.
+     * An alert delivered later still counts as delivered under NF-ALR-02 (the in-app channel includes
+     * the notification list). Only failures count against us.
      */
     @Test
     void statistiquesDiffusion_neCompteQueLesEchecsContreLeSysteme() {
@@ -174,10 +171,10 @@ class AlerteServiceTest {
         StatistiquesDiffusionResponse stats = alerteService.statistiquesDiffusion(debut, fin);
 
         assertThat(stats.observees()).isEqualTo(1000L);
-        // 995/1000 : les différées sont délivrées, seuls les 5 échecs pèsent.
+        // 995/1000: deferred alerts are delivered, only the 5 failures count.
         assertThat(stats.tauxDelivrance()).isEqualByComparingTo("99.50");
         assertThat(stats.seuilRespecte()).isTrue();
-        // Tout autre chose : la proportion de destinataires connectés au moment du déclenchement.
+        // Something else entirely: the share of recipients connected when the alert fired.
         assertThat(stats.tauxDiffusionTempsReel()).isEqualByComparingTo("70.00");
         assertThat(stats.nonTraitees()).isEqualTo(42L);
     }
@@ -197,8 +194,8 @@ class AlerteServiceTest {
     }
 
     /**
-     * Une fenêtre sans aucune alerte observée ne vaut pas un manquement : il n'y a rien à respecter
-     * ni à enfreindre. La déclarer non conforme ferait sonner une alarme sur du vide.
+     * A window with no observed alert is not a breach: there is nothing to comply with. Flagging it
+     * as non-compliant would raise an alarm over nothing.
      */
     @Test
     void statistiquesDiffusion_uneFenetreVideNEstPasUnManquement() {
@@ -214,8 +211,10 @@ class AlerteServiceTest {
 
     @Test
     void statistiquesDiffusion_refuseUneFenetreInversee() {
+        var date2 = LocalDate.of(2026, 9, 30);
+        var date3 = LocalDate.of(2026, 9, 1);
         assertThatThrownBy(() -> alerteService.statistiquesDiffusion(
-                LocalDate.of(2026, 9, 30), LocalDate.of(2026, 9, 1)))
+                date2, date3))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("date de début");
     }
@@ -244,9 +243,8 @@ class AlerteServiceTest {
     }
 
     /**
-     * Q-102 — les deux filtres neufs. Ce que ce test garde n'est pas leur transmission mais le fait
-     * que le **destinataire** reste celui du jeton : il n'est pas un paramètre, et aucun filtre ne
-     * doit pouvoir le déplacer vers un collègue.
+     * What this test guards is not that the filters are passed on, but that the <b>recipient</b>
+     * stays the token's user: it is not a parameter, and no filter may redirect it to a colleague.
      */
     @Test
     void mesNotifications_transmetTypeEtDossierSansToucherAuDestinataire() {

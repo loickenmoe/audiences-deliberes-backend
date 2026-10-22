@@ -18,19 +18,12 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Provisionne un {@link Utilisateur} à partir du jeton Keycloak, <b>dans sa propre transaction en
- * écriture</b> (correctif R-06, M15).
+ * Provisions a {@link Utilisateur} from the Keycloak token in its own write transaction
+ * ({@link Propagation#REQUIRES_NEW}). Otherwise a read-only caller's transaction would make
+ * PostgreSQL reject the INSERT, failing a new user's first request with a 500.
  * <p>
- * Ce service existe uniquement pour porter {@link Propagation#REQUIRES_NEW} : l'INSERT de
- * provisionnement était auparavant exécuté dans {@code CurrentUserService}, donc dans la
- * transaction de l'appelant. Tout endpoint en lecture seule
- * ({@code @Transactional(readOnly = true)}) propageait son mode à cet INSERT, que PostgreSQL
- * rejetait — « cannot execute INSERT in a read-only transaction » — faisant échouer en 500 la
- * **première requête de tout nouvel utilisateur** dès lors qu'elle tombait sur une lecture
- * (typiquement `GET /alertes/mes-notifications` ou `GET /dossiers` au chargement du frontend).
- * <p>
- * Une classe distincte est nécessaire : {@code @Transactional} s'appuie sur un proxy, un appel
- * interne à {@code CurrentUserService} n'aurait donc pas changé de transaction.
+ * A separate bean is required: {@code @Transactional} is proxy-based, so an internal call within
+ * {@code CurrentUserService} would not start a new transaction.
  */
 @Slf4j
 @Service
@@ -38,25 +31,22 @@ import java.util.Set;
 public class UtilisateurProvisioningService {
 
     /**
-     * Profils métier, par <b>ordre de priorité</b>. Depuis Q-81, le DJ et la DJA portent aussi
-     * {@code ROLE_JURISTE} (rôle composite du realm) : un jeton de DJ contient donc deux rôles métier,
-     * dans un ordre que Keycloak ne garantit pas. Le profil se déduit par priorité, jamais par ordre
-     * d'apparition — sans quoi un nouveau DJ aurait pu être enregistré comme juriste. Même ordre que
-     * {@code profilPrincipal} côté frontend.
+     * Business profiles by priority. DJ and DJA also carry {@code ROLE_JURISTE} (composite realm role)
+     * and Keycloak does not guarantee role order, so the profile is chosen by priority. Same order as
+     * {@code profilPrincipal} on the frontend.
      */
     private static final List<String> PRIORITE_PROFILS = List.of(
             "DJ", "DJA", "SH", "ASSISTANTE", "JURISTE", "AVOCAT");
 
-    /** Q-84 : claim Keycloak de l'identifiant de connexion. */
+    /** Keycloak claim holding the login identifier. */
     static final String CLAIM_IDENTIFIANT = "preferred_username";
 
     private final UtilisateurRepository utilisateurRepository;
     private final ProfilRepository profilRepository;
 
     /**
-     * Crée l'utilisateur s'il n'existe pas encore, dans une transaction indépendante de celle de
-     * l'appelant. Reteste l'existence à l'intérieur de la nouvelle transaction : deux requêtes
-     * concurrentes du même nouvel utilisateur ne doivent pas produire deux lignes.
+     * Creates the user if missing, in a transaction independent from the caller's. Existence is
+     * re-checked inside the new transaction so two concurrent first requests do not create two rows.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Utilisateur provisionner(Jwt jwt) {
@@ -65,8 +55,8 @@ public class UtilisateurProvisioningService {
     }
 
     /**
-     * Q-84 : enregistre l'identifiant de connexion d'un utilisateur déjà provisionné — avant Q-84,
-     * ou renommé dans Keycloak. Transaction à part, pour la même raison que la création (R-06).
+     * Stores the login identifier of an already provisioned user (missing or renamed in Keycloak), in
+     * a separate transaction for the same reason as creation.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void synchroniserIdentifiant(Long utilisateurId, String identifiant) {

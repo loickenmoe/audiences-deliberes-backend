@@ -18,9 +18,9 @@ services:
     networks:
       - default
 
-  # Sidecar Dapr : voie documentée par le Guide V1 pour publier vers le Notification Engine.
-  # Il ne sert qu'au profil `notifications` : docker compose --profile notifications up -d
-  # Sans lui, l'application démarre normalement, et le transport KAFKA reste disponible en repli.
+  # Dapr sidecar: documented path to publish to the Notification Engine.
+  # Only used by the `notifications` profile: docker compose --profile notifications up -d
+  # Without it the application starts normally, and the KAFKA transport remains as a fallback.
   dapr:
     image: daprio/daprd:1.14.4
     profiles: ["notifications"]
@@ -33,8 +33,8 @@ services:
       - "--log-level=info"
     volumes:
       - ./docker/dapr:/composants:ro
-    # Le sidecar partage la pile réseau de l'application : celle-ci le joint sur localhost:3500,
-    # comme le ferait un sidecar Kubernetes.
+    # The sidecar shares the application's network stack: it is reached on localhost:3500,
+    # like a Kubernetes sidecar.
     network_mode: "service:audiences-app"
     depends_on:
       - audiences-app
@@ -45,14 +45,14 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-audiences_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-audiences_pass}
     ports:
-      # Port hôte configurable : 5432 est fréquemment occupé par une installation PostgreSQL
-      # native sur les postes Windows (ex : service "postgresql-x64-17"). Le port interne au
-      # réseau Docker (utilisé par Keycloak via KC_DB_URL ci-dessous) reste 5432, inchangé.
+      # Configurable host port: 5432 is often taken by a native PostgreSQL install
+      # on Windows workstations (e.g. service "postgresql-x64-17"). The internal Docker
+      # network port (used by Keycloak via KC_DB_URL below) stays 5432.
       - "${POSTGRES_PORT:-5433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      # Crée en plus la base applicative "audiences_app" au premier démarrage du volume,
-      # à côté de la base Keycloak (POSTGRES_DB) — les deux partagent la même instance locale.
+      # Also creates the application database "audiences_app" on first volume start,
+      # next to the Keycloak database (POSTGRES_DB); both share the same local instance.
       - ./docker/postgres/init-app-db.sql:/docker-entrypoint-initdb.d/init-app-db.sql:ro
     networks:
       - default
@@ -85,9 +85,9 @@ services:
     networks:
       - default
     healthcheck:
-      # Le en-tête Host est obligatoire : sans lui, le hostname provider de Keycloak lève une
-      # NullPointerException (HttpServerRequest.authority() == null) et le test échoue toujours,
-      # même quand le realm répond correctement (bug constaté lors de la validation M1).
+      # The Host header is required: without it Keycloak's hostname provider throws a
+      # NullPointerException (HttpServerRequest.authority() == null) and the check always fails,
+      # even when the realm responds correctly.
       test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && printf 'GET /realms/audiences-realm HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && cat <&3 | grep -q 'audiences-realm'"]
       interval: 15s
       timeout: 5s

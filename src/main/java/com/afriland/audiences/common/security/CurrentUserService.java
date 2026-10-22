@@ -15,19 +15,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Résout l'utilisateur authentifié à partir du jeton Keycloak, en le provisionnant dans la table
- * {@code utilisateur} au premier appel (aucun compte n'est créé côté Keycloak par l'application —
- * REF-05 §1.3 : le backend n'implémente aucune gestion de credentials, seule la synchronisation
- * du profil applicatif est de son ressort).
+ * Resolves the authenticated user from the Keycloak token, provisioning it in the {@code utilisateur}
+ * table on first call. The application never creates Keycloak accounts nor manages credentials
+ * (REF-05 §1.3).
  * <p>
- * Le rôle « métier » principal (un des 6 profils de saisie) est déterminé à partir du claim
- * {@code roles} du jeton ; les rôles transverses {@code ROLE_SAISIE} et {@code ROLE_CONSULTATION}
- * ne sont jamais retenus comme profil (cf. DECISIONS_AND_OPEN_QUESTIONS.md Q-08).
+ * The main business profile is derived from the token's {@code roles} claim; the cross-cutting roles
+ * {@code ROLE_SAISIE} and {@code ROLE_CONSULTATION} are never used as a profile.
  * <p>
- * <b>La création elle-même est déléguée à {@link UtilisateurProvisioningService}</b>, qui l'exécute
- * dans une transaction en écriture indépendante — sans quoi un appelant en lecture seule ferait
- * échouer l'INSERT (R-06, corrigé en M15). La lecture reste, elle, compatible avec un contexte en
- * lecture seule.
+ * Creation is delegated to {@link UtilisateurProvisioningService}, which runs in its own write
+ * transaction so that read-only callers still work.
  */
 @Slf4j
 @Service
@@ -37,26 +33,26 @@ public class CurrentUserService {
     private final UtilisateurRepository utilisateurRepository;
     private final UtilisateurProvisioningService provisioningService;
 
-    /**
-     * Retourne l'utilisateur correspondant au jeton de la requête courante, en le créant si
-     * c'est sa première requête authentifiée.
-     */
+    /** Returns the user of the current request's token, creating it on its first authenticated request. */
     @Transactional(readOnly = true)
     public Utilisateur getCurrentUser() {
-        return resolveOrProvision(extractJwt());
+        return resoudreOuProvisionner(extractJwt());
     }
 
     @Transactional(readOnly = true)
     public Utilisateur resolveOrProvision(Jwt jwt) {
+        return resoudreOuProvisionner(jwt);
+    }
+
+    private Utilisateur resoudreOuProvisionner(Jwt jwt) {
         return utilisateurRepository.findByKeycloakId(jwt.getSubject())
                 .map(utilisateur -> synchroniserIdentifiant(utilisateur, jwt))
                 .orElseGet(() -> provisioningService.provisionner(jwt));
     }
 
     /**
-     * Q-84 : l'identifiant de connexion sert à reconnaître un avocat. Un utilisateur provisionné
-     * avant Q-84, ou renommé dans Keycloak, le reçoit à sa requête suivante — écrit par le service
-     * de provisionnement, dans sa propre transaction (R-06).
+     * The login identifier is used to recognize a lawyer. A user provisioned without it, or renamed in
+     * Keycloak, gets it on the next request (written in the provisioning service's own transaction).
      */
     private Utilisateur synchroniserIdentifiant(Utilisateur utilisateur, Jwt jwt) {
         String identifiant = jwt.getClaimAsString(UtilisateurProvisioningService.CLAIM_IDENTIFIANT);

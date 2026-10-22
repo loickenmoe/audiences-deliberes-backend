@@ -1,9 +1,8 @@
 package com.afriland.audiences.alerte.domain;
 
 /**
- * Types d'alerte — liste réunie retenue en Q-22 (DECISIONS_AND_OPEN_QUESTIONS.md), complétée de
- * {@code ALARME} pour les échéances de la table {@code alarme} (Q-04). Doit rester synchronisée
- * avec la contrainte {@code chk_alerte_type} de {@code V1__schema_initial.sql}.
+ * Alert types, including {@code ALARME} for {@code alarme} due dates. Must stay in sync with the
+ * {@code chk_alerte_type} database constraint.
  */
 public enum TypeAlerte {
     RAPPEL_AUDIENCE,
@@ -24,24 +23,18 @@ public enum TypeAlerte {
     DELIBERE_ATTENDU,
     DOSSIER_INCOMPLET,
     /**
-     * Deux audiences consecutives sans compte rendu, pour un meme avocat (N7, metier du 2026-10-07).
-     *
-     * <p>Elle va au <b>Directeur Juridique</b>, et a lui seul : c'est lui qui decide d'envoyer une
-     * demande d'explication. L'application constate un manquement, elle ne le sanctionne pas.
-     *
-     * <p>Toute valeur ajoutee ici exige une migration de {@code chk_alerte_type} - voir V45.
+     * Two consecutive hearings without a report for the same lawyer (N7).
+     * <p>Sent to the <b>Legal Director</b> only: they decide whether to request an explanation. The
+     * application records the breach, it does not sanction it.
+     * <p>Any new value requires a migration of {@code chk_alerte_type} (see V45).
      */
     MANQUEMENT_COMPTE_RENDU,
 
     /**
-     * La demande d'explication, et la reponse qui revient (N7 temps 2, metier du 2026-10-07).
-     *
-     * <p><b>Un seul type pour les deux sens.</b> La demande part vers l'avocat, la reponse revient
-     * vers la direction : c'est le meme fil, et le texte de l'alerte dit lequel. Deux types
-     * auraient double la grille de notification pour une distinction que le destinataire fait deja
-     * de lui-meme - il sait s'il a ecrit ou s'il attend.
-     *
-     * <p>Toute valeur ajoutee ici exige une migration de {@code chk_alerte_type} - voir V46.
+     * The request for explanation and its answer (N7, second step).
+     * <p>One type for both directions: the request goes to the lawyer, the answer back to
+     * management; it is the same thread and the alert text says which one.
+     * <p>Any new value requires a migration of {@code chk_alerte_type} (see V46).
      */
     DEMANDE_EXPLICATION
 }

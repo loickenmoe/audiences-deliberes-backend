@@ -77,7 +77,7 @@ class ConstitutionServiceTest {
             demande.getDateDemande(), demande.getDateDecision(),
             demande.getDossier() != null ? demande.getDossier().getReference() : null,
             demande.getPrestataire() != null ? demande.getPrestataire().getNom() : null, null, null, null,
-            // Le mappeur ne connaît pas la session : le service pose le droit d'écrire après lui.
+            // The mapper does not know the session: the service sets the write permission after it.
             false);
 
     private ConstitutionService service;
@@ -127,7 +127,8 @@ class ConstitutionServiceTest {
                 .statut(StatutConstitution.VALIDEE).build();
         when(demandeConstitutionRepository.findById(100L)).thenReturn(Optional.of(demande));
 
-        assertThatThrownBy(() -> service.valider(100L, new ValiderConstitutionRequest(StatutConstitution.VALIDEE, null)))
+        var requete = new ValiderConstitutionRequest(StatutConstitution.VALIDEE, null);
+        assertThatThrownBy(() -> service.valider(100L, requete))
                 .isInstanceOf(ApiException.class);
     }
 
@@ -138,7 +139,8 @@ class ConstitutionServiceTest {
         when(demandeConstitutionRepository.findById(100L)).thenReturn(Optional.of(demande));
         when(currentUserService.getCurrentUser()).thenReturn(sh);
 
-        assertThatThrownBy(() -> service.valider(100L, new ValiderConstitutionRequest(StatutConstitution.REJETEE, null)))
+        var requete = new ValiderConstitutionRequest(StatutConstitution.REJETEE, null);
+        assertThatThrownBy(() -> service.valider(100L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("motif");
     }
@@ -169,12 +171,9 @@ class ConstitutionServiceTest {
         when(demandeConstitutionRepository.findById(100L)).thenReturn(Optional.of(demande));
         when(currentUserService.getCurrentUser()).thenReturn(sh);
         /*
-         * La lettre est désormais un document enregistré, non plus un calcul (Q-115 B1) : le service
-         * compose un brouillon, le dépôt lui donne son numéro, puis le rendu le met en page.
-         */
-        /*
-         * Le brouillon naît **sans numéro** (B2) : celui-ci n'est tiré qu'à la signature, pour ne pas
-         * en brûler un sur une demande sans suite — la série ne repart jamais à un.
+         * The letter is a stored document: the service composes a draft, upload gives it its number, then
+         * rendering lays it out. The draft is created **without a number** (B2): the number is only drawn
+         * at signature, so none is burned on an abandoned request (the series never restarts at one).
          */
         when(lettreConstitutionRepository.findByDemandeId(any())).thenReturn(Optional.empty());
         when(lettreConstitutionRepository.prochainNumero()).thenReturn(4L);
@@ -200,11 +199,8 @@ class ConstitutionServiceTest {
     }
 
     /**
-     * La lettre porte <b>deux</b> signatures, et chacune vient du compte de son titulaire (métier,
-     * 2026-10-07).
-     *
-     * <p>Jamais du champ « signataire », qui est du texte libre : apposer une image sur la foi d'un
-     * texte libre permettrait de signer au nom d'autrui.
+     * The letter carries <b>two</b> signatures, each taken from its holder's account, never from the
+     * free-text "signataire" field (that would allow signing on someone else's behalf).
      */
     @Test
     void valider_apposeLesSignaturesDuRedacteurEtDuValideur() {
@@ -234,12 +230,9 @@ class ConstitutionServiceTest {
     }
 
     /**
-     * Le SH qui a corrigé la lettre ne signe pas <b>deux fois</b>.
-     *
-     * <p>Depuis Q-124 il peut récrire avant de signer, et devient alors le dernier rédacteur. Le
-     * prendre tel quel le mettrait des deux côtés de la lettre, ce qui ne dit plus rien : on reprend
-     * le juriste qui a sollicité la constitution. Sa correction reste tracée ailleurs - à l'écran,
-     * et dans l'historique.
+     * The SH who corrected the letter does not sign <b>twice</b>. Having rewritten it, they become the
+     * last author; the legal officer who requested the retainer is used instead. The correction stays
+     * traced on screen and in the history.
      */
     @Test
     void valider_quandLeShACorrigeLaLettre_laGaucheRevientAuJuristeQuiASollicite() {
@@ -262,7 +255,7 @@ class ConstitutionServiceTest {
         assertThat(droite.getValue().nom()).isEqualTo("Hierarchique Sup");
     }
 
-    /** Le décor commun aux deux parcours de signature : la demande, la lettre, la GED. */
+    /** Shared setup for both signature journeys: request, letter, GED. */
     private void preparerSignature(DemandeConstitution demande, LettreConstitution lettre) {
         when(demandeConstitutionRepository.findById(100L)).thenReturn(Optional.of(demande));
         when(currentUserService.getCurrentUser()).thenReturn(sh);
@@ -290,12 +283,9 @@ class ConstitutionServiceTest {
         when(demandeConstitutionRepository.findById(100L)).thenReturn(Optional.of(demande));
         when(currentUserService.getCurrentUser()).thenReturn(sh);
         /*
-         * La lettre est désormais un document enregistré, non plus un calcul (Q-115 B1) : le service
-         * compose un brouillon, le dépôt lui donne son numéro, puis le rendu le met en page.
-         */
-        /*
-         * Le brouillon naît **sans numéro** (B2) : celui-ci n'est tiré qu'à la signature, pour ne pas
-         * en brûler un sur une demande sans suite — la série ne repart jamais à un.
+         * The letter is a stored document: the service composes a draft, upload gives it its number, then
+         * rendering lays it out. The draft is created **without a number** (B2): the number is only drawn
+         * at signature, so none is burned on an abandoned request (the series never restarts at one).
          */
         when(lettreConstitutionRepository.findByDemandeId(any())).thenReturn(Optional.empty());
         when(lettreConstitutionRepository.prochainNumero()).thenReturn(4L);
@@ -317,8 +307,6 @@ class ConstitutionServiceTest {
         verify(alerteService, never()).declencher(any(), any(), any(), any());
         verify(utilisateurRepository, never()).findByKeycloakId(any());
     }
-
-    // ------------------------------------------------------------------ lister (M15, Q-68)
 
     @Test
     void lister_filtreParStatut_alimenteLaFileDuSh() {
@@ -349,9 +337,8 @@ class ConstitutionServiceTest {
                 .extracting(DemandeConstitutionResponse::id).containsExactly(101L, 100L);
     }
     /**
-     * Le tirage pour papier préimprimé part du <b>document de la GED</b> : c'est de l'onglet
-     * « Documents » d'un dossier que le métier reprend la lettre pour l'imprimer, et cet écran ne
-     * connaît que la pièce, jamais la demande de constitution qui l'a produite.
+     * Printing on pre-printed paper starts from the <b>GED document</b>: the business reprints the letter
+     * from the case's Documents tab, which only knows the document, never the retainer request.
      */
     @Test
     void lettrePourPapierPreimprime_regenereDepuisLaLettreEnregistree() {
@@ -360,19 +347,19 @@ class ConstitutionServiceTest {
         LettreConstitution lettre = LettreConstitution.builder().id(9L).numero(4).demande(demande).build();
         when(demandeConstitutionRepository.findByLettreDocumentId(77L)).thenReturn(Optional.of(demande));
         when(lettreConstitutionRepository.findByDemandeId(100L)).thenReturn(Optional.of(lettre));
-        // Le tirage préimprimé porte les mêmes signatures que l'exemplaire archivé (N8) : ici la
-        // demande n'a ni rédacteur ni validateur, et la lettre part avec les noms seuls.
+        // The pre-printed copy carries the same signatures as the archived one (N8): here the request has
+        // neither author nor validator, so the letter goes out with names only.
         when(lettreConstitutionService.generer(eq(lettre), eq(true), isNull(), isNull()))
                 .thenReturn("%PDF-preimprime".getBytes(StandardCharsets.UTF_8));
 
         byte[] pdf = service.lettrePourPapierPreimprime(77L);
 
         assertThat(new String(pdf, StandardCharsets.UTF_8)).isEqualTo("%PDF-preimprime");
-        // Le tirage se régénère : rien n'est déposé dans la GED, aucun second exemplaire ne naît.
+        // The copy is regenerated: nothing is uploaded to the GED, no second copy is created.
         verify(minioStorageService, never()).deposer(any(), any(), any(), any());
     }
 
-    /** La GED porte des pièces de toutes sortes : aucune autre n'est régénérable. */
+    /** The GED holds all kinds of documents: no other one can be regenerated. */
     @Test
     void lettrePourPapierPreimprime_refuseUnDocumentQuiNEstPasUneLettre() {
         when(demandeConstitutionRepository.findByLettreDocumentId(55L)).thenReturn(Optional.empty());

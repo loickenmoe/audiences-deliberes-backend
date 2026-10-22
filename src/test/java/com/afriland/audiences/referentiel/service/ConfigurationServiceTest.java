@@ -69,13 +69,13 @@ class ConfigurationServiceTest {
 
         assertThat(config.getValeur()).isEqualTo("12");
         assertThat(result.valeur()).isEqualTo("12");
-        // Q-111 : la clé n'est plus concaténée au libellé, elle est une donnée de `details`.
+        // The key is not concatenated into the label: it is a `details` field.
         verify(historiqueActionService).enregistrerPour(eq(dj), isNull(),
                 eq(TypeActionHistorique.CONFIGURATION_MODIFIEE),
                 eq(Map.of("cle", "SEUIL_PROROGATIONS", "ancienneValeur", "10", "nouvelleValeur", "12")));
     }
 
-    /** Q-91 : une saisie non numérique est refusée ici, au lieu de casser le module frais plus tard. */
+    /** Non-numeric input is refused here, instead of breaking the fees module later. */
     @Test
     void modifier_rejectsValueThatBreaksTheKeyContract() {
         ConfigurationSysteme config = ConfigurationSysteme.builder().cle("SEUIL_MONTANT_DEFAUT").valeur("50000000").build();
@@ -89,7 +89,7 @@ class ConfigurationServiceTest {
         verifyNoInteractions(historiqueActionService);
     }
 
-    /** Q-91 : la liste est enregistrée normalisée — GedService la découpe sans retirer les espaces. */
+    /** The list is stored normalized: GedService splits it without trimming spaces. */
     @Test
     void modifier_storesNormalizedListValue() {
         ConfigurationSysteme config = ConfigurationSysteme.builder().cle("FORMATS_GED").valeur("PDF,PNG").build();
@@ -105,7 +105,7 @@ class ConfigurationServiceTest {
         assertThat(config.getValeur()).isEqualTo("PDF,XLSX");
     }
 
-    /** Q-118 : ne rien envoyer par SMS est un réglage, pas une saisie manquante. */
+    /** Sending nothing by SMS is a setting, not missing input. */
     @Test
     void modifier_acceptsAnEmptyNotificationGrid() {
         ConfigurationSysteme config = ConfigurationSysteme.builder().cle("GRILLE_NOTIFICATION_SMS").valeur("RAPPEL_AUDIENCE").build();
@@ -121,7 +121,7 @@ class ConfigurationServiceTest {
                 eq(Map.of("cle", "GRILLE_NOTIFICATION_SMS", "ancienneValeur", "RAPPEL_AUDIENCE", "nouvelleValeur", "")));
     }
 
-    /** La requête n'exige plus qu'une valeur non nulle : une clé sans règle garde son refus du vide. */
+    /** The query only requires a non-null value: a key without a rule still refuses empty values. */
     @Test
     void modifier_stillRejectsBlankValueForAKeyWithoutRule() {
         ConfigurationSysteme config = ConfigurationSysteme.builder().cle("CLE_SANS_REGLE").valeur("x").build();

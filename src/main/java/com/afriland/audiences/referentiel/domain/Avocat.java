@@ -16,9 +16,9 @@ import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
 /**
- * Avocat partenaire : intervenant externe, seul type de prestataire disposant d'un compte
- * Keycloak (RG-INT-01) — dépôt de demandes de frais, de comptes rendus d'audience, réception des
- * lettres de constitution. Cf. dictionnaire des données §2.2.2 (table {@code avocat}).
+ * Partner lawyer: external party, the only provider type with a Keycloak account (RG-INT-01), used
+ * to file expense requests and hearing reports and to receive appointment letters.
+ * See data dictionary §2.2.2 (table {@code avocat}).
  */
 @Getter
 @Setter
@@ -40,7 +40,7 @@ public class Avocat extends Intervenant {
     @Builder.Default
     private Double indicateurCharge = 0d;
 
-    /** Consentement aux canaux externes (V29), coché par défaut — cf. Q-119. */
+    /** Consent to external channels (V29), checked by default. */
     @Builder.Default
     private Boolean notification = true;
 

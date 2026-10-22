@@ -12,14 +12,10 @@ import org.springframework.stereotype.Repository;
 public interface JurisprudenceRepository extends JpaRepository<Jurisprudence, Long> {
 
     /**
-     * UC-DEF-03 : recherche par mots-clés/nature/juridiction, chaque filtre optionnel (ignoré si
-     * {@code null}). Requête native : {@code mots_cles} est un tableau Postgres (`text[]`), non une
-     * collection JPA.
-     * <p>
-     * Depuis Q-89, chaque filtre textuel est un <b>motif {@code LIKE} déjà en minuscules</b>, préparé
-     * par le service ({@code %terme%}, jokers échappés) : la recherche est partielle et insensible à
-     * la casse — un mot-clé est retenu dès qu'un des mots indexés le contient. Les {@code CAST}
-     * donnent un type aux paramètres nuls, que PostgreSQL ne saurait pas déduire seul.
+     * UC-DEF-03: search by keywords/nature/court, each filter optional (ignored when {@code null}).
+     * Native query because {@code mots_cles} is a Postgres {@code text[]}, not a JPA collection.
+     * Each text filter is a lowercase {@code LIKE} pattern prepared by the service (partial,
+     * case-insensitive match). The {@code CAST}s type the null parameters for PostgreSQL.
      */
     @Query(value = "SELECT * FROM jurisprudence j WHERE "
             + "(CAST(:motCle AS text) IS NULL OR EXISTS (SELECT 1 FROM unnest(j.mots_cles) AS m(valeur) "

@@ -15,12 +15,12 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
- * M15 — expose les référentiels fermés nécessaires aux formulaires du frontend. Sans eux, l'écran
- * « Création de dossier » ne peut pas peupler sa liste « nature » alors que le backend rejette
- * (400) toute nature hors taxonomie (RG-DOS-02) — cf. Q-68.
+ * Exposes the closed reference lists needed by frontend forms. Without them the case file creation
+ * screen could not populate its "nature" list, while the backend rejects (400) any nature outside
+ * the taxonomy (RG-DOS-02).
  * <p>
- * Lecture seule : ces référentiels sont administrés par le DJ via la base (CONF02), aucune écriture
- * n'est demandée par les user stories.
+ * Read-only: these lists are administered by the DJ in the database (CONF02); the user stories
+ * require no write access.
  */
 @RestController
 @RequestMapping("${api.prefix}/referentiels")
@@ -30,7 +30,7 @@ public class ReferentielController {
     private final NatureDossierRepository natureDossierRepository;
     private final TypeClientSensibleRepository typeClientSensibleRepository;
 
-    /** Taxonomie des natures de dossier, filtrable par catégorie (le formulaire s'adapte à la catégorie choisie). */
+    /** Case file nature taxonomy, filterable by category (the form adapts to the chosen category). */
     @GetMapping("/natures-dossier")
     @PreAuthorize("hasRole('CONSULTATION')")
     public List<NatureDossierResponse> naturesDossier(@RequestParam(required = false) CategorieDossier categorie) {
@@ -42,7 +42,7 @@ public class ReferentielController {
                 .toList();
     }
 
-    /** Types de client sensible actifs (RG-DOS-09) — liste déroulante du volet « dossier sensible ». */
+    /** Active sensitive client types (RG-DOS-09), for the "sensitive case file" drop-down. */
     @GetMapping("/types-client-sensible")
     @PreAuthorize("hasRole('CONSULTATION')")
     public List<TypeClientSensibleResponse> typesClientSensible() {

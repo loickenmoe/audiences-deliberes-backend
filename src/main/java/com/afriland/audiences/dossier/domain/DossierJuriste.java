@@ -18,9 +18,7 @@ import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 
-/**
- * Affectation d'un juriste à un dossier (RG-DOS-03). Cf. DECISIONS_AND_OPEN_QUESTIONS.md Q-01.
- */
+/** Assignment of an in-house lawyer to a case (RG-DOS-03). */
 @Getter
 @Setter
 @Builder

@@ -1,5 +1,8 @@
 package com.afriland.audiences.dossier.service;
 
+import org.springframework.data.domain.PageRequest;
+import java.time.LocalDate;
+import com.afriland.audiences.dossier.domain.DossierJuriste;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -93,10 +96,10 @@ class DossierServiceTest {
     private final AuditSeuilMapper auditSeuilMapper = new AuditSeuilMapperTestImpl();
     private final HistoriqueActionMapper historiqueActionMapper = new HistoriqueActionMapperTestImpl();
 
-    /** Bonanjo : une agence reelle du referentiel (V42), pour ne pas inventer de code. */
+    /** Bonanjo: a real agency from the reference data (V42), so no code is invented. */
     private static final String AGENCE = "00002";
 
-    /** Les parties sont obligatoires depuis le 2026-10-05 (observation 6). */
+    /** Parties are mandatory. */
     private static final PartiesDto PARTIES =
             new PartiesDto(List.of("Afriland First Bank"), List.of("Client Test"));
 
@@ -118,13 +121,12 @@ class DossierServiceTest {
                 etapeProcedureMapper, auditSeuilMapper, historiqueActionMapper, historiqueActionService, currentUserService,
                 alerteService, agenceService, generateurReference, List.of());
 
-        // Le système attribue la référence : les tests n'en fournissent plus aucune. `lenient` car
-        // la majorité des tests de cette classe ne créent pas de dossier et ne l'appelleront jamais.
+        // The system assigns the reference: tests no longer provide one. `lenient` because most tests
+        // of this class never create a case.
         lenient().when(generateurReference.prochaine(FamilleReference.DOSSIER)).thenReturn("DOS-2026-0001");
 
-        // L'agence d'origine est obligatoire depuis le 2026-10-05 (observation 2) et son code est
-        // verifie au referentiel. `lenient` pour la meme raison que la reference : la plupart des
-        // tests de cette classe ne creent aucun dossier.
+        // The originating agency is mandatory and its code is checked against the reference data.
+        // `lenient` for the same reason as the reference.
         lenient().when(agenceService.existeEtEstActive(AGENCE)).thenReturn(true);
 
         client = Client.builder().id(1L).reference("CLI-1").nom("Client Test").build();
@@ -142,9 +144,8 @@ class DossierServiceTest {
     }
 
     /**
-     * Depuis le 2026-09-29, la référence est attribuée par le système : un doublon ne peut plus
-     * venir d'une saisie. S'il survient, c'est que le compteur (V36) est désynchronisé — le message
-     * doit le dire, et ne nommer <b>aucun champ</b> puisqu'il n'y en a plus à corriger à l'écran.
+     * The reference is assigned by the system, so a duplicate cannot come from user input. If it occurs,
+     * the counter (V36) is out of sync: the message must say so and name <b>no field</b>.
      */
     @Test
     void creerDossier_signaleUneReferenceAttribueeDejaPortee() {
@@ -153,7 +154,8 @@ class DossierServiceTest {
                 .thenReturn(Optional.of(NatureDossier.builder().categorie(CategorieDossier.RECOUVREMENT).build()));
         when(dossierRepository.existsByReference("DOS-2026-0001")).thenReturn(true);
 
-        assertThatThrownBy(() -> service.creerDossier(baseRequest(false)))
+        var requete = baseRequest(false);
+        assertThatThrownBy(() -> service.creerDossier(requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("désynchronisé")
                 .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.type(ApiException.class))
@@ -161,7 +163,7 @@ class DossierServiceTest {
                 .isNull();
     }
 
-    /** La référence ne vient pas de la requête : elle est demandée au générateur. */
+    /** The reference does not come from the request: it is requested from the generator. */
     @Test
     void creerDossier_attribueLaReferenceLuiMeme() {
         when(clientRepository.findById(1L)).thenReturn(Optional.of(client));
@@ -186,7 +188,8 @@ class DossierServiceTest {
     void creerDossier_rejectsUnknownClient() {
         when(clientRepository.findById(1L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.creerDossier(baseRequest(false)))
+        var requete = baseRequest(false);
+        assertThatThrownBy(() -> service.creerDossier(requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("Client introuvable");
     }
@@ -196,7 +199,8 @@ class DossierServiceTest {
         when(clientRepository.findById(1L)).thenReturn(Optional.of(client));
         when(natureDossierRepository.findByLibelleIgnoreCase("Saisie immobilière")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.creerDossier(baseRequest(false)))
+        var requete = baseRequest(false);
+        assertThatThrownBy(() -> service.creerDossier(requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("taxonomie");
     }
@@ -217,12 +221,9 @@ class DossierServiceTest {
     }
 
     /**
-     * Amendement de Q-11 (métier, 2026-09-29) : « ce sont les pièces jointes qui sont obligatoires,
-     * pas leur texte associé ». Un dossier de recouvrement se crée donc sans ses références.
-     *
-     * <p>Ce test tenait la règle inverse jusqu'ici. L'obligation n'a pas disparu, elle a changé
-     * d'objet : elle porte désormais sur les fichiers, et ne peut être tenue que par l'écran —
-     * une pièce se dépose après la création, qui seule produit l'identifiant du dossier.
+     * Attachments are mandatory, not their associated text: a recovery case is created without its
+     * references. The obligation applies to files and is enforced by the UI, since a document can only
+     * be uploaded after creation produces the case identifier.
      */
     @Test
     void creerDossier_accepteUnRecouvrementSansSesReferences() {
@@ -250,11 +251,8 @@ class DossierServiceTest {
     }
 
     /**
-     * Le code d'agence ne s'invente plus (métier, 2026-10-03, observation 2).
-     *
-     * <p>Sur les 341 dossiers de recette, un seul code était renseigné - {@code 5466546546} - et il
-     * ne désignait aucune agence. Le refus doit nommer le champ fautif : le formulaire porte deux
-     * codes d'agence, et l'utilisateur ne saurait pas lequel reprendre.
+     * Agency codes cannot be invented. The refusal must name the faulty field: the form carries two
+     * agency codes, and the user would not know which one to fix.
      */
     @Test
     void creerDossier_rejetteUnCodeAgenceInconnu() {
@@ -273,16 +271,14 @@ class DossierServiceTest {
                 .hasMessageContaining("Aucune agence ouverte")
                 .hasMessageContaining("codeAgenceOrigine");
 
-        // Le refus tombe avant toute écriture : aucune référence consommée, aucun dossier enregistré.
+        // The refusal happens before any write: no reference consumed, no case saved.
         verify(generateurReference, never()).prochaine(any());
         verify(dossierRepository, never()).save(any());
     }
 
     /**
-     * L'agence du contentieux, quand elle est renseignée, passe le même contrôle.
-     *
-     * <p>Elle reste facultative - un dossier n'est pas toujours transféré - mais un code présent et
-     * faux vaut un code inventé : les rapports par agence le compteraient nulle part.
+     * The litigation agency, when provided, goes through the same check. It stays optional (a case is
+     * not always transferred), but a wrong code would be counted nowhere in agency reports.
      */
     @Test
     void creerDossier_rejetteUnCodeAgenceContentieuseInconnu() {
@@ -315,8 +311,8 @@ class DossierServiceTest {
                 PARTIES, 15_000_000d, null, null, AGENCE, null, "CREDIT-1", "PV-1",
                 null, null, null, true, 60_000_000d, "VIPP", List.of(10L), List.of());
 
-        // Q-06 laisse la colonne libre de toute clé étrangère, mais confie ce contrôle au service :
-        // sans lui, une faute de frappe était enregistrée en silence et ressortait dans les rapports.
+        // The column has no foreign key; the service performs this check, otherwise a typo would be
+        // saved silently and show up in reports.
         assertThatThrownBy(() -> service.creerDossier(faute))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("Type de client inconnu");
@@ -377,8 +373,8 @@ class DossierServiceTest {
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
         when(etapeProcedureRepository.findById(5L)).thenReturn(Optional.of(etape));
 
-        assertThatThrownBy(() -> service.modifierStatutEtape(1L, 5L,
-                new ModifierStatutEtapeRequest(StatutCycleVie.CLOTURE)))
+        var requete = new ModifierStatutEtapeRequest(StatutCycleVie.CLOTURE);
+        assertThatThrownBy(() -> service.modifierStatutEtape(1L, 5L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("non autorisée");
     }
@@ -392,8 +388,8 @@ class DossierServiceTest {
         when(etapeProcedureRepository.findById(5L)).thenReturn(Optional.of(etape));
         when(etapeProcedureRepository.save(any(EtapeProcedure.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        assertThatThrownBy(() -> service.modifierStatutEtape(1L, 5L,
-                new ModifierStatutEtapeRequest(StatutCycleVie.EN_COURS)))
+        var requete = new ModifierStatutEtapeRequest(StatutCycleVie.EN_COURS);
+        assertThatThrownBy(() -> service.modifierStatutEtape(1L, 5L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("Aucune voie de recours");
     }
@@ -408,8 +404,8 @@ class DossierServiceTest {
                         .avocat(com.afriland.audiences.referentiel.domain.Avocat.builder().id(7L).build())
                         .build()));
 
-        assertThatThrownBy(() -> service.modifierAffectation(1L,
-                new ModifierAffectationRequest(List.of(), List.of(7L)), false))
+        var requete = new ModifierAffectationRequest(List.of(), List.of(7L));
+        assertThatThrownBy(() -> service.modifierAffectation(1L, requete, false))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("déjà affecté");
     }
@@ -438,13 +434,13 @@ class DossierServiceTest {
 
     @Test
     void validerDerogationSeuil_refuseDeTrancherLaPropositionInitiale() {
-        // Sensibilité encore en attente : le seul audit en attente est la proposition initiale.
+        // Sensitivity still pending: the only pending audit is the initial proposal.
         Dossier dossier = Dossier.builder().id(1L).estSensible(true)
                 .sensibiliteStatut(StatutValidation.EN_ATTENTE).build();
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
 
-        assertThatThrownBy(() -> service.validerDerogationSeuil(1L, 5L,
-                new ValiderDerogationRequest(StatutValidation.VALIDEE, null)))
+        var requete = new ValiderDerogationRequest(StatutValidation.VALIDEE, null);
+        assertThatThrownBy(() -> service.validerDerogationSeuil(1L, 5L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("validation de la diligence particulière");
         verify(auditSeuilDossierRepository, never()).save(any());
@@ -454,7 +450,7 @@ class DossierServiceTest {
     void listerDerogationsSeuil_filtreSurLeStatutDemande() {
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(Dossier.builder().id(1L).build()));
         when(auditSeuilDossierRepository.findByDossierIdAndStatutOrderByDateActionDesc(1L, StatutValidation.EN_ATTENTE))
-                // Un audit est toujours rattaché à un dossier et à son auteur : le mapper s'y fie.
+                // An audit is always linked to a case and its author: the mapper relies on it.
                 .thenReturn(List.of(AuditSeuilDossier.builder().id(9L).dossier(Dossier.builder().id(1L).build())
                         .utilisateur(juriste).nouveauSeuil(80_000_000d)
                         .motif("Client stratégique").statut(StatutValidation.EN_ATTENTE).build()));
@@ -471,20 +467,17 @@ class DossierServiceTest {
                 .sensibiliteStatut(StatutValidation.EN_ATTENTE).build();
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
 
-        assertThatThrownBy(() -> service.demanderDerogationSeuil(1L,
-                new DemandeDerogationSeuilRequest(80_000_000d, "Motif")))
+        var requete = new DemandeDerogationSeuilRequest(80_000_000d, "Motif");
+        assertThatThrownBy(() -> service.demanderDerogationSeuil(1L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("diligence particulière déjà validé");
     }
 
-    // ------------------------------------------------- N4 : la diligence particulière après l'ouverture
-
     /**
-     * Ce que N4 débloque : avant, {@code estSensible} ne se posait qu'à la création, et un dossier
-     * ouvert comme ordinaire le restait définitivement.
+     * N4: sensitivity can be proposed after opening, not only at creation.
      *
-     * <p>La proposition suit le circuit de la création - {@code EN_ATTENTE} plus une proposition de
-     * seuil - pour que l'arbitrage n'ait pas à savoir d'où elle vient.
+     * <p>The proposal follows the creation workflow ({@code EN_ATTENTE} plus a threshold proposal), so
+     * arbitration does not need to know where it comes from.
      */
     @Test
     void proposerSensibilite_ouvreLeCircuitDeValidationSansToucherAuSeuil() {
@@ -506,24 +499,24 @@ class DossierServiceTest {
         assertThat(dossier.getSensibiliteStatut()).isEqualTo(StatutValidation.EN_ATTENTE);
         assertThat(dossier.getTypeClientSensible()).isEqualTo("VIP");
         /*
-         * Q-10 : aucun effet avant la validation. Le seuil ne bouge pas, sinon un juriste
-         * déclencherait seul la double validation des frais.
+         * No effect before validation: the threshold does not move, otherwise a legal officer alone would
+         * trigger double validation of fees.
          */
         assertThat(dossier.getSeuilMontant()).isNull();
         assertThat(dossier.getSeuilOrigine()).isEqualTo(SeuilOrigine.GLOBAL);
-        // La proposition de seuil est bien créée : c'est elle que l'arbitrage retrouvera.
+        // The threshold proposal is created: arbitration will find it.
         verify(auditSeuilDossierRepository).save(any(AuditSeuilDossier.class));
     }
 
-    /** Proposer deux fois n'a pas de sens, et le refus doit dire laquelle des deux situations on est. */
+    /** Proposing twice makes no sense, and the refusal must state which of the two situations applies. */
     @Test
     void proposerSensibilite_refuseUneSecondePropositionEnAttente() {
         Dossier dossier = Dossier.builder().id(1L).estSensible(true)
                 .sensibiliteStatut(StatutValidation.EN_ATTENTE).build();
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
 
-        assertThatThrownBy(() -> service.proposerSensibilite(1L,
-                new ProposerSensibiliteRequest(60_000_000d, "VIP", "Motif")))
+        var requete = new ProposerSensibiliteRequest(60_000_000d, "VIP", "Motif");
+        assertThatThrownBy(() -> service.proposerSensibilite(1L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("déjà en attente");
         verify(dossierRepository, never()).save(any());
@@ -535,16 +528,15 @@ class DossierServiceTest {
                 .sensibiliteStatut(StatutValidation.VALIDEE).build();
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
 
-        assertThatThrownBy(() -> service.proposerSensibilite(1L,
-                new ProposerSensibiliteRequest(60_000_000d, "VIP", "Motif")))
+        var requete = new ProposerSensibiliteRequest(60_000_000d, "VIP", "Motif");
+        assertThatThrownBy(() -> service.proposerSensibilite(1L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("déjà suivi");
     }
 
     /**
-     * Un dossier dont la proposition a été **rejetée** doit pouvoir être reproposé : le refus portait
-     * sur la situation d'alors, pas sur l'avenir du dossier. Le motif de l'épisode précédent est
-     * effacé - le laisser ferait lire à l'écran une décision qui ne porte plus.
+     * A case whose proposal was **rejected** can be proposed again. The previous reason is cleared so the
+     * screen does not show an outdated decision.
      */
     @Test
     void proposerSensibilite_accepteUnDossierDontLaPropositionAvaitEteRejetee() {
@@ -567,7 +559,7 @@ class DossierServiceTest {
         assertThat(dossier.getSensibiliteMotifRejet()).isNull();
     }
 
-    /** Le DJ décide sans proposition : la faire passer par un arbitrage de lui-même n'ajouterait rien. */
+    /** The DJ decides without a proposal: arbitrating their own decision would add nothing. */
     @Test
     void modifierSensibilite_poseLaDiligenceDirectementEtApplique() {
         Dossier dossier = Dossier.builder().id(1L).estSensible(false)
@@ -586,17 +578,16 @@ class DossierServiceTest {
                 new ModifierSensibiliteRequest(true, 60_000_000d, "VIP", "Décision du comité"));
 
         assertThat(dossier.getEstSensible()).isTrue();
-        // Directement **validée** : il n'y a personne d'autre à attendre.
+        // Directly **validated**: nobody else to wait for.
         assertThat(dossier.getSensibiliteStatut()).isEqualTo(StatutValidation.VALIDEE);
         assertThat(dossier.getSeuilMontant()).isEqualTo(60_000_000d);
         assertThat(dossier.getSeuilOrigine()).isEqualTo(SeuilOrigine.DEROGATION);
     }
 
     /**
-     * Le retrait (métier, 2026-10-06). Ce qu'il doit faire en plus de baisser le drapeau : **rendre
-     * le seuil global**. Un seuil de dérogation n'existe que pour un dossier à diligence
-     * particulière ; le laisser donnerait au dossier un seuil que rien ne justifie et que plus
-     * personne ne pourrait réviser, {@code demanderDerogationSeuil} refusant un dossier non sensible.
+     * Withdrawal must also **restore the global threshold**. A derogation threshold only exists for a
+     * sensitive case; keeping it would leave a threshold nobody can revise, since
+     * {@code demanderDerogationSeuil} refuses a non-sensitive case.
      */
     @Test
     void modifierSensibilite_retireLaDiligenceEtRendLeSeuilGlobal() {
@@ -617,11 +608,11 @@ class DossierServiceTest {
         assertThat(dossier.getSensibiliteMotifRetrait()).isEqualTo("L'affaire s'est révélée ordinaire");
         assertThat(dossier.getSeuilMontant()).isNull();
         assertThat(dossier.getSeuilOrigine()).isEqualTo(SeuilOrigine.GLOBAL);
-        // Le motif de retrait et le motif de rejet sont deux faits distincts : le second reste vide.
+        // The withdrawal reason and the rejection reason are distinct facts: the latter stays empty.
         assertThat(dossier.getSensibiliteMotifRejet()).isNull();
     }
 
-    /** Lever la diligence fait sortir le dossier du circuit de double validation : l'audit demandera pourquoi. */
+    /** Removing sensitivity takes the case out of double fee validation: the audit will ask why. */
     @Test
     void modifierSensibilite_exigeUnMotifPourRetirer() {
         Dossier dossier = Dossier.builder().id(1L).estSensible(true)
@@ -629,8 +620,8 @@ class DossierServiceTest {
                 .seuilMontant(60_000_000d).seuilOrigine(SeuilOrigine.DEROGATION).build();
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
 
-        assertThatThrownBy(() -> service.modifierSensibilite(1L,
-                new ModifierSensibiliteRequest(false, null, null, "   ")))
+        var requete = new ModifierSensibiliteRequest(false, null, null, "   ");
+        assertThatThrownBy(() -> service.modifierSensibilite(1L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("motif est obligatoire");
         verify(dossierRepository, never()).save(any());
@@ -642,28 +633,28 @@ class DossierServiceTest {
                 .sensibiliteStatut(StatutValidation.EN_ATTENTE).build();
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
 
-        assertThatThrownBy(() -> service.modifierSensibilite(1L,
-                new ModifierSensibiliteRequest(false, null, null, "Motif")))
+        var requete = new ModifierSensibiliteRequest(false, null, null, "Motif");
+        assertThatThrownBy(() -> service.modifierSensibilite(1L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("rien à retirer");
     }
 
-    /** Poser la diligence sans seuil ni type n'a pas de sens : ce sont eux qui la rendent opérante. */
+    /** Setting sensitivity without threshold or type is meaningless: they make it effective. */
     @Test
     void modifierSensibilite_exigeSeuilEtTypePourPoser() {
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(
                 Dossier.builder().id(1L).estSensible(false)
                         .sensibiliteStatut(StatutValidation.EN_ATTENTE).build()));
 
-        assertThatThrownBy(() -> service.modifierSensibilite(1L,
-                new ModifierSensibiliteRequest(true, null, null, null)))
+        var requete = new ModifierSensibiliteRequest(true, null, null, null);
+        assertThatThrownBy(() -> service.modifierSensibilite(1L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("obligatoires pour un dossier à diligence particulière");
     }
 
     /**
-     * Une proposition du juriste pendante ne doit pas survivre à la décision du DJ : la poser
-     * directement la tranche, et le seuil retenu est celui que le DJ indique, non celui proposé.
+     * A pending legal officer proposal must not survive the DJ's decision: setting it directly settles it,
+     * and the threshold is the one given by the DJ, not the proposed one.
      */
     @Test
     void modifierSensibilite_trancheLaPropositionPendante() {
@@ -698,8 +689,8 @@ class DossierServiceTest {
                 .sensibiliteStatut(StatutValidation.EN_ATTENTE).build();
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
 
-        assertThatThrownBy(() -> service.validerSensibilite(1L,
-                new ValiderSensibiliteRequest(StatutValidation.VALIDEE, null, null, null)))
+        var requete = new ValiderSensibiliteRequest(StatutValidation.VALIDEE, null, null, null);
+        assertThatThrownBy(() -> service.validerSensibilite(1L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("Aucune proposition");
     }
@@ -710,8 +701,8 @@ class DossierServiceTest {
                 .sensibiliteStatut(StatutValidation.EN_ATTENTE).build();
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
 
-        assertThatThrownBy(() -> service.validerSensibilite(1L,
-                new ValiderSensibiliteRequest(StatutValidation.REJETEE, null, null, null)))
+        var requete = new ValiderSensibiliteRequest(StatutValidation.REJETEE, null, null, null);
+        assertThatThrownBy(() -> service.validerSensibilite(1L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("motif est obligatoire");
     }
@@ -722,7 +713,8 @@ class DossierServiceTest {
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
         when(etapeProcedureRepository.existsByDossierIdAndType(1L, TypeEtape.INSTANCE)).thenReturn(true);
 
-        assertThatThrownBy(() -> service.creerEtape(1L, new CreerEtapeRequest(TypeEtape.INSTANCE)))
+        var requete = new CreerEtapeRequest(TypeEtape.INSTANCE);
+        assertThatThrownBy(() -> service.creerEtape(1L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("existe déjà");
     }
@@ -732,8 +724,8 @@ class DossierServiceTest {
         Dossier dossier = Dossier.builder().id(1L).build();
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
         when(etapeProcedureRepository.existsByDossierIdAndType(anyLong(), any())).thenReturn(false);
-        // GenerationType.IDENTITY : l'id est toujours peuplé après un save() réel ; le stub le
-        // simule pour rester réaliste (des appels en aval, ex. l'historisation, en dépendent).
+        // GenerationType.IDENTITY: the id is always set after a real save(); the stub mimics it because
+        // downstream calls (e.g. history logging) depend on it.
         long[] nextId = {1L};
         when(etapeProcedureRepository.save(any(EtapeProcedure.class))).thenAnswer(inv -> {
             EtapeProcedure e = inv.getArgument(0);
@@ -747,7 +739,7 @@ class DossierServiceTest {
                 .save(any(EtapeProcedure.class));
     }
 
-    // ---- Mappers minimaux, sans dépendre du bytecode généré par l'annotation processor MapStruct ----
+    // Minimal mappers, independent of the MapStruct-generated bytecode.
 
     private static class EtapeProcedureMapperTestImpl implements EtapeProcedureMapper {
         @Override
@@ -776,5 +768,140 @@ class DossierServiceTest {
                     action.getId(), action.getUtilisateur() != null ? action.getUtilisateur().getId() : null,
                     action.getCode(), action.getAction(), action.getDetails(), action.getDateAction());
         }
+    }
+
+    // Refusals and missing resources: each check below answers with its own message, before any write.
+
+    private Dossier dossierSensible(StatutValidation statut) {
+        return Dossier.builder().id(5L).reference("DOS-2026-0005").client(client)
+                .estSensible(true).sensibiliteStatut(statut).build();
+    }
+
+    @Test
+    void lister_fenetreInversee_estRefusee() {
+        FiltresDossiers filtres = new FiltresDossiers(null, null, null, null, null, null, null, null, null,
+                LocalDate.of(2026, 9, 30), LocalDate.of(2026, 9, 1));
+
+        PageRequest premiere = PageRequest.of(0, 10);
+
+        assertThatThrownBy(() -> service.listerDossiers(filtres, false, premiere))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("La date de début doit précéder la date de fin");
+    }
+
+    @Test
+    void historique_dossierInexistant() {
+        when(dossierRepository.findById(404L)).thenReturn(Optional.empty());
+        PageRequest premiere = PageRequest.of(0, 10);
+
+        assertThatThrownBy(() -> service.historique(404L, premiere))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("Dossier introuvable : 404");
+    }
+
+    @Test
+    void vueClient_clientInexistant() {
+        when(clientRepository.findById(404L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.vueConsolideeParClient(404L))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("Client introuvable : 404");
+    }
+
+    @Test
+    void affectation_enDouble_demandeConfirmation() {
+        when(dossierRepository.findById(5L)).thenReturn(Optional.of(dossierSensible(StatutValidation.VALIDEE)));
+        when(dossierJuristeRepository.findByDossierId(5L))
+                .thenReturn(List.of(DossierJuriste.builder().utilisateur(juriste).build()));
+        when(dossierAvocatRepository.findByDossierId(5L)).thenReturn(List.of());
+
+        ModifierAffectationRequest memeJuriste = new ModifierAffectationRequest(List.of(10L), null);
+
+        assertThatThrownBy(() -> service.modifierAffectation(5L, memeJuriste, false))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("forcer=true");
+        verify(dossierJuristeRepository, never()).save(any());
+    }
+
+    @Test
+    void statutEtape_etapeDUnAutreDossier() {
+        Dossier autre = Dossier.builder().id(6L).build();
+        when(dossierRepository.findById(5L)).thenReturn(Optional.of(dossierSensible(StatutValidation.VALIDEE)));
+        when(etapeProcedureRepository.findById(77L)).thenReturn(Optional.of(EtapeProcedure.builder().id(77L)
+                .dossier(autre).type(TypeEtape.INSTANCE).statutCycleVie(StatutCycleVie.EN_COURS).build()));
+
+        ModifierStatutEtapeRequest miseEnDelibere = new ModifierStatutEtapeRequest(StatutCycleVie.EN_DELIBERE);
+
+        assertThatThrownBy(() -> service.modifierStatutEtape(5L, 77L, miseEnDelibere))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("Étape introuvable pour ce dossier : 77");
+    }
+
+    @Test
+    void derogation_seTrancheParLaValidationTantQueLaDiligenceEstEnAttente() {
+        when(dossierRepository.findById(5L)).thenReturn(Optional.of(dossierSensible(StatutValidation.EN_ATTENTE)));
+
+        ValiderDerogationRequest validation = new ValiderDerogationRequest(StatutValidation.VALIDEE, null);
+
+        assertThatThrownBy(() -> service.validerDerogationSeuil(5L, 1L, validation))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("pas comme une dérogation");
+    }
+
+    @Test
+    void derogation_introuvable_dejaTraitee_ouRejeteeSansMotif() {
+        Dossier dossier = dossierSensible(StatutValidation.VALIDEE);
+        when(dossierRepository.findById(5L)).thenReturn(Optional.of(dossier));
+        AuditSeuilDossier traitee = AuditSeuilDossier.builder().id(2L).dossier(dossier).statut(StatutValidation.VALIDEE).build();
+        AuditSeuilDossier enAttente = AuditSeuilDossier.builder().id(3L).dossier(dossier).statut(StatutValidation.EN_ATTENTE).build();
+        AuditSeuilDossier autreDossier = AuditSeuilDossier.builder().id(4L).dossier(Dossier.builder().id(6L).build())
+                .statut(StatutValidation.EN_ATTENTE).build();
+        when(auditSeuilDossierRepository.findById(2L)).thenReturn(Optional.of(traitee));
+        when(auditSeuilDossierRepository.findById(3L)).thenReturn(Optional.of(enAttente));
+        when(auditSeuilDossierRepository.findById(4L)).thenReturn(Optional.of(autreDossier));
+        ValiderDerogationRequest validation = new ValiderDerogationRequest(StatutValidation.VALIDEE, null);
+        ValiderDerogationRequest rejetSansMotif = new ValiderDerogationRequest(StatutValidation.REJETEE, " ");
+
+        assertThatThrownBy(() -> service.validerDerogationSeuil(5L, 4L, validation))
+                .hasMessageContaining("Demande de dérogation introuvable : 4");
+        assertThatThrownBy(() -> service.validerDerogationSeuil(5L, 2L, validation))
+                .hasMessageContaining("déjà été traitée");
+        assertThatThrownBy(() -> service.validerDerogationSeuil(5L, 3L, rejetSansMotif))
+                .hasMessageContaining("Le motif est obligatoire en cas de rejet");
+        verify(auditSeuilDossierRepository, never()).save(any());
+    }
+
+    @Test
+    void validationDiligence_sansPropositionEnAttente_ouRejetSansMotif() {
+        when(dossierRepository.findById(5L))
+                .thenReturn(Optional.of(dossierSensible(StatutValidation.VALIDEE)))
+                .thenReturn(Optional.of(dossierSensible(StatutValidation.EN_ATTENTE)));
+        ValiderSensibiliteRequest validation = new ValiderSensibiliteRequest(StatutValidation.VALIDEE, null, null, null);
+        ValiderSensibiliteRequest rejetSansMotif = new ValiderSensibiliteRequest(StatutValidation.REJETEE, "", null, null);
+
+        assertThatThrownBy(() -> service.validerSensibilite(5L, validation))
+                .hasMessageContaining("Aucune proposition de diligence particulière en attente");
+        assertThatThrownBy(() -> service.validerSensibilite(5L, rejetSansMotif))
+                .hasMessageContaining("Le motif est obligatoire en cas de rejet");
+        verify(dossierRepository, never()).save(any());
+    }
+
+    @Test
+    void miseEnDiligence_exigeSeuilEtTypeConnus_surUnDossierPasDejaSuivi() {
+        when(dossierRepository.findById(5L)).thenReturn(Optional.of(dossierSensible(StatutValidation.VALIDEE)));
+        when(typeClientSensibleRepository.findByCodeIgnoreCase("INCONNU")).thenReturn(Optional.empty());
+        when(typeClientSensibleRepository.findByCodeIgnoreCase("VIP")).thenReturn(Optional.of(new TypeClientSensible()));
+
+        ModifierSensibiliteRequest sansSeuil = new ModifierSensibiliteRequest(true, null, "VIP", null);
+        ModifierSensibiliteRequest typeInconnu = new ModifierSensibiliteRequest(true, 1_000d, "INCONNU", null);
+        ModifierSensibiliteRequest complete = new ModifierSensibiliteRequest(true, 1_000d, "VIP", null);
+
+        assertThatThrownBy(() -> service.modifierSensibilite(5L, sansSeuil))
+                .hasMessageContaining("seuilMontant et typeClientSensible sont obligatoires");
+        assertThatThrownBy(() -> service.modifierSensibilite(5L, typeInconnu))
+                .hasMessageContaining("Type de client inconnu du référentiel : INCONNU");
+        assertThatThrownBy(() -> service.modifierSensibilite(5L, complete))
+                .hasMessageContaining("déjà suivi en diligence particulière");
+        verify(dossierRepository, never()).save(any());
     }
 }

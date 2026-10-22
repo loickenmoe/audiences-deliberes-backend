@@ -30,11 +30,10 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * Publication déposée par un avocat sur un dossier : {@link CompteRenduAudience} (US 5.1) ou
- * {@link AutrePublication} (US 5.3) — hiérarchie {@code JOINED} identique à
- * {@code Intervenant}/{@code Avocat} (référentiel, M2). Le module {@code publication} dépend de
- * {@code dossier}, {@code audience} (rattachement du compte rendu) et {@code ged} (stockage des
- * fichiers d'{@code AutrePublication}) — cf. FUNCTIONAL_MAP.md §5.
+ * Publication filed by a lawyer on a case file: {@link CompteRenduAudience} (US 5.1) or
+ * {@link AutrePublication} (US 5.3), using a {@code JOINED} hierarchy like
+ * {@code Intervenant}/{@code Avocat}. The {@code publication} module depends on {@code dossier},
+ * {@code audience} (report attachment) and {@code ged} (storage of {@code AutrePublication} files).
  */
 @Getter
 @Setter
@@ -75,9 +74,9 @@ public abstract class Publication {
     private String motifRejet;
 
     /**
-     * Restriction d'accès optionnelle (US 5.4) : {@code null} = consultable par tout profil interne
-     * une fois {@code VALIDE} ; sinon, seul cet utilisateur peut la consulter (403/ERR-009 sinon).
-     * Renseignée par l'avocat au dépôt — aucun endpoint dédié ne la modifie a posteriori.
+     * Optional access restriction (US 5.4): {@code null} = readable by any internal profile once
+     * {@code VALIDE}; otherwise only this user may read it (403/ERR-009 otherwise). Set by the lawyer
+     * at filing; no endpoint changes it afterwards.
      */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "restriction_acces")

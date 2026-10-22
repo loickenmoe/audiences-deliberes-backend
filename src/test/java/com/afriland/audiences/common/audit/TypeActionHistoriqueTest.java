@@ -8,11 +8,10 @@ import java.util.stream.Collectors;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Q-111 — les invariants du référentiel d'actions.
+ * Invariants of the history action catalogue.
  *
- * <p>Ce que ces tests protègent est peu spectaculaire et coûteux à perdre : un code sans libellé, ou
- * deux codes partageant la même phrase, ne casse aucune compilation et ne se voit qu'à l'écran, le
- * jour où un filtre d'audit renvoie autre chose que ce qu'on croyait demander.
+ * <p>A code without a label, or two codes sharing the same label, breaks no build and only shows
+ * up on screen, when an audit filter returns something other than what was requested.
  */
 class TypeActionHistoriqueTest {
 
@@ -24,8 +23,8 @@ class TypeActionHistoriqueTest {
     }
 
     /**
-     * Deux codes au même libellé rendraient le filtre incompréhensible : l'utilisateur choisirait
-     * une entrée dans une liste et en verrait une autre se remplir.
+     * Two codes with the same label would make the filter confusing: the user would pick one entry and
+     * see another one filled.
      */
     @Test
     void aucunLibelleNEstPartageParDeuxCodes() {
@@ -40,29 +39,13 @@ class TypeActionHistoriqueTest {
     }
 
     /**
-     * La contrainte `chk_historique_code` de V18 énumère les codes en dur. Un code ajouté à
-     * l'énumération sans migration passerait la compilation et **échouerait à l'écriture**, en
-     * production, sur l'action qu'on venait d'instrumenter. Ce test rappelle le lien.
+     * Constraint {@code chk_historique_code} enumerates the codes explicitly. A code added to the enum
+     * without a migration would compile but <b>fail on write</b> in production. This test is the
+     * reminder.
      */
     @Test
     void leNombreDeCodesCorrespondAuxSitesInstrumentes() {
-        // 42 points d'historisation recensés en Q-111, plus AUDIT_CONSULTE (Q-112),
-        // AUDIT_EXPORTE et ARCHIVE_TELECHARGEE (Q-113), LETTRE_CONSTITUTION_REDIGEE (Q-115 B2),
-        // CLIENT_MODIFIE (PUT /clients), INTERVENANT_MODIFIE (PUT /intervenants),
-        // et NON_CLASSEE pour la reprise.
-        //
-        // + SENSIBILITE_PROPOSEE et SENSIBILITE_RETIREE (N4, 2026-10-06) : la diligence
-        // particulière se révise après l'ouverture, dans les deux sens. `V43` étend
-        // `chk_historique_code` en conséquence — c'est exactement le lien que ce test rappelle.
-        //
-        // + EXPLICATION_DEMANDEE et EXPLICATION_REPONDUE (N7 temps 2, 2026-10-07) : la direction
-        // demande à un avocat de s'expliquer, l'avocat répond, et l'échange reste. `V46` étend
-        // la contrainte - le même lien, la troisième fois.
-        //
-        // + six codes du partage avec l'avocat (QF-64, Q-139, 2026-10-15) : partagé, proposé,
-        // arbitré, retiré, consulté par l'avocat, et la note à l'avocat d'une audience. `V47`
-        // étend la contrainte, et un garde-fou du script de migration a vérifié que l'énumération
-        // et la liste en base sont exactement les mêmes.
+        // Every new code requires a migration extending `chk_historique_code`; update this count with it.
         assertThat(TypeActionHistorique.values()).hasSize(59);
         assertThat(TypeActionHistorique.NON_CLASSEE.libelle()).isEqualTo("Action non classée");
     }

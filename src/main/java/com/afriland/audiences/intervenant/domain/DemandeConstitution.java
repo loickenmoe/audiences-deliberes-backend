@@ -27,11 +27,9 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * Demande de constitution d'un prestataire (avocat ou autre) sur un dossier, soumise à la
- * seconde signature du SH (RG-INT-08, FR-INT-06/07). Le module {@code intervenant} dépend de
- * {@code dossier} (affectation), {@code referentiel} (prestataire polymorphe, {@code Intervenant}
- * — avocat ou autre prestataire) et {@code ged} (stockage de la lettre générée à la validation) —
- * cf. FUNCTIONAL_MAP.md §5, Q-52.
+ * Request to appoint a provider (lawyer or other) on a case, subject to the line manager's second
+ * signature (RG-INT-08, FR-INT-06/07). The provider is the polymorphic {@code Intervenant}; the
+ * letter generated on validation is stored in the document management module.
  */
 @Getter
 @Setter

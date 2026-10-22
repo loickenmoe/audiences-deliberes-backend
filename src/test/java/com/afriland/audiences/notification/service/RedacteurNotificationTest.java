@@ -8,7 +8,6 @@ import com.afriland.audiences.notification.service.RedacteurNotification.Context
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.springframework.web.util.HtmlUtils;
 
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -24,9 +23,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Étape 5 : textes des notifications externes. Les garde-fous de D18 sont vérifiés sur <b>toutes</b>
- * les combinaisons d'événement et de canal, pas sur un échantillon : un texte ajouté demain sans
- * respecter la règle ferait échouer ce test.
+ * Step 5: external notification texts. The D18 safeguards are checked on <b>every</b> event/channel
+ * combination, not a sample: a new text breaking the rule would fail this test.
  */
 class RedacteurNotificationTest {
 
@@ -39,7 +37,7 @@ class RedacteurNotificationTest {
     private static final Route SMS = new Route("SMS", CanalEngine.SMS, "+237600000000", null);
     private static final Route WHATSAPP = new Route("WHATSAPP", CanalEngine.WHATSAPP, "+237600000000", null);
 
-    /** Marqueurs, codes de règle ou de décision, montants : rien de tout cela ne doit sortir. */
+    /** Markers, rule or decision codes, amounts: none of these may leave. */
     private static final List<Pattern> INTERDITS = List.of(
             Pattern.compile("\\[[A-Za-z]+Id:"),
             Pattern.compile("\\b(RG|FR|NF|US|UC|CONF)-[A-Z]*-?\\d"),
@@ -64,10 +62,9 @@ class RedacteurNotificationTest {
                 if (texte == null) {
                     continue;
                 }
-                // La référence et le lien sont les deux seules données insérées ; on les retire avant
-                // de vérifier que le gabarit, lui, ne contient rien d'interdit.
-                // Le HTML est décodé d'abord : l'apostrophe échappée (&#39;) n'est pas un chiffre du texte.
-                String gabarit = HtmlUtils.htmlUnescape(texte).replace(REFERENCE, "").replace(LIEN, "");
+                // The reference and link are the only inserted data; they are removed before checking the
+                // template contains nothing forbidden.
+                String gabarit = texte.replace(REFERENCE, "").replace(LIEN, "");
                 for (Pattern interdit : INTERDITS) {
                     assertThat(interdit.matcher(gabarit).find()).as(interdit + " dans : " + texte).isFalse();
                 }
@@ -91,13 +88,9 @@ class RedacteurNotificationTest {
             attendues.add("prestataire." + evenement.name() + ".phrase");
         }
         /*
-         * La phrase courte (SMS, WhatsApp) est **facultative** : sans elle, l'événement retombe sur
-         * le défaut commun. La Direction Juridique rédige ces textes un par un - celui de la
-         * constitution le 2026-10-07 - et rien n'oblige les autres à suivre.
-         *
-         * Elle doit en revanche porter le nom d'un événement **connu** : une phrase courte posée
-         * sur un nom inexistant ne serait lue par personne, et c'est exactement ce que ce test
-         * existe pour empêcher.
+         * The short sentence (SMS, WhatsApp) is **optional**: without it, the event falls back to the
+         * common default. It must however name a **known** event: a short sentence set on a nonexistent name
+         * would never be read.
          */
         Set<String> courtesAdmises = new HashSet<>();
         for (TypeAlerte type : TypeAlerte.values()) {
@@ -118,15 +111,14 @@ class RedacteurNotificationTest {
     }
 
     @Test
-    void outlook_complet_en_HTML_avec_reference_et_lien() {
+    void outlook_complet_en_texte_brut_avec_reference_et_lien() {
         ContenuNotification contenu = redacteur.pourUtilisateur(TypeAlerte.RAPPEL_AUDIENCE, OUTLOOK, new Contexte(REFERENCE, LIEN));
 
         assertThat(contenu.sujet()).isEqualTo("[Audiences et délibérés] Rappel d'audience - DOS-2026-014");
         assertThat(contenu.corps())
-                .startsWith("<p>Une audience approche sur l&#39;un de vos dossiers.</p>")
-                .contains("<p>Dossier : DOS-2026-014</p>")
-                .contains("<p>Consulter dans l&#39;application : " + LIEN + "</p>")
-                .contains("merci de ne pas y répondre");
+                .doesNotContain("<p>", "</p>", "&#39;")
+                .isEqualTo("Une audience approche sur l'un de vos dossiers.\n\nDossier : DOS-2026-014\n\n"
+                        + "Consulter dans l'application : " + LIEN + "\n\nMessage automatique, merci de ne pas y répondre.");
     }
 
     @Test
@@ -153,7 +145,7 @@ class RedacteurNotificationTest {
                 new Contexte(REFERENCE, "http://localhost:3000/portail"));
 
         assertThat(contenu.sujet()).isEqualTo("[Audiences et délibérés] Nouveau dossier confié - DOS-2026-014");
-        assertThat(contenu.corps()).startsWith("<p>Bonjour,</p>")
+        assertThat(contenu.corps()).startsWith("Bonjour,\n\n").doesNotContain("<p>")
                 .contains("Retrouvez le détail dans votre espace : http://localhost:3000/portail")
                 .contains("Direction Juridique, Afriland First Bank");
     }
@@ -166,7 +158,7 @@ class RedacteurNotificationTest {
         assertThat(contenu.corps()).contains("contactez la Direction Juridique").doesNotContain("http");
     }
 
-    /** D18 : ni référence ni lien par SMS ou WhatsApp, et un seul segment de 160 caractères au plus. */
+    /** D18: no reference or link by SMS or WhatsApp, and a single segment of at most 160 characters. */
     @ParameterizedTest
     @EnumSource(EvenementPrestataire.class)
     void sms_et_whatsapp_minimaux(EvenementPrestataire evenement) {
@@ -180,11 +172,8 @@ class RedacteurNotificationTest {
     }
 
     /**
-     * Le texte de la constitution, <b>au mot près</b> (Direction Juridique, 2026-10-07).
-     *
-     * <p>Ce n'est pas une formulation du projet : c'est une parole qu'on nous a confiée, et qui part
-     * sous le nom de la banque. Un test de forme générale laisserait passer une reformulation
-     * involontaire - celui-ci ne le permet pas.
+     * The retainer text, <b>word for word</b>, as written by the Legal Department. It goes out under the
+     * bank's name: a generic shape test would let an accidental rewording through.
      */
     @Test
     void le_message_court_de_la_constitution_est_celui_dicte_par_la_direction_juridique() {
@@ -197,10 +186,8 @@ class RedacteurNotificationTest {
     }
 
     /**
-     * Et les autres événements n'ont pas bougé.
-     *
-     * <p>La Direction Juridique a réécrit <b>un</b> message. Les treize autres gardent le leur : les
-     * emporter au passage changerait, sous le nom de la banque, des textes que personne n'a relus.
+     * The other events are unchanged: only <b>one</b> message was rewritten, and the others must not
+     * change unreviewed under the bank's name.
      */
     @Test
     void les_autres_messages_courts_gardent_leur_formulation() {
@@ -213,17 +200,19 @@ class RedacteurNotificationTest {
     }
 
     @Test
-    void une_reference_malveillante_est_echappee_dans_le_HTML() {
+    void une_donnee_inseree_reste_du_texte_brut() {
         ContenuNotification contenu = redacteur.pourUtilisateur(TypeAlerte.ALARME, OUTLOOK,
                 new Contexte("<script>x</script>", null));
 
-        assertThat(contenu.corps()).doesNotContain("<script>").contains("&lt;script&gt;");
+        // Plain text is not interpreted by the mail client: the value is shown as typed, never as markup.
+        assertThat(contenu.corps()).contains("Dossier : <script>x</script>").doesNotContain("&lt;", "<p>");
     }
 
     @Test
     void un_canal_regle_inconnu_est_refuse() {
         Route inconnue = new Route("PIGEON", CanalEngine.EMAIL, "a@b.cm", null);
-        assertThatThrownBy(() -> redacteur.pourUtilisateur(TypeAlerte.ALARME, inconnue, new Contexte(null, null)))
+        var contexte = new Contexte(null, null);
+        assertThatThrownBy(() -> redacteur.pourUtilisateur(TypeAlerte.ALARME, inconnue, contexte))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

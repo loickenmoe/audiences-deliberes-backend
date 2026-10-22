@@ -6,9 +6,9 @@ import jakarta.validation.constraints.NotNull;
 
 import java.time.LocalDate;
 
-/** FR-DEF-02/US 8.2 : aucune précondition d'étape n'est spécifiée (Q-59), à la différence de l'adjudication. */
+/** FR-DEF-02/US 8.2: no step precondition, unlike the adjudication. */
 public record CreerCondamnationRequest(
-        /** Obligatoire depuis QF-66 : l'étape clôturée qui a rendu la décision, comme l'adjudication. */
+        /** Required: the closed step that issued the decision, as for the adjudication. */
         @NotNull Long etapeId,
         @NotNull SensCondamnation sens,
         @NotBlank String naturePaiement,

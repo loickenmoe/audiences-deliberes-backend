@@ -56,8 +56,9 @@ class JurisprudenceServiceTest {
     void creer_rejectsEmptyFile() {
         MockMultipartFile vide = new MockMultipartFile("file", "", "application/pdf", new byte[0]);
 
-        assertThatThrownBy(() -> service.creer(null, TypeArchiveJurisprudence.GROSSE, List.of("saisie"),
-                "Recouvrement", "TGI Douala", LocalDate.now(), vide))
+        List<String> motsCles = List.of("saisie");
+        var date = LocalDate.now();
+        assertThatThrownBy(() -> service.creer(null, TypeArchiveJurisprudence.GROSSE, motsCles, "Recouvrement", "TGI Douala", date, vide))
                 .isInstanceOf(ApiException.class);
     }
 
@@ -66,8 +67,9 @@ class JurisprudenceServiceTest {
         MockMultipartFile fichier = new MockMultipartFile("file", "decision.docx",
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document", new byte[]{1, 2, 3});
 
-        assertThatThrownBy(() -> service.creer(null, TypeArchiveJurisprudence.GROSSE, List.of("saisie"),
-                "Recouvrement", "TGI Douala", LocalDate.now(), fichier))
+        List<String> motsCles = List.of("saisie");
+        var date = LocalDate.now();
+        assertThatThrownBy(() -> service.creer(null, TypeArchiveJurisprudence.GROSSE, motsCles, "Recouvrement", "TGI Douala", date, fichier))
                 .isInstanceOf(ApiException.class);
     }
 
@@ -76,8 +78,9 @@ class JurisprudenceServiceTest {
         byte[] gros = new byte[11 * 1024 * 1024];
         MockMultipartFile fichier = new MockMultipartFile("file", "decision.pdf", "application/pdf", gros);
 
-        assertThatThrownBy(() -> service.creer(null, TypeArchiveJurisprudence.GROSSE, List.of("saisie"),
-                "Recouvrement", "TGI Douala", LocalDate.now(), fichier))
+        List<String> motsCles = List.of("saisie");
+        var date = LocalDate.now();
+        assertThatThrownBy(() -> service.creer(null, TypeArchiveJurisprudence.GROSSE, motsCles, "Recouvrement", "TGI Douala", date, fichier))
                 .isInstanceOf(ApiException.class);
     }
 
@@ -85,8 +88,9 @@ class JurisprudenceServiceTest {
     void creer_rejectsEmptyMotsCles() {
         MockMultipartFile fichier = new MockMultipartFile("file", "decision.pdf", "application/pdf", new byte[]{1, 2, 3});
 
-        assertThatThrownBy(() -> service.creer(null, TypeArchiveJurisprudence.GROSSE, List.of(),
-                "Recouvrement", "TGI Douala", LocalDate.now(), fichier))
+        List<String> motsCles = List.of();
+        var date = LocalDate.now();
+        assertThatThrownBy(() -> service.creer(null, TypeArchiveJurisprudence.GROSSE, motsCles, "Recouvrement", "TGI Douala", date, fichier))
                 .isInstanceOf(ApiException.class);
     }
 
@@ -113,8 +117,8 @@ class JurisprudenceServiceTest {
     void creer_withDossierUsesDeposer() {
         MockMultipartFile fichier = new MockMultipartFile("file", "decision.pdf", "application/pdf", new byte[]{1, 2, 3});
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
-        // Le dossier est terminé : c'est la condition du versement (2026-09-29), dite ici plutôt
-        // que laissée au défaut du mock — sans quoi ce test ne prouverait pas qu'elle est remplie.
+        // The case is finished, which is the filing condition; stated explicitly rather than left to the
+        // mock default, otherwise this test would not prove it holds.
         when(etapeProcedureRepository.existsByDossierIdAndStatutCycleVieNotIn(1L, StatutCycleVie.FERMES))
                 .thenReturn(false);
         when(minioStorageService.deposer(1L, fichier)).thenReturn("dossiers/1/decision.pdf");
@@ -133,10 +137,9 @@ class JurisprudenceServiceTest {
     }
 
     /**
-     * La garde du 2026-09-29 : une décision ne rejoint la base jurisprudentielle qu'une fois
-     * définitive. {@code Jurisprudence} n'enregistrant rien qui dise l'état de la décision, une
-     * décision frappée d'appel y entrerait au même titre qu'un arrêt définitif — et le juriste qui
-     * la trouve comme précédent ne pourrait pas savoir qu'elle a peut-être été infirmée.
+     * A decision enters the case-law base only once final. {@code Jurisprudence} records nothing about
+     * the decision's state, so an appealed decision would otherwise sit alongside a final ruling, and
+     * a lawyer finding it as a precedent could not know it may have been overturned.
      */
     @Test
     void creer_refuseTantQuUneEtapeDuDossierEstEnCours() {
@@ -145,20 +148,21 @@ class JurisprudenceServiceTest {
         when(etapeProcedureRepository.existsByDossierIdAndStatutCycleVieNotIn(1L, StatutCycleVie.FERMES))
                 .thenReturn(true);
 
-        assertThatThrownBy(() -> service.creer(1L, TypeArchiveJurisprudence.EXPEDITION, List.of("hypotheque"),
-                "Recouvrement", "TGI Douala", LocalDate.now(), fichier))
+        List<String> motsCles = List.of("hypotheque");
+        var date = LocalDate.now();
+        assertThatThrownBy(() -> service.creer(1L, TypeArchiveJurisprudence.EXPEDITION, motsCles, "Recouvrement", "TGI Douala", date, fichier))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("encore une étape en cours")
                 .hasMessageContaining("définitive");
 
-        // Rien n'a été déposé ni enregistré : le refus tombe avant tout effet.
+        // Nothing was uploaded or saved: the refusal comes before any side effect.
         verify(minioStorageService, never()).deposer(any(Long.class), any(org.springframework.web.multipart.MultipartFile.class));
         verify(jurisprudenceRepository, never()).save(any(Jurisprudence.class));
     }
 
     /**
-     * Une jurisprudence <b>sans dossier</b> reste libre : elle sert à verser un arrêt trouvé
-     * ailleurs, dont rien ne permet — ni n'a à permettre — de juger l'état.
+     * Case law <b>without a case</b> remains unrestricted: it is used to file a ruling found elsewhere,
+     * whose state cannot be assessed.
      */
     @Test
     void creer_sansDossierNInterrogeAucuneEtape() {
@@ -182,7 +186,7 @@ class JurisprudenceServiceTest {
         Jurisprudence jurisprudence = Jurisprudence.builder().id(1L).typeArchive(TypeArchiveJurisprudence.GROSSE)
                 .motsCles(List.of("saisie")).natureDecision("Recouvrement").juridiction("TGI Douala").dateDecision(LocalDate.now()).build();
         Page<Jurisprudence> page = new PageImpl<>(List.of(jurisprudence));
-        // Q-89 : le terme devient un motif « contient », en minuscules.
+        // The term becomes a lowercase "contains" pattern.
         when(jurisprudenceRepository.rechercher(eq("%saisie%"), eq(null), eq(null), eq(null), any())).thenReturn(page);
 
         var result = service.rechercher("Saisie", null, null, null, PageRequest.of(0, 20));

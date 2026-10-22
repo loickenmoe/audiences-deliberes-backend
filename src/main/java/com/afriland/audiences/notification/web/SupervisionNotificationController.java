@@ -15,11 +15,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.LocalDate;
 
 /**
- * Supervision des notifications externes, sur l'écran d'administration (D17).
- * <p>
- * <b>Réservée au DJ et à la DJA</b>, comme la supervision du canal applicatif (Q-109) : ces lignes
- * portent les coordonnées des destinataires et les erreurs des fournisseurs, qui n'ont pas à être
- * ouvertes à tous les profils internes.
+ * Monitoring of external notifications on the administration screen. Restricted to DJ and DJA, like
+ * the in-app channel monitoring: rows carry recipient contact details and provider errors.
  */
 @RestController
 @RequestMapping("${api.prefix}/notifications")
@@ -36,7 +33,7 @@ public class SupervisionNotificationController {
         return supervisionNotificationService.superviser(dateDebut, dateFin);
     }
 
-    /** Remet en file un envoi abandonné, une fois corrigée la cause de son échec. */
+    /** Requeues an abandoned send once the cause of its failure has been fixed. */
     @PostMapping("/{id}/relancer")
     @PreAuthorize("hasAnyRole('DJ', 'DJA')")
     public void relancer(@PathVariable Long id) {

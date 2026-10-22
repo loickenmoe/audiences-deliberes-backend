@@ -9,10 +9,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Map;
 
 /**
- * Point d'entrée unique pour historiser une action sur un dossier (RG-DOS-06, US 1.6). Les
- * services métier des modules fonctionnels (M4+) appellent {@link #enregistrer} après chaque
- * opération de création/modification — pas d'AOP/interception implicite, pour garder la trace
- * explicite dans le code appelant (cf. SYSTEM_ARCHITECTURE.md §3.2).
+ * Single entry point to record an action on a case (RG-DOS-06, US 1.6). Business services call
+ * {@link #enregistrer} explicitly after each create/update; no AOP, so the trace stays visible in
+ * the calling code.
  */
 @Service
 @RequiredArgsConstructor
@@ -22,31 +21,28 @@ public class HistoriqueActionService {
     private final CurrentUserService currentUserService;
 
     /**
-     * Historise une action pour l'utilisateur actuellement authentifié.
+     * Records an action for the currently authenticated user. The label is derived from
+     * {@link TypeActionHistorique}, so code and label cannot diverge.
      *
-     * <p><b>Le libellé n'est plus transmis</b> depuis Q-111 : il est porté par
-     * {@link TypeActionHistorique} et dérivé ici. Deux arguments côte à côte — un code et une phrase
-     * censée le décrire — auraient fini par diverger ; l'écart est désormais impossible.
-     *
-     * @param code      nature typée de l'action, sur laquelle porteront les filtres d'audit
-     * @param dossierId identifiant du dossier concerné (peut être {@code null} pour une action
-     *                  hors dossier — ex. modification d'une configuration système)
-     * @param details   détails structurés, y compris ce qui figurait autrefois dans la phrase
-     *                  (nom de l'étape, sens d'une décision, clé de configuration) ; peut être
+     * @param dossierId related case, or {@code null} for an action outside any case (e.g. system
+     *                  configuration change)
+     * @param details   structured details (step name, decision, configuration key...); may be
      *                  {@code null}
      */
     @Transactional
     public HistoriqueAction enregistrer(Long dossierId, TypeActionHistorique code, Map<String, Object> details) {
         Utilisateur utilisateur = currentUserService.getCurrentUser();
-        return enregistrerPour(utilisateur, dossierId, code, details);
+        return creerTrace(utilisateur, dossierId, code, details);
     }
 
-    /**
-     * Variante permettant de préciser explicitement l'auteur (ex. action déclenchée par un
-     * traitement planifié agissant pour le compte d'un utilisateur donné).
-     */
+    /** Variant with an explicit author (e.g. a scheduled job acting on behalf of a user). */
     @Transactional
     public HistoriqueAction enregistrerPour(Utilisateur utilisateur, Long dossierId, TypeActionHistorique code,
+                                             Map<String, Object> details) {
+        return creerTrace(utilisateur, dossierId, code, details);
+    }
+
+    private HistoriqueAction creerTrace(Utilisateur utilisateur, Long dossierId, TypeActionHistorique code,
                                              Map<String, Object> details) {
         HistoriqueAction entry = HistoriqueAction.builder()
                 .dossierId(dossierId)

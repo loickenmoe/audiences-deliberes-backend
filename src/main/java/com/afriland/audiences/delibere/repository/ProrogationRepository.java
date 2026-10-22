@@ -11,6 +11,6 @@ public interface ProrogationRepository extends JpaRepository<Prorogation, Long> 
 
     long countByDelibereId(Long delibereId);
 
-    /** Q-78, FR-DEL-04 critère 2 : historique des prorogations, dans l'ordre où elles ont été prononcées. */
+    /** FR-DEL-04 criterion 2: extension history, in the order the extensions were pronounced. */
     List<Prorogation> findByDelibereIdOrderByCompteurAsc(Long delibereId);
 }

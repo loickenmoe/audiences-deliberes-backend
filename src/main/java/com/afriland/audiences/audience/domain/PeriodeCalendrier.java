@@ -3,11 +3,10 @@ package com.afriland.audiences.audience.domain;
 import java.time.LocalDate;
 
 /**
- * FR-AUD-05 : fenêtre du calendrier des audiences, relative à un {@code dateDebut} donné.
+ * FR-AUD-05: hearing calendar window, relative to a given {@code dateDebut}.
  * <p>
- * <b>La borne de fin est incluse</b> (la requête interroge {@code BETWEEN}) : une période s'arrête
- * donc la <b>veille</b> de la suivante. Sans ce retrait d'un jour, une semaine commençant un lundi
- * ramenait aussi le lundi suivant, compté deux fois entre deux périodes consécutives (QF-31).
+ * <b>The end bound is inclusive</b> (the query uses {@code BETWEEN}), so a period ends the <b>day
+ * before</b> the next one; otherwise the boundary day would be counted in two consecutive periods.
  */
 public enum PeriodeCalendrier {
     HEBDOMADAIRE {

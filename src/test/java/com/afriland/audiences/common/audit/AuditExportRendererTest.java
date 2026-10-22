@@ -16,15 +16,11 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * La provenance portée par le fichier lui-même (Q-114).
+ * Provenance carried by the file itself.
  *
- * <p><b>Ce que ces tests gardent.</b> Un fichier se renomme, se transfère, se retrouve dans une pièce
- * jointe sans son contexte. Ce qui n'est pas <em>dans</em> le document est perdu au premier
- * déplacement — et une archive dont on ne sait plus ce qu'elle couvre ni qui l'a produite ne vaut
- * plus grand-chose comme pièce. On vérifie donc que la référence et la période survivent au fichier
- * seul, dans <b>les deux formats</b> : le PDF qu'on remet comme l'Excel qu'on trie.
- *
- * <p>On ne vérifie pas la mise en page : un test ne sait pas si un document est lisible.
+ * <p>A file gets renamed, forwarded, attached without context; whatever is not <em>in</em> the
+ * document is lost. These tests check that the reference and the period survive in the file alone,
+ * in <b>both formats</b> (PDF and Excel). Layout is not checked.
  */
 class AuditExportRendererTest {
 
@@ -51,10 +47,10 @@ class AuditExportRendererTest {
             assertThat(texte).contains("AUD-2026-0042");
             assertThat(texte).contains("2026-09-01").contains("2026-09-17");
             assertThat(texte).contains("Paule Directrice");
-            // Et l'explication de ce qu'est l'empreinte : sans elle, celui qui reçoit la pièce
-            // ignore qu'il peut la vérifier, et l'empreinte ne sert alors à personne.
+            // And the explanation of the fingerprint: without it, the recipient does not know it can be
+            // verified, and the fingerprint is useless.
             assertThat(texte).contains("SHA-256");
-            // La charte commune, que l'archive n'avait pas jusqu'ici (A3).
+            // The common branding.
             assertThat(texte).contains("Afriland First Bank").contains("Direction Juridique");
             assertThat(texte).contains("Page 1 sur");
         }
@@ -66,9 +62,9 @@ class AuditExportRendererTest {
         byte[] contenu = renderer.excel(deuxLignes(), DEBUT, FIN, TITRE, "Paule Directrice");
 
         try (XSSFWorkbook classeur = new XSSFWorkbook(new ByteArrayInputStream(contenu))) {
-            // Les lignes d'abord : celui qui ouvre le classeur vient pour elles.
+            // Rows first: they are what the reader opens the workbook for.
             assertThat(classeur.getSheetAt(0).getSheetName()).isEqualTo("Audit");
-            assertThat(classeur.getSheetAt(0).getLastRowNum()).isEqualTo(2); // en-tête + 2 lignes
+            assertThat(classeur.getSheetAt(0).getLastRowNum()).isEqualTo(2); // header + 2 rows
 
             XSSFSheet provenance = classeur.getSheet("Provenance");
             assertThat(provenance).as("feuille de provenance").isNotNull();
@@ -87,9 +83,8 @@ class AuditExportRendererTest {
     }
 
     /**
-     * Un auteur absent ne doit pas produire « Extrait par : null ». Le cas se présente pour une
-     * extraction déclenchée par un traitement, et « null » dans une pièce transmise fait mauvais
-     * effet là où un tiret ne dit rien de plus que l'absence.
+     * A missing author must not print "null" in the "extracted by" field. It happens for extractions
+     * triggered by a batch job; a dash is shown instead.
      */
     @Test
     @DisplayName("un auteur inconnu s'affiche en tiret, jamais en « null »")
@@ -106,10 +101,8 @@ class AuditExportRendererTest {
     }
 
     /**
-     * Le colophon doit rester la **dernière** page (A3).
-     *
-     * <p>Il ferme la pièce : le placer ailleurs le ferait prendre pour un préambule, et celui qui
-     * feuillette s'arrêterait avant de savoir comment vérifier ce qu'il tient.
+     * The colophon must remain the <b>last</b> page: placed elsewhere it would read as a preamble, and
+     * a reader skimming would stop before learning how to verify the document.
      */
     @Test
     @DisplayName("le colophon ferme le document, après les lignes")
@@ -127,17 +120,16 @@ class AuditExportRendererTest {
 
             assertThat(derniere).contains("Periode couverte").contains("SHA-256");
             /*
-             * Et la dernière page ne porte aucune ligne d'audit : le colophon y est seul. On vise une
-             * référence **complète** : « D-2026- » seul est contenu dans « AUD-2026-0042 », qui figure
-             * au titre de chaque page — l'assertion aurait échoué sur le titre, pas sur une donnée.
+             * And the last page carries no audit row: the colophon is alone. A full reference is targeted
+             * because "D-2026-" alone is contained in "AUD-2026-0042", which appears in every page title.
              */
             assertThat(derniere).doesNotContain("D-2026-100").doesNotContain("Modification d'un parametre");
         }
     }
 
     /**
-     * Sur mille cinq cents lignes, perdre les en-têtes en page 2 rendrait les colonnes indéchiffrables
-     * — et c'est précisément ce qu'un contrôleur lit.
+     * Across 1,500 rows, losing the headers on page 2 would make the columns unreadable, and that is
+     * exactly what an auditor reads.
      */
     @Test
     @DisplayName("les en-têtes de colonnes sont répétés sur chaque page de lignes")
@@ -147,15 +139,14 @@ class AuditExportRendererTest {
         try (PDDocument document = Loader.loadPDF(contenu)) {
             String texte = new PDFTextStripper().getText(document);
             long avecEntete = texte.lines().filter(l -> l.contains("Horodatage") || l.contains("Auteur")).count();
-            // Toutes les pages sauf le colophon.
+            // Every page except the colophon.
             assertThat(avecEntete).isEqualTo(document.getNumberOfPages() - 1L);
         }
     }
 
     /**
-     * La colonne « Détails » coupait ce qui dépassait sa largeur, remplacé par « ... ». Un détail
-     * long doit désormais figurer en entier, replié sur plusieurs lignes — y compris un mot plus
-     * large que la colonne, comme une empreinte.
+     * A long "Details" value must appear in full, wrapped over several lines, including a word wider
+     * than the column such as a fingerprint.
      */
     @Test
     @DisplayName("un détail plus long que sa colonne est écrit en entier, sans « ... »")
@@ -172,12 +163,12 @@ class AuditExportRendererTest {
             texte = new PDFTextStripper().getText(document);
         }
         assertThat(texte).contains("FIN-DU-DETAIL").contains("lignes = 1532").doesNotContain("...");
-        // L'empreinte est plus large que la colonne : coupée au caractère, elle doit se retrouver
-        // entière une fois les retours à la ligne ôtés.
+        // The fingerprint is wider than the column: broken by character, it must be found whole once
+        // line breaks are removed.
         assertThat(texte.replaceAll("\\s", "")).contains(empreinte);
     }
 
-    /** Aucune ligne ne doit se perdre en franchissant une page. */
+    /** No row may be lost across a page break. */
     @Test
     @DisplayName("aucune ligne n'est perdue entre les pages")
     void aucuneLignePerdue() throws Exception {

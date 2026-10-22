@@ -9,16 +9,15 @@ import org.springframework.stereotype.Component;
 import java.util.Optional;
 
 /**
- * Bac à sable des environnements de travail (D10) : hors production, chaque message part vers une
- * adresse ou un numéro de test, jamais vers le destinataire réel.
+ * Sandbox for non-production environments: every message goes to a test address or number, never to
+ * the real recipient.
  * <p>
- * <b>Pourquoi rediriger plutôt que filtrer.</b> Les bases de développement contiennent de vraies
- * coordonnées d'avocats. Une liste d'adresses autorisées laisserait passer tout ce qu'on oublierait
- * d'y mettre ; la redirection, elle, ne laisse rien passer et permet de vérifier tous les scénarios.
- * Le destinataire réel reste enregistré dans la file, ce qui rend la substitution vérifiable.
+ * Redirecting rather than allow-listing, because development databases hold real lawyer contacts and
+ * an allow-list would let through anything forgotten. The real recipient stays recorded in the queue,
+ * so the substitution is verifiable.
  * <p>
- * La cible dépend du canal <b>et</b> du public : une adresse professionnelle pour un interne, un
- * courriel personnel pour un prestataire, un numéro pour le SMS et WhatsApp.
+ * The target depends on the channel <b>and</b> the audience: work address for internal users,
+ * personal e-mail for providers, a phone number for SMS and WhatsApp.
  */
 @Component
 @RequiredArgsConstructor
@@ -27,22 +26,21 @@ public class RedirectionDestinataires {
     private final NotificationEngineProperties proprietes;
 
     /**
-     * La redirection n'a de sens que lorsque des messages partent réellement. Moteur coupé, la
-     * passerelle journal n'envoie rien : exiger des destinataires de test bloquerait la file sans
-     * rien protéger, et le stock ne se viderait jamais.
+     * Redirection only matters when messages are really sent. With the engine off the logging gateway
+     * sends nothing, and requiring test recipients would block the queue for no benefit.
      */
     public boolean active() {
         return proprietes.actif() && proprietes.redirection().actif();
     }
 
-    /** Destinataire à viser réellement ; vide si la redirection ne s'applique pas. */
+    /** Actual recipient to target; empty if redirection does not apply. */
     public Optional<String> cible(NotificationEnvoi envoi) {
         if (!active()) {
             return Optional.empty();
         }
         NotificationEngineProperties.Redirection redirection = proprietes.redirection();
         String cible = switch (envoi.getCanal()) {
-            // Le numéro de test est saisi comme celui d'une fiche : il passe par la même mise en forme.
+            // The test number is entered like a contact record's, so it goes through the same formatting.
             case SMS, WHATSAPP -> Coordonnees.telephone(redirection.telephone()).orElse(null);
             case TEAMS -> redirection.courrielInterne();
             case EMAIL -> envoi.getDestinataireType() == TypeDestinataire.UTILISATEUR

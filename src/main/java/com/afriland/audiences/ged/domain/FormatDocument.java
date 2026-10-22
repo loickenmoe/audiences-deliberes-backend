@@ -1,14 +1,14 @@
 package com.afriland.audiences.ged.domain;
 
 /**
- * Formats acceptés (RG-GED-04, contrainte {@code chk_document_format}).
+ * Accepted formats (RG-GED-04, constraint {@code chk_document_format}).
  *
- * <p>Le format est déduit de l'<b>extension</b> du fichier déposé, jamais du type MIME déclaré
- * (Q-46) : un nom de constante doit donc correspondre exactement à une extension, en majuscules.
+ * <p>The format is derived from the file <b>extension</b>, never from the declared MIME type:
+ * each constant name must therefore match an extension exactly, in upper case.
  *
- * <p>Toute valeur ajoutée ici doit l'être aussi dans {@code chk_document_format} et dans le
- * paramètre {@code FORMATS_GED}, faute de quoi le fichier serait refusé par la base ou par la
- * configuration — deux refus que l'utilisateur ne saurait pas distinguer.
+ * <p>Any value added here must also be added to {@code chk_document_format} and to the
+ * {@code FORMATS_GED} parameter, otherwise the file would be rejected by the database or by the
+ * configuration, two rejections the user could not tell apart.
  */
 public enum FormatDocument {
     PDF,
@@ -17,13 +17,12 @@ public enum FormatDocument {
     TXT,
     XLSX,
 
-    /** Word depuis 2007. Seul format Word que l'application sait <b>afficher</b> (2026-10-02). */
+    /** Word 2007 and later. The only Word format the application can <b>preview</b>. */
     DOCX,
 
     /**
-     * Word 97-2003, binaire. Accepté au dépôt parce que la banque en détient encore, mais
-     * <b>sans aperçu</b> : aucune bibliothèque de navigateur ne sait le rendre. L'écran l'annonce
-     * et propose le téléchargement (arbitrage du métier, 2026-10-02).
+     * Word 97-2003, binary. Accepted on upload because the bank still holds such files, but
+     * <b>without preview</b>: no browser library can render it. The UI says so and offers a download.
      */
     DOC
 }

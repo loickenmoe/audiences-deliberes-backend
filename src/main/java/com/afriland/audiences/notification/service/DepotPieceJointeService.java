@@ -17,16 +17,12 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 
 /**
- * Dépôt du fichier chez le Notification Engine, deuxième temps du mécanisme « claim-check »
- * (Guide V1 §3 bis) : le moteur a rendu une adresse à usage unique, le fichier y est envoyé
- * directement, et la notification ne portera ensuite que la clé de stockage.
+ * Uploads the file to the Notification Engine, second step of the claim-check pattern (Guide V1 §3 bis):
+ * the file goes straight to the single-use URL and the notification only carries the storage key, so
+ * large files avoid Kafka's message size limit.
  * <p>
- * <b>Aucun octet ne passe par Kafka ni par le moteur</b> : c'est tout l'intérêt du mécanisme, et la
- * raison pour laquelle une lettre de constitution de plusieurs centaines de kilo-octets peut être
- * jointe sans se heurter à la taille maximale d'un message.
- * <p>
- * <b>Un échec de dépôt ne retient pas la notification</b> : elle part sans son document, avec la
- * cause enregistrée. Prévenir sans la pièce vaut mieux que ne pas prévenir.
+ * An upload failure does not hold the notification back: it is sent without the document and the
+ * cause is recorded. Notifying without the attachment beats not notifying.
  */
 @Slf4j
 @Service
@@ -45,7 +41,7 @@ public class DepotPieceJointeService {
         }
         NotificationEnvoi envoi = notificationEnvoiRepository.findByEventId(reponse.requestId()).orElse(null);
         if (envoi == null || envoi.getStatut() != StatutEnvoi.ATTENTE_PIECE_JOINTE) {
-            // Réponse d'un autre service, ou ligne déjà traitée : rien à faire.
+            // Response for another service, or row already processed.
             return;
         }
         if (!reponse.prete()) {

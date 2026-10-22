@@ -44,7 +44,7 @@ class NotificationEngineConfigTest {
                 .run(ctx -> assertThat(ctx).getFailure().rootCause().hasMessageContaining("au moins 32 caractères"));
     }
 
-    /** Moteur actif : c'est la voie documentée par le Guide qui est montée par défaut. */
+    /** Engine active: the path documented by the Guide is wired by default. */
     @Test
     void actif_avec_un_compte_complet_monte_le_sidecar_Dapr() {
         contexte.withPropertyValues("notification.engine.actif=true", "notification.engine.code-service=audience-deliberer",
@@ -55,7 +55,7 @@ class NotificationEngineConfigTest {
                 });
     }
 
-    /** Le repli Kafka ne se monte pas sans courtier : mieux vaut refuser que publier dans le vide. */
+    /** The Kafka fallback is not wired without a broker: refusing beats publishing into the void. */
     @Test
     void actif_en_transport_Kafka_sans_courtier_le_demarrage_echoue() {
         contexte.withPropertyValues("notification.engine.actif=true", "notification.engine.code-service=audience-deliberer",
@@ -75,8 +75,8 @@ class NotificationEngineConfigTest {
     }
 
     /**
-     * D10 : hors production, une redirection incomplète laisserait partir un message vers un vrai
-     * avocat. Le démarrage échoue plutôt que d'en prendre le risque.
+     * D10: outside production, an incomplete redirection could send a message to a real lawyer.
+     * Startup fails rather than take that risk.
      */
     @Test
     void actif_avec_une_redirection_incomplete_le_demarrage_echoue() {

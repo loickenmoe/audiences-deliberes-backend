@@ -5,18 +5,11 @@ import com.afriland.audiences.dossier.web.dto.HistoriqueActionResponse;
 import java.util.List;
 
 /**
- * Une page d'audit (Q-112).
+ * A page of audit results, plus {@code actionsDisponibles}: the action types actually present, used
+ * for a closed-list filter. That list ignores the other active filters so the user can switch choice.
  *
- * <p>Même forme qu'une page paginée, plus {@code actionsDisponibles} : les natures réellement
- * présentes dans le périmètre consulté, qui alimentent un filtre à <b>liste fermée</b>. Cette liste
- * ne dépend pas des autres filtres en cours — sinon en choisir une ferait disparaître les autres et
- * l'on ne pourrait plus changer d'avis sans tout vider.
- *
- * <p><b>Ce que l'audit ne couvre pas, et qu'il faut savoir avant de s'y fier.</b> Seules les
- * <b>modifications</b> sont historisées (RG-DOS-06) ; <b>aucune consultation ne l'est</b>, à
- * l'exception de celle de cet écran. Ouvrir un dossier sensible ou télécharger une pièce ne laisse
- * aucune trace : l'absence de ligne ne prouve donc pas l'absence d'action. C'est une limite connue
- * et écrite, dont la levée éventuelle fait l'objet d'un jalon distinct.
+ * <p>Only modifications are recorded (RG-DOS-06); consultations are not, except for this screen.
+ * A missing line therefore does not prove that an action did not happen.
  */
 public record AuditResponse(
         List<HistoriqueActionResponse> content,
@@ -25,11 +18,8 @@ public record AuditResponse(
         List<OptionAction> actionsDisponibles) {
 
     /**
-     * Une entrée du filtre par nature d'action : le <b>code</b> part au serveur, le <b>libellé</b>
-     * s'affiche.
-     *
-     * <p>Le libellé vient de l'énumération et non de la ligne : les entrées reprises par V18 portent
-     * encore leur ancienne phrase, et une même nature se serait présentée plusieurs fois.
+     * A filter option: the code is sent to the server, the label is displayed. The label comes from
+     * the enum, not from the row, since rows migrated by V18 still carry their legacy wording.
      */
     public record OptionAction(TypeActionHistorique code, String libelle) {
         public static OptionAction de(TypeActionHistorique code) {

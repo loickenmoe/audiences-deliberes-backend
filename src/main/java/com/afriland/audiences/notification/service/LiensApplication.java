@@ -4,9 +4,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
- * Liens vers l'application insérés dans les notifications externes. L'adresse de base dépend de
- * l'environnement ({@code NOTIFICATION_LIEN_APPLICATION}) ; les chemins sont ceux des écrans du
- * frontend.
+ * Application links inserted in external notifications. The base URL depends on the environment
+ * ({@code NOTIFICATION_LIEN_APPLICATION}); paths match the frontend screens.
  */
 @Component
 public class LiensApplication {
@@ -17,12 +16,12 @@ public class LiensApplication {
         this.base = base.endsWith("/") ? base.substring(0, base.length() - 1) : base;
     }
 
-    /** Fiche du dossier ; à défaut de dossier, la liste des notifications de l'utilisateur. */
+    /** Case-file page; without a case file, the user's notification list. */
     public String pourUtilisateur(Long dossierId) {
         return dossierId == null ? base + "/notifications" : base + "/dossiers/" + dossierId;
     }
 
-    /** Espace de l'avocat qui a un compte ; un autre prestataire n'en a pas. */
+    /** Portal of a lawyer who has an account; other providers have none. */
     public String portailAvocat() {
         return base + "/portail";
     }

@@ -23,10 +23,9 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * Classe abstraite représentant un tiers intervenant dans une procédure : {@link Avocat}
- * (utilisateur externe de la plateforme) ou {@link AutrePrestataire} (notaire, huissier,
- * greffier, conservateur foncier — sans compte, RG-INT-02).
- * Cf. dictionnaire des données §2.2.1 (table {@code intervenant}, discriminant {@code type}).
+ * Abstract third party involved in a procedure: {@link Avocat} (external platform user) or
+ * {@link AutrePrestataire} (notary, bailiff, court clerk, land registrar, without account,
+ * RG-INT-02). See data dictionary §2.2.1 (table {@code intervenant}, discriminator {@code type}).
  */
 @Getter
 @Setter
@@ -63,9 +62,9 @@ public abstract class Intervenant {
     private LocalDateTime updatedAt;
 
     /**
-     * Accord du prestataire pour être notifié <b>hors de l'application</b> : SMS, WhatsApp ou
-     * courriel personnel (Q-118, D15). Chaque type porte son propre champ, avec sa valeur par
-     * défaut : décoché pour un autre prestataire (RG-INT-02, depuis V1), coché pour un avocat (V29).
+     * Provider's consent to be notified <b>outside the application</b>: SMS, WhatsApp or personal
+     * email. Each subtype has its own field and default: unchecked for other providers (RG-INT-02),
+     * checked for lawyers.
      */
     public abstract boolean accepteNotificationsExternes();
 }

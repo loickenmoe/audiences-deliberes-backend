@@ -12,12 +12,11 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.Set;
 
 /**
- * Contrôle de format et de poids d'un fichier reçu (RG-GED-04/08).
+ * Format and size check of an uploaded file (RG-GED-04/08).
  *
- * <p>Extrait de {@code GedService} en M19 (Q-97) : les pièces justificatives d'une demande de frais
- * atterrissent dans le même stockage que les documents GED et doivent donc obéir aux mêmes règles.
- * Les dupliquer aurait fait diverger deux contrôles que le DJ pilote par une **seule** paire de
- * paramètres, {@code FORMATS_GED} et {@code TAILLE_MAX_GED}.
+ * <p>Shared by GED documents and expense supporting documents, which land in the same storage and
+ * must obey the same rules, both governed by the single pair of parameters {@code FORMATS_GED} and
+ * {@code TAILLE_MAX_GED}.
  */
 @Service
 @RequiredArgsConstructor
@@ -26,9 +25,9 @@ public class ValidationFichierService {
     private final ConfigurationService configurationService;
 
     /**
-     * @return le format reconnu, dérivé de l'extension
-     * @throws ApiException 400 {@code ERR-008} si l'extension est absente, inconnue, désactivée par
-     *                      la configuration, ou si le fichier dépasse le plafond
+     * @return the recognised format, derived from the extension
+     * @throws ApiException 400 {@code ERR-008} if the extension is missing, unknown, disabled by
+     *                      configuration, or if the file exceeds the size limit
      */
     public FormatDocument valider(MultipartFile fichier) {
         String nom = fichier.getOriginalFilename();

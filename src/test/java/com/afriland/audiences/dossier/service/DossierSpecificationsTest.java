@@ -27,9 +27,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * M14 — les filtres optionnels de {@code GET /dossiers} n'étaient couverts par aucun test : seule
- * la composition des prédicats est vérifiable sans base (l'exécution SQL réelle l'est, elle, par
- * les tests bout en bout).
+ * Optional filters of {@code GET /dossiers}: only predicate composition is checked here, without a
+ * database (actual SQL execution is covered by end-to-end tests).
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -55,7 +54,7 @@ class DossierSpecificationsTest {
 
     @Test
     void sansAucunFiltre_laConjonctionResteNeutre() {
-        Predicate predicate = DossierSpecifications.withFilters(null, null, null, null, null, null, null, null, null, null, null, null).toPredicate(root, query, cb);
+        Predicate predicate = DossierSpecifications.withFilters(new FiltresDossiers(null, null, null, null, null, null, null, null, null, null, null), null).toPredicate(root, query, cb);
 
         assertThat(predicate).isSameAs(conjonction);
         verify(cb, never()).and(any(Predicate.class), any(Predicate.class));
@@ -63,14 +62,14 @@ class DossierSpecificationsTest {
 
     @Test
     void filtreNatureVide_estIgnore() {
-        DossierSpecifications.withFilters("   ", null, null, null, null, null, null, null, null, null, null, null).toPredicate(root, query, cb);
+        DossierSpecifications.withFilters(new FiltresDossiers("   ", null, null, null, null, null, null, null, null, null, null), null).toPredicate(root, query, cb);
 
         verify(cb, never()).and(any(Predicate.class), any(Predicate.class));
     }
 
     @Test
     void filtreNature_ajouteUneEgaliteInsensibleALaCasse() {
-        DossierSpecifications.withFilters("Assignation", null, null, null, null, null, null, null, null, null, null, null).toPredicate(root, query, cb);
+        DossierSpecifications.withFilters(new FiltresDossiers("Assignation", null, null, null, null, null, null, null, null, null, null), null).toPredicate(root, query, cb);
 
         verify(cb).lower(any());
         verify(cb).equal(any(Expression.class), any(Object.class));
@@ -79,14 +78,14 @@ class DossierSpecificationsTest {
 
     @Test
     void filtreCategorie_ajouteUneEgaliteStricte() {
-        DossierSpecifications.withFilters(null, CategorieDossier.RECOUVREMENT, null, null, null, null, null, null, null, null, null, null).toPredicate(root, query, cb);
+        DossierSpecifications.withFilters(new FiltresDossiers(null, CategorieDossier.RECOUVREMENT, null, null, null, null, null, null, null, null, null), null).toPredicate(root, query, cb);
 
         verify(cb, times(1)).and(any(Predicate.class), any(Predicate.class));
     }
 
     @Test
     void filtreJuridiction_ajouteUnLike() {
-        DossierSpecifications.withFilters(null, null, "Douala", null, null, null, null, null, null, null, null, null).toPredicate(root, query, cb);
+        DossierSpecifications.withFilters(new FiltresDossiers(null, null, "Douala", null, null, null, null, null, null, null, null), null).toPredicate(root, query, cb);
 
         verify(cb).like(any(Expression.class), anyString());
         verify(cb, times(1)).and(any(Predicate.class), any(Predicate.class));
@@ -94,7 +93,7 @@ class DossierSpecificationsTest {
 
     @Test
     void troisFiltresCombines_ajoutentTroisPredicats() {
-        DossierSpecifications.withFilters("Assignation", CategorieDossier.EXPLOITATION_LITIGES, "Douala", null, null, null, null, null, null, null, null, null)
+        DossierSpecifications.withFilters(new FiltresDossiers("Assignation", CategorieDossier.EXPLOITATION_LITIGES, "Douala", null, null, null, null, null, null, null, null), null)
                 .toPredicate(root, query, cb);
 
         verify(cb, times(3)).and(any(Predicate.class), any(Predicate.class));
@@ -102,10 +101,10 @@ class DossierSpecificationsTest {
 
     @Test
     void laReferenceEstRechercheeEnPartiel() {
-        DossierSpecifications.withFilters(null, null, null, "DOS-2026", null, null, null, null, null, null, null, null)
+        DossierSpecifications.withFilters(new FiltresDossiers(null, null, null, "DOS-2026", null, null, null, null, null, null, null), null)
                 .toPredicate(root, query, cb);
 
-        // Une référence se retient rarement en entier : `like` et non `equal`.
+        // A reference is rarely remembered in full: `like`, not `equal`.
         verify(cb).like(any(Expression.class), eq("%dos-2026%"));
     }
 
@@ -113,20 +112,19 @@ class DossierSpecificationsTest {
     void leClientEstFiltreSurSonIdentifiant() {
         when(chemin.get(anyString())).thenReturn(chemin);
 
-        DossierSpecifications.withFilters(null, null, null, null, 42L, null, null, null, null, null, null, null)
+        DossierSpecifications.withFilters(new FiltresDossiers(null, null, null, null, 42L, null, null, null, null, null, null), null)
                 .toPredicate(root, query, cb);
 
         verify(cb).equal(any(Expression.class), eq(42L));
     }
 
     /**
-     * Q-101 — le filtre demandé par le porteur du projet. `estSensible` est un booléen : le tester
-     * vérifie surtout qu'il n'est **pas** confondu avec « non renseigné », faute de quoi filtrer sur
-     * les dossiers non sensibles renverrait tout.
+     * `estSensible` is a boolean: the test mainly checks it is **not** confused with "not set", otherwise
+     * filtering on non-sensitive cases would return everything.
      */
     @Test
     void laSensibiliteEstFiltreeSurSaValeurBooleenne() {
-        DossierSpecifications.withFilters(null, null, null, null, null, null, Boolean.TRUE, null, null, null, null, null)
+        DossierSpecifications.withFilters(new FiltresDossiers(null, null, null, null, null, Boolean.TRUE, null, null, null, null, null), null)
                 .toPredicate(root, query, cb);
 
         verify(cb).equal(any(Expression.class), eq(Boolean.TRUE));
@@ -134,16 +132,16 @@ class DossierSpecificationsTest {
 
     @Test
     void unFiltreSensibiliteFauxNEstPasConfonduAvecAbsent() {
-        DossierSpecifications.withFilters(null, null, null, null, null, null, Boolean.FALSE, null, null, null, null, null)
+        DossierSpecifications.withFilters(new FiltresDossiers(null, null, null, null, null, Boolean.FALSE, null, null, null, null, null), null)
                 .toPredicate(root, query, cb);
 
         verify(cb).equal(any(Expression.class), eq(Boolean.FALSE));
     }
 
-    /** `EN_ATTENTE` est la file des sensibilités à valider du DJ et de la DJA (moitié de QF-08). */
+    /** `EN_ATTENTE` is the queue of sensitivity flags awaiting DJ/DJA validation. */
     @Test
     void leStatutDeSensibiliteEstFiltre() {
-        DossierSpecifications.withFilters(null, null, null, null, null, null, null, StatutValidation.EN_ATTENTE, null, null, null, null)
+        DossierSpecifications.withFilters(new FiltresDossiers(null, null, null, null, null, null, StatutValidation.EN_ATTENTE, null, null, null, null), null)
                 .toPredicate(root, query, cb);
 
         verify(cb).equal(any(Expression.class), eq(StatutValidation.EN_ATTENTE));
@@ -151,7 +149,7 @@ class DossierSpecificationsTest {
 
     @Test
     void aucunFiltreDeSensibiliteNAjouteRien() {
-        DossierSpecifications.withFilters(null, null, null, null, null, null, null, null, null, null, null, null)
+        DossierSpecifications.withFilters(new FiltresDossiers(null, null, null, null, null, null, null, null, null, null, null), null)
                 .toPredicate(root, query, cb);
 
         verify(cb, never()).equal(any(Expression.class), any(Boolean.class));
@@ -159,7 +157,7 @@ class DossierSpecificationsTest {
 
     @Test
     void unFiltreReferenceVideNAjouteRien() {
-        DossierSpecifications.withFilters(null, null, null, "  ", null, null, null, null, null, null, null, null)
+        DossierSpecifications.withFilters(new FiltresDossiers(null, null, null, "  ", null, null, null, null, null, null, null), null)
                 .toPredicate(root, query, cb);
 
         verify(cb, never()).like(any(Expression.class), anyString());

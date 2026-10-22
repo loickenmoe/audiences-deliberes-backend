@@ -23,9 +23,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Notification Engine, étape 2 : la migration V27 est appliquée par Flyway sur un PostgreSQL réel,
- * l'entité est validée par Hibernate ({@code ddl-auto=validate}), et les contraintes qui protègent
- * la file tiennent aussi quand on écrit sans passer par l'entité.
+ * Notification Engine step 2: migration V27 is applied by Flyway on a real PostgreSQL, the entity is
+ * validated by Hibernate ({@code ddl-auto=validate}), and the queue constraints hold even when writing
+ * without the entity.
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -33,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class NotificationEnvoiRepositoryIntegrationTest {
 
     @Container
-    static PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17")
+    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17")
             .withDatabaseName("audiences_notification")
             .withUsername("test")
             .withPassword("test");
@@ -88,8 +88,9 @@ class NotificationEnvoiRepositoryIntegrationTest {
     void un_eventId_deja_present_est_refuse_par_la_base() {
         repository.saveAndFlush(NotificationEnvoi.aRemettre(origine("alerte-4"), CanalEngine.EMAIL, "a@b.cm", "s", "x"));
 
+        var aRemettre = NotificationEnvoi.aRemettre(origine("alerte-4"), CanalEngine.EMAIL, "c@d.cm", "s", "y");
         assertThatThrownBy(() -> repository.saveAndFlush(
-                NotificationEnvoi.aRemettre(origine("alerte-4"), CanalEngine.EMAIL, "c@d.cm", "s", "y")))
+                aRemettre))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
@@ -102,7 +103,7 @@ class NotificationEnvoiRepositoryIntegrationTest {
                 .hasMessageContaining("chk_notification_envoi_joignable");
     }
 
-    // Un test par contrainte : après un refus, PostgreSQL rejette toute la suite de la transaction.
+    // One test per constraint: after a refusal, PostgreSQL rejects the rest of the transaction.
     @Test
     void la_base_refuse_un_canal_inconnu() {
         assertThatThrownBy(() -> jdbc.update("INSERT INTO notification_envoi "

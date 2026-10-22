@@ -30,12 +30,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Les deux conditions d'archivage (métier, 2026-09-29) : l'issue définitive enregistrée, les frais
- * soldés.
+ * The two archiving conditions: final outcome recorded, fees settled.
  *
- * <p>Elles vivent dans deux modules différents — {@code decision} et {@code frais} — mais portent
- * sur le même passage, et c'est ensemble qu'elles doivent parler. Elles sont donc éprouvées ici,
- * côté {@code dossier}, là où elles se rejoignent.
+ * <p>They live in the {@code decision} and {@code frais} modules but apply to the same transition,
+ * so they are tested together here, on the {@code dossier} side.
  */
 @ExtendWith(MockitoExtension.class)
 class ConditionsArchivageTest {
@@ -61,7 +59,6 @@ class ConditionsArchivageTest {
         return EtapeProcedure.builder().id(id).type(type).statutCycleVie(statut).dossier(dossier).build();
     }
 
-    /** Les étapes que le dossier porte, celle qu'on archive comprise. */
     private void dossierPorte(EtapeProcedure... etapes) {
         lenient().when(etapeProcedureRepository.findByDossierIdOrderByTypeAsc(4L)).thenReturn(List.of(etapes));
     }
@@ -95,8 +92,6 @@ class ConditionsArchivageTest {
         }
     }
 
-    // ------------------------------------------------------------------ L'issue définitive
-
     @Test
     void sans_decision_definitive_l_archivage_est_refuse() {
         when(decisionDefinitiveRepository.existsByEtapeId(21L)).thenReturn(false);
@@ -114,12 +109,9 @@ class ConditionsArchivageTest {
         assertThat(decisionRequise.empechement(etape)).isEmpty();
     }
 
-    // ------------------------------------------------------------------ Les frais, et la dernière étape
-
     /**
-     * Le cas soulevé par le métier : un dossier porte plusieurs avocats, donc un flux continu de
-     * demandes. Tant qu'une autre étape vit, la première instance se classe — la facture en cours
-     * appartient vraisemblablement à l'appel, et celui qui archive n'a pas la main dessus.
+     * A case with several lawyers has a continuous flow of fee requests. While another step is alive,
+     * the first instance can be archived: the pending invoice likely belongs to the appeal.
      */
     @Test
     void une_etape_ancienne_se_classe_meme_avec_des_frais_en_cours_ailleurs() {
@@ -127,7 +119,7 @@ class ConditionsArchivageTest {
         demandesEnCours(demande("FAC-001", "Me Ndjock"));
 
         assertThat(fraisSoldes.empechement(etape)).isEmpty();
-        // La question des frais n'est même pas posée : inutile d'interroger ce qu'on n'opposera pas.
+        // The fees question is not even asked: no point querying what will not be enforced.
         verify(demandeFraisRepository, never()).findByDossierIdAndStatutCircuitNotIn(anyLong(), anyList());
     }
 
@@ -151,7 +143,7 @@ class ConditionsArchivageTest {
         assertThat(fraisSoldes.empechement(etape)).isPresent();
     }
 
-    /** Le refus nomme les demandes : celui qui archive doit savoir auprès de qui aller. */
+    /** The refusal names the requests: the archiver must know whom to contact. */
     @Test
     void le_refus_nomme_les_demandes_et_leurs_avocats() {
         dossierPorte(etape);
@@ -165,7 +157,7 @@ class ConditionsArchivageTest {
                         .contains("soldez-les"));
     }
 
-    /** Sans référence de facture, l'avocat suffit à retrouver la demande. */
+    /** Without an invoice reference, the lawyer is enough to identify the request. */
     @Test
     void une_demande_sans_facture_est_designee_par_son_avocat() {
         dossierPorte(etape);
@@ -175,7 +167,7 @@ class ConditionsArchivageTest {
                 .hasValueSatisfying(motif -> assertThat(motif).contains("(Me Ndjock)"));
     }
 
-    /** Au-delà de trois, la liste cesse d'aider : le reste est compté. */
+    /** Beyond three, the list stops helping: the rest is counted. */
     @Test
     void au_dela_de_trois_demandes_le_reste_est_compte() {
         dossierPorte(etape);
@@ -189,7 +181,7 @@ class ConditionsArchivageTest {
                         .contains("et 2 autre(s)"));
     }
 
-    /** Soldée veut dire payée **ou** rejetée : ce sont les deux fins du circuit. */
+    /** Settled means paid **or** rejected: the two ends of the workflow. */
     @Test
     void seules_les_demandes_payees_ou_rejetees_sont_soldees() {
         dossierPorte(etape);
@@ -208,8 +200,6 @@ class ConditionsArchivageTest {
 
         assertThat(fraisSoldes.empechement(etape)).isEmpty();
     }
-
-    // ------------------------------------------------------------------ Ensemble
 
     @Test
     void les_deux_manques_se_disent_ensemble() {

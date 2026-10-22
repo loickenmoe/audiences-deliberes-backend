@@ -21,20 +21,19 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Mapping manuel (pas MapStruct) : {@link Publication} est une hiérarchie {@code JOINED} dont les
- * champs propres à chaque sous-type ({@link CompteRenduAudience}/{@link AutrePublication}) doivent
- * être aplatis conditionnellement dans {@link PublicationResponse} — plus direct qu'un mapper
- * déclaratif ici.
+ * Hand-written mapping (not MapStruct): {@link Publication} is a {@code JOINED} hierarchy whose
+ * subtype-specific fields ({@link CompteRenduAudience}/{@link AutrePublication}) must be flattened
+ * conditionally into {@link PublicationResponse}.
  */
 @Component
 public class PublicationMapper {
 
-    /** Forme de liste (#59) : ni URL de fichier, ni commentaires, ni correspondance (Q-86). */
+    /** List form: no file URL, comments or correspondence. */
     public PublicationResponse toResponse(Publication publication) {
         return toResponse(publication, null, null, null);
     }
 
-    /** Forme de détail (#32, Q-86) : URL pré-signée du fichier, commentaires et correspondance. */
+    /** Detail form: presigned file URL, comments and correspondence. */
     public PublicationResponse toResponse(Publication publication, String urlTelechargement,
                                           List<CommentaireResponse> commentaires, CorrespondanceResponse correspondance) {
         Long audienceId = null;
@@ -49,7 +48,7 @@ public class PublicationMapper {
                 audienceDate = cr.getAudience().getDatePlanifiee();
             }
             contenu = cr.getContenu();
-            // Q-98 : la pièce jointe se lit comme celle d'une autre publication — même nom, même URL.
+            // The attachment is read like that of an other publication: same name, same URL.
             nomFichier = nomFichier(cr.getCheminStockage());
         } else if (publication instanceof AutrePublication autre) {
             typeDocument = autre.getTypeDocument();
@@ -82,12 +81,11 @@ public class PublicationMapper {
     }
 
     /**
-     * Une correspondance, telle qu'elle se lit de part et d'autre (QF-58).
+     * A correspondence, as read on both sides.
      *
-     * <p>Elle vit ici, et non dans un service, parce que <b>deux</b> appelants la lisent depuis
-     * QF-58 : le juriste sur le détail d'une publication, et l'avocat sur son portail. Écrite deux
-     * fois, elle aurait divergé au premier champ ajouté - la signature de l'auteur, par exemple,
-     * manquerait d'un côté et pas de l'autre.
+     * <p>Lives here rather than in a service because <b>two</b> callers read it: the legal officer on a
+     * publication's detail, and the lawyer on their portal. Written twice, it would diverge at the
+     * first added field.
      */
     public static CorrespondanceResponse versReponse(Long publicationId, CorrespondanceAvocat correspondance) {
         Utilisateur auteur = correspondance.getAuteur();
@@ -105,7 +103,7 @@ public class PublicationMapper {
                 .collect(Collectors.joining(" "));
     }
 
-    /** Clé {@code dossiers/{id}/{uuid}-{nom}} de {@code MinioStorageService} → nom d'origine du fichier. */
+    /** {@code MinioStorageService} key {@code dossiers/{id}/{uuid}-{nom}} to the original file name. */
     static String nomFichier(String cle) {
         if (cle == null) {
             return null;

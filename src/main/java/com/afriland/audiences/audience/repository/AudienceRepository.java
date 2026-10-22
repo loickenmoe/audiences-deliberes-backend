@@ -19,60 +19,51 @@ import java.util.List;
 public interface AudienceRepository extends JpaRepository<Audience, Long> {
 
     /**
-     * RG-AUD-06 : doublon d'audience. Appelé avec {@code ANNULEE} (Q-76) — une audience annulée ne
-     * compte pas : replanifier à la même date après un renvoi n'est pas un doublon.
+     * RG-AUD-06: duplicate hearing check. Called with {@code ANNULEE}: a cancelled hearing does not
+     * count, so rescheduling on the same date after an adjournment is not a duplicate.
      */
     boolean existsByEtapeIdAndDatePlanifieeAndStatutNot(Long etapeId, LocalDate datePlanifiee, StatutAudience statut);
 
-    /** Conditions de mise en délibéré (2026-09-29) : une audience tenue est exigée sur l étape. */
+    /** Deliberation preconditions: a held hearing is required on the step. */
     boolean existsByEtapeIdAndStatut(Long etapeId, StatutAudience statut);
 
-    /** Conditions de mise en délibéré : aucune audience ne doit rester en attente sur l étape. */
+    /** Deliberation preconditions: no hearing may remain pending on the step. */
     long countByEtapeIdAndStatut(Long etapeId, StatutAudience statut);
 
-    /** FR-AUD-05 : calendrier et exports. Appelé avec {@code ANNULEE} (Q-76) : ils l'écartent. */
+    /**
+     * FR-AUD-05: calendar and exports. Called with {@code ANNULEE} to exclude cancelled hearings.
+     */
     List<Audience> findByDatePlanifieeBetweenAndStatutNot(LocalDate debut, LocalDate fin, StatutAudience statut);
 
-    /** RG-AUD-03 (rappels J-7/J-3/J-1) : audiences encore planifiées à une date donnée. */
+    /** RG-AUD-03 (J-7/J-3/J-1 reminders): hearings still scheduled on a given date. */
     List<Audience> findByStatutAndDatePlanifiee(StatutAudience statut, LocalDate datePlanifiee);
 
     /**
-     * RG-INT-11 : les audiences dont la date est passée, hors annulées — une audience annulée
-     * ne s'est pas tenue, elle n'a donc aucun compte rendu à attendre.
-     *
-     * <p>Le statut n'est volontairement PAS restreint à {@code TENUE} : c'est le juriste qui
-     * marque une audience tenue en saisissant son propre compte rendu, et faire dépendre la
-     * relance de l'avocat d'un geste interne la retarderait d'autant. L'avocat, lui, était à
-     * l'audience.
+     * RG-INT-11: hearings whose date has passed, cancelled ones excluded (no report to expect).
+     * <p>The status is deliberately NOT restricted to {@code TENUE}: the in-house lawyer marks a
+     * hearing held when entering their own report, and the lawyer's reminder must not wait for that
+     * internal step.
      */
     List<Audience> findByDatePlanifieeBeforeAndStatutNot(LocalDate date, StatutAudience statut);
 
-    /**
-     * Les audiences d'un jour donné, annulées exclues : le journal des audiences (écran 44).
-     *
-     * <p>Paginé comme les autres listes du système : une juridiction chargée aligne les audiences,
-     * et rien ne garantit qu'une journée en compte dix plutôt que cent.
-     */
+    /** Hearings of a given day, cancelled ones excluded: the hearing log (screen 44). Paginated. */
     Page<Audience> findByDatePlanifieeAndStatutNot(LocalDate datePlanifiee, StatutAudience statut, Pageable pageable);
 
     /**
-     * Les audiences d'une fenêtre restées au statut demandé.
-     *
-     * <p>Sert à lister les comptes rendus attendus : une audience dont la date est passée et qui est
-     * encore `PLANIFIEE` est, <b>par construction</b>, une audience dont le compte rendu n'a pas été
-     * saisi — c'est la saisie qui la fait passer à `TENUE`. Aucune colonne supplémentaire n'est
-     * nécessaire pour connaître les manquements.
+     * Hearings of a window still in the requested status.
+     * <p>Used to list expected reports: a past hearing still {@code PLANIFIEE} has, <b>by
+     * construction</b>, no report yet, since entering the report moves it to {@code TENUE}.
      */
     Page<Audience> findByStatutAndDatePlanifieeBetween(
             StatutAudience statut, LocalDate debut, LocalDate fin, Pageable pageable);
 
-    /** FR-REP-02 (tableau de bord, M13) : audiences encore à venir, tous dossiers confondus. */
+    /** FR-REP-02 (dashboard): upcoming hearings, all cases. */
     @Query("SELECT COUNT(a) FROM Audience a "
             + "WHERE a.statut = :statut AND a.dossier.categorie IN :categories")
     long compterParStatut(@Param("statut") StatutAudience statut,
                           @Param("categories") List<CategorieDossier> categories);
 
-    /** Les audiences que {@link #countByStatut} compte (Q-137) - la plus proche d'abord. */
+    /** The hearings counted by {@link #countByStatut}, nearest first. */
     @Query("SELECT a FROM Audience a "
             + "WHERE a.statut = :statut AND a.dossier.categorie IN :categories "
             + "ORDER BY a.datePlanifiee ASC")
@@ -80,10 +71,10 @@ public interface AudienceRepository extends JpaRepository<Audience, Long> {
                                    @Param("categories") List<CategorieDossier> categories,
                                    Pageable pageable);
 
-    /** FR-REP-01 (rapport périodique, M13) : audiences tenues dans la période. */
+    /** FR-REP-01 (periodic report): hearings held in the period. */
     long countByStatutAndDateTenueBetween(StatutAudience statut, LocalDate debut, LocalDate fin);
 
-    /** FR-REP-01, recadré par catégorie (Q-138). */
+    /** FR-REP-01, restricted by category. */
     @Query("SELECT COUNT(a) FROM Audience a WHERE a.statut = :statut "
             + "AND a.dateTenue BETWEEN :debut AND :fin AND a.dossier.categorie IN :categories")
     long compterTenuesEntre(@Param("statut") StatutAudience statut,
@@ -91,6 +82,6 @@ public interface AudienceRepository extends JpaRepository<Audience, Long> {
                             @Param("fin") LocalDate fin,
                             @Param("categories") List<CategorieDossier> categories);
 
-    /** M15 : onglet « Audiences » de la fiche dossier (Q-68), plus récente d'abord. */
+    /** "Hearings" tab of the case page, most recent first. */
     Page<Audience> findByDossierIdOrderByDatePlanifieeDesc(Long dossierId, Pageable pageable);
 }

@@ -1,6 +1,5 @@
 package com.afriland.audiences.referentiel.repository;
 
-import com.afriland.audiences.referentiel.domain.Avocat;
 import com.afriland.audiences.referentiel.domain.Intervenant;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -9,21 +8,19 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-/** Résolution polymorphe d'un prestataire (avocat ou autre) — {@code demande_constitution.prestataire_id} (RG-INT-08, M9). */
+/** Polymorphic resolution of a provider (lawyer or other) for {@code demande_constitution.prestataire_id} (RG-INT-08). */
 @Repository
 public interface IntervenantRepository extends JpaRepository<Intervenant, Long> {
 
     /**
-     * Les avocats seuls, ou tous les autres prestataires (Q-100).
+     * Lawyers only, or all other providers.
      *
-     * <p>Le filtre s'exprime sur le **type de l'entité**, que la hiérarchie {@code JOINED} matérialise
-     * par le discriminant {@code intervenant.type} : il part donc en SQL, avec la pagination. Le
-     * précédent code chargeait tout l'annuaire pour le filtrer en mémoire — sans conséquence à
-     * l'échelle actuelle, mais c'est précisément ce que la pagination doit cesser de faire.
+     * <p>The filter applies to the <b>entity type</b>, materialised by the {@code JOINED} hierarchy
+     * discriminator {@code intervenant.type}, so it runs in SQL along with pagination.
      *
-     * <p>⚠ {@code nom} arrive **déjà en minuscules et encadré de `%`** : voir
-     * {@code DemandeFraisRepository.rechercher} pour la raison — {@code LOWER()} sur un paramètre nul
-     * échoue sur PostgreSQL.
+     * <p>{@code nom} arrives <b>already lower-cased and wrapped in `%`</b>: see
+     * {@code DemandeFraisRepository.rechercher} for the reason ({@code LOWER()} on a null parameter
+     * fails on PostgreSQL).
      */
     @Query("SELECT i FROM Intervenant i WHERE (:avocatsSeuls IS NULL "
             + "OR (:avocatsSeuls = TRUE AND TYPE(i) = Avocat) "

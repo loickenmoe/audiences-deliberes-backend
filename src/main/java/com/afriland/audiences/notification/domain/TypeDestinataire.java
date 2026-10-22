@@ -1,8 +1,8 @@
 package com.afriland.audiences.notification.domain;
 
 /**
- * Nature du destinataire, qui dit à quelle table renvoie {@code destinataire_ref} : {@code utilisateur}
- * pour un utilisateur interne, {@code intervenant} pour un avocat ou un autre prestataire.
+ * Recipient kind, telling which table {@code destinataire_ref} points to: {@code utilisateur} for an
+ * internal user, {@code intervenant} for a lawyer or another external provider.
  */
 public enum TypeDestinataire {
     UTILISATEUR,

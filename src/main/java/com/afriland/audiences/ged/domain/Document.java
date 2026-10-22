@@ -25,14 +25,12 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * Document chargé dans la GED (RG-GED-02/04/06/08), stocké dans MinIO — {@code cheminStockage}
- * porte la clé d'objet (Q-07). Le module {@code ged} dépend de {@code dossier} (cf.
- * FUNCTIONAL_MAP.md §6), une {@code @ManyToOne} directe est donc légitime, même principe que
- * {@code audience}/{@code delibere}.
+ * Document uploaded to the GED (RG-GED-02/04/06/08) and stored in MinIO; {@code cheminStockage}
+ * holds the object key. The {@code ged} module depends on {@code dossier}, so a direct
+ * {@code @ManyToOne} is legitimate.
  * <p>
- * {@code typeDocument} reste un texte libre (RG-GED n'expose aucune taxonomie dédiée, contrairement
- * à {@code autre_publication.type_document} qui, lui, est fermé à {PIECE, DECISION, CONCLUSION} —
- * cf. dictionnaire des données §2.3.1/§2.4.2, à ne pas confondre).
+ * {@code typeDocument} is free text (RG-GED defines no taxonomy), unlike
+ * {@code autre_publication.type_document}, which is restricted to {PIECE, DECISION, CONCLUSION}.
  */
 @Getter
 @Setter
@@ -88,9 +86,9 @@ public class Document {
     private String cheminStockage;
 
     /**
-     * Le partage avec l'avocat du dossier (QF-64). {@code NON} par défaut : la GED contient le
-     * dossier crédit d'origine, le PV de transfert et des pièces financières du client - du secret
-     * bancaire. Une pièce ne part chez l'avocat que si quelqu'un l'a décidé.
+     * Sharing with the case file's lawyer. Defaults to {@code NON}: the GED holds the original credit
+     * file, the transfer report and the client's financial documents, all covered by banking secrecy.
+     * A document only reaches the lawyer if someone decided so.
      */
     @NotNull
     @Builder.Default
@@ -98,7 +96,7 @@ public class Document {
     @Column(name = "partage_avocat", length = 20, nullable = false)
     private StatutPartageAvocat partageAvocat = StatutPartageAvocat.NON;
 
-    /** Qui a partagé la pièce, ou proposé de la partager sur un dossier sensible. */
+    /** Who shared the document, or proposed sharing it on a sensitive case file. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "partage_par")
     private Utilisateur partagePar;
@@ -106,7 +104,7 @@ public class Document {
     @Column(name = "partage_le")
     private LocalDateTime partageLe;
 
-    /** Le DJ ou la DJA qui a rendu la pièce visible sur un dossier sensible. */
+    /** The DJ or DJA who made the document visible on a sensitive case file. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "partage_valide_par")
     private Utilisateur partageValidePar;

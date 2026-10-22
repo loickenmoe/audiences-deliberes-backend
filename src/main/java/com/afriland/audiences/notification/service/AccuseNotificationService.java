@@ -14,18 +14,16 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 
 /**
- * Enregistre les accusés du Notification Engine (topics {@code notification-sent} et
- * {@code notification-failed}), quelle que soit la voie par laquelle ils arrivent.
- * <p>
- * <b>Deux garde-fous imposés par le contrat du moteur.</b>
+ * Records Notification Engine receipts ({@code notification-sent} and {@code notification-failed}),
+ * whatever path they arrive through.
  * <ul>
- *   <li><b>Filtrage par service</b> : les topics portent les accusés de tous les services de la
- *       banque. On ne retient que les nôtres, sur le {@code serviceId}.</li>
- *   <li><b>Livraison au moins une fois</b> : le même accusé peut arriver deux fois. On l'ignore
- *       silencieusement à la seconde, grâce à l'unicité (notificationId, type).</li>
+ *   <li><b>Service filtering</b>: the topics carry receipts of all bank services; only ours are kept,
+ *       by {@code serviceId}.</li>
+ *   <li><b>At-least-once delivery</b>: a duplicate receipt is silently ignored thanks to the
+ *       (notificationId, type) uniqueness.</li>
  * </ul>
- * <b>Ce que l'accusé ne dit pas</b> : à quelle ligne de notre file il correspond (Q-120). Il est donc
- * enregistré tel quel, sans rattachement, et sert la mesure par canal et par fournisseur.
+ * A receipt does not identify our queue row, so it is stored unlinked and used for per-channel and
+ * per-provider metrics.
  */
 @Slf4j
 @Service
@@ -37,7 +35,7 @@ public class AccuseNotificationService {
     private final NotificationEngineProperties proprietes;
 
     /**
-     * @return {@code true} si l'accusé nous concernait et a été enregistré
+     * @return {@code true} if the receipt concerned us and was recorded
      */
     @Transactional
     public boolean enregistrer(AccuseEngine accuse, TypeAccuse type) {
@@ -49,13 +47,13 @@ public class AccuseNotificationService {
             return false;
         }
         if (notificationAccuseRepository.existsByNotificationIdAndType(accuse.notificationId(), type)) {
-            // Livraison au moins une fois : le doublon est normal, pas une anomalie.
+            // At-least-once delivery: a duplicate is expected, not an anomaly.
             log.debug("Accusé {} déjà enregistré pour {}", type, accuse.notificationId());
             return false;
         }
         NotificationAccuse enregistre = notificationAccuseRepository.save(NotificationAccuse.de(
-                accuse.notificationId(), type, accuse.serviceId(), accuse.channel(), accuse.provider(),
-                accuse.errorMessage(), accuse.permanent(), accuse.instant()));
+                        accuse.notificationId(), type, accuse.serviceId(), accuse.instant())
+                .avecDetails(accuse.channel(), accuse.provider(), accuse.errorMessage(), accuse.permanent()));
 
         if (type == TypeAccuse.FAILED) {
             log.warn("Le moteur signale un échec sur le canal {} (fournisseur {}) : {}",
@@ -66,9 +64,8 @@ public class AccuseNotificationService {
     }
 
     /**
-     * Rattache l'accusé à sa ligne d'envoi <b>si le moteur nous en donne le moyen</b> : aujourd'hui,
-     * il ne renvoie pas l'{@code eventId}. Le champ reste donc vide, et ce code s'activera de
-     * lui-même le jour où l'accusé le portera (Q-120).
+     * Links the receipt to its queue row <b>if the engine provides the means</b>. It currently does not
+     * return the {@code eventId}, so this takes effect only once receipts carry it.
      */
     private void rattacher(NotificationAccuse accuseEnregistre, AccuseEngine accuse) {
         if (accuse.eventId() == null || accuse.eventId().isBlank()) {
@@ -85,11 +82,10 @@ public class AccuseNotificationService {
     }
 
     /**
-     * Rappel reçu sur l'URL que nous avions transmise ({@code callbackUrl}) : la référence est connue,
-     * donc le rattachement est exact. C'est la seule voie qui l'autorise aujourd'hui (Q-120).
+     * Callback received on our {@code callbackUrl}: the reference is known, so the link is exact.
      * <p>
-     * L'issue se lit sur le corps du rappel quand il en porte une ; le Guide n'en fixe pas la forme,
-     * aussi l'absence d'erreur vaut succès — c'est ce qu'il décrit : « le statut (succès/échec) ».
+     * The outcome is read from the callback body when present; the Guide does not define its shape,
+     * so the absence of an error counts as success.
      */
     @Transactional
     public void enregistrerRappel(String eventId, AccuseEngine accuse) {
@@ -109,23 +105,25 @@ public class AccuseNotificationService {
     }
 
     private void enregistrerSiNouveau(AccuseEngine accuse, TypeAccuse type, String eventId, Long envoiId) {
-        // Sans identifiant du moteur, la référence tient lieu de clé : le rappel reste idempotent.
+        // Without an engine id, the reference acts as the key so the callback stays idempotent.
         String notificationId = accuse != null && accuse.notificationId() != null ? accuse.notificationId() : eventId;
         if (notificationAccuseRepository.existsByNotificationIdAndType(notificationId, type)) {
             return;
         }
-        NotificationAccuse enregistre = notificationAccuseRepository.save(NotificationAccuse.de(notificationId, type,
-                proprietes.codeService(), accuse == null ? null : accuse.channel(), accuse == null ? null : accuse.provider(),
-                accuse == null ? null : accuse.errorMessage(), accuse == null ? null : accuse.permanent(),
-                accuse == null ? LocalDateTime.now() : accuse.instant()));
+        NotificationAccuse nouveau = NotificationAccuse.de(notificationId, type, proprietes.codeService(),
+                accuse == null ? LocalDateTime.now() : accuse.instant());
+        if (accuse != null) {
+            nouveau.avecDetails(accuse.channel(), accuse.provider(), accuse.errorMessage(), accuse.permanent());
+        }
+        NotificationAccuse enregistre = notificationAccuseRepository.save(nouveau);
         enregistre.rattacherA(envoiId);
     }
 
-    /** Les topics sont partagés par tous les services de la banque (Guide V1 §8). */
+    /** The topics are shared by all bank services (Guide V1 §8). */
     private boolean nousConcerne(AccuseEngine accuse) {
         String notre = proprietes.codeService();
         if (notre == null || notre.isBlank() || accuse.serviceId() == null) {
-            // Sans code de service configuré, on ne peut rien affirmer : on n'enregistre pas.
+            // Without a configured service code nothing can be asserted, so nothing is recorded.
             return false;
         }
         return notre.equals(accuse.serviceId());

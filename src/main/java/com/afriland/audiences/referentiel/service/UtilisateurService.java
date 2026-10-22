@@ -11,17 +11,15 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * M15 (Q-69) — lecture du référentiel des utilisateurs internes.
+ * Read access to the internal users reference list.
  * <p>
- * Sans elle, {@code POST /dossiers} était inutilisable depuis une interface : son champ
- * {@code juristesAffectes} est obligatoire ({@code @NotEmpty}) et attend des {@code utilisateur.id},
- * qu'aucun endpoint ne permettait d'obtenir. Pendant de {@code GET /intervenants} pour le personnel
- * interne.
+ * Needed by {@code POST /dossiers}, whose mandatory {@code juristesAffectes} field expects
+ * {@code utilisateur.id} values. Counterpart of {@code GET /intervenants} for internal staff.
  * <p>
- * <b>Lecture seule.</b> Les comptes naissent du provisionnement au premier appel authentifié
- * ({@link com.afriland.audiences.common.security.UtilisateurProvisioningService}) à partir de
- * Keycloak, qui reste la source de vérité des identités (REF-05 §1.3) : ni création, ni
- * modification, ni désactivation ne sont exposées ici.
+ * <b>Read-only.</b> Accounts are created by provisioning on the first authenticated call
+ * ({@link com.afriland.audiences.common.security.UtilisateurProvisioningService}) from Keycloak,
+ * which remains the source of truth for identities (REF-05 §1.3): no creation, update or
+ * deactivation is exposed here.
  */
 @Service
 @RequiredArgsConstructor
@@ -30,11 +28,11 @@ public class UtilisateurService {
     private final UtilisateurRepository utilisateurRepository;
 
     /**
-     * Liste les utilisateurs, filtrable par code de profil (« JURISTE », « DJ »…).
+     * Lists users, filterable by profile code ("JURISTE", "DJ"...).
      *
-     * @param profil code de profil, ou {@code null} pour tous les profils
-     * @param inclureInactifs {@code true} pour inclure les comptes désactivés — par défaut la
-     *        liste ne sert que des comptes actifs, seuls affectables à un dossier
+     * @param profil profile code, or {@code null} for all profiles
+     * @param inclureInactifs {@code true} to include deactivated accounts; by default only active
+     *        accounts, the only ones assignable to a case file, are listed
      */
     @Transactional(readOnly = true)
     public List<UtilisateurResponse> lister(String profil, boolean inclureInactifs) {

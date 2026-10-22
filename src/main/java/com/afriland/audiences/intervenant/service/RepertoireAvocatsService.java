@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
-/** FR-INT-08/US 5.8 (RG-INT-01) — cf. FUNCTIONAL_MAP.md §5, API_IMPLEMENTATION_STATUS.md §7. */
+/** Lawyer directory (FR-INT-08, US 5.8, RG-INT-01). */
 @Service
 @RequiredArgsConstructor
 public class RepertoireAvocatsService {
@@ -30,14 +30,9 @@ public class RepertoireAvocatsService {
     private final DelibereRepository delibereRepository;
 
     /**
-     * Paginé depuis Q-100, mais **la découpe reste en mémoire**, et il faut le dire.
-     *
-     * <p>US 5.8 classe le répertoire par charge croissante. Or la charge n'est pas une colonne : elle
-     * vient d'un comptage agrégé, joint en Java. Aucun {@code ORDER BY} SQL ne peut donc produire cet
-     * ordre, et la base ne peut pas découper ce qu'elle ne sait pas trier. La pagination réduit ici ce
-     * qui **voyage** jusqu'au navigateur, pas ce que la base lit. C'est un gain réel — dix lignes au
-     * lieu de tout le répertoire — mais partiel, et le jour où le répertoire deviendrait volumineux,
-     * la vraie réponse serait de calculer la charge en SQL pour trier et paginer côté base.
+     * Paginated in memory. US 5.8 sorts by ascending workload, which is an aggregate joined in Java,
+     * so the database cannot sort or page it. Pagination only reduces what is sent to the browser;
+     * for a large directory, compute the workload in SQL and page in the database.
      */
     @Transactional(readOnly = true)
     public PageResponse<AvocatRepertoireResponse> lister(String nom, Pageable pageable) {
@@ -69,13 +64,8 @@ public class RepertoireAvocatsService {
                                                   Map<Long, DelibereRepository.PerformanceAvocat> performances) {
         long charge = charges.getOrDefault(avocat.getId(), 0L);
         DelibereRepository.PerformanceAvocat performance = performances.get(avocat.getId());
-        /*
-         * Les deux décomptes plutôt que le seul taux (métier, 2026-10-06, appliqué ici le
-         * 2026-10-07). Le taux reste renvoyé - la même requête le produit - mais il n'est plus ce
-         * que l'écran montre : « 3 sur 4 » dit ce que « 75 % » résumait, **et sur combien
-         * d'affaires**. Un taux de 100 % sur un délibéré unique ne vaut pas le même jugement qu'un
-         * taux de 70 % sur trente, et c'est pourtant le premier qui paraissait le meilleur.
-         */
+        // Both counts are returned alongside the rate: "3 out of 4" also tells how many cases the
+        // rate is based on. The rate is kept in the response but is no longer displayed.
         long favorables = performance == null ? 0L : performance.getFavorables();
         long total = performance == null ? 0L : performance.getTotal();
         double taux = total == 0 ? 0d : (double) favorables / total;

@@ -13,14 +13,9 @@ public interface LettreConstitutionRepository extends JpaRepository<LettreConsti
     boolean existsByNumero(Integer numero);
 
     /**
-     * Le numéro suivant, proposé par la séquence.
-     *
-     * <p>Une séquence et non {@code max(numero) + 1} : deux validations simultanées liraient le même
-     * maximum et se disputeraient le même numéro, que la contrainte d'unicité ferait alors échouer
-     * au hasard de l'ordonnancement. La séquence sert un numéro distinct à chacune.
-     *
-     * <p>Elle <b>propose</b> : le numéro reste modifiable, et c'est l'unicité en base qui garantit
-     * qu'on n'en serve pas deux fois le même.
+     * Next number proposed by the sequence. A sequence rather than {@code max(numero) + 1}, so that
+     * concurrent validations never read the same maximum. The number stays editable; the database
+     * uniqueness constraint is what prevents duplicates.
      */
     @Query(value = "SELECT nextval('lettre_constitution_numero_seq')", nativeQuery = true)
     long prochainNumero();

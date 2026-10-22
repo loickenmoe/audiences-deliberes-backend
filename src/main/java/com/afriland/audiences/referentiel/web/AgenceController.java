@@ -22,18 +22,16 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Le référentiel des agences (métier, 2026-10-03, observation 2).
+ * Branch reference list.
  *
- * <p><b>Lu par tous, tenu par la direction.</b> Tout porteur de la consultation interroge la liste
- * — elle alimente la liste déroulante du formulaire de création. Seuls le DJ et la DJA la
- * modifient, comme pour les paramètres système : un code d'agence engage les dossiers qui le
- * portent, et sa tenue n'est pas un geste de saisie.
+ * <p><b>Read by all, maintained by management.</b> Anyone with consultation rights can query the
+ * list, which feeds the creation form's drop-down. Only the DJ and DJA modify it: a branch code
+ * affects the case files that carry it.
  *
- * <p><b>Pas de suppression.</b> {@code DELETE} désactive, et
- * {@code PATCH /{id}/reactivation} rouvre. Un dossier ouvert sous une agence fermée reste un
- * dossier valide, et son code doit continuer de désigner quelque chose — l'audit pose des questions
- * des années après. La fermeture est donc réversible : une erreur de manipulation se corrige, et
- * une agence qui réouvre garde son code.
+ * <p><b>No deletion.</b> {@code DELETE} deactivates and {@code PATCH /{id}/reactivation} reopens.
+ * A case file opened under a closed branch remains valid and its code must keep designating
+ * something. Closing is reversible: a handling error can be fixed, and a reopened branch keeps its
+ * code.
  */
 @RestController
 @RequestMapping("${api.prefix}/referentiels/agences")
@@ -43,9 +41,9 @@ public class AgenceController {
     private final AgenceService agenceService;
 
     /**
-     * @param recherche       fragment cherché dans le code ou le nom, insensible à la casse
-     * @param actifSeulement  vrai par défaut : la saisie ne propose que les agences ouvertes.
-     *                        L'écran d'administration passe {@code false} pour tout voir.
+     * @param recherche       fragment searched in the code or name, case-insensitive
+     * @param actifSeulement  true by default: input only offers open branches.
+     *                        The admin screen passes {@code false} to see everything.
      */
     @GetMapping
     @PreAuthorize("hasRole('CONSULTATION')")
@@ -69,7 +67,7 @@ public class AgenceController {
         return agenceService.modifier(id, request);
     }
 
-    /** Désactive : l'agence quitte les listes de choix, les dossiers qui la citent restent intacts. */
+    /** Deactivates: the branch leaves selection lists; case files citing it stay intact. */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('DJ', 'DJA')")
     public AgenceResponse desactiver(@PathVariable Long id) {
@@ -77,11 +75,10 @@ public class AgenceController {
     }
 
     /**
-     * Réouvre une agence fermée : elle revient dans les listes de choix, avec son code d'origine.
+     * Reopens a closed branch: it returns to selection lists with its original code.
      *
-     * <p>{@code PATCH} et non {@code PUT} : on ne remplace pas l'agence, on change son seul état
-     * d'ouverture - même forme que {@code PATCH /audiences/{id}/annulation}. Une agence déjà
-     * ouverte est rendue telle quelle, sans refus : l'état demandé est atteint.
+     * <p>{@code PATCH} rather than {@code PUT}: only the open state changes (same form as
+     * {@code PATCH /audiences/{id}/annulation}). An already open branch is returned as is.
      */
     @PatchMapping("/{id}/reactivation")
     @PreAuthorize("hasAnyRole('DJ', 'DJA')")

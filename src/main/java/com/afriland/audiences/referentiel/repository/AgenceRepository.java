@@ -20,20 +20,14 @@ public interface AgenceRepository extends JpaRepository<Agence, Long> {
     boolean existsByCodeAndActifTrue(String code);
 
     /**
-     * Recherche au fil de la frappe, sur le <b>code</b> et sur le <b>nom</b>.
+     * Search-as-you-type on <b>code</b> and <b>name</b>.
      *
-     * <p>Le métier l'a décrite ainsi : « si on commence par entrer le nom d'une agence, l'app nous
-     * renvoie progressivement les agences avec ces noms ». Chercher aussi sur le code sert ceux qui
-     * le connaissent par cœur — pour un gestionnaire, taper {@code 00002} va plus vite que
-     * « Bonanjo ».
+     * <p>Partial and case-insensitive: {@code bona} finds Bonanjo, Bonabéri, Bonamoussadi and
+     * Bonapriso. {@code motif} arrives already wrapped in percent signs and <b>escaped by the
+     * service</b>, otherwise a percent typed by the user would return the whole list.
      *
-     * <p>Recherche <b>partielle et insensible à la casse</b>, comme la recherche jurisprudentielle
-     * (Q-89) : {@code bona} trouve Bonanjo, Bonabéri, Bonamoussadi et Bonapriso. Le {@code motif}
-     * arrive déjà encadré de pourcents et <b>échappé par le service</b> — sans quoi un pourcent
-     * saisi par l'utilisateur ramènerait tout le référentiel.
-     *
-     * <p>{@code actifSeulement} filtre ce qui se propose à la saisie ; l'écran d'administration,
-     * lui, demande tout, y compris les agences fermées.
+     * <p>{@code actifSeulement} filters what is offered for input; the admin screen requests
+     * everything, including closed branches.
      */
     @Query("""
             select a from Agence a

@@ -19,17 +19,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Point d'entrée unique des notifications adressées à un prestataire (NOTIFICATION_ENGINE_PLAN.md,
- * étape 7 et décision D19), avocat comme autre prestataire.
+ * Single entry point for notifications to a provider, lawyer or other. External channels need no
+ * application account: they target the contact details of the provider record.
  * <p>
- * <b>Ce que cela change.</b> Jusqu'ici, seul un avocat disposant d'un compte applicatif était
- * prévenu, et seulement dans l'application (Q-52) ; un notaire ou un huissier ne l'était jamais. Les
- * canaux externes ne demandent plus de compte : ils visent les coordonnées de la fiche.
- * <p>
- * <b>Appelé dans la transaction de l'action métier</b> (D12), au même endroit que l'alerte
- * applicative quand elle existe. Rien n'est envoyé ici : le dispatcher (étape 8) s'en charge.
- * Une notification ne doit jamais faire échouer l'action qui la provoque : le calcul est isolé, et
- * un événement déjà mis en file est ignoré plutôt que de heurter la contrainte d'unicité.
+ * <b>Called within the business action's transaction</b>, alongside the in-app alert when there is
+ * one. Nothing is sent here; the dispatcher does it. A notification must never fail the triggering
+ * action: computation is isolated, and an already queued event is skipped rather than hitting the
+ * unique constraint.
  */
 @Slf4j
 @Service
@@ -44,10 +40,10 @@ public class NotificationPrestataireService {
     private final NotificationEnvoiRepository notificationEnvoiRepository;
 
     /**
-     * Met en file les canaux externes prévus pour cet événement.
+     * Queues the external channels configured for this event.
      *
-     * @param referenceEvenement référence métier stable et unique de l'événement, par exemple
-     *                           {@code frais-12-rejet} : elle fonde la clé de déduplication
+     * @param referenceEvenement stable, unique business reference of the event, e.g.
+     *                           {@code frais-12-rejet}; it is the deduplication key
      */
     public void notifier(EvenementPrestataire evenement, Intervenant prestataire, Long dossierId,
                          String referenceEvenement) {
@@ -55,9 +51,8 @@ public class NotificationPrestataireService {
     }
 
     /**
-     * @param pieceJointe document de la GED à joindre, ou {@code null}. Il n'est attaché qu'au
-     *                    courriel (D5) : le Guide constate que WhatsApp et Teams la perdent en
-     *                    silence, et que le SMS ne la supporte pas.
+     * @param pieceJointe document to attach, or {@code null}. Only attached to e-mail: WhatsApp and
+     *                    Teams silently drop it and SMS does not support it.
      */
     public void notifier(EvenementPrestataire evenement, Intervenant prestataire, Long dossierId,
                          String referenceEvenement, PieceJointe pieceJointe) {
@@ -83,7 +78,7 @@ public class NotificationPrestataireService {
         if (prestataire == null) {
             return List.of();
         }
-        // Q-87 : un prestataire chargé paresseusement est un proxy ; on ne teste jamais « instanceof » sans ceci.
+        // A lazily loaded provider is a proxy; never test "instanceof" without unproxying it first.
         Intervenant reel = (Intervenant) Hibernate.unproxy(prestataire);
         List<Route> routes = routage.pourPrestataire(evenement, new RoutageNotification.CoordonneesPrestataire(
                 reel.getEmail(), reel.getTelephone(), reel.accepteNotificationsExternes()));
@@ -108,7 +103,7 @@ public class NotificationPrestataireService {
             } else {
                 envoi = NotificationEnvoi.nonJoignable(origine, route.canal(), route.motif().name());
             }
-            // Même événement rejoué (relance planifiée, avocat réaffecté) : on ne le remet pas en file.
+            // Same event replayed (scheduled reminder, lawyer reassigned): not queued again.
             if (notificationEnvoiRepository.existsByEventId(envoi.getEventId())) {
                 log.debug("Notification déjà en file, ignorée : {}", envoi.getEventId());
                 continue;
@@ -119,10 +114,9 @@ public class NotificationPrestataireService {
     }
 
     /**
-     * Document de la GED à joindre à une notification (D5).
+     * Document to attach to a notification.
      *
-     * @param chemin emplacement dans notre stockage, d'où le fichier sera lu pour être déposé chez
-     *               le moteur
+     * @param chemin location in our storage, from which the file is read to upload it to the engine
      */
     public record PieceJointe(Long documentId, String nom, String mime, String chemin) {
     }

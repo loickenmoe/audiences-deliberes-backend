@@ -1,17 +1,17 @@
 package com.afriland.audiences.ged.domain;
 
 /**
- * L'état du partage d'une pièce avec l'avocat du dossier (QF-64).
+ * Sharing state of a document with the case file's lawyer.
  *
- * <p>Une pièce n'est partagée avec <b>personne en particulier</b> : elle l'est avec les avocats
- * affectés au dossier <b>et constitués</b>, ce qui se vérifie à chaque lecture. Un changement
- * d'avocat retire donc l'accès sur-le-champ, sans rien à défaire ici.
+ * <p>A document is not shared with <b>a specific person</b>: it is shared with the lawyers
+ * assigned to the case file <b>and formally appointed</b>, which is checked on every read.
+ * Changing lawyers therefore revokes access immediately, with nothing to undo here.
  */
 public enum StatutPartageAvocat {
-    /** Réservée aux profils internes : l'état de toute pièce tant que personne n'a décidé autrement. */
+    /** Internal profiles only: the state of every document until someone decides otherwise. */
     NON,
-    /** Dossier sensible : un juriste a proposé le partage, le DJ ou la DJA ne l'a pas encore validé. */
+    /** Sensitive case file: a legal officer proposed sharing, not yet approved by the DJ or DJA. */
     PROPOSE,
-    /** Visible des avocats affectés et constitués. */
+    /** Visible to assigned and appointed lawyers. */
     PARTAGE
 }

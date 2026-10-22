@@ -3,8 +3,8 @@ package com.afriland.audiences.notification.passerelle;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 /**
- * Pièce jointe citée dans une notification (Guide V1 §3 bis). Le fichier lui-même a été déposé
- * auparavant : seule sa clé de stockage voyage.
+ * Attachment referenced by a notification (Guide V1 §3 bis). The file itself was uploaded
+ * beforehand: only its storage key is sent.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record PieceJointeEngine(String fileName, String mimeType, String storageKey) {

@@ -24,20 +24,16 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * Demande d'explication adressée par la direction à un avocat, et sa réponse (N7 temps 2,
- * observation 8).
+ * Request for explanation sent by management to a lawyer, and the lawyer's answer.
  *
- * <p><b>Ce qu'elle complète.</b> Le temps 1 signale à la direction que deux audiences consécutives
- * sont restées sans compte rendu. Ensuite, rien : le DJ écrivait hors de l'application, et plus
- * personne ne savait qui s'était expliqué. La demande vit donc ici, avec sa réponse.
+ * <p>Follows the alert raised when two consecutive hearings have no report, so that the exchange is
+ * kept in the application.
  *
- * <p><b>Pourquoi elle pend à l'avocat, et non à une publication.</b> Elle porte sur une
- * <b>absence</b> : il n'y a précisément rien de publié à quoi l'accrocher. C'est ce qui la distingue
- * de {@link CorrespondanceAvocat}, dont le modèle a pourtant servi de patron.
+ * <p><b>Attached to the lawyer, not to a publication</b>: it concerns an <b>absence</b>, so there is
+ * no publication to attach it to. This is what distinguishes it from {@link CorrespondanceAvocat}.
  *
- * <p><b>Le statut ne se stocke pas.</b> Une demande est en attente tant que {@code dateReponse} est
- * nulle. Une colonne de plus pourrait dire le contraire des deux autres, et c'est toujours elle
- * qu'on finirait par croire.
+ * <p><b>The status is not stored.</b> A request is pending while {@code dateReponse} is null; an
+ * extra column could contradict the other two.
  */
 @Getter
 @Setter
@@ -58,11 +54,10 @@ public class DemandeExplication {
     private Avocat avocat;
 
     /**
-     * Le dossier de la dernière audience manquée : il situe la demande sans la restreindre.
+     * Case file of the last missed hearing: it places the request in context without restricting it.
      *
-     * <p>Facultatif, parce que la demande porte sur une <b>conduite</b> - des audiences manquées à
-     * travers plusieurs dossiers - et non sur une affaire. Il sert à l'historique, qui s'enregistre
-     * toujours sur un dossier.
+     * <p>Optional, because the request concerns a <b>conduct</b> (missed hearings across several case
+     * files), not a single matter. It is used for the history, which is always recorded on a case file.
      */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "dossier_id")
@@ -87,7 +82,7 @@ public class DemandeExplication {
     @Column(name = "date_reponse")
     private LocalDateTime dateReponse;
 
-    /** En attente tant que l'avocat n'a pas répondu. Déduit, jamais stocké. */
+    /** Pending until the lawyer has answered. Derived, never stored. */
     public boolean estEnAttente() {
         return dateReponse == null;
     }

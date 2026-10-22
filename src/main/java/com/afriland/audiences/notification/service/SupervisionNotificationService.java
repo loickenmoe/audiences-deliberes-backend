@@ -23,20 +23,19 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Supervision des notifications externes (D17) : ce que chaque canal a produit sur une fenêtre, et
- * la liste de ce qui demande un examen.
+ * Monitoring of external notifications: what each channel produced over a time window, and the rows
+ * needing review.
  * <p>
- * Le compte se fait sur la file, pas sur les accusés : c'est elle qui sait ce que l'application a
- * voulu envoyer. Les accusés ne se rattachent ligne à ligne que par le rappel (Q-120) ; sans lui, un
- * envoi reste « remis » jusqu'à ce que la veille le déclare sans retour. Les deux états sont donc
- * distingués plutôt que réunis en un taux flatteur.
+ * Counts come from the queue, not from receipts, since the queue knows what the application meant to
+ * send. Receipts only match rows through the callback; otherwise a send stays "delivered to transport"
+ * until the watcher marks it as without receipt. Both states are kept distinct.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class SupervisionNotificationService {
 
-    /** Au-delà, la liste cesse d'être lisible : les filtres du tableau prennent le relais. */
+    /** Beyond this the list is unreadable; the table filters take over. */
     static final int MAX_ECHECS = 50;
 
     private final NotificationEnvoiRepository notificationEnvoiRepository;
@@ -79,11 +78,8 @@ public class SupervisionNotificationService {
     }
 
     /**
-     * Remet en file un envoi abandonné, après correction de ce qui l'avait fait échouer — une
-     * coordonnée absente, un moteur indisponible. Le compteur de tentatives repart de zéro : c'est une
-     * décision humaine, pas la poursuite automatique d'une série perdue.
-     * <p>
-     * Un envoi en attente ou déjà confirmé n'est pas relancé : il n'y a rien à reprendre.
+     * Requeues an abandoned send once its cause (missing contact, engine down) is fixed. The attempt
+     * counter is reset since this is a human decision. Pending or confirmed sends are not requeued.
      */
     @Transactional
     public void relancer(Long id) {

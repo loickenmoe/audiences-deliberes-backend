@@ -13,26 +13,24 @@ import java.util.Optional;
 @Repository
 public interface DemandeConstitutionRepository extends JpaRepository<DemandeConstitution, Long> {
 
-    /** M15 (Q-68) : file de travail « constitutions à signer » du SH, filtrable par statut. */
+    /** Line manager's "appointments to sign" work queue, filterable by status. */
     Page<DemandeConstitution> findByStatutOrderByDateDemandeAsc(StatutConstitution statut, Pageable pageable);
 
     Page<DemandeConstitution> findByOrderByDateDemandeDesc(Pageable pageable);
 
-    /** Portail avocat (Q-96) : les lettres de constitution le désignant comme prestataire. */
+    /** Lawyer portal: appointment requests naming this lawyer as provider. */
     List<DemandeConstitution> findByPrestataireIdOrderByDateDemandeDesc(Long prestataireId);
 
     /**
-     * La demande dont la lettre signée est ce document de la GED. C'est le chemin qu'emprunte le
-     * tirage sur papier préimprimé : l'onglet « Documents » d'un dossier ne connaît que la pièce,
-     * jamais la demande qui l'a produite.
+     * The request whose signed letter is this document. Used for printing on pre-printed paper,
+     * since a case's documents tab only knows the document, not the request that produced it.
      */
     Optional<DemandeConstitution> findByLettreDocumentId(Long documentId);
 
     /**
-     * Cet avocat est-il **constitué** sur ce dossier ? (QF-64)
-     *
-     * <p>L'affectation ne fait pas le mandat : c'est la lettre signée par le SH qui fait de l'avocat
-     * le représentant de la banque. Les pièces et les notes ne s'ouvrent qu'à ce moment-là.
+     * Whether this lawyer is formally appointed on this case. Assignment alone is not a mandate:
+     * only the letter signed by the line manager makes the lawyer the bank's representative, and
+     * only then do the case documents and notes open up.
      */
     boolean existsByDossierIdAndPrestataireIdAndStatut(Long dossierId, Long prestataireId,
                                                       com.afriland.audiences.intervenant.domain.StatutConstitution statut);

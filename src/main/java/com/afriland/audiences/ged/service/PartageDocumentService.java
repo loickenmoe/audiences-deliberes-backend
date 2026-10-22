@@ -31,34 +31,34 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Le partage d'une pièce de la GED avec l'avocat du dossier (QF-64).
+ * Sharing a GED document with the case file's lawyer.
  *
- * <p><b>Les règles, arbitrées par le porteur du projet le 2026-10-15.</b>
+ * <p><b>Rules.</b>
  * <ol>
- *   <li>Tout juriste partage une pièce, sans validation du DJ - <b>le SH et l'Assistante aussi</b>
- *       depuis QF-65, « ils sont à la base des juristes ».</li>
- *   <li>Sur un dossier <b>sensible</b>, le partage est réservé au DJ et à la DJA : le juriste, le SH
- *       ou l'Assistante le <b>propose</b>, et rien n'est visible de l'avocat avant leur validation. Le
- *       DJ ou la DJA qui partage lui-même n'a pas à se valider. La règle se lit sur le profil
- *       ({@link #DIRECTION}), si bien que l'ouverture aux deux nouveaux profils n'a rien demandé
- *       ici : ils proposent, comme tout profil qui n'est pas la direction.</li>
- *   <li>L'avocat ne voit une pièce partagée que s'il est affecté au dossier <b>et constitué</b> :
- *       c'est {@code PortailAvocatService} qui le vérifie, à chaque lecture.</li>
+ *   <li>Any legal officer can share a document without DJ approval, <b>including the SH and the
+ *       Assistant</b>, who are treated as legal officers.</li>
+ *   <li>On a <b>sensitive</b> case file, sharing is reserved to the DJ and DJA: a legal officer, SH
+ *       or Assistant only <b>proposes</b> it, and nothing is visible to the lawyer before approval.
+ *       A DJ or DJA who shares directly does not need to approve their own share. The rule is read
+ *       from the profile ({@link #DIRECTION}).</li>
+ *   <li>A lawyer only sees a shared document if assigned to the case file <b>and appointed</b>:
+ *       {@code PortailAvocatService} checks this on every read.</li>
  * </ol>
  *
- * <p><b>Un dossier sensible se lit sur {@code estSensible}</b>, une proposition de sensibilité en
- * attente comprise : un rejet le repasse à faux. Dans le doute, le DJ valide - c'est le côté
- * prudent, et une pièce partagée à tort ne se reprend pas.
+ * <p><b>A sensitive case file is read from {@code estSensible}</b>, including a pending sensitivity
+ * proposal (a rejection resets it to false). When in doubt the DJ approves: this is the cautious
+ * side, since a wrongly shared document cannot be taken back.
  *
- * <p><b>Service à part de {@code GedService}</b>, qui porte déjà quinze dépendances : le partage
- * est un circuit distinct du dépôt et de la suppression, et l'y greffer aurait alourdi un service
- * dont chaque modification touche toute la GED.
+ * <p>Kept separate from {@code GedService}, which already has many dependencies: sharing is a
+ * workflow distinct from upload and deletion.
  */
 @Service
 @RequiredArgsConstructor
 public class PartageDocumentService {
 
-    /** Les profils qui tranchent sur un dossier sensible. Lus sur le profil, jamais sur le rôle (Q-81). */
+    private static final String CLE_DOCUMENT_ID = "documentId";
+
+    /** Profiles that decide on a sensitive case file. Read from the profile, never from the role. */
     private static final Set<String> DIRECTION = Set.of("DJ", "DJA");
 
     private final DocumentRepository documentRepository;
@@ -68,11 +68,11 @@ public class PartageDocumentService {
     private final DemandeConstitutionRepository demandeConstitutionRepository;
 
     /**
-     * Un avocat affecté au dossier y est-il constitué ? (QF-65)
+     * Is a lawyer assigned to the case file also appointed on it?
      *
-     * <p>La règle même qui ouvre les pièces à l'avocat (Q-139), évaluée ici pour celui qui
-     * partage : sans elle, il lit « Partagé » quand l'avocat ne voit rien. Un dossier compte peu
-     * d'avocats : une lecture par avocat affecté reste négligeable.
+     * <p>The same rule that opens documents to the lawyer, evaluated for the person sharing: without
+     * it, they would see "Shared" while the lawyer sees nothing. A case file has few lawyers, so one
+     * read per assigned lawyer is negligible.
      */
     @Transactional(readOnly = true)
     public EtatPartageDossierResponse etat(Long dossierId) {
@@ -83,9 +83,9 @@ public class PartageDocumentService {
     }
 
     /**
-     * Partage une pièce - ou, sur un dossier sensible, propose de la partager.
+     * Shares a document or, on a sensitive case file, proposes sharing it.
      *
-     * @throws ApiException 409 si la pièce est déjà partagée ou en attente de validation
+     * @throws ApiException 409 if the document is already shared or awaiting approval
      */
     @Transactional
     public PartageAvocatResponse partager(Long documentId) {
@@ -108,22 +108,22 @@ public class PartageDocumentService {
         } else {
             document.setPartageAvocat(StatutPartageAvocat.PARTAGE);
             if (sensible) {
-                // Le DJ ou la DJA qui partage valide du même geste : sa décision est la validation.
+                // A DJ or DJA who shares approves in the same action: their decision is the approval.
                 document.setPartageValidePar(auteur);
                 document.setPartageValideLe(maintenant);
             }
             trace = TypeActionHistorique.DOCUMENT_PARTAGE_AVOCAT;
         }
         document = documentRepository.save(document);
-        historiqueActionService.enregistrer(document.getDossier().getId(), trace, Map.of("documentId", document.getId()));
+        historiqueActionService.enregistrer(document.getDossier().getId(), trace, Map.of(CLE_DOCUMENT_ID, document.getId()));
         return versReponse(document);
     }
 
     /**
-     * Retire un partage, ou annule une proposition. Ouvert à tout juriste, sur tout dossier :
-     * retirer réduit l'exposition d'une pièce, et ne demande donc aucune validation.
+     * Withdraws a share or cancels a proposal. Open to any legal officer on any case file:
+     * withdrawing reduces exposure and therefore needs no approval.
      *
-     * @throws ApiException 409 si la pièce n'est ni partagée ni proposée
+     * @throws ApiException 409 if the document is neither shared nor proposed
      */
     @Transactional
     public PartageAvocatResponse retirer(Long documentId) {
@@ -135,14 +135,14 @@ public class PartageDocumentService {
         reinitialiser(document);
         document = documentRepository.save(document);
         historiqueActionService.enregistrer(document.getDossier().getId(), TypeActionHistorique.DOCUMENT_PARTAGE_RETIRE,
-                Map.of("documentId", document.getId(), "ancienStatut", ancien.name()));
+                Map.of(CLE_DOCUMENT_ID, document.getId(), "ancienStatut", ancien.name()));
         return versReponse(document);
     }
 
     /**
-     * Le DJ ou la DJA tranche un partage proposé sur un dossier sensible.
+     * The DJ or DJA decides on a share proposed on a sensitive case file.
      *
-     * @throws ApiException 409 si aucun partage n'attend de validation ; 400 sur un rejet sans motif
+     * @throws ApiException 409 if no share is awaiting approval; 400 on a rejection without a reason
      */
     @Transactional
     public PartageAvocatResponse arbitrer(Long documentId, ArbitragePartageRequest request) {
@@ -152,7 +152,7 @@ public class PartageDocumentService {
         }
         String motif = request.motif() == null ? null : request.motif().trim();
         if (request.decision() == DecisionPartage.REJETE && (motif == null || motif.isEmpty())) {
-            // Le juriste qui a proposé doit savoir pourquoi la pièce ne part pas.
+            // The legal officer who proposed must know why the document is not shared.
             throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE, "Le rejet d'un partage exige un motif");
         }
 
@@ -166,7 +166,7 @@ public class PartageDocumentService {
         document = documentRepository.save(document);
 
         Map<String, Object> details = new LinkedHashMap<>();
-        details.put("documentId", document.getId());
+        details.put(CLE_DOCUMENT_ID, document.getId());
         details.put("decision", request.decision().name());
         if (request.decision() == DecisionPartage.REJETE) {
             details.put("motif", motif);
@@ -175,14 +175,14 @@ public class PartageDocumentService {
         return versReponse(document);
     }
 
-    /** La file du DJ et de la DJA : les partages proposés, le plus ancien d'abord. */
+    /** The DJ/DJA queue: proposed shares, oldest first. */
     @Transactional(readOnly = true)
     public PageResponse<PartageAvocatResponse> propositions(Pageable pageable) {
         return PageResponse.of(documentRepository.findByPartageAvocatAndEstSupprimeFalseOrderByPartageLeAsc(
                 StatutPartageAvocat.PROPOSE, pageable), this::versReponse);
     }
 
-    /** Une pièce supprimée ne se partage plus : elle n'existe plus pour personne hors de l'audit. */
+    /** A deleted document can no longer be shared: it no longer exists for anyone outside the audit. */
     private Document documentOuErreur(Long documentId) {
         return documentRepository.findById(documentId)
                 .filter(document -> !Boolean.TRUE.equals(document.getEstSupprime()))

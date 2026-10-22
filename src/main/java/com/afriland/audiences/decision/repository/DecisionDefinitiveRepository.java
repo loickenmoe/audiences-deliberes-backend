@@ -19,24 +19,21 @@ import java.util.List;
 @Repository
 public interface DecisionDefinitiveRepository extends JpaRepository<DecisionDefinitive, Long> {
 
-    /** Condition d archivage (2026-09-29) : une étape ne s archive pas sans son issue définitive. */
+    /** Archiving precondition: a step cannot be archived without its final decision. */
     boolean existsByEtapeId(Long etapeId);
 
     /**
-     * FR-REP-02 (tableau de bord, M13) : montant total des provisions reprises (toutes périodes) —
-     * requête portant sur le sous-type {@link com.afriland.audiences.decision.domain.Adjudication},
-     * seul à porter {@code reliquat}/{@code repriseProvision}.
+     * FR-REP-02 (dashboard): total reversed provisions, all periods. Queries the
+     * {@link com.afriland.audiences.decision.domain.Adjudication} subtype, the only one with
+     * {@code reliquat}/{@code repriseProvision}.
      */
     @Query("SELECT COALESCE(SUM(a.reliquat), 0) FROM Adjudication a "
             + "WHERE a.repriseProvision = true AND a.dossier.categorie IN :categories")
     Double sommeProvisionsReprises(@Param("categories") List<CategorieDossier> categories);
 
     /**
-     * Les adjudications que {@link #sommeProvisionsReprises} additionne (Q-137).
-     *
-     * <p><b>L'invariant n'est pas le même que pour les autres blocs.</b> Celui-ci affiche une somme
-     * d'argent, non un décompte : ce qui doit tomber juste, c'est la <b>somme des montants listés</b>
-     * face au montant affiché, et non le nombre de lignes.
+     * The adjudications summed by {@link #sommeProvisionsReprises}. Unlike count-based blocks, the
+     * invariant is that the listed amounts add up to the displayed total, not the row count.
      */
     @Query("SELECT a FROM Adjudication a "
             + "WHERE a.repriseProvision = true AND a.dossier.categorie IN :categories "
@@ -44,7 +41,7 @@ public interface DecisionDefinitiveRepository extends JpaRepository<DecisionDefi
     Page<Adjudication> listerProvisionsReprises(@Param("categories") List<CategorieDossier> categories,
                                                 Pageable pageable);
 
-    /** FR-REP-01 (rapport périodique, M13) : même indicateur, restreint aux adjudications décidées dans la période. */
+    /** FR-REP-01 (periodic report): same indicator, restricted to adjudications decided in the period. */
     @Query("SELECT COALESCE(SUM(a.reliquat), 0) FROM Adjudication a "
             + "WHERE a.repriseProvision = true AND a.dossier.categorie IN :categories "
             + "AND a.dateDecision BETWEEN :debut AND :fin")
@@ -52,11 +49,11 @@ public interface DecisionDefinitiveRepository extends JpaRepository<DecisionDefi
                                           @Param("fin") LocalDate fin,
                                           @Param("categories") List<CategorieDossier> categories);
 
-    /** Q-88 : adjudications d'un dossier, la plus récente d'abord. */
+    /** Adjudications of a case file, newest first. */
     @Query("SELECT a FROM Adjudication a WHERE a.dossier.id = :dossierId ORDER BY a.dateDecision DESC, a.id DESC")
     List<Adjudication> adjudicationsDuDossier(@Param("dossierId") Long dossierId);
 
-    /** Q-88 : condamnations pécuniaires d'un dossier, la plus récente d'abord. */
+    /** Monetary judgments of a case file, newest first. */
     @Query("SELECT c FROM CondamnationPecuniaire c WHERE c.dossier.id = :dossierId ORDER BY c.dateDecision DESC, c.id DESC")
     List<CondamnationPecuniaire> condamnationsDuDossier(@Param("dossierId") Long dossierId);
 }

@@ -16,24 +16,22 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Prolonge chaque alerte applicative par ses notifications externes (NOTIFICATION_ENGINE_PLAN.md,
- * étape 6) : Outlook et/ou Teams pour un utilisateur interne, selon les réglages du DJ.
+ * Extends each in-app alert with its external notifications: Outlook and/or Teams for an internal
+ * user, according to the notification settings.
  * <p>
- * <b>Même transaction que l'action métier (D12).</b> {@code @EventListener} est synchrone : les lignes
- * de {@code notification_envoi} sont écrites avec l'alerte, et disparaissent avec elle si l'action
- * est annulée. Rien n'est envoyé ici ; l'envoi appartient au dispatcher (étape 8).
+ * <b>Same transaction as the business action.</b> {@code @EventListener} is synchronous: the
+ * {@code notification_envoi} rows are written with the alert and rolled back with it. Nothing is sent
+ * here; sending belongs to the dispatcher.
  * <p>
- * <b>Une notification ne doit jamais faire échouer l'action qui la provoque.</b> Le calcul (routage,
- * textes) est fait avant toute écriture ; s'il échoue, l'erreur est journalisée et l'alerte
- * applicative, elle, reste acquise. Les écritures ne peuvent échouer que sur une panne de la base,
- * qui aurait de toute façon emporté l'action métier.
+ * <b>A notification must never fail the action that triggers it.</b> Routing and texts are computed
+ * before any write; on failure the error is logged and the in-app alert is kept.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class NotificationAlerteListener {
 
-    /** Préfixe de la référence métier : une alerte donne au plus une ligne par canal. */
+    /** Business reference prefix: an alert yields at most one row per channel. */
     static final String PREFIXE_EVENEMENT = "alerte-";
 
     private final RoutageNotification routage;

@@ -52,8 +52,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Cycle d'un délibéré (Q-78) : mise en délibéré → prorogations / rabattement pendant l'attente →
- * vidage par le résultat. L'enregistrement d'un délibéré déjà rendu, en un seul geste, reste possible.
+ * Deliberation lifecycle: placed under deliberation → extensions / reopening while pending →
+ * delivered with the result. Recording an already-rendered deliberation in one go remains possible.
  */
 @ExtendWith(MockitoExtension.class)
 class DelibereServiceTest {
@@ -86,13 +86,13 @@ class DelibereServiceTest {
                 .statutCycleVie(StatutCycleVie.EN_DELIBERE).build();
     }
 
-    /** Délibéré mis en délibéré, date annoncée dans une semaine, sans résultat. */
+    /** Pending deliberation, announced date in one week, no result. */
     private Delibere enAttente() {
         return Delibere.builder().id(100L).dossier(dossier).etape(etapeEnDelibere)
                 .dateDeliberee(LocalDate.now().plusDays(7)).build();
     }
 
-    /** Délibéré déjà vidé : étape « Délibéré vidé », résultat connu, expédition ouverte. */
+    /** Delivered deliberation: step "deliberation delivered", result known, enforceable copy open. */
     private Delibere vide() {
         EtapeProcedure etapeVide = EtapeProcedure.builder().id(10L).dossier(dossier).type(TypeEtape.INSTANCE)
                 .statutCycleVie(StatutCycleVie.DELIBERE_VIDE).build();
@@ -129,8 +129,8 @@ class DelibereServiceTest {
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
         when(etapeProcedureRepository.findById(10L)).thenReturn(Optional.of(etapeEnCours));
 
-        assertThatThrownBy(() -> service.enregistrerDelibere(1L,
-                new EnregistrerDelibereRequest(10L, LocalDate.now(), ResultatDelibere.FAVORABLE, null)))
+        var requete = new EnregistrerDelibereRequest(10L, LocalDate.now(), ResultatDelibere.FAVORABLE, null);
+        assertThatThrownBy(() -> service.enregistrerDelibere(1L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("EN_DELIBERE");
     }
@@ -155,8 +155,8 @@ class DelibereServiceTest {
     void enregistrerDelibere_refuseUneEcheanceSansResultat() {
         etapeDuDossier();
 
-        assertThatThrownBy(() -> service.enregistrerDelibere(1L,
-                new EnregistrerDelibereRequest(10L, LocalDate.now(), null, LocalDateTime.now().plusDays(30))))
+        var requete = new EnregistrerDelibereRequest(10L, LocalDate.now(), null, LocalDateTime.now().plusDays(30));
+        assertThatThrownBy(() -> service.enregistrerDelibere(1L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("se saisit avec le résultat");
         verify(delibereRepository, never()).save(any());
@@ -167,8 +167,8 @@ class DelibereServiceTest {
         etapeDuDossier();
         when(delibereRepository.existsByEtapeIdAndResultatIsNullAndDateRabattementIsNull(10L)).thenReturn(true);
 
-        assertThatThrownBy(() -> service.enregistrerDelibere(1L,
-                new EnregistrerDelibereRequest(10L, LocalDate.now().plusDays(15), null, null)))
+        var requete = new EnregistrerDelibereRequest(10L, LocalDate.now().plusDays(15), null, null);
+        assertThatThrownBy(() -> service.enregistrerDelibere(1L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("déjà en attente");
         verify(delibereRepository, never()).save(any());
@@ -178,8 +178,8 @@ class DelibereServiceTest {
     void enregistrerDelibere_rejectsMissingEcheanceForDefavorable() {
         etapeDuDossier();
 
-        assertThatThrownBy(() -> service.enregistrerDelibere(1L,
-                new EnregistrerDelibereRequest(10L, LocalDate.now(), ResultatDelibere.DEFAVORABLE, null)))
+        var requete = new EnregistrerDelibereRequest(10L, LocalDate.now(), ResultatDelibere.DEFAVORABLE, null);
+        assertThatThrownBy(() -> service.enregistrerDelibere(1L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("requise");
         verify(delibereRepository, never()).save(any());
@@ -189,9 +189,8 @@ class DelibereServiceTest {
     void enregistrerDelibere_rejectsEcheanceProvidedForFavorable() {
         etapeDuDossier();
 
-        assertThatThrownBy(() -> service.enregistrerDelibere(1L,
-                new EnregistrerDelibereRequest(10L, LocalDate.now(), ResultatDelibere.FAVORABLE,
-                        LocalDateTime.now().plusDays(30))))
+        var requete = new EnregistrerDelibereRequest(10L, LocalDate.now(), ResultatDelibere.FAVORABLE, LocalDateTime.now().plusDays(30));
+        assertThatThrownBy(() -> service.enregistrerDelibere(1L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("recours");
     }
@@ -232,7 +231,8 @@ class DelibereServiceTest {
     void viderDelibere_exigeLEcheancePourUnResultatDefavorable() {
         when(delibereRepository.findById(100L)).thenReturn(Optional.of(enAttente()));
 
-        assertThatThrownBy(() -> service.viderDelibere(100L, new ViderDelibereRequest(ResultatDelibere.MIXTE, null)))
+        var requete = new ViderDelibereRequest(ResultatDelibere.MIXTE, null);
+        assertThatThrownBy(() -> service.viderDelibere(100L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("requise");
         verify(etapeProcedureRepository, never()).save(any());
@@ -242,7 +242,8 @@ class DelibereServiceTest {
     void viderDelibere_refuseUnDelibereDejaVide() {
         when(delibereRepository.findById(100L)).thenReturn(Optional.of(vide()));
 
-        assertThatThrownBy(() -> service.viderDelibere(100L, new ViderDelibereRequest(ResultatDelibere.FAVORABLE, null)))
+        var requete = new ViderDelibereRequest(ResultatDelibere.FAVORABLE, null);
+        assertThatThrownBy(() -> service.viderDelibere(100L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("déjà vidé");
     }
@@ -321,7 +322,8 @@ class DelibereServiceTest {
     void proroger_refuseUnDelibereDejaVide() {
         when(delibereRepository.findById(100L)).thenReturn(Optional.of(vide()));
 
-        assertThatThrownBy(() -> service.proroger(100L, new CreerProrogationRequest(LocalDate.now().plusDays(30), null)))
+        var requete = new CreerProrogationRequest(LocalDate.now().plusDays(30), null);
+        assertThatThrownBy(() -> service.proroger(100L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("déjà vidé");
         verify(prorogationRepository, never()).save(any());
@@ -331,7 +333,8 @@ class DelibereServiceTest {
     void proroger_refuseUneDateQuiNEstPasFuture() {
         when(delibereRepository.findById(100L)).thenReturn(Optional.of(enAttente()));
 
-        assertThatThrownBy(() -> service.proroger(100L, new CreerProrogationRequest(LocalDate.now(), null)))
+        var requete = new CreerProrogationRequest(LocalDate.now(), null);
+        assertThatThrownBy(() -> service.proroger(100L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("future");
         verify(prorogationRepository, never()).save(any());
@@ -354,7 +357,8 @@ class DelibereServiceTest {
     void rabattre_refuseUnDelibereDejaVide() {
         when(delibereRepository.findById(100L)).thenReturn(Optional.of(vide()));
 
-        assertThatThrownBy(() -> service.rabattre(100L, new RabattementRequest(LocalDate.now(), "motif")))
+        var requete = new RabattementRequest(LocalDate.now(), "motif");
+        assertThatThrownBy(() -> service.rabattre(100L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("déjà vidé");
         verify(etapeProcedureRepository, never()).save(any());
@@ -422,13 +426,14 @@ class DelibereServiceTest {
     void modifierExpedition_refuseAvantQueLeDelibereSoitVide() {
         when(delibereRepository.findById(100L)).thenReturn(Optional.of(enAttente()));
 
-        assertThatThrownBy(() -> service.modifierExpedition(100L, new ExpeditionRequest(StatutExpedition.LEVEE)))
+        var requete = new ExpeditionRequest(StatutExpedition.LEVEE);
+        assertThatThrownBy(() -> service.modifierExpedition(100L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("vidé");
         verify(delibereRepository, never()).save(any());
     }
 
-    // ------------------------------------------------------------------ listerParDossier (M15, Q-68)
+    // ------------------------------------------------------------------ listerParDossier
 
     @Test
     void listerParDossier_retourneLesDeliberesDuDossierAvecLeurEtat() {
@@ -438,8 +443,8 @@ class DelibereServiceTest {
                 Delibere.builder().id(1L).dossier(dossier).etape(etapeEnDelibere)
                         .dateDeliberee(LocalDate.now().minusMonths(1))
                         .dateRabattement(LocalDate.now().minusDays(20)).motifRabattement("Réouverture").build()));
-        // Appelé pour chaque délibéré de la liste : réponse selon l'identifiant (le mode strict de
-        // Mockito refuserait un stub posé sur 100L puis appelé avec 1L).
+        // Called for each deliberation in the list: answer by id (Mockito strict mode would reject a stub
+        // set on 100L and called with 1L).
         when(prorogationRepository.countByDelibereId(any())).thenAnswer(inv -> Long.valueOf(100L).equals(inv.getArgument(0)) ? 2L : 0L);
 
         List<DelibereResponse> result = service.listerParDossier(1L);

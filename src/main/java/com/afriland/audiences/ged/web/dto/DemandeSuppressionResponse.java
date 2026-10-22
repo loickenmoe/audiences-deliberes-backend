@@ -5,9 +5,9 @@ import com.afriland.audiences.ged.domain.StatutSuppression;
 import java.time.LocalDateTime;
 
 /**
- * Q-79 : la demande nomme ce qu'elle vise — fichier, type, dossier. Sans cela, la file du DJ/DJA
- * n'affichait qu'un identifiant de document, et l'historique d'une demande approuvée restait
- * anonyme (le document supprimé répond 404 à la consultation).
+ * The request names its target (file, type, case file): otherwise the DJ/DJA queue would only show
+ * a document id, and an approved request's history would be anonymous (the deleted document
+ * returns 404).
  */
 public record DemandeSuppressionResponse(
         Long id,

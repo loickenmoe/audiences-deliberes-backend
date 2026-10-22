@@ -35,37 +35,36 @@ class CalendrierExportServiceTest {
     }
 
     /**
-     * Ce que le fichier **contient**, et non plus seulement qu'il en est un (A1). La version
-     * precedente se contentait de « non vide, commence par %PDF- » : un calendrier qui aurait perdu
-     * toutes ses lignes passait au vert.
+     * Checks what the file <b>contains</b>, not just that it is a PDF: a calendar that lost all its
+     * rows would otherwise pass.
      */
     @Test
     @DisplayName("le PDF porte les en-tetes et les donnees de chaque entree")
     void exportPdf_contientLesDonnees() throws Exception {
         String texte = LecturePdf.texte(service.exportPdf(entrees()));
 
-        // Les sept en-têtes, **accents compris** : « Référence » et « Étape » passent par le repli de
-        // TextePdf, et c'est précisément là qu'un caractère se perd sans qu'on le remarque.
+        // The seven headers, accents included: accented headers go through the TextePdf fallback, which
+        // is exactly where a character can be lost unnoticed.
         assertThat(texte).contains("Référence").contains("Juridiction").contains("Étape")
-                .contains("Client").contains("Agence d'origine").contains("Risque encouru").contains("Date");
-        assertThat(texte).contains("DOS-2026-001").contains("Client Test").contains("AG01");
-        // La marque et la numérotation, que le document n'avait jamais portées (A2).
-        assertThat(texte).contains("Afriland First Bank").contains("Direction Juridique");
-        assertThat(texte).contains("Page 1 sur 1");
+                .contains("Client").contains("Agence d'origine").contains("Risque encouru").contains("Date")
+                .contains("DOS-2026-001").contains("Client Test").contains("AG01")
+                // The branding and the page numbering.
+                .contains("Afriland First Bank").contains("Direction Juridique")
+                .contains("Page 1 sur 1");
     }
 
     @Test
     @DisplayName("le fichier porte un titre, la ou il n'en avait aucun")
     void exportPdf_porteSesProprietes() throws Exception {
-        // Le titre du fichier porte la période couverte, déduite des entrées : deux calendriers
-        // extraits à deux semaines d'intervalle ne doivent pas se confondre dans un explorateur (A2).
+        // The file title carries the covered period, derived from the entries: two calendars extracted
+        // two weeks apart must not be confused in a file explorer.
         assertThat(LecturePdf.proprietes(service.exportPdf(entrees())).getTitle())
                 .startsWith("Calendrier des audiences - Du ");
     }
 
     /**
-     * Une juridiction ou un nom de client peut contenir n'importe quel caractere : sans repli, la
-     * police leve et l'export echoue (A1).
+     * A court or client name may contain any character: without a fallback, the font throws and the
+     * export fails.
      */
     @Test
     @DisplayName("une saisie hors encodage n'empeche pas l'export")
@@ -81,7 +80,7 @@ class CalendrierExportServiceTest {
         byte[] xlsx = service.exportExcel(entrees());
 
         assertThat(xlsx).isNotEmpty();
-        // Signature ZIP (xlsx = archive OOXML) : "PK".
+        // ZIP signature (xlsx is an OOXML archive): "PK".
         assertThat(xlsx[0]).isEqualTo((byte) 'P');
         assertThat(xlsx[1]).isEqualTo((byte) 'K');
     }

@@ -13,10 +13,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 
 /**
- * Échéance d'une alarme (Q-04) : génère une {@link TypeAlerte#ALARME} destinée à son créateur.
- * L'alarme reste {@code ACTIVE} après le déclenchement — elle n'est close ({@code TRAITEE}) que par
- * une reprogrammation (FR-AUD-04) ou un traitement explicite (Q-77) ; l'anti-doublon
- * ({@link AlerteService#aDejaEteDeclenchee}) évite donc de la resignaler à chaque cycle d'ici là.
+ * Alarm due date: raises a {@link TypeAlerte#ALARME} for its creator. The alarm stays
+ * {@code ACTIVE} afterwards; it is only closed ({@code TRAITEE}) by rescheduling (FR-AUD-04) or
+ * explicit handling, so the duplicate guard ({@link AlerteService#aDejaEteDeclenchee}) prevents
+ * re-raising it every cycle.
  */
 @Component
 @RequiredArgsConstructor

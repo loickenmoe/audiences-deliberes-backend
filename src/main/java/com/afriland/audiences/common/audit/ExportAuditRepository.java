@@ -11,19 +11,17 @@ import java.util.Optional;
 @Repository
 public interface ExportAuditRepository extends JpaRepository<ExportAudit, Long> {
 
-    /** Les archives, de la plus récente à la plus ancienne, `id` départageant les ex æquo (Q-92). */
+    /** Archives newest first, `id` breaking ties. */
     Page<ExportAudit> findAllByOrderByDateExportDescIdDesc(Pageable pageable);
 
     /**
-     * Prochain numéro de référence (Q-114), lu <b>avant</b> de produire le fichier.
-     *
-     * <p>La référence doit figurer dans le PDF, donc exister avant lui — alors que l'identifiant de
-     * la ligne n'existe qu'après l'insertion, laquelle exige l'empreinte, laquelle exige le fichier.
-     * Une séquence indépendante rompt ce cercle.
+     * Next reference number, read before producing the file. The reference must be printed in the
+     * file, while the row id only exists after insert (which needs the hash, hence the file); an
+     * independent sequence breaks that cycle.
      */
     @Query(value = "SELECT nextval('export_audit_reference_seq')", nativeQuery = true)
     long prochainNumeroReference();
 
-    /** Vérification d'un fichier détenu par un tiers (Q-114) : recherche par égalité d'empreinte. */
+    /** Lookup by exact hash, to verify a file held by a third party. */
     Optional<ExportAudit> findByEmpreinte(String empreinte);
 }

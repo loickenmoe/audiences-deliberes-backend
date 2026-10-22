@@ -24,28 +24,18 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * L'activité de chacun sur une période (observation 14, N6).
+ * Each user's activity over a period, computed solely from {@code historique_action}.
  *
- * <p><b>Tout vient de l'historique, et rien d'ailleurs.</b> {@code historique_action} enregistre qui
- * a fait quoi, quand, sous un code typé : c'est la seule matière dont l'application dispose, et ce
- * service ne compte rien qu'elle n'ait enregistré. Un indicateur qui ne s'y lit pas n'existe pas,
- * et c'est préférable à un chiffre fabriqué.
- *
- * <p><b>L'application compte, le responsable apprécie</b> (métier, 2026-10-07). Pas de note, pas de
- * classement, pas de total global : additionner des dossiers ouverts et des lettres rédigées
- * produirait un nombre sans signification, que sa seule existence rendrait pourtant autoritaire.
+ * <p>The application counts; managers assess. No score, ranking or global total: summing unrelated
+ * action types would produce a meaningless number.
  */
 @Service
 @RequiredArgsConstructor
 public class RapportNominatifService {
 
     /**
-     * Les six natures suivies, et le rôle de chacune.
-     *
-     * <p>Elles disent ce qu'une personne <b>a fait entrer, organisé, consigné, conclu, écrit et
-     * contrôlé</b>. Les frais comptent deux codes : le contrôle de conformité et celui
-     * d'opportunité sont deux gestes distincts sur la même demande, et n'en retenir qu'un rendrait
-     * invisible la moitié du travail.
+     * Tracked action types. Fees count two codes: compliance and appropriateness checks are
+     * distinct steps on the same request.
      */
     private static final Set<TypeActionHistorique> CODES_SUIVIS = Set.of(
             TypeActionHistorique.DOSSIER_CREE,
@@ -62,11 +52,7 @@ public class RapportNominatifService {
 
     @Transactional(readOnly = true)
     public RapportNominatifResponse produire(LocalDate debut, LocalDate fin) {
-        /*
-         * La fin est **incluse** : un rapport du 1er au 31 doit compter le 31. Les bornes sont des
-         * dates, les actions des instants - on va donc jusqu'au lendemain à minuit, exclu, plutôt
-         * que de perdre une journée entière sans que personne le remarque.
-         */
+        // End date is inclusive: the upper bound is the next day's midnight, exclusive.
         LocalDateTime borneBasse = debut.atStartOfDay();
         LocalDateTime borneHaute = fin.plusDays(1).atStartOfDay();
 
@@ -91,7 +77,7 @@ public class RapportNominatifService {
         return new RapportNominatifResponse(debut, fin, comptes.entrySet().stream()
                 .map(entree -> versLigne(entree.getKey(), entree.getValue(),
                         personnes.get(entree.getKey()), delais.get(entree.getKey())))
-                // Par nom, et non par volume : un classement ferait du rapport un palmarès.
+                // Sorted by name, not volume, to avoid a ranking.
                 .sorted(Comparator.comparing(ActiviteNominative::nom, Comparator.nullsLast(String::compareToIgnoreCase)))
                 .toList());
     }
@@ -116,12 +102,7 @@ public class RapportNominatifService {
         return comptes.getOrDefault(code, 0L);
     }
 
-    /**
-     * Le nom de la personne, ou son identifiant à défaut.
-     *
-     * <p>Un compte supprimé du référentiel laisse ses traces derrière lui : les compter sous un nom
-     * vide les rendrait anonymes, alors que l'audit sert précisément à savoir qui.
-     */
+    /** The person's full name, or {@code null} for a deleted account (the line keeps its user id). */
     private static String nomDe(Utilisateur personne) {
         if (personne == null) {
             return null;
@@ -131,13 +112,8 @@ public class RapportNominatifService {
     }
 
     /**
-     * Les quatre natures que seul un avocat accomplit (Q-136).
-     *
-     * <p>Les trois dépôts et la réponse à une demande d'explication sont tous
-     * {@code hasRole('AVOCAT')} : grouper sur elles ne ramène que des avocats, sans condition sur le
-     * profil. Une condition de moins à garder d'accord avec les habilitations - et si l'une d'elles
-     * s'ouvrait un jour à un profil interne, c'est l'habilitation qui dirait la vérité, pas une
-     * liste recopiée ici.
+     * The four lawyer-only action types, all guarded by {@code hasRole('AVOCAT')}: grouping on them
+     * returns only lawyers without any profile condition.
      */
     private static final Set<TypeActionHistorique> CODES_AVOCAT = Set.of(
             TypeActionHistorique.PUBLICATION_CR_DEPOSE,
@@ -146,22 +122,14 @@ public class RapportNominatifService {
             TypeActionHistorique.EXPLICATION_REPONDUE);
 
     /**
-     * L'activité des avocats sur une période, pour la direction (Q-136).
-     *
-     * <p><b>Pourquoi un tableau à part de {@link #produire}.</b> Signalé par le porteur du projet le
-     * 2026-10-13 : « Activité par personne » ne montrait que les profils internes. C'était exact, et
-     * ce n'était pas réparable en y ajoutant les avocats - ce tableau compte six natures de
-     * production interne dont un avocat n'accomplit aucune. Il <b>dépose</b> ; c'est le juriste qui
-     * enregistre. L'y faire figurer n'aurait affiché qu'une ligne de zéros.
-     *
-     * <p>Même service, en revanche, et non un service voisin : les deux tableaux partagent les
-     * bornes de période et la règle de tri par nom. Les séparer les ferait dériver.
+     * Lawyers' activity over a period, for management. Separate from {@link #produire} because
+     * lawyers perform none of the internal actions counted there (they file; legal officers
+     * record). Kept in this service to share the period bounds and name ordering.
      */
     @Transactional(readOnly = true)
     public RapportAvocatsResponse produireAvocats(LocalDate debut, LocalDate fin) {
         LocalDateTime borneBasse = debut.atStartOfDay();
-        // Toute la journée de fin, comme le tableau interne : comparer un horodatage à une date nue
-        // exclurait le dernier jour demandé.
+        // End date is inclusive, as in the internal report.
         LocalDateTime borneHaute = fin.plusDays(1).atStartOfDay();
 
         Map<Long, Map<TypeActionHistorique, Long>> comptes = new HashMap<>();
@@ -178,10 +146,9 @@ public class RapportNominatifService {
         }
 
         /*
-         * Les inscriptions en une seule lecture. Le pont compte -> inscription passe par
-         * `compte_keycloak`, qui porte tantôt l'identifiant de connexion, tantôt l'identifiant
-         * technique Keycloak selon l'époque de l'inscription : les deux sont donc demandés, comme le
-         * fait déjà `CompteAvocatService` pour une personne seule.
+         * Directory entries in one query. `compte_keycloak` holds either the login or the Keycloak
+         * technical id depending on when the lawyer was registered, so both are looked up, as in
+         * `CompteAvocatService`.
          */
         Set<String> comptesCherches = new HashSet<>();
         for (var personne : personnes.values()) {
@@ -202,9 +169,7 @@ public class RapportNominatifService {
         return new RapportAvocatsResponse(debut, fin, comptes.entrySet().stream()
                 .map(entree -> versLigneAvocat(entree.getKey(), entree.getValue(),
                         personnes.get(entree.getKey()), inscriptions))
-                // Par nom, comme pour les internes : un classement par volume ferait un palmarès, où
-                // le plus actif passerait pour le meilleur - alors que c'est la banque qui lui confie
-                // ses dossiers, et qu'un avocat chargé n'est pas un avocat méritant.
+                // Sorted by name, not volume: workload reflects the bank's assignments, not merit.
                 .sorted(Comparator.comparing(RapportAvocatsResponse.ActiviteAvocat::nom,
                         Comparator.nullsLast(String::compareToIgnoreCase)))
                 .toList());
@@ -216,11 +181,8 @@ public class RapportNominatifService {
             HistoriqueActionRepository.ActiviteDeposee personne,
             Map<String, Avocat> inscriptions) {
         Avocat avocat = personne == null ? null : trouverInscription(personne, inscriptions);
-        /*
-         * Le nom du répertoire d'abord : c'est celui sous lequel la direction connaît l'avocat.
-         * À défaut - inscription retirée depuis -, celui du compte, et ses dépôts restent comptés :
-         * les masquer ferait disparaître de l'activité réelle.
-         */
+        // Directory name first; if the entry was removed, fall back to the account name and keep
+        // counting the filings.
         String nom = avocat != null ? avocat.getNom() : nomDuCompte(personne);
         return new RapportAvocatsResponse.ActiviteAvocat(
                 utilisateurId,
@@ -243,7 +205,7 @@ public class RapportNominatifService {
         return personne.getKeycloakId() == null ? null : inscriptions.get(personne.getKeycloakId());
     }
 
-    /** Le nom porté par le compte, quand le répertoire ne le nomme plus. */
+    /** Account name, used when the directory no longer lists the lawyer. */
     private static String nomDuCompte(HistoriqueActionRepository.ActiviteDeposee personne) {
         if (personne == null) {
             return null;

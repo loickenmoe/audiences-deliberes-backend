@@ -13,14 +13,14 @@ public interface CorrespondanceAvocatRepository extends JpaRepository<Correspond
 
     boolean existsByPublicationId(Long publicationId);
 
-    /** Q-86 : la correspondance déjà transmise, affichée sur le détail de la publication. */
+    /** The correspondence already sent, shown on the publication detail. */
     Optional<CorrespondanceAvocat> findByPublicationId(Long publicationId);
 
     /**
-     * Les correspondances d'une page de publications, en une seule lecture (QF-58).
+     * Correspondences for a page of publications, in a single query.
      *
-     * <p>Le portail de l'avocat en affiche dix par page : une lecture par publication ferait dix
-     * requêtes là où une suffit, et c'est l'écran qu'il ouvre en premier.
+     * <p>The lawyer portal shows ten per page: one read per publication would issue ten queries where
+     * one suffices, on the screen the lawyer opens first.
      */
     List<CorrespondanceAvocat> findByPublicationIdIn(java.util.Collection<Long> publicationIds);
 }

@@ -23,9 +23,9 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * Demande de suppression d'un document soumise par son auteur, à valider par le DJ ou la DJA
- * (RG-GED-05/09, FR-GED-03, Q-02). Relancée automatiquement à 72 h tant qu'elle reste
- * {@code EN_ATTENTE} (UC-GED-03 alt. 6-a, cf. {@code SuppressionRelanceScheduler}).
+ * Request to delete a document, submitted by its uploader and approved by the DJ or DJA
+ * (RG-GED-05/09, FR-GED-03). Reminded automatically after 72 h while it remains
+ * {@code EN_ATTENTE} (UC-GED-03 alt. 6-a, see {@code SuppressionRelanceScheduler}).
  */
 @Getter
 @Setter

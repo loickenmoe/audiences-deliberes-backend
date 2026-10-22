@@ -18,13 +18,11 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 /**
- * On ne fait pas appel avant que le juge ait statué (2026-09-29).
+ * No appeal before the judge has ruled.
  *
- * <p>Ces tests protègent aussi la <b>forme</b> de la règle. Le métier avait validé « l'étape
- * précédente doit être close » ; cette version-là aurait bloqué le parcours normal, l'exercice d'un
- * recours rouvrant l'étape courante en {@code EN_COURS} au lieu de la clore. Le test
- * {@code apres_un_recours_le_degre_superieur_s_ouvre} verrouille ce cas : s'il tombe un jour, c'est
- * que la règle a glissé vers la version impossible.
+ * <p>Also guards the <b>shape</b> of the rule: requiring the previous step to be closed would block the
+ * normal flow, since exercising a remedy reopens the current step as {@code EN_COURS} instead of
+ * closing it. {@code apres_un_recours_le_degre_superieur_s_ouvre} locks this case.
  */
 @ExtendWith(MockitoExtension.class)
 class AucuneEtapeAnterieureEnDelibereTest {
@@ -51,7 +49,7 @@ class AucuneEtapeAnterieureEnDelibereTest {
     @Test
     void la_condition_ne_vaut_que_pour_l_ouverture_des_debats() {
         assertThat(condition.concerne(StatutCycleVie.OUVERTURE, StatutCycleVie.EN_COURS)).isTrue();
-        // La reprise après recours part de DELIBERE_VIDE et porte sur l'étape elle-même.
+        // Resumption after a remedy starts from DELIBERE_VIDE and applies to the step itself.
         assertThat(condition.concerne(StatutCycleVie.DELIBERE_VIDE, StatutCycleVie.EN_COURS)).isFalse();
         assertThat(condition.concerne(StatutCycleVie.EN_COURS, StatutCycleVie.EN_DELIBERE)).isFalse();
         assertThat(condition.concerne(StatutCycleVie.CLOTURE, StatutCycleVie.ARCHIVE)).isFalse();
@@ -64,7 +62,7 @@ class AucuneEtapeAnterieureEnDelibereTest {
         assertThat(condition.empechement(instance)).isEmpty();
     }
 
-    /** Le cas visé : l'instance attend son jugement, et l'on voudrait ouvrir les débats d'appel. */
+    /** The target case: the first instance awaits its judgment, and appeal hearings would be opened. */
     @Test
     void une_instance_en_delibere_empeche_d_ouvrir_l_appel() {
         EtapeProcedure appel = etape(2L, TypeEtape.RECOURS_1, StatutCycleVie.OUVERTURE);
@@ -78,8 +76,8 @@ class AucuneEtapeAnterieureEnDelibereTest {
     }
 
     /**
-     * Le parcours normal après un recours : l'instance est {@code EN_COURS}, pas close. Une règle
-     * exigeant l'antécédent clos l'aurait bloqué — c'est pourquoi elle a été écartée.
+     * The normal flow after a remedy: the first instance is {@code EN_COURS}, not closed. A rule
+     * requiring the previous step to be closed would have blocked it.
      */
     @Test
     void apres_un_recours_le_degre_superieur_s_ouvre() {
@@ -98,8 +96,8 @@ class AucuneEtapeAnterieureEnDelibereTest {
     }
 
     /**
-     * Les deux cassations sont concurrentes : un pourvoi national en délibéré n'empêche pas
-     * d'ouvrir les débats devant la CCJA. Un calcul par rang aurait fait l'inverse.
+     * The two cassation appeals run concurrently: a national appeal under deliberation does not prevent
+     * opening hearings before the CCJA. A rank-based computation would have done the opposite.
      */
     @Test
     void un_pourvoi_national_en_delibere_n_empeche_pas_la_CCJA() {

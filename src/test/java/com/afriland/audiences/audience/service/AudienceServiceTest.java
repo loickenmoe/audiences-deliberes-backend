@@ -76,7 +76,7 @@ class AudienceServiceTest {
                 dossierJuristeRepository, dossierAvocatRepository, utilisateurRepository,
                 historiqueActionService, alerteService, audienceMapper);
 
-        // Ouvert il y a un an : les audiences régularisées s'y rattachent, celles d'avant non.
+        // Opened a year ago: back-dated hearings attach to it, earlier ones do not.
         dossier = Dossier.builder().id(1L).reference("DOS-2026-001")
                 .createdAt(LocalDateTime.now().minusYears(1)).build();
         etapeEnCours = EtapeProcedure.builder().id(10L).dossier(dossier).type(TypeEtape.INSTANCE)
@@ -90,16 +90,13 @@ class AudienceServiceTest {
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
         when(etapeProcedureRepository.findById(10L)).thenReturn(Optional.of(etapeOuverture));
 
-        assertThatThrownBy(() -> service.planifierAudience(1L,
-                new PlanifierAudienceRequest(10L, LocalDate.now().plusDays(5), null), false))
+        var requete = new PlanifierAudienceRequest(10L, LocalDate.now().plusDays(5), null);
+        assertThatThrownBy(() -> service.planifierAudience(1L, requete, false))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("EN_COURS");
     }
 
-/**
-     * RG-AUD-08 (2026-09-23) : l'audience du jour s'enregistre, et son compte rendu est
-     * recevable dans la foulée — c'était le besoin à l'origine de l'arbitrage.
-     */
+    /** RG-AUD-08: today's hearing can be recorded and its report submitted right away. */
     @Test
     void une_audience_peut_etre_enregistree_le_jour_meme() {
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
@@ -118,8 +115,8 @@ class AudienceServiceTest {
     }
 
     /**
-     * V34 : l'audience porte la juridiction où elle se tient. Sans indication, elle reprend celle du
-     * dossier — exacte au premier degré, qui est le cas courant.
+     * The hearing records the court where it is held. By default it takes the case's court, which is
+     * correct at first instance, the usual case.
      */
     @Test
     @DisplayName("sans indication, l'audience se tient là où le dossier a été saisi")
@@ -139,9 +136,8 @@ class AudienceServiceTest {
     }
 
     /**
-     * Le cas qui motive le champ : une audience d'appel ne se tient pas devant le tribunal qui a
-     * jugé. Afficher la juridiction du dossier ne laissait pas l'information manquante — elle la
-     * rendait fausse.
+     * An appeal hearing is not held before the court that gave judgment: showing the case's court
+     * would make the information wrong, not merely missing.
      */
     @Test
     @DisplayName("une audience d'appel se tient devant sa propre juridiction")
@@ -158,11 +154,11 @@ class AudienceServiceTest {
                 new PlanifierAudienceRequest(10L, LocalDate.now().plusDays(3), "  Cour d'appel du Littoral  "),
                 false);
 
-        // Les espaces de saisie sont retirés : « Cour d'appel » et « Cour d'appel  » sont le même lieu.
+        // Surrounding whitespace is trimmed: values differing only by trailing spaces are the same court.
         assertThat(resultat.juridiction()).isEqualTo("Cour d'appel du Littoral");
     }
 
-    /** Une saisie vide n'est pas une juridiction : elle vaut absence, donc celle du dossier. */
+    /** Blank input is not a court: it counts as absent, so the case's court applies. */
     @Test
     void une_juridiction_vide_vaut_celle_du_dossier() {
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
@@ -179,7 +175,7 @@ class AudienceServiceTest {
         assertThat(resultat.juridiction()).isEqualTo(dossier.getJuridictionSaisie());
     }
 
-    /** Une audience tenue sans avoir été saisie se régularise : sinon, elle était perdue à jamais. */
+    /** A hearing held without being recorded can be back-dated; otherwise it would be lost for good. */
     @Test
     void une_audience_deja_tenue_peut_etre_regularisee() {
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
@@ -196,14 +192,14 @@ class AudienceServiceTest {
         assertThat(resultat.datePlanifiee()).isEqualTo(LocalDate.now().minusDays(10));
     }
 
-    /** La seule borne : une audience ne peut pas précéder le dossier qui la porte (faute de frappe). */
+    /** The only bound: a hearing cannot predate its case (typo guard). */
     @Test
     void une_audience_anterieure_a_l_ouverture_du_dossier_est_refusee() {
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
         when(etapeProcedureRepository.findById(10L)).thenReturn(Optional.of(etapeEnCours));
 
-        assertThatThrownBy(() -> service.planifierAudience(1L,
-                new PlanifierAudienceRequest(10L, dossier.getCreatedAt().toLocalDate().minusDays(1), null), false))
+        var requete = new PlanifierAudienceRequest(10L, dossier.getCreatedAt().toLocalDate().minusDays(1), null);
+        assertThatThrownBy(() -> service.planifierAudience(1L, requete, false))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("ouverture du dossier");
     }
@@ -214,8 +210,8 @@ class AudienceServiceTest {
         when(etapeProcedureRepository.findById(10L)).thenReturn(Optional.of(etapeEnCours));
         when(audienceRepository.existsByEtapeIdAndDatePlanifieeAndStatutNot(10L, LocalDate.now().plusDays(5), StatutAudience.ANNULEE)).thenReturn(true);
 
-        assertThatThrownBy(() -> service.planifierAudience(1L,
-                new PlanifierAudienceRequest(10L, LocalDate.now().plusDays(5), null), false))
+        var requete = new PlanifierAudienceRequest(10L, LocalDate.now().plusDays(5), null);
+        assertThatThrownBy(() -> service.planifierAudience(1L, requete, false))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("existe déjà");
         verify(alerteService, never()).declencher(any(), any(), any(), any());
@@ -266,7 +262,8 @@ class AudienceServiceTest {
                 .statut(StatutAudience.PLANIFIEE).build();
         when(audienceRepository.findById(5L)).thenReturn(Optional.of(audience));
 
-        assertThatThrownBy(() -> service.enregistrerCompteRendu(5L, new EnregistrerCompteRenduRequest("Compte rendu")))
+        var requete = new EnregistrerCompteRenduRequest("Compte rendu");
+        assertThatThrownBy(() -> service.enregistrerCompteRendu(5L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("après la tenue");
     }
@@ -286,8 +283,8 @@ class AudienceServiceTest {
     }
 
     /**
-     * QF-32 : une audience appartient au mois où elle s'est tenue, pas à celui où le juriste a
-     * trouvé le temps d'en écrire le compte rendu. C'est cette date que compte le rapport d'activité.
+     * A hearing belongs to the month it was held, not the month its report was written. The activity
+     * report counts that date.
      */
     @Test
     void un_compte_rendu_saisi_en_retard_ne_deplace_pas_l_audience() {
@@ -303,7 +300,7 @@ class AudienceServiceTest {
         assertThat(result.dateTenue()).isNotEqualTo(LocalDate.now());
     }
 
-    /** M15 (Q-68) : onglet « audiences » d'un dossier. */
+    /** Case file "hearings" tab. */
     @Test
     void listerParDossier_retourneLesAudiencesDuDossier() {
         when(dossierRepository.findById(dossier.getId())).thenReturn(Optional.of(dossier));
@@ -323,13 +320,14 @@ class AudienceServiceTest {
     void listerParDossier_dossierInconnu_retourne404() {
         when(dossierRepository.findById(999L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.listerParDossier(999L, PageRequest.of(0, 10)))
+        var pageRequest = PageRequest.of(0, 10);
+        assertThatThrownBy(() -> service.listerParDossier(999L, pageRequest))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("Dossier introuvable");
         verify(audienceRepository, never()).findByDossierIdOrderByDatePlanifieeDesc(any(), any());
     }
 
-    /** Q-76 : annulation motivée d'une audience planifiée. */
+    /** Reasoned cancellation of a scheduled hearing. */
     @Test
     void annulerAudience_nominalPasseAnnuleeAvecMotifEtDate() {
         Audience audience = Audience.builder().id(5L).dossier(dossier).datePlanifiee(LocalDate.now().plusDays(4))
@@ -351,7 +349,8 @@ class AudienceServiceTest {
                 .statut(StatutAudience.TENUE).build();
         when(audienceRepository.findById(5L)).thenReturn(Optional.of(tenue));
 
-        assertThatThrownBy(() -> service.annulerAudience(5L, new AnnulerAudienceRequest("Erreur")))
+        var requete = new AnnulerAudienceRequest("Erreur");
+        assertThatThrownBy(() -> service.annulerAudience(5L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("Seule une audience planifiée");
         verify(audienceRepository, never()).save(any());
@@ -363,13 +362,14 @@ class AudienceServiceTest {
                 .statut(StatutAudience.ANNULEE).motifAnnulation("Renvoi").dateAnnulation(LocalDateTime.now()).build();
         when(audienceRepository.findById(5L)).thenReturn(Optional.of(annulee));
 
-        assertThatThrownBy(() -> service.enregistrerCompteRendu(5L, new EnregistrerCompteRenduRequest("CR")))
+        var requete = new EnregistrerCompteRenduRequest("CR");
+        assertThatThrownBy(() -> service.enregistrerCompteRendu(5L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("annulée");
         verify(audienceRepository, never()).save(any());
     }
 
-    /** Q-76 : le calendrier et ses exports écartent les audiences annulées (stub strict : autre appel = échec). */
+    /** The calendar and its exports exclude cancelled hearings (strict stub: any other call fails). */
     @Test
     void calendrier_ecarteLesAudiencesAnnulees() {
         LocalDate debut = LocalDate.of(2026, 9, 7);
@@ -379,12 +379,9 @@ class AudienceServiceTest {
         assertThat(service.calendrier(PeriodeCalendrier.HEBDOMADAIRE, debut)).isEmpty();
     }
 
-    // ─────────────────────────────────────────────────────────────── QF-64
-
     /**
-     * La note à l'avocat est **distincte du compte rendu** (QF-64) : l'écrire ne touche pas au
-     * compte rendu interne, et ne change pas le statut de l'audience. Elle s'écrit même avant
-     * l'audience - « apportez l'original de l'acte » se dit avant, pas après.
+     * The note to the lawyer is <b>separate from the hearing report</b>: writing it leaves the internal
+     * report and the hearing status untouched. It can be written before the hearing.
      */
     @Test
     void modifierNoteAvocat_neToucheNiAuCompteRenduNiAuStatut() {
@@ -404,7 +401,7 @@ class AudienceServiceTest {
                 java.util.Map.of("audienceId", 11L));
     }
 
-    /** Vide, la note est effacée : c'est ainsi qu'on retire une note devenue sans objet. */
+    /** An empty note clears it: that is how an obsolete note is removed. */
     @Test
     void modifierNoteAvocat_videLEfface() {
         Audience audience = Audience.builder().id(11L).dossier(dossier).etape(etapeEnCours)

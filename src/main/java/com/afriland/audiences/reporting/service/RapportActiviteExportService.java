@@ -16,22 +16,16 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 /**
- * Exports de la fiche d'activité (Q-133) : PDF, Excel, CSV.
+ * Activity sheet exports: PDF, Excel, CSV. Separate from {@link RapportExportService}, which lays
+ * out a single label/value aggregate, whereas this is a variable-length list of rows.
  *
- * <p><b>Pourquoi un service à part de {@link RapportExportService}.</b> Celui-là met en page un
- * agrégat unique, en libellé/valeur ; celle-ci est une <b>liste de lignes</b> de longueur variable -
- * de une à quarante-neuf. Les deux formes ne se factorisent pas sans rendre les deux illisibles, et
- * toucher à l'export du rapport périodique pour servir un besoin nouveau risquerait un document que
- * la Direction imprime déjà.
- *
- * <p><b>Documents en français.</b> C'est le cas de tous les PDF du projet : il n'existe qu'un
- * {@code pdf/libelles.properties}, et le libellé d'une nature d'action n'a d'existence française que
- * dans l'énumération du backend - limite relevée en QF-24. L'écran, lui, est bilingue.
+ * <p>Documents are in French: action type labels exist only in French in the backend enum. The UI
+ * is bilingual.
  */
 @Service
 public class RapportActiviteExportService {
 
-    /** Deux colonnes sur les 515 points utiles d'une A4 portrait : la nature prime sur le nombre. */
+    /** Two columns over the 515 usable points of a portrait A4 page. */
     private static final float[] LARGEURS = {395f, 120f};
 
     private static final DateTimeFormatter JOUR = DateTimeFormatter.ofPattern("dd/MM/yyyy");
@@ -39,10 +33,7 @@ public class RapportActiviteExportService {
     private static final String COLONNE_NATURE = "Nature de l'action";
     private static final String COLONNE_NOMBRE = "Nombre";
 
-    /**
-     * La fiche, mise en page par la charte commune (Q-115 A2) - qui franchit les pages d'elle-même :
-     * une personne très active peut porter quarante-neuf lignes, et une page n'en tient pas autant.
-     */
+    /** The sheet, laid out with the shared PDF template, which handles page breaks. */
     public byte[] exportPdf(RapportActiviteResponse rapport) {
         try (DocumentPdf document = new DocumentPdf(PDRectangle.A4,
                 "Activité de " + nom(rapport),
@@ -84,11 +75,8 @@ public class RapportActiviteExportService {
     }
 
     /**
-     * Les lignes du document, dans l'ordre où le service les a rendues.
-     *
-     * <p>Le <b>délai moyen</b> ferme la liste, précédé d'une ligne vide : ce n'est pas un décompte
-     * d'actions, et le mêler aux autres laisserait croire qu'on peut l'additionner avec elles. Il
-     * est omis - et non porté à zéro - quand il n'y a rien à mesurer.
+     * Document rows in service order. The average delay comes last after a blank row, since it is
+     * not an action count; it is omitted (not zeroed) when there is nothing to measure.
      */
     private List<List<String>> lignes(RapportActiviteResponse rapport) {
         List<List<String>> lignes = new java.util.ArrayList<>(rapport.lignes().stream()
@@ -102,29 +90,22 @@ public class RapportActiviteExportService {
         return lignes;
     }
 
-    /** Le nom de la personne, ou son identifiant : un document doit dire de qui il parle. */
+    /** The person's name, or their id as a fallback. */
     private static String nom(RapportActiviteResponse rapport) {
         return rapport.nom() == null ? "l'utilisateur #" + rapport.utilisateurId() : rapport.nom();
     }
 
-    /**
-     * Les accents retirés avant la mise en minuscules : sans cette passe, « Hervé » donnait
-     * « herv- », le caractère accentué ne tombant pas dans {@code [a-z0-9]}.
-     */
+    /** Strips accents first, otherwise accented letters fall outside {@code [a-z0-9]}. */
     private static String sansAccent(String nom) {
         return java.text.Normalizer.normalize(nom, java.text.Normalizer.Form.NFD)
                 .replaceAll("\\p{M}+", "")
                 .toLowerCase(java.util.Locale.ROOT)
                 .replaceAll("[^a-z0-9]+", "-")
-                .replaceAll("(^-|-$)", "");
+                .replaceFirst("^-", "")
+                .replaceFirst("-$", "");
     }
 
-    /**
-     * Le nom du fichier, construit sur la personne et la période.
-     *
-     * <p>« activite.pdf » ne dit rien : une direction qui télécharge cinq fiches le même jour doit
-     * pouvoir les distinguer sans les ouvrir.
-     */
+    /** File name built from the person and the period, so downloaded sheets are distinguishable. */
     public String nomFichier(RapportActiviteResponse rapport, String extension) {
         String personne = rapport.nom() == null
                 ? String.valueOf(rapport.utilisateurId())

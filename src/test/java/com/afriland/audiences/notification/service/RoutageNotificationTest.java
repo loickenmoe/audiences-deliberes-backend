@@ -34,7 +34,7 @@ class RoutageNotificationTest {
     @Mock private ReglagesNotificationService reglagesNotificationService;
     @InjectMocks private RoutageNotification routage;
 
-    /** Réglages initiaux de V28, modifiables clé par clé. */
+    /** Initial V28 settings, editable key by key. */
     private static Map<String, String> reglagesInitiaux() {
         Map<String, String> valeurs = new HashMap<>();
         valeurs.put("CANAUX_NOTIFICATION_DEFAUT", "APPLICATIF,OUTLOOK");
@@ -55,7 +55,7 @@ class RoutageNotificationTest {
         return Utilisateur.builder().id(7L).email(email).profil(Profil.builder().code(profil).build()).build();
     }
 
-    // ── Utilisateurs internes (D1) ──
+    // Internal users (D1)
 
     @Test
     void interne_parDefaut_ne_recoit_que_Outlook_a_son_adresse() {
@@ -101,14 +101,14 @@ class RoutageNotificationTest {
                 .containsExactly(new Route("OUTLOOK", CanalEngine.EMAIL, null, MotifNonJoignable.COORDONNEE_INVALIDE));
     }
 
-    /** D2 : un avocat qui a un compte suit la grille des prestataires, jamais Outlook ou Teams. */
+    /** D2: a lawyer with an account follows the provider grid, never Outlook or Teams. */
     @Test
     void un_avocat_avec_compte_n_a_aucun_canal_interne() {
         assertThat(routage.pourUtilisateur(TypeAlerte.PAIEMENT_EFFECTUE, utilisateur("AVOCAT", "avocat@cabinet.cm"))).isEmpty();
         verifyNoInteractions(reglagesNotificationService);
     }
 
-    // ── Prestataires (D2, D14, D15) ──
+    // Providers (D2, D14, D15)
 
     @Test
     void prestataire_parDefaut_recoit_courriel_personnel_et_SMS_mais_pas_WhatsApp() {
@@ -133,7 +133,7 @@ class RoutageNotificationTest {
                 .containsExactly(new Route("WHATSAPP", CanalEngine.WHATSAPP, "+237600000000", null));
     }
 
-    /** D14 : le canal sans coordonnée est signalé, les autres partent. */
+    /** D14: the channel without contact details is flagged, the others are sent. */
     @Test
     void prestataire_sans_telephone_garde_le_courriel_et_signale_le_SMS() {
         regler(reglagesInitiaux());
@@ -156,7 +156,7 @@ class RoutageNotificationTest {
                         new Route("SMS", CanalEngine.SMS, null, MotifNonJoignable.COORDONNEE_INVALIDE));
     }
 
-    /** D15 : sans consentement, rien ne part hors de l'application — pas même une ligne non joignable. */
+    /** D15: without consent, nothing leaves the application, not even an unreachable line. */
     @Test
     void prestataire_sans_consentement_n_est_pas_notifie() {
         assertThat(routage.pourPrestataire(EvenementPrestataire.CONSTITUTION_VALIDEE,
@@ -174,7 +174,7 @@ class RoutageNotificationTest {
                 new CoordonneesPrestataire("prestataire.test@example.cm", "600000000", true))).isEmpty();
     }
 
-    // ── Lecture des réglages ──
+    // Reading settings
 
     @Test
     void reglages_une_cle_absente_ou_une_valeur_inconnue_ne_font_rien_partir() {

@@ -16,22 +16,21 @@ public interface DossierAvocatRepository extends JpaRepository<DossierAvocat, Do
 
     List<DossierAvocat> findByDossierId(Long dossierId);
 
-    /** Affectations de plusieurs dossiers en une requête (QF-41). */
+    /** Assignments of several cases in one query. */
     List<DossierAvocat> findByDossierIdIn(Collection<Long> dossierIds);
 
     boolean existsByDossierIdAndAvocatId(Long dossierId, Long avocatId);
 
     void deleteByDossierId(Long dossierId);
 
-    /** Nombre de dossiers affectés par avocat — alerte CHARGE_MAX_AVOCAT (RG-ALR-02, module alerte M5). */
+    /** Number of assigned cases per lawyer, for the CHARGE_MAX_AVOCAT alert (RG-ALR-02). */
     @Query("SELECT da.avocat.id AS avocatId, COUNT(da) AS total FROM DossierAvocat da GROUP BY da.avocat.id")
     List<ChargeAvocat> compterDossiersParAvocat();
 
     /**
-     * Nombre de dossiers <b>actifs</b> par avocat (RG-INT-01, `GET /repertoire/avocats`, M9) — un
-     * dossier est actif s'il porte au moins une étape hors {@code statutsFermes} (typiquement
-     * {@code CLOTURE}/{@code ARCHIVE}). Distinct de {@link #compterDossiersParAvocat} (M5), qui
-     * compte toute affectation sans notion d'activité.
+     * Number of <b>active</b> cases per lawyer (RG-INT-01, {@code GET /repertoire/avocats}): a case
+     * is active if it has at least one step outside {@code statutsFermes}. Unlike
+     * {@link #compterDossiersParAvocat}, which counts every assignment.
      */
     @Query("SELECT da.avocat.id AS avocatId, COUNT(DISTINCT da.dossier.id) AS total FROM DossierAvocat da "
             + "WHERE EXISTS (SELECT 1 FROM EtapeProcedure e WHERE e.dossier = da.dossier AND e.statutCycleVie NOT IN :statutsFermes) "

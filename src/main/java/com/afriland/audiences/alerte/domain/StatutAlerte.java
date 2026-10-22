@@ -1,6 +1,6 @@
 package com.afriland.audiences.alerte.domain;
 
-/** Cycle de vie d'une alerte (RG-ALR-01) : déclenchée, puis traitée par son destinataire. */
+/** Alert lifecycle (RG-ALR-01): raised, then handled by its recipient. */
 public enum StatutAlerte {
     DECLENCHEE,
     TRAITEE

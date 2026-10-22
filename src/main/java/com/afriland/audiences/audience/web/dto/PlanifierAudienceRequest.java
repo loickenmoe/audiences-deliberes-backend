@@ -6,9 +6,8 @@ import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 
 /**
- * @param juridiction juridiction devant laquelle l'audience se tiendra. Facultative : laissée vide,
- *                    elle reprend celle du dossier — le cas courant du premier degré. Elle se
- *                    précise pour un appel ou un pourvoi, qui se tiennent ailleurs.
+ * @param juridiction court where the hearing will take place. Optional: defaults to the case's
+ * court (first instance); set it for an appeal or cassation.
  */
 public record PlanifierAudienceRequest(@NotNull Long etapeId, @NotNull LocalDate datePlanifiee,
                                        @Size(max = 100) String juridiction) {
