@@ -20,18 +20,14 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Test d'intégration contre un vrai PostgreSQL (Testcontainers), migré par Flyway comme en
- * production. M3 n'introduit aucun contrôleur : contrairement à M1/M2, il n'existe pas d'appel
- * HTTP manuel possible pour valider le provisioning — ce test en tient lieu.
- */
+/** Integration test against a real PostgreSQL (Testcontainers), migrated by Flyway as in production. */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Testcontainers
 class CurrentUserServiceIntegrationTest {
 
     @Container
-    static PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17")
+    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17")
             .withDatabaseName("audiences_test")
             .withUsername("test")
             .withPassword("test");
@@ -53,9 +49,8 @@ class CurrentUserServiceIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        // Le provisionnement vit désormais dans son propre bean, porteur de REQUIRES_NEW (R-06,
-        // corrigé en M15) — instancié directement ici, la propagation transactionnelle n'étant pas
-        // l'objet de ce test (elle l'est de UtilisateurProvisioningServiceIntegrationTest).
+        // Provisioning lives in its own REQUIRES_NEW bean, instantiated directly here: transaction
+        // propagation is covered by UtilisateurProvisioningServiceIntegrationTest.
         currentUserService = new CurrentUserService(utilisateurRepository,
                 new UtilisateurProvisioningService(utilisateurRepository, profilRepository));
     }

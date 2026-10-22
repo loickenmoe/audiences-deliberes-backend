@@ -1,6 +1,6 @@
 package com.afriland.audiences.frais.domain;
 
-/** Décision individuelle enregistrée sur une ligne {@code validation_frais}. */
+/** Individual decision recorded on a {@code validation_frais} row. */
 public enum DecisionValidationFrais {
     ACCORD,
     REJET

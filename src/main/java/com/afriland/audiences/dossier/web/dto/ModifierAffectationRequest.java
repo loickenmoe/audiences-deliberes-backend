@@ -4,13 +4,12 @@ import jakarta.validation.constraints.NotEmpty;
 
 import java.util.List;
 
-/** FR-DOS-02, US 1.2. Listes complètes (remplacent l'affectation existante), pas un delta. */
 /**
- * Nouvelle affectation d'un dossier (FR-DOS-02). L'endpoint <b>remplace</b> les deux listes.
+ * New assignment of a case (FR-DOS-02, US 1.2). The endpoint <b>replaces</b> both lists (not a
+ * delta).
  * <p>
- * {@code @NotEmpty} ajouté en M16 (Q-75) : sans lui, une liste vide ou absente retirait tous les
- * juristes — ou tous les avocats — d'un dossier, contre RG-DOS-03, alors que la création exige déjà
- * les deux listes non vides. Même règle aux deux bouts de la vie de l'affectation.
+ * {@code @NotEmpty}: an empty list would remove all in-house lawyers or lawyers from the case,
+ * against RG-DOS-03; creation already requires both lists.
  */
 public record ModifierAffectationRequest(
         @NotEmpty List<Long> juristesAffectes,

@@ -4,10 +4,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
- * {@code alerte} (Q-17) : {@code true} dès que le compteur de prorogations dépasse le seuil
- * configuré ({@code SEUIL_PROROGATIONS}, Q-18) — pas seulement lors de la prorogation qui
- * franchit ce seuil. Ne s'agit pas d'une erreur HTTP : la prorogation est toujours enregistrée
- * avec le code {@code 201 Created}.
+ * {@code alerte} is {@code true} as soon as the extension count exceeds the configured threshold
+ * ({@code SEUIL_PROROGATIONS}), not only on the extension that crosses it. It is not an HTTP error:
+ * the extension is always recorded with {@code 201 Created}.
  */
 public record ProrogationResponse(
         Long id,

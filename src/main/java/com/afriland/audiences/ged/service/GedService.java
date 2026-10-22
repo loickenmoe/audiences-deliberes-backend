@@ -47,10 +47,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** Épic 6 (RG-GED-02/04/05/06/08/09) — cf. FUNCTIONAL_MAP.md §6, API_IMPLEMENTATION_STATUS.md §8. */
+/** GED service (RG-GED-02/04/05/06/08/09). */
 @Service
 @RequiredArgsConstructor
 public class GedService {
+
+    private static final String CLE_DOCUMENT_ID = "documentId";
 
     private final DocumentRepository documentRepository;
     private final DemandeSuppressionRepository demandeSuppressionRepository;
@@ -66,7 +68,7 @@ public class GedService {
     private final CompteAvocatService compteAvocatService;
     private final NotificationPrestataireService notificationPrestataireService;
     private final MinioStorageService minioStorageService;
-    // RG-GED-04/08, partagé avec les pièces justificatives de frais (Q-97).
+    // RG-GED-04/08, shared with expense supporting documents.
     private final ValidationFichierService validationFichierService;
     private final DemandeSuppressionMapper demandeSuppressionMapper;
 
@@ -89,14 +91,14 @@ public class GedService {
                 .build());
 
         historiqueActionService.enregistrerPour(auteur, dossierId, TypeActionHistorique.DOCUMENT_CHARGE,
-                Map.of("documentId", document.getId(), "nomFichier", document.getNomFichier()));
+                Map.of(CLE_DOCUMENT_ID, document.getId(), "nomFichier", document.getNomFichier()));
 
         signalerDocumentCharge(dossier, document);
 
         return toResponse(document, null);
     }
 
-    /** RG-GED-02 : notifie chaque juriste coté au dossier. */
+    /** RG-GED-02: notifies every legal officer assigned to the case file. */
     private void signalerDocumentCharge(Dossier dossier, Document document) {
         String declencheur = "Nouveau document « " + document.getNomFichier() + " » chargé sur le dossier "
                 + dossier.getReference() + ".";
@@ -119,8 +121,8 @@ public class GedService {
     }
 
     /**
-     * RG-GED-05/09 : double comportement selon le rôle de l'appelant — juriste auteur du
-     * chargement (crée une demande, 202) ou DJ/DJA (suppression immédiate, 200).
+     * RG-GED-05/09: behaviour depends on the caller's role: the legal officer who uploaded the
+     * document (creates a request, 202) or the DJ/DJA (immediate deletion, 200).
      */
     @Transactional
     public SuppressionResult supprimerOuDemander(Long documentId) {
@@ -147,7 +149,7 @@ public class GedService {
                 .build());
 
         historiqueActionService.enregistrerPour(utilisateur, document.getDossier().getId(),
-                TypeActionHistorique.DOCUMENT_SUPPRESSION_DEMANDEE, Map.of("documentId", documentId, "demandeId", demande.getId()));
+                TypeActionHistorique.DOCUMENT_SUPPRESSION_DEMANDEE, Map.of(CLE_DOCUMENT_ID, documentId, "demandeId", demande.getId()));
 
         signalerDemandeSuppression(document, "Une demande de suppression a été soumise pour le document « "
                 + document.getNomFichier() + "» (dossier " + document.getDossier().getReference() + ").");
@@ -160,8 +162,8 @@ public class GedService {
         documentRepository.save(document);
         minioStorageService.supprimer(document.getCheminStockage());
 
-        // Q-79 : la demande en attente sur ce document est close avec lui. Laissée ouverte, elle
-        // restait dans la file, indécidable (document supprimé → 404) et relancée toutes les 72 h.
+        // The pending request on this document is closed along with it. Left open, it would stay in
+        // the queue, impossible to decide (deleted document returns 404) and reminded every 72 h.
         demandeSuppressionRepository.findByDocumentIdAndStatut(document.getId(), StatutSuppression.EN_ATTENTE)
                 .ifPresent(demande -> {
                     demande.setStatut(StatutSuppression.APPROUVEE);
@@ -171,7 +173,7 @@ public class GedService {
                 });
 
         historiqueActionService.enregistrerPour(validePar, document.getDossier().getId(),
-                TypeActionHistorique.DOCUMENT_SUPPRIME_DIRECTEMENT, Map.of("documentId", document.getId()));
+                TypeActionHistorique.DOCUMENT_SUPPRIME_DIRECTEMENT, Map.of(CLE_DOCUMENT_ID, document.getId()));
 
         alerteService.declencher(TypeAlerte.SUPPRESSION_DOCUMENT, document.getDossier().getId(), document.getAuteurChargement(),
                 "Votre document « " + document.getNomFichier() + " » a été supprimé directement par "
@@ -181,8 +183,8 @@ public class GedService {
     }
 
     /**
-     * M15 (Q-68) : file de travail « demandes de suppression en attente » du DJ/DJA — endpoint 🆕.
-     * Sans filtre, retourne l'historique complet (plus récentes d'abord).
+     * Queue of pending deletion requests for the DJ/DJA. Without a filter, returns the full history
+     * (most recent first).
      */
     @Transactional(readOnly = true)
     public PageResponse<DemandeSuppressionResponse> listerDemandesSuppression(StatutSuppression statut, Pageable pageable) {
@@ -220,8 +222,8 @@ public class GedService {
                     "Votre demande de suppression du document « " + document.getNomFichier()
                             + " » a été rejetée : " + request.motifRejet());
         }
-        // D19 : si le demandeur est un avocat, il est aussi prévenu par ses canaux externes (Q-118).
-        // Copie locale : la variable demande est réaffectée juste après, et une lambda exige une variable finale.
+        // If the requester is a lawyer, they are also notified through their external channels.
+        // Local copy: the variable demande is reassigned just below, and a lambda requires an effectively final variable.
         DemandeSuppression arbitree = demande;
         compteAvocatService.avocatDe(arbitree.getDemandeur()).ifPresent(avocat ->
                 notificationPrestataireService.notifier(EvenementPrestataire.SUPPRESSION_DOCUMENT_ARBITREE, avocat,
@@ -231,7 +233,7 @@ public class GedService {
 
         historiqueActionService.enregistrerPour(validateur, document.getDossier().getId(),
                 TypeActionHistorique.DOCUMENT_SUPPRESSION_ARBITREE,
-                Map.of("documentId", documentId, "decision", request.decision().name()));
+                Map.of(CLE_DOCUMENT_ID, documentId, "decision", request.decision().name()));
 
         return demandeSuppressionMapper.toResponse(demande);
     }

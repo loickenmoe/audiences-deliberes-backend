@@ -7,25 +7,23 @@ import java.time.Duration;
 import java.util.List;
 
 /**
- * Paramètres du Notification Engine, lus depuis le {@code .env} (jamais versionné).
+ * Notification Engine settings, read from the {@code .env} file (never committed).
  *
- * @param actif          interrupteur général ; {@code false} par défaut : aucune notification ne quitte
- *                       l'application, elles sont seulement écrites dans le journal
- * @param codeService    code du compte de service attribué par l'administrateur ({@code sub} du JWT)
- * @param jwtSecret      secret de signature HS256 des jetons ; au moins 32 caractères (Guide V1 §4 bis)
- * @param tentativesMax  nombre de remises tentées avant l'échec définitif (D13)
- * @param ageMax         au-delà, une notification en attente est périmée plutôt qu'envoyée (voir § 8)
- * @param redirection     bac à sable des environnements de travail (D10)
- * @param callbackBaseUrl adresse publique de l'application, telle que le moteur peut la joindre. Vide
- *                        depuis un poste de travail : les rappels sont alors désactivés (Q-120)
- * @param priorite        priorité portée par chaque message ; celle du compte de service (STANDARD)
- * @param delaiDepot      au-delà, une notification qui attend l'adresse de dépôt de sa pièce jointe
- *                        part sans elle (D5) : prévenir sans la pièce vaut mieux que ne pas prévenir
- * @param suiviAccuses    le moteur publie-t-il vraiment ses accusés ? <b>Faux par défaut</b> : relus
- *                        depuis leur origine, {@code notification-sent} et {@code notification-failed}
- *                        se sont révélés vides, tous services confondus (Q-121). Tant qu'il en est
- *                        ainsi, une notification remise ne peut pas être confirmée, et l'attendre
- *                        ferait passer en SANS_RETOUR des messages pourtant délivrés
+ * @param actif          master switch; {@code false} by default: no notification leaves the
+ *                       application, they are only logged
+ * @param codeService    service account code assigned by the administrator (JWT {@code sub})
+ * @param jwtSecret      HS256 token signing secret; at least 32 characters (Guide V1 §4 bis)
+ * @param tentativesMax  delivery attempts before permanent failure
+ * @param ageMax         beyond this age a pending notification expires instead of being sent
+ * @param redirection     sandbox for non-production environments
+ * @param callbackBaseUrl public application URL reachable by the engine; empty on a workstation, which
+ *                        disables callbacks
+ * @param priorite        priority carried by each message; the service account's (STANDARD)
+ * @param delaiDepot      beyond this delay, a notification waiting for its attachment upload URL is
+ *                        sent without the attachment
+ * @param suiviAccuses    whether the engine actually publishes receipts. <b>False by default</b>: the
+ *                        tracking topics are empty for all services, so a delivered notification
+ *                        cannot be confirmed and waiting would wrongly mark it SANS_RETOUR
  */
 @ConfigurationProperties(prefix = "notification.engine")
 public record NotificationEngineProperties(
@@ -41,31 +39,30 @@ public record NotificationEngineProperties(
         @DefaultValue("false") boolean suiviAccuses,
         @DefaultValue("5m") Duration delaiDepot) {
 
-    /** Longueur minimale du secret exigée par le moteur pour la signature HS256 (256 bits). */
+    /** Minimum secret length required by the engine for HS256 signing (256 bits). */
     public static final int LONGUEUR_MIN_SECRET = 32;
 
     /**
-     * Délais avant chaque nouvelle tentative (D13) : 1 min, 5 min, 15 min, 1 h, puis 6 h. Au-delà du
-     * nombre de tentatives, la notification est en échec et visible en supervision.
+     * Delays before each retry: 1 min, 5 min, 15 min, 1 h, then 6 h. Past the maximum number of
+     * attempts, the notification fails and shows in monitoring.
      */
     public static final List<Duration> DELAIS_TENTATIVES = List.of(
             Duration.ofMinutes(1), Duration.ofMinutes(5), Duration.ofMinutes(15),
             Duration.ofHours(1), Duration.ofHours(6));
 
     /**
-     * Transport du message jusqu'au moteur.
+     * Message transport to the engine.
      *
-     * @param type            DAPR (voie documentée par le Guide), KAFKA (repli direct) ou JOURNAL (rien
-     *                        n'est envoyé, utile pour éprouver une configuration active sans émettre)
-     * @param topic           topic d'entrée du moteur. <b>Un message réellement accepté arrive sur
-     *                        {@code notification-send-request}</b> (Q-121) : c'est le topic consommé, et
-     *                        la priorité voyage dans le message plutôt que par un topic dédié. Le
-     *                        {@code notification-send-standard} du Guide n'est lu par personne.
-     * @param pubsub          nom du composant pubsub, tel qu'il apparaît dans les messages acceptés
-     * @param daprUrl         adresse locale du sidecar
-     * @param attenteSecondes délai d'attente de l'accusé du courtier, en transport Kafka direct
-     * @param cloudEvents     en transport Kafka direct, reproduire l'enveloppe que le sidecar Dapr
-     *                        aurait posée. Vrai par défaut : c'est ce que le moteur attend
+     * @param type            DAPR (documented by the Guide), KAFKA (direct fallback) or JOURNAL (nothing
+     *                        is sent; useful to test an active configuration without sending)
+     * @param topic           engine input topic. Accepted messages arrive on
+     *                        {@code notification-send-request}, with the priority inside the message;
+     *                        the Guide's {@code notification-send-standard} is not consumed.
+     * @param pubsub          pubsub component name, as seen in accepted messages
+     * @param daprUrl         local sidecar URL
+     * @param attenteSecondes broker acknowledgement timeout, for direct Kafka transport
+     * @param cloudEvents     for direct Kafka transport, reproduce the Dapr sidecar envelope. True by
+     *                        default, as the engine expects it
      */
     public record Transport(
             @DefaultValue("DAPR") TypeTransport type,
@@ -81,7 +78,7 @@ public record NotificationEngineProperties(
         DAPR, KAFKA, JOURNAL
     }
 
-    /** Masque le secret : ce record peut finir dans un journal ou un message d'erreur. */
+    /** Masks the secret: this record may end up in a log or an error message. */
     @Override
     public String toString() {
         return "NotificationEngineProperties[actif=" + actif + ", codeService=" + codeService
@@ -90,13 +87,12 @@ public record NotificationEngineProperties(
     }
 
     /**
-     * Redirection des envois hors production (D10). Les données de DEV contiennent de vrais numéros
-     * d'avocats : tant qu'elle est active, aucun message ne part vers un destinataire réel, et le
-     * destinataire d'origine est conservé dans la file pour le contrôle.
+     * Non-production redirection. DEV data contains real lawyer numbers: while active, no message
+     * reaches a real recipient, and the original recipient is kept in the queue for checking.
      *
-     * @param courrielInterne   remplace l'adresse professionnelle (Outlook, Teams)
-     * @param courrielPersonnel remplace le courriel personnel d'un prestataire
-     * @param telephone         remplace le numéro (SMS, WhatsApp), au format du Guide
+     * @param courrielInterne   replaces the work address (Outlook, Teams)
+     * @param courrielPersonnel replaces a provider's personal e-mail
+     * @param telephone         replaces the number (SMS, WhatsApp), in the Guide's format
      */
     public record Redirection(
             @DefaultValue("true") boolean actif,

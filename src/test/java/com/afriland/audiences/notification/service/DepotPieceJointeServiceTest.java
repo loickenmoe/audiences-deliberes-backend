@@ -30,9 +30,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
- * Étape 12 : le dépôt du fichier chez le moteur. Un serveur local tient lieu de stockage distant —
- * c'est le comportement HTTP qui compte, et le mécanisme complet a par ailleurs été vérifié contre
- * l'environnement DEV.
+ * Step 12: uploading the file to the engine. A local server stands in for remote storage: the HTTP
+ * behavior is what matters.
  */
 @ExtendWith(MockitoExtension.class)
 class DepotPieceJointeServiceTest {
@@ -84,7 +83,7 @@ class DepotPieceJointeServiceTest {
         service.traiterLaReponse(new ReponseDepotPieceJointe("constitution-7-p9-EMAIL", "READY",
                 "pending/abc/lettre-constitution-4.pdf", urlDepot(), null, null));
 
-        // Le fichier est bien parti par l'adresse rendue, sans passer par Kafka.
+        // The file went to the returned address, without going through Kafka.
         assertThat(depots).hasSize(1);
         assertThat(new String(depots.get(0), StandardCharsets.UTF_8)).isEqualTo("%PDF-1.4");
         assertThat(envoi.getPieceJointeCle()).isEqualTo("pending/abc/lettre-constitution-4.pdf");
@@ -92,7 +91,7 @@ class DepotPieceJointeServiceTest {
         assertThat(envoi.getProchaineTentative()).isBeforeOrEqualTo(LocalDateTime.now());
     }
 
-    /** Prévenir sans la pièce vaut mieux que ne pas prévenir : la notification part quand même. */
+    /** Notifying without the attachment beats not notifying: the notification is sent anyway. */
     @Test
     void un_stockage_qui_refuse_le_depot_ne_retient_pas_la_notification() {
         codeReponse = 403;
@@ -123,7 +122,7 @@ class DepotPieceJointeServiceTest {
         verifyNoInteractions(minioStorageService);
     }
 
-    /** Le topic porte les réponses de tous les services : celles des autres ne nous concernent pas. */
+    /** The topic carries responses for all services: other services' responses are ignored. */
     @Test
     void une_reponse_pour_une_reference_inconnue_est_ignoree() {
         lenient().when(repository.findByEventId("autre-service")).thenReturn(Optional.empty());

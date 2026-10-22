@@ -14,13 +14,11 @@ import lombok.Setter;
 import java.io.Serializable;
 
 /**
- * Le compteur annuel d'une famille de références (V36).
+ * Yearly counter of a reference family (migration V36).
  *
- * <p>Cette entité n'est jamais écrite par JPA : les numéros sont servis par la fonction
- * {@code prochain_numero_reference}, seule capable de le faire atomiquement. Elle existe pour deux
- * raisons : donner au repository une entité à laquelle s'accrocher, et faire valider la table par
- * Hibernate au démarrage ({@code ddl-auto=validate}) — si la migration et le code divergeaient un
- * jour, l'application refuserait de démarrer plutôt que de servir des numéros faux.
+ * <p>Never written through JPA: numbers are served atomically by the database function
+ * {@code prochain_numero_reference}. The entity gives the repository a type and lets Hibernate
+ * validate the table at startup ({@code ddl-auto=validate}), so a schema drift prevents startup.
  */
 @Getter
 @Setter
@@ -40,11 +38,11 @@ public class CompteurReference {
     @Column(nullable = false)
     private Integer annee;
 
-    /** Dernier numéro <b>servi</b> ; le prochain est celui-ci plus un. */
+    /** Last number served; the next one is this value plus one. */
     @Column(nullable = false)
     private Integer dernier;
 
-    /** Clé composite : une ligne par famille et par année. */
+    /** Composite key: one row per family and year. */
     @Getter
     @Setter
     @NoArgsConstructor

@@ -16,13 +16,12 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * Accusé publié par le Notification Engine sur {@code notification-sent} ou
- * {@code notification-failed} (voir la migration V30).
+ * Receipt published by the Notification Engine on {@code notification-sent} or
+ * {@code notification-failed} (migration V30).
  * <p>
- * <b>Il n'identifie pas notre envoi.</b> Le moteur le rattache à son propre {@code notificationId},
- * jamais à l'{@code eventId} que nous avons fourni. Ces lignes permettent donc de mesurer ce qui part
- * et ce qui échoue, par canal et par fournisseur, mais pas de dire quelle notification de la file a
- * abouti. Le champ {@code notificationEnvoiId} attend que ce rattachement devienne possible (Q-120).
+ * It does not identify our send: the engine links it to its own {@code notificationId}, never to our
+ * {@code eventId}. These rows measure successes and failures per channel and provider, but not which
+ * queued notification succeeded. {@code notificationEnvoiId} is reserved for when that link becomes possible.
  */
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -65,22 +64,26 @@ public class NotificationAccuse {
     @Column(name = "notification_envoi_id")
     private Long notificationEnvoiId;
 
-    public static NotificationAccuse de(String notificationId, TypeAccuse type, String serviceId, String canal,
-                                        String fournisseur, String messageErreur, Boolean definitif,
+    public static NotificationAccuse de(String notificationId, TypeAccuse type, String serviceId,
                                         LocalDateTime dateEvenement) {
         NotificationAccuse accuse = new NotificationAccuse();
         accuse.notificationId = notificationId;
         accuse.type = type;
         accuse.serviceId = serviceId;
-        accuse.canal = canal;
-        accuse.fournisseur = fournisseur;
-        accuse.messageErreur = tronquer(messageErreur);
-        accuse.definitif = definitif;
         accuse.dateEvenement = dateEvenement;
         return accuse;
     }
 
-    /** Rattache l'accusé à une ligne de la file, le jour où le moteur nous en donnera le moyen. */
+    /** What the engine reports about the delivery; all optional. */
+    public NotificationAccuse avecDetails(String canal, String fournisseur, String messageErreur, Boolean definitif) {
+        this.canal = canal;
+        this.fournisseur = fournisseur;
+        this.messageErreur = tronquer(messageErreur);
+        this.definitif = definitif;
+        return this;
+    }
+
+    /** Links the receipt to a queue row, once the engine provides the means to do so. */
     public void rattacherA(Long notificationEnvoiId) {
         this.notificationEnvoiId = notificationEnvoiId;
     }

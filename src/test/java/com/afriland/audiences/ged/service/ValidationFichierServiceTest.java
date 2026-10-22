@@ -20,13 +20,11 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 /**
- * Contrôle de format et de poids, pour lui-même.
+ * Format and size validation, tested on its own.
  *
- * <p>Ce service décide ce que l'application accepte de recevoir : il est partagé par la GED, les
- * pièces justificatives d'une demande de frais (Q-97) et la pièce d'un compte rendu (Q-98). Le
- * tester à travers {@code GedService} ne couvrait que la première de ces trois portes.
- *
- * <p>Écrit à l'ajout des formats Word (2026-10-02).
+ * <p>This service decides what the application accepts: it is shared by the GED, fee request
+ * supporting documents and hearing report attachments. Testing it through {@code GedService} only
+ * covered the first.
  */
 @ExtendWith(MockitoExtension.class)
 class ValidationFichierServiceTest {
@@ -41,7 +39,7 @@ class ValidationFichierServiceTest {
 
     @BeforeEach
     void configurationParDefaut() {
-        // `lenient` : les cas qui échouent sur l'extension n'atteignent jamais la configuration.
+        // `lenient`: cases failing on the extension never reach the configuration.
         lenient().when(configurationService.getOrThrow("FORMATS_GED"))
                 .thenReturn(ConfigurationSysteme.builder().valeur(TOUS_LES_FORMATS).build());
         lenient().when(configurationService.getOrThrow("TAILLE_MAX_GED"))
@@ -65,7 +63,7 @@ class ValidationFichierServiceTest {
         assertThat(service.valider(fichier(nom))).isEqualTo(attendu);
     }
 
-    /** L'extension est lue sans égard à la casse : Word écrit volontiers « .DOCX ». */
+    /** The extension is case-insensitive: Word often writes ".DOCX". */
     @ParameterizedTest
     @CsvSource({"CONCLUSIONS.DOCX, DOCX", "Assignation.Doc, DOC"})
     void valider_ignoreLaCasseDeLExtension(String nom, FormatDocument attendu) {
@@ -73,9 +71,8 @@ class ValidationFichierServiceTest {
     }
 
     /**
-     * Le format vient de l'extension, pas du type MIME déclaré (Q-46). Un document Word envoyé
-     * sous un type MIME générique est donc accepté — c'est la règle, et la connaître évite de
-     * croire à un défaut le jour où un navigateur déclare {@code application/octet-stream}.
+     * The format comes from the extension, not the declared MIME type. A Word document sent as
+     * {@code application/octet-stream} is therefore accepted, by design.
      */
     @Test
     void valider_sAppuieSurLExtensionEtNonSurLeTypeMime() {
@@ -86,25 +83,28 @@ class ValidationFichierServiceTest {
 
     @Test
     void valider_refuseUnFormatInconnu() {
-        assertThatThrownBy(() -> service.valider(fichier("texte.odt")))
+        var fichier = fichier("texte.odt");
+        assertThatThrownBy(() -> service.valider(fichier))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("non conforme");
     }
 
     @Test
     void valider_refuseUnFichierSansExtension() {
-        assertThatThrownBy(() -> service.valider(fichier("conclusions")))
+        var fichier = fichier("conclusions");
+        assertThatThrownBy(() -> service.valider(fichier))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("extension");
     }
 
-    /** Le DJ peut retirer Word de la liste : le refus le dit alors, et ne parle pas d'un inconnu. */
+    /** The DJ can remove Word from the list: the refusal then says so instead of reporting an unknown format. */
     @Test
     void valider_refuseUnFormatDesactiveParLaConfiguration() {
         when(configurationService.getOrThrow("FORMATS_GED"))
                 .thenReturn(ConfigurationSysteme.builder().valeur("PDF,PNG,JPG").build());
 
-        assertThatThrownBy(() -> service.valider(fichier("conclusions.docx")))
+        var fichier = fichier("conclusions.docx");
+        assertThatThrownBy(() -> service.valider(fichier))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("désactivé");
     }
@@ -114,7 +114,8 @@ class ValidationFichierServiceTest {
         when(configurationService.getOrThrow("TAILLE_MAX_GED"))
                 .thenReturn(ConfigurationSysteme.builder().valeur("2").build());
 
-        assertThatThrownBy(() -> service.valider(fichier("conclusions.docx")))
+        var fichier = fichier("conclusions.docx");
+        assertThatThrownBy(() -> service.valider(fichier))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("supérieur au maximum");
     }

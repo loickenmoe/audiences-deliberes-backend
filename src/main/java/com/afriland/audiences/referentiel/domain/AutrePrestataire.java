@@ -13,9 +13,9 @@ import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
 /**
- * Prestataire non-utilisateur (notaire, huissier, greffier, conservateur foncier) : aucun compte
- * Keycloak, peut recevoir une notification par email si nécessaire (RG-INT-02).
- * Cf. dictionnaire des données §2.2.3 (table {@code autre_prestataire}).
+ * Non-user service provider (notary, bailiff, court clerk, land registrar): no Keycloak account,
+ * may receive an email notification if needed (RG-INT-02).
+ * See data dictionary §2.2.3 (table {@code autre_prestataire}).
  */
 @Getter
 @Setter

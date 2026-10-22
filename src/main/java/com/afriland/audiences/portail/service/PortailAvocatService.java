@@ -46,22 +46,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Lectures du portail Avocat (Q-96, QF-01 du frontend).
- *
- * <p><b>Pourquoi ce module existe.</b> L'avocat ne porte pas {@code ROLE_CONSULTATION} : il
- * n'atteignait que six endpoints, tous en écriture ou propres à ses notifications. Or US 4.1 le fait
- * soumettre un {@code dossierId} et US 5.1 lui demande de déposer un compte rendu « <b>en
- * choisissant le dossier et l'audience</b> » — un choix que rien ne lui permettait de faire. Les deux
- * premières lectures ci-dessous comblent cette exigence.
- *
- * <p><b>Périmètre ajouté, à confirmer.</b> Les deux dernières — ses publications et ses lettres de
- * constitution — ne répondent à aucune exigence écrite : US 5.4 vise le juriste. Elles sont livrées
- * sur arbitrage du porteur du projet (2026-09-14), au motif que l'avocat est notifié du rejet d'une
- * publication sans pouvoir relire ce qui a été rejeté. <b>À confirmer avec la Direction Juridique.</b>
- *
- * <p><b>Principe de cadrage.</b> Chaque lecture est restreinte <b>dans la requête</b>, jamais par un
- * filtre appliqué après coup : un filtre oublié exposerait le portefeuille entier de la banque à un
- * prestataire externe. Les réponses sont réduites à ce que l'usage exige.
+ * Lawyer portal reads. The lawyer lacks {@code ROLE_CONSULTATION}, yet US 4.1 and US 5.1 require
+ * choosing a case file and a hearing; the first reads below provide that. The lawyer's own
+ * publications and engagement letters let them review what was rejected.
+ * <p>
+ * Each read is restricted <b>in the query</b>, never by an after-the-fact filter: a forgotten filter
+ * would expose the bank's whole portfolio to an external provider. Responses carry only what is needed.
  */
 @Service
 @RequiredArgsConstructor
@@ -82,20 +72,22 @@ public class PortailAvocatService {
     private final DocumentRepository documentRepository;
     private final HistoriqueActionService historiqueActionService;
 
-    /** US 4.1, US 5.1 : de quoi désigner son dossier. Identification seule. */
+    /** US 4.1, US 5.1: enough to identify the lawyer's case files, nothing more. */
     @Transactional(readOnly = true)
     public PageResponse<DossierAvocatResponse> mesDossiers(Pageable pageable) {
-        return mesDossiers(null, pageable);
+        return listerMesDossiers(null, pageable);
     }
 
     /**
-     * @param reference fragment de référence cherché, ou {@code null} pour la liste entière. La
-     *                  recherche est faite <b>par le serveur</b> : filtrer une page déjà chargée
-     *                  n'aurait cherché que parmi les dossiers les plus récents, et aurait donc
-     *                  répondu « aucun résultat » pour un dossier qui existe bel et bien
+     * @param reference reference fragment to search, or {@code null} for the whole list. Searched
+     *                  server-side: filtering a loaded page would miss older case files
      */
     @Transactional(readOnly = true)
     public PageResponse<DossierAvocatResponse> mesDossiers(String reference, Pageable pageable) {
+        return listerMesDossiers(reference, pageable);
+    }
+
+    private PageResponse<DossierAvocatResponse> listerMesDossiers(String reference, Pageable pageable) {
         Avocat avocat = avocatCourant();
         Page<Dossier> dossiers = reference == null || reference.isBlank()
                 ? dossierRepository.findDossiersDeLAvocat(avocat.getId(), pageable)
@@ -106,22 +98,18 @@ public class PortailAvocatService {
     }
 
     /**
-     * US 5.1 : les audiences d'un de <b>ses</b> dossiers. Un dossier auquel il n'est pas affecté
-     * répond 403 — et non 404 : le dossier existe, c'est l'accès qui est refusé.
+     * US 5.1: hearings of one of the lawyer's <b>own</b> case files. An unassigned case file returns 403,
+     * not 404: the file exists, access is denied.
      */
     @Transactional(readOnly = true)
     public List<AudienceAvocatResponse> audiencesDeMonDossier(Long dossierId) {
         Avocat avocat = avocatCourant();
         verifierAffectation(dossierId, avocat);
-        // La note n'est lue que par l'avocat constitué (QF-64) : c'est le mandat qui ouvre la
-        // communication, pas l'affectation. Lue une fois pour toute la liste.
+        // The note is only shown to an engaged lawyer: the mandate, not the assignment, opens
+        // communication. Read once for the whole list.
         boolean constitue = estConstitue(dossierId, avocat);
-        /*
-         * `unpaged` volontairement : cette liste alimente le **sélecteur d'audience** du formulaire
-         * de dépôt (écran 33), pas un tableau. La paginer amputerait silencieusement le choix de
-         * l'avocat — le compilateur a d'ailleurs signalé cet appel quand la requête est passée en
-         * `Page`, ce qui a évité de le découvrir en recette.
-         */
+        // Deliberately unpaged: this list feeds the hearing selector of the filing form, not a table.
+        // Paging would silently truncate the lawyer's choice.
         return audienceRepository.findByDossierIdOrderByDatePlanifieeDesc(dossierId, Pageable.unpaged()).stream()
                 .map(audience -> new AudienceAvocatResponse(audience.getId(), audience.getDatePlanifiee(),
                         audience.getDateTenue(), audience.getJuridiction(), audience.getStatut(),
@@ -130,15 +118,9 @@ public class PortailAvocatService {
     }
 
     /**
-     * Les pièces de son dossier que la banque lui partage (QF-64).
-     *
-     * <p><b>Affecté, sinon 403</b> - comme les audiences : le dossier existe, c'est l'accès qui est
-     * refusé. <b>Affecté sans être constitué, une liste vide et {@code constitue = false}</b> : la
-     * pièce attend un mandat qui viendra, et l'écran doit pouvoir le dire plutôt qu'afficher
-     * « aucune pièce » comme si la banque ne lui avait rien transmis.
-     *
-     * <p>La restriction est <b>dans la requête</b> : seules les pièces partagées de ce dossier sont
-     * lues. Un changement d'avocat retire donc l'accès sur-le-champ, sans rien à révoquer.
+     * Case-file documents the bank shares with the lawyer. Not assigned: 403. Assigned but not engaged:
+     * empty list with {@code constitue = false}, so the screen can say so rather than "no document".
+     * The restriction is in the query, so a change of lawyer revokes access immediately.
      */
     @Transactional(readOnly = true)
     public PiecesDossierAvocatResponse piecesDeMonDossier(Long dossierId) {
@@ -159,14 +141,11 @@ public class PortailAvocatService {
     }
 
     /**
-     * Ouvre une pièce partagée : l'URL pré-signée, et la trace de la lecture (QF-64).
-     *
-     * <p><b>404 et non 403</b> pour une pièce non partagée ou d'un autre dossier : répondre 403
-     * confirmerait qu'elle existe, et l'avocat pourrait sonder la GED de la banque en essayant des
-     * identifiants. Même raisonnement que l'ordre des vérifications de Q-133.
-     *
-     * <p><b>La lecture est tracée</b> : une pièce partagée l'est pour être lue, et le jour où la
-     * question se pose, il faut pouvoir dire si l'avocat l'avait vue avant l'audience.
+     * Opens a shared document: returns the pre-signed URL and records the access.
+     * <p>
+     * <b>404, not 403</b>, for an unshared document or one from another case file: 403 would confirm it
+     * exists and let the lawyer probe the document store by guessing ids. The access is recorded to
+     * know whether the lawyer saw the document before the hearing.
      */
     @Transactional
     public PieceTelechargementResponse pieceDeMonDossier(Long dossierId, Long documentId) {
@@ -186,7 +165,7 @@ public class PortailAvocatService {
                 minioStorageService.urlTelechargement(document.getCheminStockage()));
     }
 
-    /** Affecté au dossier, sinon 403 : le dossier existe, c'est l'accès qui est refusé. */
+    /** Assigned to the case file, otherwise 403: the file exists, access is denied. */
     private void verifierAffectation(Long dossierId, Avocat avocat) {
         if (!dossierAvocatRepository.existsByDossierIdAndAvocatId(dossierId, avocat.getId())) {
             throw ApiException.forbidden(ErrorCodes.DROITS_INSUFFISANTS,
@@ -195,8 +174,8 @@ public class PortailAvocatService {
     }
 
     /**
-     * Constitué sur ce dossier : une lettre de constitution <b>signée</b> par le SH (QF-64).
-     * L'affectation ne fait pas le mandat.
+     * Engaged on this case file: an engagement letter <b>signed</b> by the SH. Assignment alone is not
+     * a mandate.
      */
     private boolean estConstitue(Long dossierId, Avocat avocat) {
         return demandeConstitutionRepository.existsByDossierIdAndPrestataireIdAndStatut(
@@ -204,16 +183,11 @@ public class PortailAvocatService {
     }
 
     /**
-     * UC-INT-01 étape 4 — « l'avocat <b>charge</b> les pièces justificatives » (Q-97).
-     *
-     * <p>Le fichier est rangé sous un préfixe dédié et la <b>clé</b> est renvoyée : l'avocat la
-     * reporte dans {@code piecesJustificatives} au moment de déposer sa demande. Deux temps plutôt
-     * qu'un seul appel multipart : le contrat de {@code POST /frais/demandes} reste celui du
-     * document d'API (JSON, tableau de chaînes), et un envoi qui échoue ne fait pas reperdre les
-     * pièces déjà transmises.
-     *
-     * <p>Mêmes contrôles de format et de poids que la GED : le DJ pilote les deux par la même paire
-     * de paramètres, {@code FORMATS_GED} et {@code TAILLE_MAX_GED}.
+     * UC-INT-01 step 4: the lawyer uploads supporting documents. The file is stored under a dedicated
+     * prefix and its <b>key</b> is returned, to be passed in {@code piecesJustificatives} when filing
+     * the request. This keeps {@code POST /frais/demandes} as JSON and avoids re-uploading after a
+     * failed submission. Same format and size checks as the document store ({@code FORMATS_GED},
+     * {@code TAILLE_MAX_GED}).
      */
     @Transactional(readOnly = true)
     public PieceJustificativeResponse deposerPieceJustificative(MultipartFile fichier) {
@@ -224,7 +198,7 @@ public class PortailAvocatService {
                 minioStorageService.urlTelechargement(cle));
     }
 
-    /** Périmètre ajouté : ses propres dépôts, avec leur statut et le motif d'un rejet. */
+    /** The lawyer's own submissions, with their status and any rejection reason. */
     @Transactional(readOnly = true)
     public PageResponse<PublicationResponse> mesPublications(StatutPublication statut, Pageable pageable) {
         Avocat avocat = avocatCourant();
@@ -233,15 +207,9 @@ public class PortailAvocatService {
                 : publicationRepository.findByAvocatIdAndStatutValidation(avocat.getId(), statut, pageable);
 
         /*
-         * **La correspondance accompagne chaque publication** (QF-58). Elle en était absente : la
-         * forme à un seul argument du mapper délègue à `toResponse(publication, null, null, null)`,
-         * si bien que l'avocat recevait la notification d'une correspondance transmise sans qu'aucun
-         * écran puisse la lui montrer.
-         *
-         * <p><b>Les commentaires restent absents, et c'est une règle, pas un oubli.</b> Le juriste ne
-         * s'adresse jamais directement à l'avocat (Q-20, US 5.5, RG-INT-07) : il commente pour le
-         * DJ/DJA, qui transmet **une** correspondance. Les joindre ici ouvrirait la délibération
-         * interne à celui dont elle discute.
+         * Each publication comes with its correspondence. Comments are deliberately excluded: the
+         * legal officer never addresses the lawyer directly (US 5.5, RG-INT-07); comments are for the
+         * DJ/DJA, who forward a single correspondence.
          */
         Map<Long, CorrespondanceResponse> correspondances = correspondancesDe(page.getContent().stream()
                 .map(Publication::getId)
@@ -251,7 +219,7 @@ public class PortailAvocatService {
                 publication, null, null, correspondances.get(publication.getId())));
     }
 
-    /** Les correspondances d'une page, en une lecture ; vide si la page l'est (QF-58). */
+    /** Correspondences of a page in a single read; empty if the page is. */
     private Map<Long, CorrespondanceResponse> correspondancesDe(List<Long> publicationIds) {
         if (publicationIds.isEmpty()) {
             return Map.of();
@@ -264,7 +232,7 @@ public class PortailAvocatService {
         return parPublication;
     }
 
-    /** Périmètre ajouté : les lettres de constitution qui le désignent. */
+    /** Engagement letters naming the lawyer. */
     @Transactional(readOnly = true)
     public List<DemandeConstitutionResponse> mesConstitutions() {
         Avocat avocat = avocatCourant();
@@ -274,9 +242,8 @@ public class PortailAvocatService {
     }
 
     /**
-     * L'avocat du référentiel rattaché au compte connecté. Un compte {@code ROLE_AVOCAT} sans
-     * intervenant correspondant est une anomalie de paramétrage : mieux vaut un 403 explicite qu'une
-     * liste vide, qui se lirait comme « vous n'avez aucun dossier ».
+     * The lawyer record linked to the logged-in account. A {@code ROLE_AVOCAT} account without a
+     * matching record is a setup error: an explicit 403 beats an empty list read as "no case files".
      */
     private Avocat avocatCourant() {
         return compteAvocatService.avocatDe(currentUserService.getCurrentUser())

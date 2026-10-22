@@ -30,8 +30,8 @@ import org.hibernate.type.SqlTypes;
 import java.time.LocalDateTime;
 
 /**
- * Procédure judiciaire suivie par la Banque (RG-DOS-01). Porte 1 à 3 {@link EtapeProcedure}.
- * Cf. dictionnaire des données §2.1.2 et {@code V1__schema_initial.sql}.
+ * Legal proceeding followed by the Bank (RG-DOS-01). Holds 1 to 3 {@link EtapeProcedure}. See data
+ * dictionary §2.1.2 and {@code V1__schema_initial.sql}.
  */
 @Getter
 @Setter
@@ -53,9 +53,8 @@ public class Dossier {
 
     @NotBlank
     /**
-     * Libellé de la nature, repris du référentiel {@code nature_dossier} (RG-DOS-02). Largeur
-     * alignée sur celle de ce référentiel (V7) : trois libellés de la taxonomie dépassent
-     * 50 caractères et ne pouvaient pas être enregistrés.
+     * Nature label, copied from the {@code nature_dossier} reference table (RG-DOS-02). Same width
+     * as that table: some taxonomy labels exceed 50 characters.
      */
     @Size(max = 255)
     @Column(nullable = false, length = 255)
@@ -149,11 +148,9 @@ public class Dossier {
     private String sensibiliteMotifRejet;
 
     /**
-     * Motif du retrait de la diligence particulière (métier, 2026-10-06), réservé au DJ et à la DJA.
-     *
-     * <p><b>Distinct de {@link #sensibiliteMotifRejet}.</b> Le rejet refuse une proposition ; le
-     * retrait lève une diligence qui avait été validée, parfois des mois plus tôt. Confondre les deux
-     * ferait dire à la fiche qu'une proposition a été refusée alors qu'elle avait été acceptée.
+     * Reason for removing special diligence, restricted to DJ and DJA.
+     * <p><b>Distinct from {@link #sensibiliteMotifRejet}</b>: a rejection refuses a proposal, a
+     * removal lifts a diligence that had been approved.
      */
     @Size(max = 255)
     @Column(name = "sensibilite_motif_retrait")

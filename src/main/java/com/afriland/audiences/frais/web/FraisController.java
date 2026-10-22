@@ -28,9 +28,8 @@ import java.time.LocalDate;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Épic 4 (FR-INT-01 à 05) — cf. FUNCTIONAL_MAP.md §4, API_IMPLEMENTATION_STATUS.md §5.
- * {@code GET /frais/demandes} : endpoint 🆕, absent du contrat formel — ajouté pour la file de
- * travail de chaque profil (Q-24). {@code GET /frais/demandes/{id}} : 🆕 M16, détail (Q-82).
+ * Epic 4 (FR-INT-01 to 05). {@code GET /frais/demandes} (work queue of each profile) and
+ * {@code GET /frais/demandes/{id}} (detail) are not part of the formal contract.
  */
 @RestController
 @RequestMapping("${api.prefix}/frais/demandes")
@@ -70,12 +69,10 @@ public class FraisController {
     }
 
     /**
-     * Plus récentes d'abord ; l'identifiant départage deux dépôts de la même seconde (Q-82).
+     * Most recent first; the id breaks ties between two filings in the same second.
      *
-     * <p>Filtres ajoutés en M22 (Q-103) : le circuit des frais est le plus fréquenté de
-     * l'application, et l'instructeur n'avait que le statut pour s'y retrouver. {@code avocatId} est
-     * sans effet pour un avocat, qui reste borné à ses propres demandes — la restriction d'accès
-     * n'est pas un filtre.
+     * <p>{@code avocatId} has no effect for a lawyer, who stays restricted to their own requests: the
+     * access restriction is not a filter.
      */
     @GetMapping
     @PreAuthorize("hasAnyRole('AVOCAT', 'ASSISTANTE', 'DJA', 'DJ')")
@@ -92,7 +89,7 @@ public class FraisController {
                 PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt", "id")));
     }
 
-    /** Q-82 : détail d'une demande et décisions du circuit — l'avocat ne lit que les siennes. */
+    /** Detail of a request with its workflow decisions; a lawyer can only read their own. */
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('AVOCAT', 'ASSISTANTE', 'DJA', 'DJ')")
     public DemandeFraisResponse consulter(@PathVariable Long id) {

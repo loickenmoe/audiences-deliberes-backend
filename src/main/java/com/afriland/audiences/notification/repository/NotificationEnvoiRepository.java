@@ -14,48 +14,47 @@ import java.util.Optional;
 @Repository
 public interface NotificationEnvoiRepository extends JpaRepository<NotificationEnvoi, Long> {
 
-    /** Retrouve une ligne à partir de l'accusé de l'Engine, qui ne connaît que l'eventId. */
+    /** Finds a row from an Engine receipt, which only knows the eventId. */
     Optional<NotificationEnvoi> findByEventId(String eventId);
 
     /**
-     * Lignes qui attendent leur pièce jointe depuis trop longtemps : la demande de dépôt est
-     * relancée, ou la notification part sans son document (D5).
+     * Rows waiting too long for their attachment: the upload request is retried, or the notification
+     * is sent without the document.
      */
     @Query("SELECT n FROM NotificationEnvoi n WHERE n.statut = com.afriland.audiences.notification.domain.StatutEnvoi.ATTENTE_PIECE_JOINTE "
             + "AND n.prochaineTentative <= :maintenant ORDER BY n.prochaineTentative ASC")
     List<NotificationEnvoi> trouverEnAttenteDePieceJointe(@Param("maintenant") LocalDateTime maintenant, Pageable page);
 
     /**
-     * Garde-fou avant écriture : le même événement peut se représenter (relance planifiée, avocat
-     * réaffecté au même dossier). Sans ce contrôle, la contrainte d'unicité ferait échouer l'action
-     * métier qui a provoqué la notification.
+     * Pre-write guard: the same event may recur (scheduled reminder, lawyer reassigned to the same
+     * case file). Without it, the unique constraint would fail the triggering business action.
      */
     boolean existsByEventId(String eventId);
 
     /**
-     * Notifications à remettre, les plus anciennes d'abord : seuls les identifiants, car chacune est
-     * ensuite traitée dans sa propre transaction. L'index partiel de V27 sert exactement cette requête.
+     * Notifications to deliver, oldest first. Only ids, since each is then processed in its own
+     * transaction. Served by the V27 partial index.
      */
     @Query("SELECT n.id FROM NotificationEnvoi n WHERE n.statut = com.afriland.audiences.notification.domain.StatutEnvoi.EN_ATTENTE "
             + "AND n.prochaineTentative <= :maintenant ORDER BY n.prochaineTentative ASC")
     List<Long> trouverARemettre(@Param("maintenant") LocalDateTime maintenant, Pageable page);
 
     /**
-     * Notifications remises au moteur avant {@code limite} et toujours sans accusé (Q-120). Un
-     * message rejeté en silence n'a ni accusé de succès ni accusé d'échec : seul le temps le révèle.
+     * Notifications delivered to the engine before {@code limite} and still without a receipt. A
+     * silently rejected message gets neither success nor failure receipt; only time reveals it.
      */
     @Query("SELECT n FROM NotificationEnvoi n WHERE n.statut = com.afriland.audiences.notification.domain.StatutEnvoi.PUBLIEE "
             + "AND n.datePublication <= :limite ORDER BY n.datePublication ASC")
     List<NotificationEnvoi> trouverPublieesSansAccuse(@Param("limite") LocalDateTime limite, Pageable page);
 
-    /** Supervision (D17) : comptes par canal et par statut sur une fenêtre — un passage, pas un par canal. */
+    /** Monitoring: counts per channel and status over a window, in a single query. */
     @Query("SELECT n.canal, n.statut, COUNT(n) FROM NotificationEnvoi n "
             + "WHERE n.dateCreation >= :debut AND n.dateCreation < :fin GROUP BY n.canal, n.statut")
     List<Object[]> compterParCanalEtStatut(@Param("debut") LocalDateTime debut, @Param("fin") LocalDateTime fin);
 
     /**
-     * Envois à examiner : abandonnés, restés sans accusé, ou dont le destinataire n'était pas
-     * joignable. Les plus récents d'abord — ce sont ceux sur lesquels on peut encore agir.
+     * Sends needing review: abandoned, without receipt, or with an unreachable recipient. Newest first,
+     * as those can still be acted upon.
      */
     @Query("SELECT n FROM NotificationEnvoi n WHERE n.dateCreation >= :debut AND n.dateCreation < :fin "
             + "AND n.statut IN (com.afriland.audiences.notification.domain.StatutEnvoi.ECHEC, "

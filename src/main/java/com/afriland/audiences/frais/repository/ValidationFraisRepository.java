@@ -17,9 +17,9 @@ public interface ValidationFraisRepository extends JpaRepository<ValidationFrais
 
     boolean existsByDemandeFraisIdAndEtapeAndDecision(Long demandeFraisId, EtapeValidationFrais etape, DecisionValidationFrais decision);
 
-    /** Q-82 : décisions d'une demande, dans l'ordre du circuit. */
+    /** Decisions on a request, in workflow order. */
     List<ValidationFrais> findByDemandeFraisIdOrderByDateValidationAscIdAsc(Long demandeFraisId);
 
-    /** Q-82 : décisions d'une page de demandes en une requête (file de travail). */
+    /** Decisions for a page of requests in a single query (work queue). */
     List<ValidationFrais> findByDemandeFraisIdInOrderByDateValidationAscIdAsc(Collection<Long> demandeFraisIds);
 }

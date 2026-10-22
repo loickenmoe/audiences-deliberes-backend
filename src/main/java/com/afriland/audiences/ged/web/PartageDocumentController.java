@@ -18,12 +18,12 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Le partage des pièces de la GED avec l'avocat du dossier (QF-64).
+ * Sharing GED documents with the case file's lawyer.
  *
- * <p>{@code @PreAuthorize} dit qui touche la fonction ; le service dit sur quel dossier, et si le
- * geste est un partage ou une proposition. Le DJ et la DJA partagent par leur {@code ROLE_JURISTE}
- * composite (Q-81) ; <b>le SH et l'Assistante aussi depuis QF-65</b> - « ils sont à la base des
- * juristes ». Le SH et l'Assistante ne portant pas {@code ROLE_JURISTE}, ils sont nommés.
+ * <p>{@code @PreAuthorize} controls who reaches the feature; the service decides on which case file,
+ * and whether the action is a share or a proposal. The DJ and DJA share through their composite
+ * {@code ROLE_JURISTE}; the SH and the Assistant, treated as legal officers but not carrying
+ * {@code ROLE_JURISTE}, are named explicitly.
  */
 @RestController
 @RequiredArgsConstructor
@@ -31,21 +31,21 @@ public class PartageDocumentController {
 
     private final PartageDocumentService partageDocumentService;
 
-    /** Partage la pièce, ou propose de la partager sur un dossier sensible. 409 si c'est déjà fait. */
+    /** Shares the document, or proposes sharing it on a sensitive case file. 409 if already done. */
     @PutMapping("${api.prefix}/ged/documents/{id}/partage-avocat")
     @PreAuthorize("hasAnyRole('JURISTE', 'SH', 'ASSISTANTE')")
     public PartageAvocatResponse partager(@PathVariable Long id) {
         return partageDocumentService.partager(id);
     }
 
-    /** Retire le partage, ou annule une proposition. Ouvert à qui partage : retirer réduit l'exposition. */
+    /** Withdraws the share or cancels a proposal. Open to anyone who can share: withdrawing reduces exposure. */
     @DeleteMapping("${api.prefix}/ged/documents/{id}/partage-avocat")
     @PreAuthorize("hasAnyRole('JURISTE', 'SH', 'ASSISTANTE')")
     public PartageAvocatResponse retirer(@PathVariable Long id) {
         return partageDocumentService.retirer(id);
     }
 
-    /** Dossier sensible : le DJ ou la DJA valide ou rejette, un rejet exigeant son motif. */
+    /** Sensitive case file: the DJ or DJA approves or rejects; a rejection requires a reason. */
     @PutMapping("${api.prefix}/ged/documents/{id}/partage-avocat/arbitrage")
     @PreAuthorize("hasAnyRole('DJ', 'DJA')")
     public PartageAvocatResponse arbitrer(@PathVariable Long id, @Valid @RequestBody ArbitragePartageRequest request) {
@@ -53,8 +53,8 @@ public class PartageDocumentController {
     }
 
     /**
-     * QF-65 : un avocat affecté à ce dossier y est-il constitué ? Ouvert à qui consulte le dossier :
-     * c'est ce que l'onglet Documents annonce avant tout partage.
+     * Is a lawyer assigned to this case file appointed on it? Open to anyone who can view the case
+     * file: the Documents tab shows this before any share.
      */
     @GetMapping("${api.prefix}/dossiers/{id}/partage-avocat")
     @PreAuthorize("hasRole('CONSULTATION')")
@@ -62,7 +62,7 @@ public class PartageDocumentController {
         return partageDocumentService.etat(id);
     }
 
-    /** La file des partages qui attendent le DJ ou la DJA, le plus ancien d'abord. */
+    /** Queue of shares awaiting the DJ or DJA, oldest first. */
     @GetMapping("${api.prefix}/ged/partages-avocat")
     @PreAuthorize("hasAnyRole('DJ', 'DJA')")
     public PageResponse<PartageAvocatResponse> propositions(@RequestParam(defaultValue = "0") int page,

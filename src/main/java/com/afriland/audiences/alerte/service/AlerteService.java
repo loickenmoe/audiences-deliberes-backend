@@ -29,20 +29,16 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
- * Point d'entrée unique de déclenchement des alertes (RG-ALR-01/02/03), sur le même principe que
- * {@link com.afriland.audiences.common.audit.HistoriqueActionService} : les autres modules
- * métier (M6+) appelleront {@link #declencher} après l'événement concerné, sans que {@code
- * alerte} ait à connaître ces modules en retour (cf. Javadoc {@link
- * com.afriland.audiences.alerte.domain.Alerte}).
+ * Single entry point for raising alerts (RG-ALR-01/02/03). Business modules call
+ * {@link #declencher}; this module does not depend on them in return.
  * <p>
- * <b>Canal applicatif (Q-37)</b> : chaque alerte est persistée avec {@code canal = APPLICATIF} et
- * diffusée en temps réel par WebSocket (Q-32) au destinataire s'il est connecté, avec {@code GET
- * /alertes/mes-notifications} comme repli garanti (l'enregistrement en base est inconditionnel).
+ * <b>In-app channel</b>: each alert is persisted with {@code canal = APPLICATIF} and pushed over
+ * WebSocket if the recipient is connected; {@code GET /alertes/mes-notifications} is the guaranteed
+ * fallback.
  * <p>
- * <b>Canaux externes (Q-118)</b> : Outlook et Teams passent par le Notification Engine de la banque.
- * Ce service n'en sait rien : il publie {@link AlerteDeclenchee} dans la transaction de l'action
- * métier, et le module notification met en file les envois que les réglages du DJ prévoient. La
- * table {@code alerte} reste la seule représentation du canal applicatif, comme Q-37 le recommandait.
+ * <b>External channels</b>: Outlook and Teams go through the bank's Notification Engine. This
+ * service only publishes {@link AlerteDeclenchee} within the business transaction; the notification
+ * module queues the sends.
  */
 @Slf4j
 @Service
@@ -55,9 +51,9 @@ public class AlerteService {
     private final AlerteMapper alerteMapper;
     private final CurrentUserService currentUserService;
     private final SimpMessagingTemplate messagingTemplate;
-    /** Sessions STOMP vivantes, indexées par le {@code sub} du jeton — cf. {@code pousserNotification}. */
+    /** Live STOMP sessions, keyed by the token {@code sub}; see {@code pousserNotification}. */
     private final SimpUserRegistry simpUserRegistry;
-    /** Prolongements de l'alerte hors du canal applicatif (notifications externes, Q-118). */
+    /** Extensions of the alert outside the in-app channel (external notifications). */
     private final ApplicationEventPublisher evenements;
 
     @Transactional
@@ -71,29 +67,20 @@ public class AlerteService {
                 .statut(StatutAlerte.DECLENCHEE)
                 .build();
         alerte = alerteRepository.save(alerte);
-        // L'issue de la diffusion est posée sur une entité **déjà gérée**, dans la transaction
-        // ouverte par @Transactional : le suivi des modifications la persiste au commit. Un second
-        // save() serait redondant, et donnerait à croire que l'enregistrement de l'alerte dépend du
-        // succès de sa diffusion — c'est l'inverse, la persistance est inconditionnelle (Q-32).
+        // The delivery outcome is set on an already managed entity and persisted at commit; no
+        // second save() is needed. Persistence of the alert never depends on delivery success.
         pousserNotification(destinataire, alerte);
         evenements.publishEvent(new AlerteDeclenchee(alerte.getId(), type, dossierId, destinataire));
         return alerte;
     }
 
     /**
-     * Diffuse l'alerte en temps réel et <b>enregistre l'issue</b> (Q-109, NF-ALR-02).
-     *
-     * <p><b>Pourquoi observer la présence du destinataire avant de pousser.</b>
-     * {@code convertAndSendToUser} ne lève aucune exception lorsque personne n'est abonné à la file
-     * visée : elle réussit silencieusement. Se contenter du {@code try/catch} reviendrait donc à
-     * déclarer 100 % de diffusions réussies en permanence, panne comprise. C'est
-     * {@link SimpUserRegistry} qui distingue les deux cas — il connaît les sessions STOMP vivantes,
-     * indexées par le nom du principal, c'est-à-dire le {@code sub} du jeton Keycloak, celui-là
-     * même que porte {@code Utilisateur.keycloakId}.
-     *
-     * <p><b>Le repli reste garanti</b> (Q-32) : l'alerte est persistée avant toute tentative de
-     * diffusion, et {@code GET /alertes/mes-notifications} la sert quoi qu'il arrive. Une issue
-     * {@link StatutDiffusion#DIFFEREE} n'est pas une perte, seulement une remise plus tardive.
+     * Pushes the alert in real time and <b>records the outcome</b> (NF-ALR-02).
+     * <p>{@code convertAndSendToUser} silently succeeds when nobody is subscribed, so a try/catch
+     * alone would always report 100 % success. {@link SimpUserRegistry} knows the live STOMP
+     * sessions, keyed by the Keycloak token {@code sub} (= {@code Utilisateur.keycloakId}).
+     * <p>The alert is persisted before any push, so {@link StatutDiffusion#DIFFEREE} is a later
+     * delivery, not a loss.
      */
     private void pousserNotification(Utilisateur destinataire, Alerte alerte) {
         boolean connecte = simpUserRegistry.getUser(destinataire.getKeycloakId()) != null;
@@ -103,10 +90,8 @@ public class AlerteService {
                     alerteMapper.toResponse(alerte));
             alerte.setStatutDiffusion(connecte ? StatutDiffusion.DIFFUSEE : StatutDiffusion.DIFFEREE);
         } catch (MessagingException e) {
-            // Le courtier est indisponible ou le transport est rompu : c'est le seul cas où le canal
-            // applicatif n'a pas fait son travail, et le seul que NF-ALR-02 compte contre nous.
-            // L'alerte reste consultable via GET /alertes/mes-notifications — rien n'est perdu, mais
-            // la remise n'est plus immédiate et cela doit se voir dans le taux.
+            // Broker unavailable or transport broken: the only case NF-ALR-02 counts as a loss. The
+            // alert remains available via GET /alertes/mes-notifications.
             alerte.setStatutDiffusion(StatutDiffusion.ECHEC);
             log.warn("Échec de la diffusion WebSocket de l'alerte {} au destinataire {} : {}",
                     alerte.getId(), destinataire.getId(), e.getMessage());
@@ -114,16 +99,11 @@ public class AlerteService {
     }
 
     /**
-     * Taux de délivrance du canal applicatif sur une fenêtre (Q-109, NF-ALR-02).
-     *
-     * <p><b>Deux taux, pas un.</b> Les confondre serait la première erreur. Le taux de
-     * <i>délivrance</i> mesure ce que NF-ALR-02 exige — le canal a-t-il fait son travail —
-     * et ne retient donc que les échecs contre nous. Le taux de <i>diffusion temps réel</i>
-     * mesure tout autre chose : à quel point les destinataires sont connectés quand on les alerte.
-     * Un second taux bas n'est pas un défaut du système ; un premier taux bas, si.
-     *
-     * <p>Les alertes antérieures à V16, dont l'issue n'a pas été observée, sont exclues : le
-     * dénominateur ne compte que ce qui a été réellement mesuré.
+     * In-app channel delivery rates over a window (NF-ALR-02).
+     * <p>Two distinct rates: the <i>delivery</i> rate (what NF-ALR-02 requires, only failures count
+     * against it) and the <i>real-time</i> rate (how often recipients are connected; a low value is
+     * not a system fault).
+     * <p>Alerts created before V16 have no recorded outcome and are excluded.
      */
     @Transactional(readOnly = true)
     public StatistiquesDiffusionResponse statistiquesDiffusion(LocalDate dateDebut, LocalDate dateFin) {
@@ -151,9 +131,8 @@ public class AlerteService {
     }
 
     /**
-     * Anti-doublon pour un déclenchement planifié (ex. {@code CHARGE_MAX_AVOCAT}) : indique si
-     * une alerte du même type, pour le même destinataire, portant le même marqueur, est déjà
-     * {@code DECLENCHEE} — inutile de la redéclencher tant qu'elle n'a pas été traitée.
+     * Duplicate guard for a scheduled alert (e.g. {@code CHARGE_MAX_AVOCAT}): true if an alert with
+     * the same type, recipient and marker is still {@code DECLENCHEE}.
      */
     @Transactional(readOnly = true)
     public boolean estDejaSignalee(TypeAlerte type, Long destinataireId, String marqueur) {
@@ -162,11 +141,10 @@ public class AlerteService {
     }
 
     /**
-     * Anti-doublon pour un événement à signaler au plus une fois dans son existence (ex. rappel
-     * J-N d'une audience, échéance d'une alarme) — contrairement à {@link #estDejaSignalee},
-     * un traitement ultérieur de l'alerte n'autorise pas un nouveau déclenchement du même
-     * événement : le marqueur doit encoder l'identité de l'événement lui-même (ex.
-     * {@code "[audienceId:5;J-7] "}), pas seulement celle du sujet.
+     * Duplicate guard for an event reported at most once in its lifetime (e.g. J-N hearing
+     * reminder, alarm due date). Unlike {@link #estDejaSignalee}, handling the alert does not allow
+     * a new one, so the marker must encode the event identity itself (e.g.
+     * {@code "[audienceId:5;J-7] "}).
      */
     @Transactional(readOnly = true)
     public boolean aDejaEteDeclenchee(TypeAlerte type, Long destinataireId, String marqueur) {

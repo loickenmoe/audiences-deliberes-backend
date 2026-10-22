@@ -15,20 +15,18 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * Une agence de la banque (métier, 2026-10-03, observation 2).
+ * A bank branch.
  *
- * <p>Les deux codes d'agence d'un dossier — celle d'origine et celle du contentieux — étaient du
- * texte libre, sans vérification. Sur les 341 dossiers de recette, un seul code était renseigné :
- * {@code 5466546546}, qui ne désigne aucune agence. Un référentiel ferme la saisie et rend la
- * recherche possible.
+ * <p>The two branch codes of a case file (origin and litigation) used to be unchecked free text; a
+ * reference list constrains input and makes search possible.
  *
- * <p><b>Le code n'est pas la clé primaire.</b> Une agence se renomme, se déplace, ferme ; un
- * identifiant technique stable survit à cela, et les dossiers qui la citent gardent leur sens.
- * Le code reste unique, car c'est lui que la banque emploie.
+ * <p><b>The code is not the primary key.</b> A branch can be renamed, moved or closed; a stable
+ * technical id survives that, and the case files citing it keep their meaning. The code remains
+ * unique, since it is what the bank uses.
  *
- * <p><b>Désactivée, jamais supprimée.</b> Un dossier ouvert sous une agence fermée reste un
- * dossier valide : effacer l'agence le rendrait illisible. {@code actif} la retire des listes de
- * choix sans toucher au passé.
+ * <p><b>Deactivated, never deleted.</b> A case file opened under a closed branch remains valid:
+ * deleting the branch would make it unreadable. {@code actif} removes it from selection lists
+ * without touching the past.
  */
 @Getter
 @Setter
@@ -43,7 +41,7 @@ public class Agence {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** Le code employé par la banque, par exemple {@code 00002} pour Bonanjo. Unique. */
+    /** Code used by the bank, e.g. {@code 00002} for Bonanjo. Unique. */
     @NotBlank
     @Size(max = 20)
     @Column(nullable = false, unique = true, length = 20)
@@ -55,9 +53,8 @@ public class Agence {
     private String nom;
 
     /**
-      * Obligatoire (métier, 2026-10-05). Deux agences peuvent porter le même nom : c'est la ville,
-      * puis l'adresse, qui les séparent. Sans elle, l'homonyme ne se distingue qu'au hasard.
-      */
+     * Mandatory. Two branches can share the same name: the city, then the address, tell them apart.
+     */
     @NotBlank
     @Size(max = 100)
     @Column(nullable = false, length = 100)

@@ -45,9 +45,9 @@ class RepertoireAvocatsServiceTest {
         assertThat(result.get(0).indicateurCharge()).isZero();
         assertThat(result.get(0).indicateurPerformance()).isZero();
         /*
-         * **Zéro sur zéro, et non zéro tout court.** Sans délibéré il n'y a rien à mesurer ; c'est
-         * le total qui le dit, et qui permet à l'écran d'écrire « aucun délibéré rendu » plutôt
-         * qu'un chiffre qui se lirait comme une contre-performance.
+         * **Zero out of zero, not just zero.** Without deliberations there is nothing to measure; the total
+         * says so and lets the screen show "no deliberation rendered" instead of a figure read as poor
+         * performance.
          */
         assertThat(result.get(0).deliberesFavorables()).isZero();
         assertThat(result.get(0).deliberesTotal()).isZero();
@@ -64,9 +64,8 @@ class RepertoireAvocatsServiceTest {
 
         assertThat(result.get(0).indicateurCharge()).isEqualTo(3L);
         /*
-         * Les deux décomptes sont ce que l'écran montre depuis le 2026-10-06 : « 3 sur 4 » dit ce
-         * que « 75 % » résumait, **et sur combien d'affaires**. Le taux reste calculé - le contrat
-         * le porte toujours - mais il n'est plus ce qu'on lit.
+         * Both counts are what the screen shows: "3 out of 4" states what "75 %" summarized, **and out of
+         * how many cases**. The rate is still computed (the contract carries it) but is no longer displayed.
          */
         assertThat(result.get(0).deliberesFavorables()).isEqualTo(3L);
         assertThat(result.get(0).deliberesTotal()).isEqualTo(4L);

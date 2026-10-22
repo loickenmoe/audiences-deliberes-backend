@@ -23,10 +23,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Épic 3 (FR-DEL-01/02/03/04/05) — cf. FUNCTIONAL_MAP.md §3, API_IMPLEMENTATION_STATUS.md §4.
- * {@code PUT /deliberes/{id}/expedition} : cité dans REF-07 §2 et les user stories (3.6) mais
- * absent de la spécification OpenAPI §3 — implémenté selon les critères Gherkin de l'US,
- * dernier volet de DECISIONS_AND_OPEN_QUESTIONS.md Q-13.
+ * Epic 3 (FR-DEL-01/02/03/04/05).
+ * {@code PUT /deliberes/{id}/expedition} is not in the OpenAPI specification; it implements the
+ * acceptance criteria of user story 3.6.
  */
 @RestController
 @RequiredArgsConstructor
@@ -55,7 +54,7 @@ public class DelibereController {
         return ResponseEntity.status(HttpStatus.CREATED).body(delibereService.rabattre(id, request));
     }
 
-    /** M15 (Q-68) : onglet « Délibérés » de la fiche dossier — endpoint 🆕. */
+    /** Case file "Deliberations" tab. */
     @GetMapping("${api.prefix}/dossiers/{id}/deliberes")
     @PreAuthorize("hasRole('CONSULTATION')")
     public java.util.List<DelibereResponse> listerDeliberesDossier(@PathVariable Long id) {
@@ -68,14 +67,14 @@ public class DelibereController {
         return delibereService.consulterRecours(id);
     }
 
-    /** Q-78 : vider le délibéré en attente — la décision est rendue, l'étape passe « Délibéré vidé ». Endpoint 🆕. */
+    /** Delivers the pending deliberation: the decision is rendered, the step becomes "deliberation delivered". */
     @PutMapping("${api.prefix}/deliberes/{id}/resultat")
     @PreAuthorize("hasRole('JURISTE')")
     public DelibereResponse viderDelibere(@PathVariable Long id, @Valid @RequestBody ViderDelibereRequest request) {
         return delibereService.viderDelibere(id, request);
     }
 
-    /** Q-78, FR-DEL-04 critère 2 : historique des prorogations d'un délibéré — endpoint 🆕. */
+    /** FR-DEL-04 criterion 2: extension history of a deliberation. */
     @GetMapping("${api.prefix}/deliberes/{id}/prorogations")
     @PreAuthorize("hasRole('CONSULTATION')")
     public java.util.List<ProrogationResponse> listerProrogations(@PathVariable Long id) {

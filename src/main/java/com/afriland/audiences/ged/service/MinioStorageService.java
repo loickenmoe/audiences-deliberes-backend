@@ -20,78 +20,78 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Intégration MinIO (RG-GED-02/06) : dépôt, URL pré-signée de récupération, suppression physique
- * de l'objet. Point d'entrée unique du stockage — seul {@link GedService} y fait appel.
+ * MinIO integration (RG-GED-02/06): upload, presigned download URL, physical deletion of the
+ * object. Single entry point to storage.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class MinioStorageService {
 
+    private static final String MESSAGE_FICHIER_ILLISIBLE = "Fichier illisible : ";
+
     private static final int EXPIRATION_URL_MINUTES = 10;
 
     private final MinioClient minioClient;
 
-    /** Préfixe des pièces justificatives de frais (Q-97). Public : il sert de marqueur à la lecture. */
+    /** Prefix for expense supporting documents. Public: it serves as a marker when reading. */
     public static final String PREFIXE_PIECES_FRAIS = "frais";
 
     @Value("${minio.bucket-name}")
     private String bucketName;
 
-    /** Dépose le fichier sous une clé unique {@code dossiers/{dossierId}/{uuid}-{nomFichier}} et la retourne. */
+    /** Stores the file under a unique key {@code dossiers/{dossierId}/{uuid}-{nomFichier}} and returns it. */
     public String deposer(Long dossierId, MultipartFile fichier) {
         try (InputStream flux = fichier.getInputStream()) {
             return deposer("dossiers/" + dossierId, fichier.getOriginalFilename(), fichier.getContentType(), flux, fichier.getSize());
         } catch (IOException e) {
-            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE, "Fichier illisible : " + e.getMessage());
+            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE, MESSAGE_FICHIER_ILLISIBLE + e.getMessage());
         }
     }
 
     /**
-     * Variante pour un document généré par le système (ex. lettre de constitution, M9), sans
-     * passer par un {@link MultipartFile} d'upload HTTP.
+     * Variant for a system-generated document (e.g. appointment letter), without an HTTP
+     * {@link MultipartFile} upload.
      */
     public String deposer(Long dossierId, String nomFichier, String contentType, byte[] contenu) {
-        return deposer("dossiers/" + dossierId, nomFichier, contentType, new ByteArrayInputStream(contenu), (long) contenu.length);
+        return deposer("dossiers/" + dossierId, nomFichier, contentType, new ByteArrayInputStream(contenu), contenu.length);
     }
 
     /**
-     * Variante pour un fichier non rattaché à un dossier (ex. jurisprudence sans {@code dossierId},
-     * Q-58, M12) — {@code document.dossier_id} étant `NOT NULL`, ce chemin ne peut jamais créer de
-     * ligne `document` GED ; il ne fait que déposer l'octet-stream sous un préfixe dédié.
+     * Variant for a file not attached to a case file (e.g. case law without {@code dossierId}).
+     * Since {@code document.dossier_id} is {@code NOT NULL}, this path never creates a GED
+     * {@code document} row; it only stores the bytes under a dedicated prefix.
      */
     public String deposerSansDossier(MultipartFile fichier) {
         try (InputStream flux = fichier.getInputStream()) {
             return deposer("jurisprudence", fichier.getOriginalFilename(), fichier.getContentType(), flux, fichier.getSize());
         } catch (IOException e) {
-            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE, "Fichier illisible : " + e.getMessage());
+            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE, MESSAGE_FICHIER_ILLISIBLE + e.getMessage());
         }
     }
 
     /**
-     * Pièce justificative d'une demande de frais (Q-97). Elle n'est pas un document GED : elle
-     * n'est pas rattachée à une étape du dossier, n'est pas soumise au circuit de suppression, et
-     * son cycle de vie est celui de la demande. D'où un préfixe dédié, que
-     * {@code FraisService} reconnaît pour ne signer que ce qu'il a lui-même stocké.
+     * Supporting document of an expense request. It is not a GED document: it is not attached to a
+     * case file step, does not go through the deletion workflow, and shares the request's lifecycle.
+     * Hence a dedicated prefix, which {@code FraisService} recognises so it only signs what it stored.
      */
     public String deposerPieceFrais(MultipartFile fichier) {
         try (InputStream flux = fichier.getInputStream()) {
             return deposer(PREFIXE_PIECES_FRAIS, fichier.getOriginalFilename(), fichier.getContentType(),
                     flux, fichier.getSize());
         } catch (IOException e) {
-            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE, "Fichier illisible : " + e.getMessage());
+            throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE, MESSAGE_FICHIER_ILLISIBLE + e.getMessage());
         }
     }
 
     /**
-     * Archive d'audit (Q-113), produite par le système et rattachée à aucun dossier.
+     * Audit archive, produced by the system and attached to no case file.
      *
-     * <p>Préfixe dédié : ces fichiers ne sont pas des documents GED — ils ne suivent ni le circuit
-     * de suppression, ni le cycle de vie d'un dossier. Leur seule porte de sortie est l'endpoint de
-     * téléchargement, qui trace chaque récupération.
+     * <p>Dedicated prefix: these files are not GED documents and follow neither the deletion workflow
+     * nor a case file lifecycle. Their only way out is the download endpoint, which logs every retrieval.
      */
     public String deposerArchiveAudit(String nomFichier, String contentType, byte[] contenu) {
-        return deposer("audit", nomFichier, contentType, new ByteArrayInputStream(contenu), (long) contenu.length);
+        return deposer("audit", nomFichier, contentType, new ByteArrayInputStream(contenu), contenu.length);
     }
 
     private String deposer(String prefixe, String nomFichier, String contentType, InputStream flux, long taille) {
@@ -111,10 +111,10 @@ public class MinioStorageService {
         }
     }
 
-    /** URL pré-signée de téléchargement (FR-GED-02), valide {@value #EXPIRATION_URL_MINUTES} minutes. */
+    /** Presigned download URL (FR-GED-02), valid for {@value #EXPIRATION_URL_MINUTES} minutes. */
     /**
-     * Contenu d'un objet, pour le redéposer ailleurs — aujourd'hui chez le Notification Engine, qui
-     * exige que le fichier lui soit remis par une URL à usage unique (étape 12).
+     * Object content, to upload it elsewhere: currently to the Notification Engine, which requires
+     * the file to be supplied through a single-use URL.
      */
     public byte[] lire(String cheminStockage) {
         try (var flux = minioClient.getObject(io.minio.GetObjectArgs.builder()
@@ -145,9 +145,9 @@ public class MinioStorageService {
     }
 
     /**
-     * Suppression physique de l'objet — best-effort : un échec ne bloque jamais la suppression
-     * logique en base ({@code document.est_supprime}), qui reste la source de vérité exposée par
-     * l'API ; un objet orphelin résiduel dans MinIO est un problème d'exploitation, pas fonctionnel.
+     * Physical deletion of the object, best-effort: a failure never blocks the logical deletion in the
+     * database ({@code document.est_supprime}), which remains the source of truth exposed by the API.
+     * A leftover orphan object in MinIO is an operations issue, not a functional one.
      */
     public void supprimer(String cheminStockage) {
         try {

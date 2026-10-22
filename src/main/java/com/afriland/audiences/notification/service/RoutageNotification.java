@@ -16,32 +16,30 @@ import java.util.Optional;
 import java.util.function.Function;
 
 /**
- * Calcule, pour un destinataire et un événement, les canaux externes qui partent réellement
- * (NOTIFICATION_ENGINE_PLAN.md, étape 4).
+ * Computes the external channels actually used for a recipient and an event.
  * <ul>
- *   <li><b>Utilisateur interne</b> (D1) : Outlook et Teams, selon {@code CANAUX_NOTIFICATION_DEFAUT} et
- *       leur grille. Seule l'adresse de l'annuaire Keycloak est connue, qui sert aux deux canaux (le
- *       destinataire Teams est l'adresse Azure AD, Guide V1).</li>
- *   <li><b>Prestataire</b> (D2) : courriel personnel, SMS et WhatsApp, selon
- *       {@code CANAUX_NOTIFICATION_PRESTATAIRES} et leur grille, à condition qu'il ait consenti (D15).</li>
+ *   <li><b>Internal user</b>: Outlook and Teams, per {@code CANAUX_NOTIFICATION_DEFAUT} and their grid.
+ *       Only the Keycloak directory address is known; it serves both channels (the Teams recipient is
+ *       the Azure AD address, Guide V1).</li>
+ *   <li><b>Provider</b>: personal e-mail, SMS and WhatsApp, per
+ *       {@code CANAUX_NOTIFICATION_PRESTATAIRES} and their grid, provided the provider consented.</li>
  * </ul>
- * Un canal retenu sans coordonnée utilisable n'est pas retiré en silence : il revient avec son motif,
- * pour être visible en supervision (D14). Le canal applicatif n'est pas concerné, il part toujours.
+ * A selected channel without a usable contact is returned with its reason so it shows in monitoring.
+ * The in-app channel is not concerned; it always fires.
  */
 @Service
 @RequiredArgsConstructor
 public class RoutageNotification {
 
-    /** Code du profil des avocats disposant d'un compte : ils suivent la grille des prestataires. */
+    /** Profile code of lawyers with an account: they follow the provider grid. */
     static final String PROFIL_AVOCAT = "AVOCAT";
 
     private final ReglagesNotificationService reglagesNotificationService;
 
     /**
-     * Canaux externes d'une alerte adressée à un utilisateur de l'application.
-     * <p>
-     * Un avocat qui a un compte n'est jamais notifié par Outlook ou Teams : ses canaux externes sont
-     * ceux des prestataires (D2), calculés par {@link #pourPrestataire}. La liste est alors vide.
+     * External channels of an alert addressed to an application user. A lawyer with an account is
+     * never notified via Outlook or Teams (provider channels apply, see {@link #pourPrestataire}), so
+     * the list is then empty.
      */
     public List<Route> pourUtilisateur(TypeAlerte type, Utilisateur utilisateur) {
         if (estAvocat(utilisateur)) {
@@ -58,7 +56,7 @@ public class RoutageNotification {
         return routes;
     }
 
-    /** Canaux externes d'un événement adressé à un avocat ou à un autre prestataire. */
+    /** External channels of an event addressed to a lawyer or another provider. */
     public List<Route> pourPrestataire(EvenementPrestataire evenement, CoordonneesPrestataire coordonnees) {
         if (!coordonnees.consentement()) {
             return List.of();
@@ -90,10 +88,10 @@ public class RoutageNotification {
     }
 
     /**
-     * Ce que le routage doit savoir d'un prestataire, quel que soit son type.
+     * What routing needs to know about a provider, whatever its type.
      *
-     * @param consentement accord du prestataire pour être notifié hors de l'application (D15) :
-     *                     {@code AutrePrestataire.notification}, et pour l'avocat le champ ajouté à l'étape 7
+     * @param consentement provider's consent to be notified outside the application
+     *                     ({@code AutrePrestataire.notification}, or the lawyer's equivalent field)
      */
     public record CoordonneesPrestataire(String courriel, String telephone, boolean consentement) {
     }

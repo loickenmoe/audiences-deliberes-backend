@@ -1,12 +1,12 @@
 package com.afriland.audiences.referentiel.web.dto;
 
 /**
- * Utilisateur interne du référentiel (M15, Q-69) — alimente les sélecteurs « juriste affecté »
- * des formulaires de création et de réaffectation d'un dossier.
+ * Internal user from the reference list, used by the "assigned legal officer" selectors of the
+ * case file creation and reassignment forms.
  * <p>
- * {@code keycloakId} n'est <b>pas</b> exposé : c'est un identifiant d'authentification, sans usage
- * pour le frontend, qui ne manipule que l'identifiant applicatif {@code id} — le seul attendu par
- * {@code juristesAffectes} (cf. {@code CreerDossierRequest}).
+ * {@code keycloakId} is <b>not</b> exposed: it is an authentication identifier, useless to the
+ * frontend, which only uses the application {@code id} expected by {@code juristesAffectes}
+ * (see {@code CreerDossierRequest}).
  */
 public record UtilisateurResponse(
         Long id,

@@ -3,11 +3,11 @@ package com.afriland.audiences.notification.domain;
 import com.afriland.audiences.notification.passerelle.CanalEngine;
 
 /**
- * Canal externe par lequel un prestataire (avocat ou autre prestataire) est notifié (D2). Les
- * utilisateurs internes, eux, passent par Outlook et Teams ({@link com.afriland.audiences.alerte.domain.CanalAlerte}).
+ * External channel used to notify a provider (lawyer or other). Internal users go through Outlook and
+ * Teams ({@link com.afriland.audiences.alerte.domain.CanalAlerte}).
  * <p>
- * Le courriel personnel et Outlook aboutissent tous deux au canal {@link CanalEngine#EMAIL} du
- * moteur ; ils restent distincts ici parce que le DJ les règle séparément, pour des publics différents.
+ * Personal e-mail and Outlook both map to the engine's {@link CanalEngine#EMAIL} channel; they stay
+ * distinct here because they are configured separately, for different audiences.
  */
 public enum CanalPrestataire {
     COURRIEL_PERSONNEL(CanalEngine.EMAIL),

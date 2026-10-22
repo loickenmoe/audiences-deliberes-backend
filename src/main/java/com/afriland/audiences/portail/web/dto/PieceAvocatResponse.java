@@ -5,9 +5,8 @@ import com.afriland.audiences.ged.domain.FormatDocument;
 import java.time.LocalDateTime;
 
 /**
- * Une pièce du dossier telle que l'avocat la voit (QF-64). Ni l'auteur du chargement, ni le
- * chemin de stockage : il lui faut de quoi reconnaître la pièce, pas de quoi lire l'organisation
- * interne de la banque.
+ * A case-file document as the lawyer sees it. Neither the uploader nor the storage path is exposed:
+ * enough to recognise the document without revealing the bank's internal organisation.
  */
 public record PieceAvocatResponse(
         Long id,

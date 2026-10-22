@@ -31,13 +31,11 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * Épic 5, volet publications (FR-INT-09) — cf. FUNCTIONAL_MAP.md §5, API_IMPLEMENTATION_STATUS.md
- * §6. {@code PUT /publications/{id}/validation} : le contrat ne numérote que
- * {@code /publications/cr-audience/{id}/validation} (#30), mais RG-INT-06/10 s'appliquent
- * uniformément à la {@code publication} de base et aucun second endpoint n'est prévu pour valider
- * une « autre » publication (US 5.3) — chemin généralisé, sans le segment {@code cr-audience},
- * pour couvrir les deux sous-types (Q-55). {@code POST /publications/{id}/correspondance} :
- * « à proposer » (Q-20).
+ * Epic 5, publications (FR-INT-09). {@code PUT /publications/{id}/validation}: the contract only
+ * defines {@code /publications/cr-audience/{id}/validation}, but RG-INT-06/10 apply to every
+ * {@code publication} and no second endpoint exists to validate an other publication (US 5.3), so
+ * the path is generalised without the {@code cr-audience} segment to cover both subtypes.
+ * {@code POST /publications/{id}/correspondance} is not in the formal contract.
  */
 @RestController
 @RequestMapping("${api.prefix}/publications")
@@ -47,15 +45,14 @@ public class PublicationController {
     private final PublicationService publicationService;
 
     /**
-     * US 5.1, étendu par Q-98 d'une **pièce jointe facultative**.
+     * US 5.1, with an <b>optional attachment</b>.
      *
-     * <p>Le corps passe en multipart pour l'accueillir, comme {@code /publications/autres} l'est
-     * déjà : les métadonnées en paramètres, le seul fichier en partie. Le contrat d'API décrivait un
-     * corps JSON — l'écart est assumé et consigné (Q-98), le récit restant obligatoire et le fichier
-     * facultatif. Un compte rendu déposé sans pièce se comporte exactement comme avant.
+     * <p>The body is multipart to carry it, like {@code /publications/autres}: metadata as parameters,
+     * the single file as a part. The report text remains mandatory; a report filed without an
+     * attachment behaves as before.
      *
-     * <p>Les contraintes du DTO sont reportées sur les paramètres : sans elles, un {@code contenu}
-     * vide ne serait plus refusé à l'entrée mais au flush, en 500 au lieu de 400.
+     * <p>DTO constraints are repeated on the parameters: without them, an empty {@code contenu} would be
+     * rejected at flush (500) instead of on input (400).
      */
     @PostMapping("/cr-audience")
     @PreAuthorize("hasRole('AVOCAT')")
@@ -93,18 +90,17 @@ public class PublicationController {
     }
 
     /**
-     * M15 (Q-68) : file de travail des publications — endpoint 🆕. {@code statut=DEPOSE} alimente
-     * l'écran « File des publications à valider » de l'Assistante ; {@code dossierId} l'onglet
-     * publications d'une fiche dossier.
+     * Publications queue. {@code statut=DEPOSE} feeds the Assistant's "publications to validate"
+     * screen; {@code dossierId} feeds the publications tab of a case file.
      */
     @GetMapping
-    @PreAuthorize("hasAnyRole('ASSISTANTE', 'JURISTE', 'DJ', 'DJA')")
+    @PreAuthorize("hasAnyRole('ASSISTANTE', 'JURISTE', 'DJ', 'DJA', 'SH')")
     public com.afriland.audiences.common.web.PageResponse<PublicationResponse> lister(
             @RequestParam(required = false) Long dossierId,
             @RequestParam(required = false) com.afriland.audiences.publication.domain.StatutPublication statut,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        // Q-86 : la file à valider se traite dans l'ordre d'arrivée ; ailleurs, la plus récente d'abord.
+        // The validation queue is processed in arrival order; elsewhere, most recent first.
         Sort.Direction sens = statut == StatutPublication.DEPOSE ? Sort.Direction.ASC : Sort.Direction.DESC;
         return publicationService.lister(dossierId, statut, PageRequest.of(page, size, Sort.by(sens, "dateDepot", "id")));
     }

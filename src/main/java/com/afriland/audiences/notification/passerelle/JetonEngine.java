@@ -15,16 +15,13 @@ import java.time.Instant;
 import java.util.Date;
 
 /**
- * Jeton court qui identifie le service appelant dans chaque message Kafka (Guide V1 §4 bis) :
- * HS256, {@code sub} = code du service, durée de vie de 5 minutes.
+ * Short-lived token identifying the calling service in each Kafka message (Guide V1 §4 bis): HS256,
+ * {@code sub} = service code, 5-minute lifetime.
  * <p>
- * <b>Le secret est utilisé tel quel</b>, c'est-à-dire les octets UTF-8 de la chaîne partagée. Le
- * Guide exige « au moins 32 caractères », une longueur qui n'aurait pas de sens si la chaîne était
- * d'abord décodée en base64. <b>À confirmer au premier envoi réel</b> : un jeton invalide est rejeté
- * par le moteur <b>sans aucun retour</b>, et seule l'absence d'accusé le révélerait.
+ * The secret is used as is (UTF-8 bytes of the shared string), since the Guide requires "at least 32
+ * characters". An invalid token is rejected silently by the engine; only missing receipts reveal it.
  * <p>
- * Un jeton est produit à chaque remise, et non mis en cache : il vaut 5 minutes, et une notification
- * retentée six heures plus tard doit en porter un valide.
+ * A token is generated per delivery, not cached: a notification retried hours later needs a valid one.
  */
 @Component
 public class JetonEngine {

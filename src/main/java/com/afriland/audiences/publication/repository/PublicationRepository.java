@@ -12,35 +12,30 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface PublicationRepository extends JpaRepository<Publication, Long> {
 
-    /** M15 (Q-68) : file de travail « publications à valider » de l'Assistante, filtrable par statut. */
+    /** Assistant's queue of publications to validate, filterable by status. */
     Page<Publication> findByStatutValidation(StatutPublication statut, Pageable pageable);
 
-    /** M15 (Q-68) : publications d'un dossier — onglet correspondant de la fiche dossier. */
+    /** Publications of a case file (publications tab of the case file page). */
     Page<Publication> findByDossierId(Long dossierId, Pageable pageable);
 
-    /** Portail avocat (Q-96) : ses propres dépôts, quel qu'en soit le statut — y compris rejetés. */
+    /** Lawyer portal: their own filings, whatever the status, including rejected ones. */
     Page<Publication> findByAvocatId(Long avocatId, Pageable pageable);
 
-    /** Q-104 — « Mon espace » : l'avocat filtre ses dépôts par statut (déposé, validé, rejeté). */
+    /** "My space": the lawyer filters their filings by status (filed, validated, rejected). */
     Page<Publication> findByAvocatIdAndStatutValidation(Long avocatId, StatutPublication statut, Pageable pageable);
 
     Page<Publication> findByDossierIdAndStatutValidation(Long dossierId, StatutPublication statut, Pageable pageable);
 
     /**
-     * RG-INT-06 amendée (métier du 2026-10-05) : ce qu'un habilité a le droit de voir.
+     * RG-INT-06 (amended): what an authorised user may see.
      *
-     * <p>Deux régimes, selon la nature du dépôt. Un <b>compte rendu d'audience</b> est lisible
-     * <b>dès son dépôt</b>, par tous ceux qui portent la consultation : le récit de l'avocat sur ce
-     * qui s'est dit à l'audience n'attend pas un contrôle. Une <b>autre publication</b> — pièce,
-     * décision, conclusion — reste invisible tant qu'elle n'est pas validée, sa conformité n'ayant
-     * pas été vérifiée.
+     * <p>Two regimes depending on the filing type. A <b>hearing report</b> is readable <b>as soon as it
+     * is filed</b> by everyone with consultation rights. An <b>other publication</b> (exhibit, decision,
+     * submission) stays hidden until validated, since its compliance has not been checked.
      *
-     * <p>Le filtre est posé en <b>base</b> et non après coup : filtrer une page déjà chargée
-     * fausserait le total et donnerait des pages trouées. C'est la raison pour laquelle le reste du
-     * projet écrit ses restrictions en {@code exists}, jamais en jointure.
-     *
-     * <p>Aucune identité n'entre ici : la règle ne dépend plus de qui regarde, mais de ce qui est
-     * regardé. Les profils instructeurs, eux, ne passent pas par cette requête.
+     * <p>The filter is applied <b>in the database</b>: filtering an already loaded page would skew the
+     * total and produce gaps. This is why restrictions are written with {@code exists}, never with
+     * joins. Investigating profiles do not use this query.
      */
     @Query("""
             select p from Publication p

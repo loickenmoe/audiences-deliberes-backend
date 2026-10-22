@@ -1,30 +1,28 @@
 package com.afriland.audiences.notification.passerelle;
 
 /**
- * Point unique de remise d'un message au Notification Engine. Le transport (sidecar Dapr ou Kafka
- * direct) est un détail d'implémentation : le reste de l'application ne dépend que de cette
- * interface, ce qui permet d'en changer par simple configuration.
+ * Single entry point for delivering a message to the Notification Engine. The transport (Dapr sidecar
+ * or direct Kafka) is selected by configuration.
  * <p>
- * Tant que l'interrupteur {@code notification.engine.actif} est à {@code false} (valeur par défaut),
- * l'implémentation retenue est {@link PasserelleJournal}, qui n'envoie rien.
+ * While {@code notification.engine.actif} is {@code false} (default), {@link PasserelleJournal} is
+ * used and nothing is sent.
  */
 public interface PasserelleNotificationEngine {
 
     /**
-     * Remet le message au transport. Une exception signifie que la remise a échoué et qu'elle peut
-     * être retentée ; le suivi de la délivrance effective se fait à part (topics
-     * {@code notification-sent} et {@code notification-failed}).
+     * Hands the message to the transport. An exception means delivery failed and may be retried;
+     * actual delivery is tracked separately ({@code notification-sent} and {@code notification-failed}).
      *
-     * @return nom du transport utilisé, consigné dans la file pour le diagnostic
+     * @return name of the transport used, recorded in the queue for diagnostics
      */
     String publier(MessageEngine message);
 
     /**
-     * Demande au moteur une URL de dépôt pour une pièce jointe (Guide V1 §3 bis). La réponse arrive
-     * plus tard, sur un topic, et porte le {@code requestId} de la demande.
+     * Requests an attachment upload URL from the engine (Guide V1 §3 bis). The response arrives later
+     * on a topic, carrying the request's {@code requestId}.
      *
-     * @return {@code false} si ce transport ne sait pas demander de dépôt — la notification partira
-     *         alors sans sa pièce jointe, plutôt que de ne jamais partir
+     * @return {@code false} if this transport cannot request uploads; the notification is then sent
+     *         without its attachment
      */
     default boolean demanderDepot(DemandeDepotPieceJointe demande) {
         return false;

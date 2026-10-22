@@ -13,7 +13,7 @@ public interface DossierJuristeRepository extends JpaRepository<DossierJuriste, 
 
     List<DossierJuriste> findByDossierId(Long dossierId);
 
-    /** Affectations de plusieurs dossiers en une requête (QF-41). */
+    /** Assignments of several cases in one query. */
     List<DossierJuriste> findByDossierIdIn(Collection<Long> dossierIds);
 
     boolean existsByDossierIdAndUtilisateurId(Long dossierId, Long utilisateurId);

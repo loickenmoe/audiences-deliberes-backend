@@ -25,11 +25,9 @@ public interface AlerteRepository extends JpaRepository<Alerte, Long> {
     Page<Alerte> findByDestinataireIdAndStatut(Long destinataireId, StatutAlerte statut, Pageable pageable);
 
     /**
-     * Mes notifications, avec ses filtres optionnels (Q-102).
-     *
-     * <p>Une requête paramétrée plutôt que des méthodes dérivées : quatre critères facultatifs en
-     * auraient demandé huit, à maintenir une par une. Le destinataire, lui, n'est **pas** optionnel —
-     * il vient du jeton, jamais d'un paramètre, sinon chacun lirait les notifications des autres.
+     * The current user's notifications, with optional filters.
+     * <p>The recipient is <b>not</b> optional: it comes from the token, never from a parameter,
+     * otherwise anyone could read other users' notifications.
      */
     @Query("SELECT a FROM Alerte a WHERE a.destinataire.id = :destinataireId "
             + "AND (:statut IS NULL OR a.statut = :statut) "
@@ -42,28 +40,26 @@ public interface AlerteRepository extends JpaRepository<Alerte, Long> {
                             Pageable pageable);
 
     /**
-     * Anti-doublon pour le déclenchement planifié (ex. {@code CHARGE_MAX_AVOCAT}, §M5) : une
-     * alerte encore {@code DECLENCHEE} portant le même marqueur (préfixe stable de
-     * {@code declencheur}, ex. {@code "[avocatId:42] "}) signale que le sujet est déjà notifié —
-     * inutile de la redéclencher tant qu'elle n'a pas été traitée.
+     * Duplicate guard for scheduled alerts (e.g. {@code CHARGE_MAX_AVOCAT}): a still
+     * {@code DECLENCHEE} alert with the same marker (stable prefix of {@code declencheur}, e.g.
+     * {@code "[avocatId:42] "}) means the subject is already notified.
      */
     boolean existsByTypeAndDestinataireIdAndStatutAndDeclencheurStartingWith(
             TypeAlerte type, Long destinataireId, StatutAlerte statut, String marqueur);
 
     /**
-     * Anti-doublon pour un événement qui ne doit être signalé **qu'une seule fois dans son
-     * existence** (ex. rappel J-7 d'une audience, échéance d'une alarme) — contrairement à
-     * {@link #existsByTypeAndDestinataireIdAndStatutAndDeclencheurStartingWith}, le statut
-     * {@code TRAITEE} ne doit pas autoriser un nouveau déclenchement du même événement.
+     * Duplicate guard for an event to be reported <b>only once in its lifetime</b> (e.g. J-7
+     * hearing reminder, alarm due date): unlike
+     * {@link #existsByTypeAndDestinataireIdAndStatutAndDeclencheurStartingWith}, a {@code TRAITEE} status
+     * does not allow raising it again.
      */
     boolean existsByTypeAndDestinataireIdAndDeclencheurStartingWith(
             TypeAlerte type, Long destinataireId, String marqueur);
 
-    /** FR-REP-02 (tableau de bord, M13) : alertes de prorogation encore non traitées, tous destinataires confondus. */
-    /*
-     * Une alerte porte un `dossierId` libre, sans relation : la categorie se lit donc par
-     * sous-requete. Toute alerte de prorogation en porte un - elle nait du dossier d'un
-     * delibere (`DelibereService`) -, si bien que la partition par categorie est complete.
+    /**
+     * FR-REP-02 (dashboard): unhandled extension alerts, all recipients. The category is read
+     * through a subquery since {@code dossierId} is a plain reference; every extension alert
+     * carries one, so the category partition is complete.
      */
     @Query("SELECT COUNT(a) FROM Alerte a WHERE a.type = :type AND a.statut = :statut "
             + "AND a.dossierId IN (SELECT d.id FROM Dossier d WHERE d.categorie IN :categories)")
@@ -72,11 +68,8 @@ public interface AlerteRepository extends JpaRepository<Alerte, Long> {
                                 @Param("categories") List<CategorieDossier> categories);
 
     /**
-     * Les alertes que {@link #countByTypeAndStatut} compte (Q-137), la plus récente d'abord.
-     *
-     * <p><b>Une ligne par alerte, et non par dossier.</b> C'est ce que le compteur compte : une
-     * prorogation prévenant plusieurs destinataires produit plusieurs alertes. Regrouper
-     * donnerait une liste plus courte que le nombre affiché.
+     * The alerts counted by {@link #countByTypeAndStatut}, most recent first. One row per alert,
+     * not per case, so the list matches the displayed count.
      */
     @Query("SELECT a FROM Alerte a WHERE a.type = :type AND a.statut = :statut "
             + "AND a.dossierId IN (SELECT d.id FROM Dossier d WHERE d.categorie IN :categories) "
@@ -87,13 +80,10 @@ public interface AlerteRepository extends JpaRepository<Alerte, Long> {
                                        Pageable pageable);
 
     /**
-     * Supervision du canal applicatif (Q-109, NF-ALR-02) : nombre d'alertes d'une issue donnée sur
-     * une fenêtre. Un décompte par issue plutôt qu'un {@code GROUP BY} : trois requêtes servies par
-     * le même index partiel, contre un agrégat dont il faudrait ensuite combler les issues absentes
-     * — un zéro manquant se lit trop facilement comme un zéro mesuré.
-     *
-     * <p>La borne haute est <b>exclusive</b> : l'appelant passe le lendemain de la date de fin, ce
-     * qui inclut toute la dernière journée sans dépendre de la précision des horodatages.
+     * In-app channel monitoring (NF-ALR-02): number of alerts with a given outcome in a window. One
+     * count per outcome rather than a {@code GROUP BY}, so a missing outcome cannot be misread as a
+     * measured zero.
+     * <p>The upper bound is <b>exclusive</b>: the caller passes the day after the end date.
      */
     @Query("SELECT COUNT(a) FROM Alerte a WHERE a.statutDiffusion = :statut "
             + "AND a.dateDeclenchement >= :debut AND a.dateDeclenchement < :fin")
@@ -102,9 +92,8 @@ public interface AlerteRepository extends JpaRepository<Alerte, Long> {
                                 @Param("fin") LocalDateTime fin);
 
     /**
-     * Alertes de la fenêtre que personne n'a ouvertes. Ce décompte ne participe à aucun taux : une
-     * alerte techniquement délivrée mais jamais lue relève d'un autre problème que la délivrance,
-     * et les mélanger brouillerait les deux.
+     * Alerts of the window nobody opened. Not part of any rate: an alert delivered but never read
+     * is a different problem from delivery.
      */
     @Query("SELECT COUNT(a) FROM Alerte a WHERE a.statut = com.afriland.audiences.alerte.domain.StatutAlerte.DECLENCHEE "
             + "AND a.dateDeclenchement >= :debut AND a.dateDeclenchement < :fin")

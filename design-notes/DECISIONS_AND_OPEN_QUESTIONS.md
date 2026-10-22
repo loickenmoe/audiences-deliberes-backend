@@ -183,8 +183,7 @@ persiste ; en pratique, **réessayer le démarrage** (`mvn spring-boot:run`) suf
 l'échec quand il se produit.
 **Statut (2026-09-07, M10)** : non corrigé — pré-existant (reproduit sur `dev`), hors périmètre.
 Impact sur ce jalon : nul au final — après plusieurs tentatives, l'application a démarré
-normalement et la **validation manuelle complète de bout en bout a été réalisée** (voir §M10 de
-`DEVELOPMENT_ROADMAP.md`). Reste un point de vigilance pour M14 (durcissement final) : fiabiliser
+normalement et la **validation manuelle complète de bout en bout a été réalisée**. Reste un point de vigilance pour M14 (durcissement final) : fiabiliser
 `contextLoads` (qui échoue, lui, de façon systématique dans les runs `mvn test`) et surveiller la
 récurrence de l'intermittence au démarrage.
 **Suivi (2026-09-07, M14)** : l'intermittence ne s'est **plus manifestée** sur les jalons M11 à M14
@@ -607,7 +606,7 @@ saisies manuellement** ». Sans création, aucun dossier n'est créable. **C** :
 `POST /clients` et `PUT /clients/{id}` (`ROLE_SAISIE`).
 
 **Statut (2026-09-04, M4)** : `POST /clients` implémenté et marqué 🆕 (hors contrat OpenAPI
-formel) dans `ClientController`/`API_IMPLEMENTATION_STATUS.md`, `ROLE_SAISIE` requis, vérifié en
+formel) dans `ClientController` et dans l'inventaire des endpoints (devenu le Contrat d'API V1.1 (`Doc/`)), `ROLE_SAISIE` requis, vérifié en
 conditions réelles. `PUT /clients/{id}` **non implémenté** — aucune US ni cas d'usage M4 ne
 l'exigeait explicitement (seule la création bloquait `POST /dossiers`) ; à réévaluer si un besoin
 de modification client émerge dans un module ultérieur. **Soldé en Q-116 (2026-09-22)** : le besoin a
@@ -644,7 +643,7 @@ UC-DOS-04 alt. 3-b permet de positionner directement une étape (ex. `RECOURS_2`
 que `PATCH /dossiers/{id}/etapes/{etapeId}/statut`, qui exige structurellement un `etapeId`
 **existant** — il ne peut donc pas créer une étape qui n'existe pas encore.
 **C — Recommandation** : ajouter un nouvel endpoint, hors des 12 endpoints du contrat formel
-(`API_IMPLEMENTATION_STATUS.md` §1), clairement marqué 🆕.
+(inventaire des endpoints, devenu le Contrat d'API V1.1 (`Doc/`)), clairement marqué 🆕.
 **Statut (2026-09-04, M4 ; rôle corrigé en M14)** : implémenté — `POST /dossiers/{id}/etapes`
 (`CreerEtapeRequest{type, statutCycleVie}`, **`ROLE_JURISTE`** — cette fiche annonçait
 `ROLE_SAISIE`, écart relevé par l'audit de conformité M14 et tranché en faveur du code, cohérent
@@ -1169,8 +1168,8 @@ les intégrations externes ni les règles métier unitaires (déjà couvertes pa
 **Statut (2026-09-07, M14)** : appliqué — `ParcoursEndToEndIntegrationTest`.
 
 ### Q-66 ✅ Audit de conformité endpoint par endpoint : 2 écarts doc/code — corrigés (M14)
-L'audit systématique des 56 endpoints (annotations `@PreAuthorize` du code vs tableau
-`API_IMPLEMENTATION_STATUS.md`) a relevé **2 divergences**, de même nature : la documentation
+L'audit systématique des 56 endpoints (annotations `@PreAuthorize` du code vs inventaire
+des endpoints, devenu le Contrat d'API V1.1 (`Doc/`)) a relevé **2 divergences**, de même nature : la documentation
 annonçait `ROLE_SAISIE`, le code exige `ROLE_JURISTE` (plus strict — `ROLE_JURISTE` est un rôle
 composite qui **contient** `ROLE_SAISIE`, l'écart est donc restrictif, jamais permissif) :
 - `POST /dossiers/{id}/etapes` (Q-34, M4) ;
@@ -1180,7 +1179,7 @@ fonctionnel appuie `ROLE_JURISTE` (FR-GED-03 : « Juriste **auteur du chargement
 demande » ; UC-DOS-04 : la gestion des étapes est l'acte du juriste, comme son endpoint frère
 `PATCH …/etapes/{etapeId}/statut`, déjà `ROLE_JURISTE` des deux côtés). Aucun changement de
 comportement, donc aucun risque de régression.
-**Statut (2026-09-07, M14)** : appliqué — lignes corrigées dans `API_IMPLEMENTATION_STATUS.md`
+**Statut (2026-09-07, M14)** : appliqué — lignes corrigées dans l'inventaire des endpoints (devenu le Contrat d'API V1.1 (`Doc/`))
 §1/§8 et dans la fiche Q-34. **Les 54 autres endpoints sont conformes** (chemin, méthode, rôle).
 
 ### Q-67 ✅ `DossierResponse.documents` toujours vide : dette de M4 non résorbée en M8 — tranché (M14)
@@ -3942,4 +3941,4 @@ une formation des utilisateurs clés a été réalisée ; les données historiqu
 | 2026-09-06 | Q-53 | Indicateurs du répertoire calculés à la demande (non persistés) ; `intervenant` dépend aussi de `dossier`/`delibere` | Implémenté M9 |
 
 Les autres questions (P1/P2) restent ouvertes et seront tranchées au fil des jalons concernés,
-au plus tard avant le module qui en dépend (cf. tableau des prérequis dans `DEVELOPMENT_ROADMAP.md`).
+au plus tard avant le module qui en dépend.

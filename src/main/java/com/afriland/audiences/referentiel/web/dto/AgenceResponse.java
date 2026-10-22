@@ -1,11 +1,10 @@
 package com.afriland.audiences.referentiel.web.dto;
 
 /**
- * Une agence, telle que l'écran la lit.
+ * A branch, as read by the UI.
  *
- * <p>{@code ville} et {@code adresse} ne sont pas décoratives : deux agences peuvent porter le même
- * nom — « MBALLA II » existe sous les codes {@code 00108} et {@code 108} — et ce sont elles qui
- * permettent au juriste de choisir la bonne (arbitrage du métier, 2026-10-05).
+ * <p>{@code ville} and {@code adresse} are not decorative: two branches can share a name ("MBALLA II"
+ * exists under codes {@code 00108} and {@code 108}) and they let the legal officer pick the right one.
  */
 public record AgenceResponse(
         Long id,

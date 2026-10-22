@@ -12,11 +12,11 @@ public interface UtilisateurRepository extends JpaRepository<Utilisateur, Long> 
 
     Optional<Utilisateur> findByKeycloakId(String keycloakId);
 
-    /** Q-84 : par identifiant de connexion ({@code preferred_username}). */
+    /** By login identifier ({@code preferred_username}). */
     Optional<Utilisateur> findByIdentifiant(String identifiant);
 
     Optional<Utilisateur> findByEmail(String email);
 
-    /** Utilisateurs actifs portant un profil donné (ex. "DJ") — destinataires des alertes de supervision (M5). */
+    /** Active users with a given profile (e.g. "DJ"), recipients of supervision alerts. */
     List<Utilisateur> findByProfilCodeAndActifTrue(String profilCode);
 }

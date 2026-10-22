@@ -36,7 +36,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-/** M14 — `ClientService` (M4) n'avait aucun test unitaire dédié : recherche, unicité, 404. */
+/** M14: `ClientService` unit tests: search, uniqueness, 404. */
 @ExtendWith(MockitoExtension.class)
 class ClientServiceTest {
 
@@ -52,7 +52,7 @@ class ClientServiceTest {
 
         @Override
         public Client toEntity(CreerClientRequest request) {
-            // La référence n'est plus dans la requête : le service l'attribue et la pose ensuite.
+            // The reference is no longer in the request: the service assigns and sets it afterwards.
             return Client.builder().nom(request.nom()).build();
         }
     };
@@ -116,15 +116,15 @@ class ClientServiceTest {
     }
 
     /**
-     * Depuis le 2026-09-29 la référence est attribuée : un doublon ne peut plus venir d'une saisie,
-     * seulement d'un compteur désynchronisé (V36). Le message le dit, et ne nomme <b>aucun champ</b>
-     * puisqu'il n'y en a plus à corriger à l'écran.
+     * The reference is assigned by the system: a duplicate can only come from an out-of-sync counter
+     * (V36). The message says so and names <b>no field</b>, since there is nothing to fix on screen.
      */
     @Test
     void creerClient_signaleUneReferenceAttribueeDejaPortee() {
         when(clientRepository.findByReference("CLI-2026-0001")).thenReturn(Optional.of(client));
 
-        assertThatThrownBy(() -> service.creerClient(new CreerClientRequest("Autre", null, null)))
+        var requete = new CreerClientRequest("Autre", null, null);
+        assertThatThrownBy(() -> service.creerClient(requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("désynchronisé")
                 .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.type(ApiException.class))
@@ -144,12 +144,10 @@ class ClientServiceTest {
         ClientResponse result = service.creerClient(new CreerClientRequest("Nouveau client", null, null));
 
         assertThat(result.id()).isEqualTo(2L);
-        // La référence vient du générateur, jamais de la requête.
+        // The reference comes from the generator, never from the request.
         assertThat(result.reference()).isEqualTo("CLI-2026-0001");
         verify(generateurReference).prochaine(FamilleReference.CLIENT);
     }
-
-    // ------------------------------------------------------------------ Modification (PUT /clients)
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> detailsHistorises() {
@@ -161,15 +159,16 @@ class ClientServiceTest {
     @Test
     void modifierClient_metAJourEtNHistoriseQueLesChampsChanges() {
         client.setEmail("ancien@banque.cm");
-        client.setTelephone("+237 600 000 000");
+        client.setTelephone("+237600000000");
         when(clientRepository.findById(1L)).thenReturn(Optional.of(client));
         when(clientRepository.save(any(Client.class))).thenAnswer(inv -> inv.getArgument(0));
 
+        // The phone is entered with spaces but normalizes to the stored value: unchanged.
         ClientResponse result = service.modifierClient(1L,
                 new ModifierClientRequest("Banque Test", "nouveau@banque.cm", "+237 600 000 000"));
 
         assertThat(result.email()).isEqualTo("nouveau@banque.cm");
-        // Seul l'e-mail a changé : le nom et le téléphone, identiques, n'encombrent pas la trace.
+        // Only the email changed: the identical name and phone do not clutter the trace.
         assertThat(detailsHistorises()).containsExactly(
                 Map.entry("reference", "CLI-001"),
                 Map.entry("ancienEmail", "ancien@banque.cm"),
@@ -191,7 +190,7 @@ class ClientServiceTest {
     void modifierClient_sansAucunChangement_nEcritRien() {
         when(clientRepository.findById(1L)).thenReturn(Optional.of(client));
 
-        // « Banque Test » à l'identique, espaces compris : ce n'est pas une modification.
+        // "Banque Test" identical, spaces included: not a modification.
         service.modifierClient(1L, new ModifierClientRequest("  Banque Test ", "", "   "));
 
         verify(clientRepository, never()).save(any());
@@ -215,9 +214,78 @@ class ClientServiceTest {
     void modifierClientInexistant_renvoie404() {
         when(clientRepository.findById(99L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.modifierClient(99L, new ModifierClientRequest("X", null, null)))
+        var requete = new ModifierClientRequest("X", null, null);
+        assertThatThrownBy(() -> service.modifierClient(99L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("Client introuvable");
         verifyNoInteractions(historiqueActionService);
+    }
+
+    // Phone: same rule as an intervenant's (Coordonnees.telephone), checked by the server.
+
+    private ApiException refus(Runnable appel) {
+        try {
+            appel.run();
+        } catch (ApiException e) {
+            return e;
+        }
+        throw new AssertionError("refus attendu");
+    }
+
+    @Test
+    void creerClient_telephoneCamerounais_enregistreAuFormatInternational() {
+        when(clientRepository.findByReference("CLI-2026-0001")).thenReturn(Optional.empty());
+        when(clientRepository.save(any(Client.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ClientResponse result = service.creerClient(new CreerClientRequest("Client SA", null, "650 22 89 36"));
+
+        assertThat(result.telephone()).isEqualTo("+237650228936");
+    }
+
+    @Test
+    void creerClient_sansTelephone_resteAbsent() {
+        when(clientRepository.findByReference("CLI-2026-0001")).thenReturn(Optional.empty());
+        when(clientRepository.save(any(Client.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThat(service.creerClient(new CreerClientRequest("Client SA", null, "   ")).telephone()).isNull();
+    }
+
+    @Test
+    void creerClient_telephoneHorsFormat_estRefuseSurLeChamp() {
+        when(clientRepository.findByReference("CLI-2026-0001")).thenReturn(Optional.empty());
+        var fixe = new CreerClientRequest("Client SA", null, "2 22 45 67 89");
+        var etrangerSansIndicatif = new CreerClientRequest("Client SA", null, "33612345678");
+
+        ApiException refusFixe = refus(() -> service.creerClient(fixe));
+        ApiException refusEtranger = refus(() -> service.creerClient(etrangerSansIndicatif));
+
+        assertThat(refusFixe.getChamp()).isEqualTo("telephone");
+        assertThat(refusFixe.getMessage()).contains("Numéro de téléphone invalide");
+        assertThat(refusEtranger.getChamp()).isEqualTo("telephone");
+        verify(clientRepository, never()).save(any());
+    }
+
+    @Test
+    void modifierClient_telephoneHorsFormat_estRefuseSansRienEcrire() {
+        when(clientRepository.findById(1L)).thenReturn(Optional.of(client));
+        var requete = new ModifierClientRequest("Banque Test", null, "12345");
+
+        assertThat(refus(() -> service.modifierClient(1L, requete)).getChamp()).isEqualTo("telephone");
+        verify(clientRepository, never()).save(any());
+        verifyNoInteractions(historiqueActionService);
+    }
+
+    @Test
+    void modifierClient_ancienFormat_estNormaliseEtTrace() {
+        client.setTelephone("+237 600 000 000");
+        when(clientRepository.findById(1L)).thenReturn(Optional.of(client));
+        when(clientRepository.save(any(Client.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ClientResponse result = service.modifierClient(1L, new ModifierClientRequest("Banque Test", null, "+237 600 000 000"));
+
+        // A number stored before the rule is rewritten in the single stored format, and the change is traced.
+        assertThat(result.telephone()).isEqualTo("+237600000000");
+        assertThat(detailsHistorises()).containsEntry("ancienTelephone", "+237 600 000 000")
+                .containsEntry("nouveauTelephone", "+237600000000");
     }
 }

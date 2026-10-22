@@ -18,12 +18,11 @@ import java.time.LocalDateTime;
 import java.util.Objects;
 
 /**
- * Une notification externe en file d'attente : un destinataire, un canal (voir la migration V27).
+ * A queued external notification: one recipient, one channel (migration V27).
  * <p>
- * Les lignes naissent par {@link #aRemettre} ou {@link #nonJoignable}, jamais par un constructeur
- * public : l'invariant « destinataire présent, sauf si NON_JOIGNABLE » est ainsi tenu dès Java, et
- * pas seulement par la contrainte en base. Les transitions d'envoi et de suivi arrivent avec le
- * dispatcher (étape 8) et la consommation des accusés (étape 9).
+ * Rows are only created through {@link #aRemettre} or {@link #nonJoignable}, never a public
+ * constructor, so the invariant "recipient present unless NON_JOIGNABLE" holds in Java and not only
+ * through the database constraint.
  */
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -96,7 +95,7 @@ public class NotificationEnvoi {
     @Column(name = "date_accuse")
     private LocalDateTime dateAccuse;
 
-    /** Document de la GED à joindre (D5) ; référence libre, comme {@code dossierId}. */
+    /** Document to attach; loose reference, like {@code dossierId}. */
     @Column(name = "piece_jointe_document_id")
     private Long pieceJointeDocumentId;
 
@@ -106,15 +105,15 @@ public class NotificationEnvoi {
     @Column(name = "piece_jointe_mime", length = 100)
     private String pieceJointeMime;
 
-    /** Chemin dans notre propre stockage, d'où le fichier est lu pour être déposé chez le moteur. */
+    /** Path in our own storage, from which the file is read to upload it to the engine. */
     @Column(name = "piece_jointe_chemin", length = 500)
     private String pieceJointeChemin;
 
-    /** Clé rendue par le moteur une fois le fichier déposé ; c'est elle que porte la notification. */
+    /** Key returned by the engine once the file is uploaded; cited by the notification. */
     @Column(name = "piece_jointe_cle", length = 500)
     private String pieceJointeCle;
 
-    /** Ligne prête à partir : elle sera remise au transport au prochain passage du dispatcher. */
+    /** Row ready to send: handed to the transport on the next dispatcher pass. */
     public static NotificationEnvoi aRemettre(Origine origine, CanalEngine canal, String destinataire,
                                               String sujet, String corps) {
         if (destinataire == null || destinataire.isBlank()) {
@@ -133,12 +132,8 @@ public class NotificationEnvoi {
     }
 
     /**
-     * Canal routé sans coordonnée utilisable : rien ne part, mais l'écart reste visible en supervision
-     * (D14), avec son motif (coordonnée absente ou invalide) dans {@code derniereErreur}.
-     */
-    /**
-     * Joint un document de la GED à cette notification (D5). Réservé au courriel : le Guide constate
-     * que WhatsApp et Teams perdent la pièce jointe en silence, et que le SMS ne la supporte pas.
+     * Attaches a document to this notification. E-mail only: WhatsApp and Teams silently drop
+     * attachments and SMS does not support them.
      */
     public void joindre(Long documentId, String nom, String mime, String chemin) {
         if (canal != CanalEngine.EMAIL) {
@@ -150,18 +145,18 @@ public class NotificationEnvoi {
         this.pieceJointeChemin = chemin;
     }
 
-    /** Une pièce jointe est attendue, et sa clé de stockage n'est pas encore connue. */
+    /** An attachment is expected and its storage key is not known yet. */
     public boolean attendSaPieceJointe() {
         return pieceJointeChemin != null && pieceJointeCle == null;
     }
 
-    /** La clé a été demandée au moteur : la ligne patiente jusqu'à la réponse. */
+    /** The key was requested from the engine; the row waits for the response. */
     public void attendreLaPieceJointe(LocalDateTime relance) {
         this.statut = StatutEnvoi.ATTENTE_PIECE_JOINTE;
         this.prochaineTentative = relance;
     }
 
-    /** Le fichier est déposé : la ligne repart, et citera la clé dans sa notification. */
+    /** The file is uploaded: the row resumes and will cite the key in its notification. */
     public void pieceJointeDeposee(String cleStockage) {
         this.pieceJointeCle = cleStockage;
         this.statut = StatutEnvoi.EN_ATTENTE;
@@ -170,8 +165,8 @@ public class NotificationEnvoi {
     }
 
     /**
-     * Le dépôt a échoué. La notification part <b>sans</b> sa pièce jointe plutôt que de ne jamais
-     * partir : le destinataire est prévenu, et l'absence du document reste tracée.
+     * The upload failed. The notification is sent <b>without</b> its attachment rather than never;
+     * the missing document stays traced.
      */
     public void pieceJointeAbandonnee(String motif) {
         this.pieceJointeChemin = null;
@@ -180,6 +175,10 @@ public class NotificationEnvoi {
         this.derniereErreur = tronquer(motif);
     }
 
+    /**
+     * Channel routed without a usable contact: nothing is sent, but the gap stays visible in monitoring
+     * with its reason (missing or invalid contact) in {@code derniereErreur}.
+     */
     public static NotificationEnvoi nonJoignable(Origine origine, CanalEngine canal, String motif) {
         NotificationEnvoi envoi = nouvelle(origine, canal);
         envoi.statut = StatutEnvoi.NON_JOIGNABLE;
@@ -188,10 +187,10 @@ public class NotificationEnvoi {
     }
 
     /**
-     * Le message a été remis au transport. L'envoi effectif n'est pas encore confirmé : il le sera
-     * par un accusé de l'Engine (étape 9), ou jamais, si le moteur a rejeté le message en silence.
+     * The message was handed to the transport. Actual delivery is confirmed by an Engine receipt, or
+     * never if the engine silently rejected the message.
      *
-     * @param transport nom de la passerelle utilisée, pour le diagnostic
+     * @param transport name of the gateway used, for diagnostics
      */
     public void marquerPubliee(String transport, String destinataireReel) {
         this.statut = StatutEnvoi.PUBLIEE;
@@ -200,17 +199,17 @@ public class NotificationEnvoi {
         this.prochaineTentative = null;
         this.derniereErreur = null;
         if (destinataireReel != null && !destinataireReel.equals(destinataire)) {
-            // Redirection hors production (D10) : on garde trace de qui aurait été visé.
+            // Non-production redirection: keep track of the original recipient.
             this.destinataireOrigine = destinataire;
             this.destinataire = destinataireReel;
         }
     }
 
     /**
-     * La remise a échoué. Tant qu'il reste des tentatives, la ligne repart plus tard ; sinon elle
-     * passe en échec et devient visible en supervision (D13).
+     * Delivery failed. While attempts remain the row is retried later; otherwise it fails and shows in
+     * monitoring.
      *
-     * @param prochaine échéance de la prochaine tentative, ou {@code null} s'il n'y en a plus
+     * @param prochaine time of the next attempt, or {@code null} if none remain
      */
     public void echouerTentative(String erreur, LocalDateTime prochaine) {
         this.tentatives++;
@@ -220,9 +219,8 @@ public class NotificationEnvoi {
     }
 
     /**
-     * Le moteur signale un échec définitif sur cette notification : plus rien ne partira, et la ligne
-     * devient visible en supervision. Nos propres tentatives ne s'appliquent pas — c'est le moteur qui
-     * a épuisé les siennes (Guide V1 §8).
+     * The engine reports a permanent failure: nothing more is sent and the row shows in monitoring.
+     * Our own retries do not apply, the engine has exhausted its own (Guide V1 §8).
      */
     public void marquerEchecDuMoteur(String erreur, LocalDateTime dateAccuse) {
         this.statut = StatutEnvoi.ECHEC;
@@ -233,8 +231,8 @@ public class NotificationEnvoi {
     }
 
     /**
-     * Remise en file après correction, sur décision du DJ (D17). Le compteur de tentatives repart de
-     * zéro : ce n'est pas la poursuite d'une série perdue, mais un nouvel essai décidé par quelqu'un.
+     * Requeued after correction, on the DJ's decision. The attempt counter is reset since this is a new,
+     * human-initiated try.
      */
     public void relancer() {
         this.statut = StatutEnvoi.EN_ATTENTE;
@@ -246,9 +244,8 @@ public class NotificationEnvoi {
     }
 
     /**
-     * Aucun accusé n'est arrivé dans le délai attendu. L'envoi n'est ni confirmé ni échoué : il est
-     * sans retour. C'est l'état d'un message rejeté en silence par le moteur — un jeton invalide, par
-     * exemple —, et le compter comme délivré masquerait précisément ce défaut.
+     * No receipt arrived within the expected delay: neither confirmed nor failed. This is the state of a
+     * message silently rejected by the engine (e.g. invalid token); counting it as delivered would hide it.
      */
     public void marquerSansRetour() {
         this.statut = StatutEnvoi.SANS_RETOUR;
@@ -256,9 +253,8 @@ public class NotificationEnvoi {
     }
 
     /**
-     * Notification trop ancienne pour être encore utile : elle n'est pas envoyée. Un rappel
-     * d'audience remis trois jours après l'audience désinformerait son destinataire, et une file
-     * accumulée pendant une coupure partirait d'un bloc.
+     * Notification too old to be useful: it is not sent. A hearing reminder delivered after the hearing
+     * would mislead, and a backlog built up during an outage would otherwise go out all at once.
      */
     public void perimer(String motif) {
         this.statut = StatutEnvoi.ECHEC;
@@ -274,8 +270,8 @@ public class NotificationEnvoi {
     }
 
     /**
-     * Accusé positif de l'Engine. Le texte des SMS et WhatsApp est alors effacé (D16) : une fois
-     * délivré, il n'a plus d'usage, et seul le suivi est conservé.
+     * Positive Engine receipt. SMS and WhatsApp text is then erased: once delivered it has no use, and
+     * only tracking data is kept.
      */
     public void marquerEnvoyee(String statutEngine, LocalDateTime dateAccuse) {
         this.statut = StatutEnvoi.ENVOYEE;
@@ -291,9 +287,9 @@ public class NotificationEnvoi {
         Objects.requireNonNull(origine, "origine");
         Objects.requireNonNull(canal, "canal");
         NotificationEnvoi envoi = new NotificationEnvoi();
-        // Un canal par ligne : le canal complète la clé, sans quoi les canaux d'un même événement
-        // se dédoublonneraient entre eux côté Engine. Séparateur « - » et non « : » : aucun message
-        // accepté ne porte de deux-points dans cette référence (Q-121).
+        // One channel per row: the channel completes the key, otherwise the Engine would deduplicate
+        // the channels of one event against each other. "-" separator, not ":", as no accepted message
+        // contains a colon in this reference.
         envoi.eventId = origine.eventId() + "-" + canal.name();
         envoi.typeEvenement = origine.typeEvenement();
         envoi.dossierId = origine.dossierId();
@@ -306,11 +302,10 @@ public class NotificationEnvoi {
     }
 
     /**
-     * Ce qui a provoqué la notification et à qui elle s'adresse, commun à tous les canaux d'un même
-     * événement.
+     * What triggered the notification and whom it targets, shared by all channels of an event.
      *
-     * @param eventId référence métier déterministe (par exemple {@code alerte-42}) ; le canal lui
-     *                est ajouté pour chaque ligne
+     * @param eventId deterministic business reference (e.g. {@code alerte-42}); the channel is
+     *                appended for each row
      */
     public record Origine(String eventId, String typeEvenement, Long dossierId, Long alerteId,
                           TypeDestinataire destinataireType, Long destinataireRef) {

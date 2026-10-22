@@ -1,23 +1,18 @@
 package com.afriland.audiences.common.reference;
 
 /**
- * Les familles d'objets dont le système attribue lui-même la référence (métier, 2026-09-29).
+ * Object families whose reference is assigned by the system. The prefix lives here so a reference
+ * cannot be built elsewhere with another prefix.
  *
- * <p>Le préfixe est porté ici, à côté de la famille, pour qu'une référence ne puisse pas être
- * fabriquée ailleurs avec un autre préfixe. {@code DOS-2026-0001} n'a qu'une seule origine possible
- * dans le code.
- *
- * <p><b>N'y figurent que les références internes.</b> La référence de facture d'un avocat et la
- * référence d'incident de compte sont des identifiants <b>externes</b> — celui de sa facture à lui,
- * celui du SI bancaire. Les attribuer reviendrait à fabriquer une donnée qui existe ailleurs, et
- * dont le seul intérêt est justement de permettre le rapprochement avec cet ailleurs.
+ * <p>Internal references only: a lawyer's invoice reference or an account incident reference are
+ * external identifiers, used precisely to reconcile with the external system.
  */
 public enum FamilleReference {
 
-    /** Les dossiers contentieux : {@code DOS-2026-0001}. */
+    /** Litigation cases: {@code DOS-2026-0001}. */
     DOSSIER("DOS"),
 
-    /** Les clients : {@code CLI-2026-0001}. */
+    /** Clients: {@code CLI-2026-0001}. */
     CLIENT("CLI");
 
     private final String prefixe;

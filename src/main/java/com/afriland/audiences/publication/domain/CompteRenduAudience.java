@@ -20,10 +20,10 @@ import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
 /**
- * Compte rendu d'audience déposé par l'avocat (US 5.1, RG-INT-09) — distinct du compte rendu que
- * le juriste saisit directement sur {@link Audience#getCompteRendu()} (Épic 2, FR-AUD-02) : deux
- * comptes rendus indépendants, l'un interne (juriste), l'autre publié par l'avocat et soumis à
- * validation de l'Assistante.
+ * Hearing report filed by the lawyer (US 5.1, RG-INT-09), distinct from the report the legal
+ * officer enters directly on {@link Audience#getCompteRendu()} (FR-AUD-02): two independent
+ * reports, one internal (legal officer), the other published by the lawyer and subject to the
+ * Assistant's validation.
  */
 @Getter
 @Setter
@@ -47,8 +47,8 @@ public class CompteRenduAudience extends Publication {
     private String contenu;
 
     /**
-     * Pièce jointe facultative (Q-98) : le document qui étaye le récit — plumitif, note d'audience.
-     * {@code null} quand le compte rendu se suffit à lui-même, ce qui reste le cas nominal d'US 5.1.
+     * Optional attachment supporting the report (court record, hearing note).
+     * {@code null} when the report stands on its own, which remains the nominal case of US 5.1.
      */
     @Size(max = 255)
     @Column(name = "chemin_stockage", length = 255)

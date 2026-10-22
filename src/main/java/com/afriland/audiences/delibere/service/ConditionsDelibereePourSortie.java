@@ -14,11 +14,10 @@ import java.time.format.DateTimeFormatter;
 import java.util.Optional;
 
 /**
- * Ce que le délibéré exige avant qu'une étape le quitte (métier, 2026-09-29).
+ * Conditions a deliberation imposes before a step may leave it.
  *
- * <p>Une étape « Délibéré vidé » a deux sorties : le <b>recours</b>, qui la rouvre et ouvre l'étape
- * suivante, et la <b>clôture</b>. Ni l'une ni l'autre ne consultait le délibéré — on pouvait donc
- * faire appel d'un jugement gagné.
+ * <p>A "deliberation delivered" step has two exits: the <b>appeal</b>, which reopens it and opens
+ * the next step, and <b>closure</b>.
  */
 public final class ConditionsDelibereePourSortie {
 
@@ -27,24 +26,16 @@ public final class ConditionsDelibereePourSortie {
     private ConditionsDelibereePourSortie() {
     }
 
-    /**
-     * Le délibéré qui fait foi sur cette étape : le dernier rendu.
-     *
-     * <p>Une étape peut en porter plusieurs — prorogée, rabattue, remise en délibéré. C'est le
-     * dernier <b>rendu</b> qui décide de ce qui peut suivre ; les précédents ont été défaits.
-     */
+    /** The authoritative deliberation on this step: the last one rendered; earlier ones were undone. */
     private static Optional<Delibere> dernierRendu(DelibereRepository repository, EtapeProcedure etape) {
         return repository.findFirstByEtapeIdAndResultatIsNotNullOrderByIdDesc(etape.getId());
     }
 
     /**
-     * Un recours ne s'exerce que contre un jugement <b>défavorable ou mixte</b>.
+     * An appeal may only be lodged against an <b>unfavourable or mixed</b> judgment.
      *
-     * <p>La règle était déjà écrite — {@code ResultatDelibere} porte ce commentaire depuis M7 :
-     * « Seuls DEFAVORABLE et MIXTE ouvrent une voie de recours (Q-42) » — mais rien ne l'appliquait.
-     * {@code DELIBERE_VIDE → EN_COURS} signifie « un recours est exercé » et <b>ouvre
-     * automatiquement l'étape suivante</b> : sans cette garde, un jugement favorable pouvait faire
-     * naître une instance d'appel que personne n'avait décidée.
+     * <p>{@code DELIBERE_VIDE -> EN_COURS} means "an appeal is lodged" and <b>automatically opens the
+     * next step</b>: without this guard, a favourable judgment could start an appeal nobody decided on.
      */
     @Component
     @RequiredArgsConstructor
@@ -73,11 +64,10 @@ public final class ConditionsDelibereePourSortie {
     }
 
     /**
-     * Un recours s'exerce <b>dans le délai</b>.
+     * An appeal must be lodged <b>within the deadline</b>.
      *
-     * <p>{@code DelaiRecoursScheduler} clôture les étapes dont le délai a expiré, mais il passe une
-     * fois par jour à 6 h. Entre l'expiration réelle et son passage, la transition restait ouverte :
-     * un recours pouvait être enregistré hors délai et faire naître l'étape suivante.
+     * <p>{@code DelaiRecoursScheduler} closes expired steps only once a day at 6 am; this guard closes
+     * the window in between, during which a late appeal could otherwise open the next step.
      */
     @Component
     @RequiredArgsConstructor
@@ -101,14 +91,12 @@ public final class ConditionsDelibereePourSortie {
     }
 
     /**
-     * Une étape ne se clôture pas sans que son délibéré soit rendu.
+     * A step cannot be closed until its deliberation has been rendered.
      *
-     * <p><b>Filet, et non correction d'un défaut constaté.</b> Aujourd'hui une étape n'atteint
-     * {@code DELIBERE_VIDE} que par {@code appliquerResultat}, qui pose précisément le résultat :
-     * cette condition ne peut donc pas se déclencher. Elle est écrite pour le jour où une autre voie
-     * mènerait à ce statut — une reprise de données, un correctif — et où clôturer une étape dont
-     * on ignore l'issue ouvrirait la porte aux décisions définitives, dont la seule garde est
-     * « étape CLOTURE ».
+     * <p>Safety net: today a step only reaches {@code DELIBERE_VIDE} through {@code appliquerResultat},
+     * which sets the result. It guards against other paths (data migration, manual fix), since closing
+     * a step with an unknown outcome would open the way to final decisions, whose only guard is a
+     * closed step.
      */
     @Component
     @RequiredArgsConstructor

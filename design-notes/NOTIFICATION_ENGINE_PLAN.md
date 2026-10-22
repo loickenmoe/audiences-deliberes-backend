@@ -248,13 +248,15 @@ Livrée, en attente du commit de l'utilisateur. Backend seulement ; aucun appela
     (`prestataire.X.minimal`) : la Direction Juridique rédige ces textes un par un, et celui de
     la constitution a été dicté le 2026-10-07 - « Vous avez été notifié(e) d'une lettre de
     constitution. Veuillez consulter votre boîte mail. ». Les autres gardent le défaut.
-  - Les courriels partent en HTML échappé, Teams, SMS et WhatsApp en texte brut. L'objet est
+  - Tous les canaux partent en texte brut, paragraphes séparés par une ligne vide : le moteur
+    transmet `directBody` tel quel, et un corps HTML montrait ses balises au destinataire
+    (constaté le 2026-10-20 sur une lettre de constitution). L'objet est
     `[Audiences et délibérés] <titre> - <référence>`.
 - `LiensApplication` : `NOTIFICATION_LIEN_APPLICATION` (par défaut `http://localhost:3000`),
   `/dossiers/{id}`, `/notifications` (alerte hors dossier), `/portail`.
 - Tests : 19. Toutes les combinaisons événement × canal sont passées aux garde-fous : ni marqueur,
   ni code de règle, ni montant, ni chiffre hors référence et lien. On vérifie aussi que chaque
-  événement a son texte, qu'aucun texte n'est orphelin et que le HTML est échappé.
+  événement a son texte et qu'aucun texte n'est orphelin ; aucun corps ne contient de balise HTML.
   Suite complète : 579 tests verts.
 
 ### ✅ Étape 6 : branchement dans `AlerteService.declencher`
@@ -483,7 +485,7 @@ Livrée, en attente du commit de l'utilisateur.
 Livrée, en attente du commit de l'utilisateur.
 
 **Sondé avant d'être écrit.** Les topics de suivi étant muets (Q-121), rien ne disait que celui des
-pièces jointes répondrait. Une sonde manuelle (`SondeAttachmentUpload`, désactivée sauf variable
+pièces jointes répondrait. Une sonde manuelle (`SondeAttachmentUploadIT`, désactivée sauf variable
 d'environnement) a tranché en quelques minutes : demande acceptée, réponse `READY`, dépôt du fichier
 en HTTP 200. **Le moteur publie donc bien sur certains topics** — le silence du suivi est une affaire
 de configuration, pas une panne générale.

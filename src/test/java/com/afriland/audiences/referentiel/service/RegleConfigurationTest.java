@@ -10,7 +10,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** Q-91 — règles de saisie des paramètres système. */
+/** Input rules for system parameters. */
 class RegleConfigurationTest {
 
     @ParameterizedTest
@@ -48,14 +48,15 @@ class RegleConfigurationTest {
             "GRILLE_NOTIFICATION_WHATSAPP, 'SMS,,RAPPEL_AUDIENCE'"
     })
     void valider_rejectsValuesThatWouldBreakAConsumer(String cle, String saisie) {
-        assertThatThrownBy(() -> RegleConfiguration.valueOf(cle).valider(saisie))
+        RegleConfiguration regle = RegleConfiguration.valueOf(cle);
+        assertThatThrownBy(() -> regle.valider(saisie))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining(cle);
     }
 
     /**
-     * Q-118 : couper tous les canaux prestataires, ou ne rien envoyer sur un canal, est un réglage
-     * légitime. Ces listes-là acceptent le vide ; les autres le refusent toujours.
+     * Disabling all provider channels, or sending nothing on a channel, is a legitimate setting. These
+     * lists accept empty values; the others always refuse them.
      */
     @ParameterizedTest
     @EnumSource(value = RegleConfiguration.class, names = {"CANAUX_NOTIFICATION_PRESTATAIRES",
@@ -80,16 +81,15 @@ class RegleConfigurationTest {
                 .isInstanceOf(ApiException.class);
     }
 
-    /** CONF06 : 10 Mo, paramètre confié à la DSI « via configuration Spring Boot / MinIO ». Au-delà, Spring rejette le fichier avant le contrôle métier. */
+    /** CONF06: 10 MB, a parameter owned by IT through Spring Boot / MinIO configuration. Beyond it, Spring rejects the file before the business check. */
     @Test
     void tailleMaxGed_isCappedAtTheSpringMultipartLimit() {
         assertThat(RegleConfiguration.TAILLE_MAX_GED.maximum()).isEqualTo(10_485_760L);
     }
 
     /**
-     * Les sources ne fixent aucun maximum métier pour les compteurs (US 7.1 : « seuil (entier
-     * positif) »). Une valeur absurde mais inoffensive doit donc être acceptée : la validation
-     * refuse ce qui casserait l'application, pas ce que la documentation autorise.
+     * The sources set no business maximum for counters (US 7.1: "threshold (positive integer)"). An
+     * absurd but harmless value is accepted: validation refuses what would break the application.
      */
     @ParameterizedTest
     @CsvSource({ "SEUIL_PROROGATIONS, '999999'", "CHARGE_MAX_AVOCAT, '100000'", "DELAI_VALIDATION_CONJOINTE, '3650'" })
@@ -97,7 +97,7 @@ class RegleConfigurationTest {
         assertThat(RegleConfiguration.valueOf(cle).valider(saisie)).isEqualTo(saisie);
     }
 
-    /** Chaque clé décrit sa saisie à l'écran d'administration : bornes pour un entier, valeurs pour une liste. */
+    /** Each key describes its input on the administration screen: bounds for an integer, values for a list. */
     @ParameterizedTest
     @EnumSource(RegleConfiguration.class)
     void chaqueRegle_describesItsInput(RegleConfiguration regle) {

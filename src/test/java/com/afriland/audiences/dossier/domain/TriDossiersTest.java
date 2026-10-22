@@ -6,10 +6,8 @@ import org.springframework.data.domain.Sort;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Le tri de {@code GET /dossiers}. Deux propriétés comptent et ne se voient pas à la lecture :
- * chaque tri se termine par l'identifiant — sans quoi la pagination peut répéter ou sauter une
- * ligne — et aucun ne nomme une propriété absente de l'entité, ce qui produirait une erreur 500 au
- * premier clic.
+ * Sorting of {@code GET /dossiers}. Every sort ends with the identifier (otherwise pagination
+ * may repeat or skip a row), and none names a property missing from the entity (that would be a 500).
  */
 class TriDossiersTest {
 

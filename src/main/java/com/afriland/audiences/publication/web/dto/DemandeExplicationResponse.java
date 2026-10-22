@@ -3,12 +3,11 @@ package com.afriland.audiences.publication.web.dto;
 import java.time.LocalDateTime;
 
 /**
- * Une demande d'explication telle qu'un écran la lit (N7 temps 2).
+ * A request for explanation as read by the UI.
  *
- * @param enAttente   déduit de {@code dateReponse}, jamais stocké : une colonne de plus pourrait
- *                    dire le contraire des deux autres, et c'est toujours elle qu'on croirait
- * @param dossierId   le dossier de la dernière audience manquée, s'il y en a un. Il situe la
- *                    demande sans la restreindre : elle porte sur une conduite, pas sur une affaire
+ * @param enAttente derived from {@code dateReponse}, never stored
+ * @param dossierId case file of the last missed hearing, if any; it places the request in context
+ *                  without restricting it, since it concerns a conduct rather than a matter
  */
 public record DemandeExplicationResponse(
         Long id,

@@ -33,10 +33,8 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * Épic 2 (FR-AUD-01/02/05) — cf. FUNCTIONAL_MAP.md §2, API_IMPLEMENTATION_STATUS.md §3.
- * Le doublon d'audience (RG-AUD-06, volet resté ouvert au jalon M4 — cf.
- * DECISIONS_AND_OPEN_QUESTIONS.md Q-12) se confirme via {@code ?forcer=true}, sur le même
- * mécanisme que {@code PUT /dossiers/{id}/affectation}.
+ * Hearings (FR-AUD-01/02/05). A duplicate hearing (RG-AUD-06) is confirmed with
+ * {@code ?forcer=true}, same mechanism as {@code PUT /dossiers/{id}/affectation}.
  */
 @RestController
 @RequiredArgsConstructor
@@ -44,7 +42,7 @@ public class AudienceController {
 
     private final AudienceService audienceService;
     private final CalendrierExportService calendrierExportService;
-    /** Pour attribuer l'export dans le pied de page : un document dit qui l'a demandé (A2). */
+    /** Used to show who requested the export in the document footer. */
     private final CurrentUserService currentUserService;
 
     @PostMapping("${api.prefix}/dossiers/{id}/audiences")
@@ -56,8 +54,8 @@ public class AudienceController {
     }
 
     /**
-     * QF-64 : la note destinée à l'avocat constitué, distincte du compte rendu interne. Le DJ et la
-     * DJA l'écrivent aussi, par leur {@code ROLE_JURISTE} composite (Q-81).
+     * Note addressed to the assigned lawyer, separate from the internal report. DJ and DJA can
+     * write it too through their composite {@code ROLE_JURISTE}.
      */
     @PutMapping("${api.prefix}/audiences/{id}/note-avocat")
     @PreAuthorize("hasRole('JURISTE')")
@@ -73,10 +71,7 @@ public class AudienceController {
         return audienceService.enregistrerCompteRendu(id, request);
     }
 
-    /**
-     * Q-76 : annulation motivée d'une audience planifiée (renvoi, date erronée) — endpoint 🆕. Le
-     * statut {@code ANNULEE} existait sans qu'aucun endpoint ne le pose.
-     */
+    /** Reasoned cancellation of a scheduled hearing (adjournment, wrong date). */
     @PatchMapping("${api.prefix}/audiences/{id}/annulation")
     @PreAuthorize("hasRole('JURISTE')")
     public AudienceResponse annulerAudience(@PathVariable Long id,
@@ -84,7 +79,7 @@ public class AudienceController {
         return audienceService.annulerAudience(id, request);
     }
 
-    /** M15 (Q-68) : onglet « Audiences » de la fiche dossier — endpoint 🆕. */
+    /** "Hearings" tab of the case page. */
     @GetMapping("${api.prefix}/dossiers/{id}/audiences")
     @PreAuthorize("hasRole('CONSULTATION')")
     public PageResponse<AudienceResponse> listerAudiencesDossier(@PathVariable Long id,
@@ -94,8 +89,8 @@ public class AudienceController {
     }
 
     @GetMapping("${api.prefix}/audiences/calendrier")
-    @PreAuthorize("hasAnyRole('JURISTE', 'DJ')")
-    public ResponseEntity<?> calendrier(@RequestParam PeriodeCalendrier periode,
+    @PreAuthorize("hasAnyRole('JURISTE', 'DJ', 'ASSISTANTE', 'SH')")
+    public ResponseEntity<Object> calendrier(@RequestParam PeriodeCalendrier periode,
                                          @RequestParam LocalDate dateDebut,
                                          @RequestParam(defaultValue = "JSON") FormatExport format) {
         List<CalendrierEntreeResponse> entrees = audienceService.calendrier(periode, dateDebut);
@@ -113,8 +108,8 @@ public class AudienceController {
     }
 
     /**
-     * Le nom de qui demande l'export, pour le pied de page. Jamais bloquant : un document se produit
-     * même si le nom manque, le pied portant alors la date d'édition.
+     * Name of the export requester, for the footer. Never blocking: if missing, the footer only
+     * shows the print date.
      */
     private String nomDemandeur() {
         try {

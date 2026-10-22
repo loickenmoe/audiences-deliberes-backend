@@ -20,9 +20,9 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * Affectation d'un avocat à un dossier (RG-DOS-03). Distincte de la constitution formelle (lettre
- * signée par le SH, module intervenant M9) — cf. DECISIONS_AND_OPEN_QUESTIONS.md Q-28 : un avocat
- * peut être affecté en interne avant l'envoi de sa lettre de constitution.
+ * Assignment of a lawyer to a case (RG-DOS-03). Distinct from the formal appointment (letter signed
+ * by the SH, stakeholder module): a lawyer can be assigned internally before the appointment letter
+ * is sent.
  */
 @Getter
 @Setter

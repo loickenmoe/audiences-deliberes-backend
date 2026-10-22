@@ -5,8 +5,8 @@ import com.afriland.audiences.ged.domain.StatutPartageAvocat;
 import java.time.LocalDateTime;
 
 /**
- * Une pièce dans la file des partages à valider du DJ et de la DJA (QF-64). Nommée : le DJ doit
- * savoir de quel dossier et de quelle pièce il s'agit, et qui la propose, sans ouvrir trois écrans.
+ * A document in the DJ/DJA queue of shares to approve. Named so the DJ knows which case file and
+ * document are concerned, and who proposes it, without opening three screens.
  */
 public record PartageAvocatResponse(
         Long documentId,

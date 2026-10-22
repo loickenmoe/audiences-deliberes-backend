@@ -19,14 +19,12 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Les deux requêtes du rapport nominatif, <b>contre PostgreSQL</b> (observation 14, N6).
+ * The two queries of the per-person report, against PostgreSQL.
  *
- * <p><b>Pourquoi une intégration ici, alors que le service est déjà testé.</b> Le service travaille
- * sur des projections simulées : il ne dit rien de ce que la base accepte. Or l'une des deux
- * requêtes est **native** et lit un document {@code jsonb} - deux choses qu'aucun test à mocks ne
- * peut valider, et qui n'échoueraient qu'à l'exécution. Le piège exact : PostgreSQL écrit la
- * présence d'une clé {@code details ? 'audienceId'}, mais {@code ?} est le marqueur de paramètre
- * positionnel de JDBC. C'est ce test qui tient {@code jsonb_exists}.
+ * <p>The service is tested on mocked projections, which say nothing about what the database
+ * accepts. One query is <b>native</b> and reads a {@code jsonb} document; PostgreSQL writes key
+ * presence as {@code details ? 'audienceId'}, but {@code ?} is the JDBC positional parameter
+ * marker. This test guards the use of {@code jsonb_exists}.
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -34,7 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class HistoriqueActionNominatifIntegrationTest {
 
     @Container
-    static PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17")
+    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17")
             .withDatabaseName("audiences_nominatif")
             .withUsername("test")
             .withPassword("test");
@@ -53,8 +51,8 @@ class HistoriqueActionNominatifIntegrationTest {
     private static final LocalDateTime FIN = LocalDate.of(2026, 10, 1).atStartOfDay();
 
     /**
-     * Le décor est posé en SQL, et non par les entités : la trace d'audit se crée par les services
-     * du domaine, qu'un test de dépôt n'a pas à démarrer pour vérifier une agrégation.
+     * Fixtures are set up in SQL rather than through entities: audit entries are created by domain
+     * services, which a repository test does not need to start.
      */
     private long poserUnJuriste(String nom) {
         Long profilId = jdbc.queryForObject(
@@ -80,10 +78,10 @@ class HistoriqueActionNominatifIntegrationTest {
         poserUneAction(juriste, TypeActionHistorique.DOSSIER_CREE, DEBUT.plusDays(3), null);
         poserUneAction(juriste, TypeActionHistorique.DOSSIER_CREE, DEBUT.plusDays(9), null);
         poserUneAction(juriste, TypeActionHistorique.DELIBERE_ENREGISTRE, DEBUT.plusDays(4), null);
-        // Hors période : avant la borne basse, et à la borne haute qui est exclue.
+        // Out of period: before the lower bound, and at the upper bound, which is exclusive.
         poserUneAction(juriste, TypeActionHistorique.DOSSIER_CREE, DEBUT.minusDays(1), null);
         poserUneAction(juriste, TypeActionHistorique.DOSSIER_CREE, FIN, null);
-        // Nature non suivie : elle ne doit pas apparaître.
+        // Untracked action type: must not appear.
         poserUneAction(juriste, TypeActionHistorique.AUDIT_CONSULTE, DEBUT.plusDays(5), null);
 
         List<HistoriqueActionRepository.ActiviteParPersonne> lignes = repository.compterActivitesParPersonne(
@@ -97,10 +95,8 @@ class HistoriqueActionNominatifIntegrationTest {
     }
 
     /**
-     * Le délai moyen de saisie, lu à travers le {@code jsonb}.
-     *
-     * <p>C'est cette requête qui aurait échoué silencieusement avec l'opérateur {@code ?}, et qui
-     * ne pouvait être éprouvée qu'ici.
+     * Average entry delay, read through the {@code jsonb}. This query would have failed silently with
+     * the {@code ?} operator and can only be exercised here.
      */
     @Test
     void delaiMoyen_litLIdentifiantDAudienceDansLeJsonb() {
@@ -109,14 +105,14 @@ class HistoriqueActionNominatifIntegrationTest {
         long etapeId = jdbc.queryForObject(
                 "SELECT id FROM etape_procedure WHERE dossier_id = ? ORDER BY id LIMIT 1", Long.class, dossierId);
 
-        // Deux audiences, deux comptes rendus saisis avec deux et quatre jours de retard.
+        // Two hearings, two reports entered two and four days late.
         long audienceUn = insererAudience(dossierId, etapeId, LocalDate.of(2026, 9, 10));
         long audienceDeux = insererAudience(dossierId, etapeId, LocalDate.of(2026, 9, 20));
         poserUneAction(juriste, TypeActionHistorique.AUDIENCE_COMPTE_RENDU_ENREGISTRE,
                 LocalDate.of(2026, 9, 12).atStartOfDay(), "{\"audienceId\": " + audienceUn + "}");
         poserUneAction(juriste, TypeActionHistorique.AUDIENCE_COMPTE_RENDU_ENREGISTRE,
                 LocalDate.of(2026, 9, 24).atStartOfDay(), "{\"audienceId\": " + audienceDeux + "}");
-        // Détails sans `audienceId` : ignoré plutôt que de fausser la moyenne.
+        // Details without `audienceId`: ignored rather than skewing the average.
         poserUneAction(juriste, TypeActionHistorique.AUDIENCE_COMPTE_RENDU_ENREGISTRE,
                 LocalDate.of(2026, 9, 25).atStartOfDay(), "{\"autreChose\": 1}");
 
@@ -130,11 +126,8 @@ class HistoriqueActionNominatifIntegrationTest {
     }
 
     /**
-     * Le strict nécessaire pour qu'une audience puisse exister : un client, un dossier, une étape.
-     *
-     * <p>La base de test ne porte que le référentiel des migrations - aucun dossier. Les poser à la
-     * main plutôt que par les services du domaine garde ce test sur ce qu'il éprouve : deux
-     * requêtes, et non une chaîne de création.
+     * The minimum for a hearing to exist: a client, a case, a step. The test database only holds
+     * migration reference data; inserting by hand keeps the test focused on the two queries.
      */
     private long poserUnDossier() {
         jdbc.update("INSERT INTO client (reference, nom) VALUES ('CLI-TEST-001', 'Client de test')");

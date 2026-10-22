@@ -18,10 +18,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 
 /**
- * Rappels planifiés d'audience à J-7, J-3 et J-1 (RG-AUD-03/FR-AUD-01). Vit dans le module
- * {@code audience} — qui dépend de {@code dossier} pour les juristes affectés — et appelle
- * {@link AlerteService} en sens unique, sur le même principe que
- * {@link com.afriland.audiences.dossier.service.ChargeMaxAvocatScheduler} (Q-38).
+ * Scheduled hearing reminders at J-7, J-3 and J-1 (RG-AUD-03/FR-AUD-01). Calls
+ * {@link AlerteService} one way, like
+ * {@link com.afriland.audiences.dossier.service.ChargeMaxAvocatScheduler}.
  */
 @Component
 @RequiredArgsConstructor
@@ -58,8 +57,8 @@ public class RappelAudienceScheduler {
             }
             alerteService.declencher(TypeAlerte.RAPPEL_AUDIENCE, audience.getDossier().getId(), juriste, declencheur);
         }
-        // D19 : l'avocat affecté est prévenu du même rappel, par ses canaux externes (Q-118). La clé
-        // porte l'audience et l'échéance : un rappel J-7 déjà mis en file ne se redouble pas.
+        // The assigned lawyer gets the same reminder through external channels. The key holds the
+        // hearing and the offset, so a queued J-7 reminder is never duplicated.
         for (var affectation : dossierAvocatRepository.findByDossierId(audience.getDossier().getId())) {
             notificationPrestataireService.notifier(EvenementPrestataire.RAPPEL_AUDIENCE, affectation.getAvocat(),
                     audience.getDossier().getId(), "audience-" + audience.getId() + "-J" + decalage);

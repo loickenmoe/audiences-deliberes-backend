@@ -33,21 +33,18 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * La demande d'explication, et la réponse de l'avocat (N7 temps 2, observation 8).
+ * Request for explanation and the lawyer's answer.
  *
- * <p><b>Ce que ce service ajoute au constat.</b> Le planificateur signale à la direction qu'un
- * avocat a manqué deux audiences de suite ; il s'arrête là, et c'est voulu - l'application constate,
- * elle ne sanctionne pas. Ce service porte ce qui vient ensuite : un responsable écrit, l'avocat
- * répond, et l'échange reste. Sans cela, la direction devait retenir de tête qui s'était expliqué.
+ * <p>The scheduler tells management that a lawyer missed two consecutive hearings and stops there:
+ * the application reports, it does not sanction. This service handles what follows: a manager
+ * writes, the lawyer answers, and the exchange is kept.
  *
- * <p><b>Une demande suspend la relance automatique.</b> Tant qu'elle attend sa réponse, le rappel
- * tous les deux jours se tait pour cet avocat : un responsable qui écrit en personne doit couvrir
- * la machine, pas rivaliser avec elle. La relance reprend à la réponse - le compte rendu manque
- * toujours, et c'est de nouveau l'affaire du rappel automatique.
+ * <p><b>A pending request suspends automatic reminders</b> for that lawyer: a manager writing in
+ * person takes precedence over the automatic reminder. Reminders resume once the lawyer answers,
+ * since the report is still missing.
  *
- * <p><b>Ce qui n'est pas fait, et pourquoi.</b> Aucune relance de la demande elle-même : « reprendre
- * si rien n'arrive » supposerait un délai que personne n'a fixé, et je n'en invente pas. Une demande
- * sans réponse reste visible dans la file de la direction, qui décide d'insister ou non.
+ * <p>The request itself is never reminded, as no delay has been defined for that. An unanswered
+ * request stays visible in management's queue, which decides whether to insist.
  */
 @Service
 @RequiredArgsConstructor
@@ -63,12 +60,11 @@ public class DemandeExplicationService {
     private final NotificationPrestataireService notificationPrestataireService;
 
     /**
-     * La direction demande à un avocat de s'expliquer.
+     * Management asks a lawyer to explain themselves.
      *
-     * <p><b>Une demande en attente à la fois.</b> En ouvrir une seconde pendant que la première
-     * attend ne dirait rien de plus à l'avocat et brouillerait la lecture de la file : laquelle
-     * suspend la relance, à laquelle faut-il répondre ? Une fois répondu, la direction peut
-     * redemander.
+     * <p><b>One pending request at a time</b>: a second one would tell the lawyer nothing more and blur
+     * the queue (which one suspends reminders, which one to answer?). Once answered, management can
+     * ask again.
      */
     @Transactional
     public DemandeExplicationResponse demander(DemanderExplicationRequest requete) {
@@ -97,8 +93,8 @@ public class DemandeExplicationService {
                     Map.of("avocatId", avocat.getId(), "demandeId", demande.getId()));
         }
 
-        // Dans l'application, pour qu'il la voie en se connectant ; et au dehors, parce qu'il peut
-        // justement ne plus s'y connecter - c'est le reproche qu'on lui fait.
+        // In the application, so the lawyer sees it on login; and outside it, because the lawyer may
+        // precisely no longer log in, which is what they are being reproached for.
         compteAvocatService.utilisateurDe(avocat).ifPresent(compte ->
                 alerteService.declencher(TypeAlerte.DEMANDE_EXPLICATION,
                         dossier == null ? null : dossier.getId(), compte,
@@ -111,10 +107,10 @@ public class DemandeExplicationService {
     }
 
     /**
-     * L'avocat répond, et une seule fois.
+     * The lawyer answers, only once.
      *
-     * <p>Une réponse qu'on pourrait récrire ne prouverait rien : c'est une prise de position, datée,
-     * que la direction lira peut-être des mois plus tard. Corriger suppose une nouvelle demande.
+     * <p>A rewritable answer would prove nothing: it is a dated statement that management may read
+     * months later. Correcting it requires a new request.
      */
     @Transactional
     public DemandeExplicationResponse repondre(Long id, RepondreExplicationRequest requete) {
@@ -142,8 +138,7 @@ public class DemandeExplicationService {
                     Map.of("demandeId", demande.getId()));
         }
 
-        // Celui qui a demandé doit savoir qu'on lui a répondu : sans cela il faudrait qu'il pense
-        // à revenir voir.
+        // The requester must know an answer has arrived, without having to check back.
         alerteService.declencher(TypeAlerte.DEMANDE_EXPLICATION,
                 demande.getDossier() == null ? null : demande.getDossier().getId(),
                 demande.getAuteur(),
@@ -154,10 +149,10 @@ public class DemandeExplicationService {
     }
 
     /**
-     * La file de la direction, ou celle de l'avocat.
+     * Management's queue, or the lawyer's.
      *
-     * <p>Le périmètre se décide <b>ici</b>, sur l'identité de qui lit, et non par un paramètre que
-     * l'écran enverrait : un avocat qui demanderait la liste entière la recevrait.
+     * <p>The scope is decided <b>here</b>, from the caller's identity, not from a UI parameter:
+     * otherwise a lawyer could request the whole list.
      */
     @Transactional(readOnly = true)
     public PageResponse<DemandeExplicationResponse> lister(boolean enAttenteSeulement, Pageable pageable) {
@@ -171,7 +166,7 @@ public class DemandeExplicationService {
                 : demandeExplicationRepository.findByOrderByDateDemandeDesc(pageable), this::versReponse);
     }
 
-    /** Les avocats dont une demande attend encore une réponse : la relance se tait pour eux. */
+    /** Lawyers with a request still awaiting an answer: reminders are suspended for them. */
     @Transactional(readOnly = true)
     public List<Long> avocatsDontOnAttendUneExplication() {
         return demandeExplicationRepository.avocatsEnAttenteDeReponse();
@@ -186,7 +181,7 @@ public class DemandeExplicationService {
                         "Aucun avocat du référentiel ne porte l'identifiant " + avocatId));
     }
 
-    /** L'avocat rattaché au compte connecté - 403 explicite plutôt qu'une liste vide trompeuse. */
+    /** The lawyer linked to the logged-in account; an explicit 403 rather than a misleading empty list. */
     private Avocat avocatCourant() {
         return compteAvocatService.avocatDe(currentUserService.getCurrentUser())
                 .orElseThrow(() -> ApiException.forbidden(ErrorCodes.AVOCAT_NON_RATTACHE,

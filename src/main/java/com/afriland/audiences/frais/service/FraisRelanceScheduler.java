@@ -22,10 +22,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * CONF04 (Q-83) : relance du DJ et/ou de la DJA quand une validation conjointe reste sans suite
- * au-delà de {@code DELAI_VALIDATION_CONJOINTE} jours — comptés depuis l'accord d'opportunité, puis
- * depuis la dernière relance. Seul celui qui n'a pas encore voté est relancé. Même principe que
- * {@code SuppressionRelanceScheduler} (Q-02).
+ * CONF04: reminds the DJ and/or the DJA when a joint approval is still pending after
+ * {@code DELAI_VALIDATION_CONJOINTE} days, counted from the appropriateness approval, then from the
+ * last reminder. Only whoever has not voted yet is reminded.
  */
 @Slf4j
 @Component

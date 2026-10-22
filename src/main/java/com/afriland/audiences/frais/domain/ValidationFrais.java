@@ -23,9 +23,9 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * Trace d'une décision individuelle sur une {@link DemandeFrais} (Q-05) : qui a contrôlé, à
- * quelle étape, avec quelle décision et quel motif — nécessaire notamment pour distinguer les
- * deux accords indépendants (DJ, DJA) de la validation conjointe (US 4.5).
+ * Record of an individual decision on a {@link DemandeFrais}: who checked it, at which step, with
+ * which decision and reason; needed in particular to distinguish the two independent approvals
+ * (DJ, DJA) of the joint validation (US 4.5).
  */
 @Getter
 @Setter

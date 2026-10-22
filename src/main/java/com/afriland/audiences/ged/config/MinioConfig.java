@@ -10,14 +10,12 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Client MinIO (M8, Épic 6) — bucket applicatif créé au démarrage s'il n'existe pas encore
- * (`docker-compose.yml` ne provisionne qu'un serveur MinIO vierge, aucun bucket).
+ * MinIO client. The application bucket is created at startup if missing
+ * ({@code docker-compose.yml} only provisions an empty MinIO server).
  * <p>
- * La vérification/création du bucket est faite via un {@link ApplicationRunner} distinct plutôt
- * qu'un {@code @PostConstruct} sur cette classe : ce dernier appellerait la méthode {@code @Bean}
- * {@link #minioClient()} pendant la propre construction de {@code MinioConfig}, provoquant une
- * référence circulaire (« Requested bean is currently in creation ») — constaté en validation
- * manuelle M8.
+ * The bucket check runs in a separate {@link ApplicationRunner} rather than a {@code @PostConstruct}:
+ * the latter would call the {@code @Bean} method {@link #minioClient()} while {@code MinioConfig} is
+ * still being constructed, causing a circular reference.
  */
 @Slf4j
 @Configuration
@@ -53,8 +51,8 @@ public class MinioConfig {
                     log.info("Bucket MinIO '{}' créé", bucketName);
                 }
             } catch (Exception e) {
-                // Non bloquant au démarrage (ex. MinIO temporairement indisponible) : chaque appel
-                // applicatif échouera explicitement en ApiException si le bucket manque réellement.
+                // Non-blocking at startup (e.g. MinIO temporarily unavailable): every application call
+                // will fail explicitly with an ApiException if the bucket is really missing.
                 log.warn("Impossible de vérifier/créer le bucket MinIO '{}' au démarrage : {}", bucketName, e.getMessage());
             }
         };

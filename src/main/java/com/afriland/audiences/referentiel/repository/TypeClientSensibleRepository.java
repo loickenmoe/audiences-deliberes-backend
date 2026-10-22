@@ -12,6 +12,6 @@ public interface TypeClientSensibleRepository extends JpaRepository<TypeClientSe
 
     List<TypeClientSensible> findByActifTrue();
 
-    /** Contrôle d'appartenance au référentiel (Q-73) : {@code dossier.type_client_sensible} porte le code. */
+    /** Membership check against the reference list: {@code dossier.type_client_sensible} holds the code. */
     Optional<TypeClientSensible> findByCodeIgnoreCase(String code);
 }

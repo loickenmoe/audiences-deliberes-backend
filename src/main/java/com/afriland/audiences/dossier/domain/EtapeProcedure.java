@@ -23,8 +23,8 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * Étape d'une procédure (Instance, Recours 1, Recours 2), avec son propre cycle de vie
- * (RG-DOS-04). Cf. dictionnaire des données §2.1.3.
+ * Procedure step (Instance, Appeal, Cassation), with its own lifecycle (RG-DOS-04). See data
+ * dictionary §2.1.3.
  */
 @Getter
 @Setter

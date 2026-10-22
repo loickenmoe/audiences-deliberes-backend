@@ -6,19 +6,14 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * Supervision des notifications externes sur une fenêtre (D17, écran 41).
+ * Monitoring of external notifications over a time window. Counts what the application did (queued,
+ * delivered to the engine, abandoned) and what the engine confirmed. Row-level confirmation is only
+ * possible through the callback, hence the distinction between {@code remises} and {@code confirmees}.
  *
- * <p><b>Ce que ce tableau dit, et ce qu'il ne dit pas.</b> Il compte ce que l'application a fait —
- * mis en file, remis au moteur, abandonné — et ce que le moteur a confirmé. La confirmation ligne à
- * ligne n'est possible que par le rappel (Q-120) : sans lui, un envoi reste « remis » jusqu'à ce que
- * le délai d'attente le fasse basculer en « sans retour ». D'où la distinction, dans chaque ligne,
- * entre {@code remises} et {@code confirmees}.
- *
- * @param canaux       une ligne par canal, dans l'ordre des canaux du moteur
- * @param derniersEchecs    les envois à examiner : échec, sans retour ou destinataire injoignable
- * @param suiviAccusesActif le moteur publie-t-il ses accusés ? Sinon (Q-121), « remise » est le
- *                          dernier état connu d'un envoi réussi, et la colonne des confirmations
- *                          reste vide sans que cela signale quoi que ce soit
+ * @param canaux       one row per channel, in engine channel order
+ * @param derniersEchecs    sends needing review: failed, without receipt or unreachable recipient
+ * @param suiviAccusesActif whether the engine publishes receipts; if not, "delivered" is the last known
+ *                          state of a successful send and the confirmations column stays empty
  */
 public record SupervisionNotificationsResponse(
         LocalDate dateDebut,
@@ -29,12 +24,12 @@ public record SupervisionNotificationsResponse(
         boolean suiviAccusesActif) {
 
     /**
-     * @param enAttente    en file, pas encore remises au moteur
-     * @param remises      remises au moteur, sans confirmation encore reçue
-     * @param confirmees   confirmées par un accusé du moteur
-     * @param echecs       abandonnées : tentatives épuisées, périmées, ou échec définitif du moteur
-     * @param sansRetour   remises, mais restées sans aucun accusé au-delà du délai (Q-120)
-     * @param nonJoignables canal retenu pour un destinataire sans coordonnée utilisable (D14)
+     * @param enAttente    queued, not yet delivered to the engine
+     * @param remises      delivered to the engine, no confirmation received yet
+     * @param confirmees   confirmed by an engine receipt
+     * @param echecs       abandoned: attempts exhausted, expired, or permanent engine failure
+     * @param sansRetour   delivered but without any receipt past the delay
+     * @param nonJoignables channel selected for a recipient without usable contact details
      */
     public record LigneCanal(String canal, long enAttente, long remises, long confirmees, long echecs,
                              long sansRetour, long nonJoignables) {
@@ -44,8 +39,8 @@ public record SupervisionNotificationsResponse(
         }
 
         /**
-         * Part de ce qui est parti ou en passe de partir. Les lignes sans coordonnée en sont exclues :
-         * elles ne disent rien du canal, seulement d'une fiche incomplète.
+         * Share of what was sent or is about to be. Rows without contact details are excluded: they
+         * reflect an incomplete record, not the channel.
          */
         public BigDecimal tauxAboutissement() {
             long denominateur = total() - nonJoignables;
@@ -59,7 +54,7 @@ public record SupervisionNotificationsResponse(
     }
 
     /**
-     * @param destinataireOrigine destinataire réel quand la redirection hors production l'a remplacé (D10)
+     * @param destinataireOrigine real recipient when non-production redirection replaced it
      */
     public record EnvoiEnDefaut(Long id, String eventId, String typeEvenement, String canal, String statut,
                                 String destinataire, String destinataireOrigine, String derniereErreur,

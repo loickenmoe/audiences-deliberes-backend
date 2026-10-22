@@ -16,7 +16,7 @@ class TypeEtapeTest {
         assertThat(TypeEtape.RECOURS_1.suivante()).isEqualTo(TypeEtape.RECOURS_2);
     }
 
-    /** Les deux cassations sont concurrentes : aucune ne suit l'autre, aucune n'ouvre de suite. */
+    /** The two cassation appeals run concurrently: neither follows the other, neither opens a next step. */
     @Test
     void aucune_etape_ne_suit_les_deux_pourvois() {
         assertThatThrownBy(TypeEtape.RECOURS_2::suivante).isInstanceOf(IllegalStateException.class);
@@ -28,8 +28,8 @@ class TypeEtapeTest {
     }
 
     /**
-     * Le pourvoi CCJA n'est jamais ouvert automatiquement : il ne suit aucune étape. Le vérifier
-     * ici évite qu'une future valeur ajoutée à l'énumération ne s'y glisse par distraction.
+     * The CCJA appeal is never opened automatically: it follows no step. Guards against a future
+     * enum value slipping in.
      */
     @Test
     void aucune_etape_n_ouvre_automatiquement_le_pourvoi_ccja() {
@@ -42,9 +42,8 @@ class TypeEtapeTest {
     }
 
     /**
-     * Le tri des étapes d'un dossier est alphabétique sur la colonne `type` : l'ordre procédural
-     * n'en découle que si les noms sont choisis pour cela. Ce test fige ce lien, invisible partout
-     * ailleurs — une valeur mal nommée fausserait l'étape courante sans rien casser.
+     * Steps are sorted alphabetically on the `type` column, so the procedural order only holds if
+     * the names are chosen for it. A badly named value would silently skew the current step.
      */
     @Test
     void l_ordre_alphabetique_des_noms_suit_l_ordre_procedural() {

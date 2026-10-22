@@ -6,8 +6,8 @@ import java.util.List;
 import java.util.function.Function;
 
 /**
- * Enveloppe de pagination conforme aux réponses paginées du contrat d'API (ex. {@code GET
- * /dossiers}, {@code GET /clients}) : {@code {content, totalPages, totalElements}}.
+ * Pagination envelope matching the API contract's paged responses:
+ * {@code {content, totalPages, totalElements}}.
  */
 public record PageResponse<T>(List<T> content, int totalPages, long totalElements) {
 

@@ -1,8 +1,8 @@
 package com.afriland.audiences.dossier.domain;
 
 /**
- * Statut d'un circuit de validation à deux issues (approbation/rejet), partagé par la validation
- * de la sensibilité d'un dossier (RG-DOS-09, Q-10) et la dérogation de seuil (Q-29).
+ * Status of a two-outcome validation workflow (approval/rejection), shared by case sensitivity
+ * validation (RG-DOS-09) and threshold override.
  */
 public enum StatutValidation {
     EN_ATTENTE,

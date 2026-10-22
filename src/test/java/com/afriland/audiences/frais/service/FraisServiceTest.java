@@ -63,7 +63,7 @@ class FraisServiceTest {
     @Mock private HistoriqueActionService historiqueActionService;
     @Mock private AlerteService alerteService;
     @Mock private ConfigurationService configurationService;
-    // Q-97 : URL pré-signées des pièces justificatives, sur le détail seulement.
+    // Pre-signed URLs of supporting documents, on the detail view only.
     @Mock private MinioStorageService minioStorageService;
 
     private FraisService service;
@@ -83,7 +83,7 @@ class FraisServiceTest {
                 dossierAvocatRepository, new CompteAvocatService(avocatRepository, utilisateurRepository),
                 notificationPrestataireService, utilisateurRepository, currentUserService,
                 historiqueActionService, alerteService, configurationService, minioStorageService);
-        // Toute réponse porte le seuil applicable (Q-82).
+        // Every response carries the applicable threshold.
         lenient().when(configurationService.getOrThrow("SEUIL_MONTANT_DEFAUT"))
                 .thenReturn(ConfigurationSysteme.builder().cle("SEUIL_MONTANT_DEFAUT").valeur("50000000").build());
 
@@ -97,7 +97,7 @@ class FraisServiceTest {
         dj = Utilisateur.builder().id(40L).profil(Profil.builder().code("DJ").build()).build();
     }
 
-    // --- Dépôt (FR-INT-01) ---
+    // --- Filing (FR-INT-01) ---
 
     @Test
     void deposer_rejectsAvocatNotAffected() {
@@ -106,7 +106,8 @@ class FraisServiceTest {
         when(avocatRepository.findByCompteKeycloak("kc-avocat")).thenReturn(Optional.of(avocat));
         when(dossierAvocatRepository.existsByDossierIdAndAvocatId(1L, 5L)).thenReturn(false);
 
-        assertThatThrownBy(() -> service.deposer(new DeposerFraisRequest(1L, 1_000_000d, List.of("piece.pdf"), "FAC-001")))
+        var requete = new DeposerFraisRequest(1L, 1_000_000d, List.of("piece.pdf"), "FAC-001");
+        assertThatThrownBy(() -> service.deposer(requete))
                 .isInstanceOf(ApiException.class);
     }
 
@@ -118,7 +119,8 @@ class FraisServiceTest {
         when(dossierAvocatRepository.existsByDossierIdAndAvocatId(1L, 5L)).thenReturn(true);
         when(demandeFraisRepository.existsByReferenceFacture("FAC-001")).thenReturn(true);
 
-        assertThatThrownBy(() -> service.deposer(new DeposerFraisRequest(1L, 1_000_000d, List.of("piece.pdf"), "FAC-001")))
+        var requete = new DeposerFraisRequest(1L, 1_000_000d, List.of("piece.pdf"), "FAC-001");
+        assertThatThrownBy(() -> service.deposer(requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("FAC-001");
     }
@@ -143,7 +145,7 @@ class FraisServiceTest {
         verify(alerteService).declencher(eq(TypeAlerte.NOUVELLE_DEMANDE_FRAIS), eq(1L), eq(assistante), any());
     }
 
-    // --- Conformité (FR-INT-02) ---
+    // --- Compliance (FR-INT-02) ---
 
     @Test
     void controlerConformite_rejectsWrongStatut() {
@@ -151,7 +153,8 @@ class FraisServiceTest {
                 .statutCircuit(StatutCircuitFrais.CONFORMITE).build();
         when(demandeFraisRepository.findById(100L)).thenReturn(Optional.of(demande));
 
-        assertThatThrownBy(() -> service.controlerConformite(100L, new ControleConformiteRequest(true, null)))
+        var requete = new ControleConformiteRequest(true, null);
+        assertThatThrownBy(() -> service.controlerConformite(100L, requete))
                 .isInstanceOf(ApiException.class);
     }
 
@@ -176,7 +179,8 @@ class FraisServiceTest {
         when(demandeFraisRepository.findById(100L)).thenReturn(Optional.of(demande));
         when(currentUserService.getCurrentUser()).thenReturn(assistante);
 
-        assertThatThrownBy(() -> service.controlerConformite(100L, new ControleConformiteRequest(false, null)))
+        var requete = new ControleConformiteRequest(false, null);
+        assertThatThrownBy(() -> service.controlerConformite(100L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("motif");
     }
@@ -196,7 +200,7 @@ class FraisServiceTest {
         verify(alerteService).declencher(eq(TypeAlerte.NOUVELLE_DEMANDE_FRAIS), eq(1L), eq(utilisateurAvocat), any());
     }
 
-    // --- Opportunité (FR-INT-03) ---
+    // --- Appropriateness (FR-INT-03) ---
 
     @Test
     void controlerOpportunite_nonSensibleUnderSeuilValidatesDirectly() {
@@ -261,7 +265,7 @@ class FraisServiceTest {
         verify(alerteService).declencher(eq(TypeAlerte.NOUVELLE_DEMANDE_FRAIS), eq(1L), eq(utilisateurAvocat), any());
     }
 
-    // --- Validation conjointe (FR-INT-04) ---
+    // --- Joint approval (FR-INT-04) ---
 
     @Test
     void validerConjointement_singleAccordDoesNotValidate() {
@@ -321,11 +325,12 @@ class FraisServiceTest {
         when(validationFraisRepository.findByDemandeFraisIdAndEtape(100L, EtapeValidationFrais.CONJOINTE_DJ))
                 .thenReturn(Optional.of(com.afriland.audiences.frais.domain.ValidationFrais.builder().id(1L).build()));
 
-        assertThatThrownBy(() -> service.validerConjointement(100L, new ValidationConjointeRequest(true, null)))
+        var requete = new ValidationConjointeRequest(true, null);
+        assertThatThrownBy(() -> service.validerConjointement(100L, requete))
                 .isInstanceOf(ApiException.class);
     }
 
-    // --- Paiement (FR-INT-05) ---
+    // --- Payment (FR-INT-05) ---
 
     @Test
     void enregistrerPaiement_rejectsWhenNotValidee() {
@@ -355,7 +360,7 @@ class FraisServiceTest {
         verify(alerteService).declencher(eq(TypeAlerte.PAIEMENT_EFFECTUE), eq(1L), eq(dja), any());
     }
 
-    // --- Consultation (Q-82) ---
+    // --- Consultation ---
 
     @Test
     void consulter_avocatCannotReadAnotherAvocatsDemande() {

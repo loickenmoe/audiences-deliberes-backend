@@ -21,9 +21,8 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * Épic 8, volet jurisprudence (FR-DEF-03, US 8.3) — cf. FUNCTIONAL_MAP.md §8,
- * API_IMPLEMENTATION_STATUS.md §10. {@code GET /jurisprudences} : endpoint 🆕 (#55), absent du
- * contrat formel, déduit de UC-DEF-03 (« consultable dans la base »).
+ * Case-law base (FR-DEF-03, US 8.3). {@code GET /jurisprudences} is not in the formal contract; it is
+ * derived from UC-DEF-03 ("searchable in the base").
  */
 @RestController
 @RequestMapping("${api.prefix}/jurisprudences")

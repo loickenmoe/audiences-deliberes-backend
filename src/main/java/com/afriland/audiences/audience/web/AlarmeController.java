@@ -17,10 +17,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * {@code POST /dossiers/{id}/alarmes} et {@code PUT /alarmes/{id}/reprogrammer} : cités dans le
- * tableau récapitulatif REF-07 §2 et les user stories (2.3, 2.4) mais **absents de la
- * spécification OpenAPI §3** — implémentés selon les critères Gherkin des US, cf.
- * DECISIONS_AND_OPEN_QUESTIONS.md Q-13.
+ * {@code POST /dossiers/{id}/alarmes} and {@code PUT /alarmes/{id}/reprogrammer}: listed in REF-07
+ * §2 and user stories 2.3/2.4 but absent from the OpenAPI specification §3; implemented from the
+ * user stories' Gherkin criteria.
  */
 @RestController
 @RequiredArgsConstructor
@@ -35,7 +34,7 @@ public class AlarmeController {
         return ResponseEntity.status(HttpStatus.CREATED).body(alarmeService.creerAlarme(id, request));
     }
 
-    /** M15 (Q-68) : alarmes d'un dossier — endpoint 🆕, aucune lecture n'existait. */
+    /** Alarms of a case. */
     @org.springframework.web.bind.annotation.GetMapping("${api.prefix}/dossiers/{id}/alarmes")
     @PreAuthorize("hasRole('CONSULTATION')")
     public com.afriland.audiences.common.web.PageResponse<AlarmeResponse> listerAlarmesDossier(
@@ -52,7 +51,7 @@ public class AlarmeController {
         return alarmeService.reprogrammerAlarme(id, request);
     }
 
-    /** Q-77 : clore une alarme traitée, sans la remplacer — endpoint 🆕. */
+    /** Closes a handled alarm without replacing it. */
     @PatchMapping("${api.prefix}/alarmes/{id}/traiter")
     @PreAuthorize("hasRole('JURISTE')")
     public AlarmeResponse traiterAlarme(@PathVariable Long id) {

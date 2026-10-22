@@ -15,9 +15,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * Référentiel des types de client sensible, géré par le DJ (RG-DOS-09). Détermine, avec le
- * montant, le circuit de validation des demandes de frais (RG-INT-03).
- * Cf. DECISIONS_AND_OPEN_QUESTIONS.md Q-06.
+ * Reference list of sensitive client types, managed by the DJ (RG-DOS-09). Together with the
+ * amount, determines the approval workflow of expense requests (RG-INT-03).
  */
 @Getter
 @Setter

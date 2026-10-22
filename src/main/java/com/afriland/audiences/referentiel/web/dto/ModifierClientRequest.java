@@ -5,13 +5,11 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 /**
- * {@code PUT /clients/{id}} — recommandé dès Q-23, différé faute de besoin, ouvert quand le besoin
- * est apparu : une coquille dans un nom ou un e-mail changé ne pouvaient plus être corrigés.
+ * {@code PUT /clients/{id}}: lets a typo in a name or a changed email be corrected.
  *
- * <p><b>La référence n'y figure pas, et c'est voulu.</b> Elle est l'identifiant du client : c'est elle
- * qu'on recherche, et elle doit rester la clé d'un futur référentiel externe (INT-05). La modifier
- * ferait changer un identifiant sous les yeux de ceux qui le connaissaient. Décision du porteur du
- * projet (2026-09-22).
+ * <p><b>The reference is deliberately absent.</b> It is the client's identifier, used for search,
+ * and must remain the key of a future external reference system (INT-05). Changing it would alter
+ * an identifier known to its users.
  */
 public record ModifierClientRequest(
         @NotBlank @Size(max = 255) String nom,

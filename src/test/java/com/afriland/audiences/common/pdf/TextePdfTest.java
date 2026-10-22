@@ -14,17 +14,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
 /**
- * Le repli de texte, éprouvé sur ce qu'il promet (A1).
+ * The text fallback, tested against what it promises.
  *
- * <p>Deux exigences, de poids inégal. La première est <b>absolue</b> : quoi qu'on lui donne, le
- * résultat doit s'écrire dans un PDF sans lever — c'est la raison d'être de la classe, et un contrat
- * qu'on ne vérifie pas en relisant le code mais en l'écrivant vraiment. La seconde tient à la
- * <b>qualité du repli</b> : remplacer par un point d'interrogation est toujours correct, rarement
- * utile ; « Nguyễn » doit rester lisible.
+ * <p>Two requirements of unequal weight. The first is <b>absolute</b>: whatever the input, the
+ * result must be writable to a PDF without throwing. The second is the <b>quality</b> of the
+ * fallback: a question mark is always correct but rarely useful; "Nguyễn" must stay readable.
  */
 class TextePdfTest {
 
-    /** Écrit réellement le texte dans un PDF : le seul juge du contrat « ne lève jamais ». */
+    /** Actually writes the text to a PDF: the only judge of the "never throws" contract. */
     private static void ecrireDansUnPdf(String texte) throws Exception {
         try (PDDocument document = new PDDocument()) {
             PDPage page = new PDPage();
@@ -66,7 +64,7 @@ class TextePdfTest {
     @Test
     @DisplayName("les accents francais sont conserves, pas aplatis")
     void accentsPreserves() {
-        // Ils sont dans l'encodage : les remplacer serait une perte gratuite.
+        // They are in the encoding: replacing them would be a needless loss.
         assertThat(TextePdf.replier("Créé à Yaoundé, coût élevé")).isEqualTo("Créé à Yaoundé, coût élevé");
     }
 
@@ -78,8 +76,8 @@ class TextePdfTest {
     }
 
     /**
-     * Ce qui n'a aucune lettre de base — un idéogramme, un emoji — devient un point d'interrogation.
-     * C'est le seul cas où l'information est perdue, et il vaut mieux qu'une exception.
+     * Anything with no base letter (an ideogram, an emoji) becomes a question mark: the only case where
+     * information is lost, and better than an exception.
      */
     @Test
     @DisplayName("ce qui n'a pas de lettre de base devient un point d'interrogation")
@@ -94,7 +92,7 @@ class TextePdfTest {
         assertThat(TextePdf.replier("Windows\r\nligne")).isEqualTo("Windows  ligne");
     }
 
-    /** QF-48 : le cadratin n'a pas sa place dans ce que lit le métier, fichiers compris. */
+    /** The em dash has no place in business-facing text, files included. */
     @Test
     @DisplayName("le cadratin devient un trait d'union (QF-48)")
     void cadratinReplie() {

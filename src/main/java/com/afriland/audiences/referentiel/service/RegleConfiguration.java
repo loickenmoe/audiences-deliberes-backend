@@ -18,44 +18,38 @@ import java.util.Set;
 import java.util.stream.Stream;
 
 /**
- * Règle de saisie d'une clé de {@code configuration_systeme} (Q-91).
+ * Input rule for a {@code configuration_systeme} key.
  * <p>
- * Sans elle, {@code PUT /configurations/{cle}} accepte n'importe quelle chaîne non vide alors que
- * cinq services relisent ces valeurs et les convertissent : {@code FraisService} ({@code
- * Double.parseDouble} du seuil, sur <b>chaque</b> réponse de frais depuis Q-82), {@code
- * DelibereService} ({@code Integer.parseInt}), {@code GedService} ({@code Long.parseLong} et
- * découpage de {@code FORMATS_GED}). Une saisie erronée du DJ se transformait donc en erreurs 500
- * dans des modules sans rapport avec l'écran de configuration. La règle refuse la valeur à la
- * source, en 400, et la normalise avant enregistrement.
+ * Several services read these values back and convert them ({@code FraisService}:
+ * {@code Double.parseDouble} of the threshold on every expense response; {@code DelibereService}:
+ * {@code Integer.parseInt}; {@code GedService}: {@code Long.parseLong} and splitting of
+ * {@code FORMATS_GED}). The rule rejects invalid input at the source with a 400, instead of 500
+ * errors in unrelated modules, and normalises the value before saving.
  * <p>
- * <b>Origine des bornes — aucune n'est inventée.</b> Les sources (user stories §11.2, tableau
- * CONF01 à CONF07, et US 7.1 « seuil (entier positif) ») fixent des <b>valeurs par défaut</b> et
- * exigent un entier positif ; elles ne fixent <b>aucun maximum métier</b>. Cette règle s'en tient
- * donc à ce qui est documenté, plus les seules limites que le code impose réellement :
+ * <b>Bounds are not invented.</b> The specifications (user stories §11.2, CONF01 to CONF07, and
+ * US 7.1) set defaults and require a positive integer, with no business maximum. Only the limits
+ * the code actually imposes are added:
  * <ul>
- *   <li>minimum 1 partout : « entier positif » (US 7.1) ;</li>
- *   <li>{@code TAILLE_MAX_GED} plafonné à 10 Mo : CONF06 donne cette valeur et confie le paramètre
- *       à la DSI « via configuration Spring Boot / MinIO ». Au-delà de
- *       {@code spring.servlet.multipart.max-file-size}, Spring rejette le fichier avant le contrôle
- *       métier — le réglage serait sans effet ;</li>
- *   <li>{@code SEUIL_MONTANT_DEFAUT} plafonné à 12 chiffres : au-delà, le {@code double} du calcul
- *       de seuil perdrait en exactitude ;</li>
- *   <li>les trois compteurs plafonnés à {@link Integer#MAX_VALUE} : c'est le type dans lequel le
- *       code appelant les convertit, rien de plus.</li>
+ *   <li>minimum 1 everywhere: "positive integer" (US 7.1);</li>
+ *   <li>{@code TAILLE_MAX_GED} capped at 10 MB (CONF06): above
+ *       {@code spring.servlet.multipart.max-file-size}, Spring rejects the file before the business
+ *       check, so the setting would have no effect;</li>
+ *   <li>{@code SEUIL_MONTANT_DEFAUT} capped at 12 digits: beyond that, the {@code double} used in
+ *       the threshold computation loses precision;</li>
+ *   <li>the three counters capped at {@link Integer#MAX_VALUE}, the type the calling code converts to.</li>
  * </ul>
- * Une valeur absurde mais inoffensive (999 999 prorogations) est donc <b>acceptée</b> : refuser ce
- * que la documentation autorise serait inventer une règle métier. Cette validation ne refuse que ce
- * qui casserait réellement l'application.
+ * An absurd but harmless value is therefore <b>accepted</b>; only values that would break the
+ * application are rejected.
  * <p>
- * <b>Notifications externes (NOTIFICATION_ENGINE_PLAN.md, D1, D2 et D4).</b> Le DJ règle deux choses :
+ * <b>External notifications.</b> The DJ configures:
  * <ul>
- *   <li>les canaux actifs : {@code CANAUX_NOTIFICATION_DEFAUT} pour les utilisateurs internes
- *       (applicatif obligatoire, Outlook et Teams), {@code CANAUX_NOTIFICATION_PRESTATAIRES} pour les
- *       prestataires (courriel personnel, SMS, WhatsApp) ;</li>
- *   <li>la grille : pour chaque canal, les événements qui y sont envoyés ({@code GRILLE_NOTIFICATION_*}).</li>
+ *   <li>active channels: {@code CANAUX_NOTIFICATION_DEFAUT} for internal users (in-app mandatory,
+ *       Outlook and Teams), {@code CANAUX_NOTIFICATION_PRESTATAIRES} for providers (personal email,
+ *       SMS, WhatsApp);</li>
+ *   <li>the grid: for each channel, the events sent through it ({@code GRILLE_NOTIFICATION_*}).</li>
  * </ul>
- * Ces listes-là peuvent être <b>vides</b> : couper tous les canaux prestataires, ou ne rien envoyer
- * par SMS, est un réglage légitime, et non une saisie manquante.
+ * These lists may be <b>empty</b>: turning off all provider channels, or sending nothing by SMS, is
+ * a valid setting, not missing input.
  */
 public enum RegleConfiguration {
 
@@ -78,9 +72,9 @@ public enum RegleConfiguration {
     private final Long minimum;
     private final Long maximum;
     private final List<String> valeursPossibles;
-    /** Valeur qu'une liste doit obligatoirement contenir, {@code null} si aucune ne l'est. */
+    /** Value a list must contain, {@code null} if none is required. */
     private final String valeurObligatoire;
-    /** Une liste vide est un réglage valable (aucun canal, aucun événement), et non une saisie manquante. */
+    /** An empty list is a valid setting (no channel, no event), not missing input. */
     private final boolean videAutorise;
 
     RegleConfiguration(RegleConfiguration.Definition definition) {
@@ -117,10 +111,10 @@ public enum RegleConfiguration {
     }
 
     /**
-     * Contrôle la valeur saisie et renvoie sa forme normalisée (espaces retirés, liste en
-     * majuscules et sans doublon), telle qu'elle doit être enregistrée.
+     * Validates the input and returns its normalised form (spaces removed, list upper-cased and
+     * deduplicated), as it must be saved.
      *
-     * @throws ApiException 400 si la valeur ne respecte pas la règle
+     * @throws ApiException 400 if the value does not satisfy the rule
      */
     public String valider(String valeur) {
         String saisie = valeur == null ? "" : valeur.trim();
@@ -188,7 +182,7 @@ public enum RegleConfiguration {
         return Arrays.stream(valeurs).map(Enum::name).toList();
     }
 
-    /** Regroupe les paramètres d'une règle : une énumération Java n'accepte qu'un constructeur. */
+    /** Groups a rule's parameters: lets the enum keep a single constructor. */
     private record Definition(TypeValeurConfiguration type, Long minimum, Long maximum,
                               List<String> valeursPossibles, String valeurObligatoire, boolean videAutorise) {
     }

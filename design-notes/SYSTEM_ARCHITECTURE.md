@@ -69,7 +69,7 @@ Internet → HTTPS:443 → nginx (DMZ, terminaison TLS)
 > Mise à jour après les jalons **M1 — Assainissement du socle et sécurisation** (validé le
 > 2026-09-04, commits `3025c46` et `e33f668`), **M2 — Schéma de base et référentiels**
 > (validé le 2026-09-04, commit `ceb0e77`) et **M3 — Socle transversal** (validé le 2026-09-04,
-> commit `57e75c3`). Voir `DEVELOPMENT_ROADMAP.md` pour le détail des jalons et
+> commit `57e75c3`). Voir
 > `DECISIONS_AND_OPEN_QUESTIONS.md` pour le suivi des risques R-01 à R-05.
 
 ### 2.1 Ce qui existe
@@ -149,7 +149,7 @@ GED M8, Intervenants M9, Frais M10, Publications M11, Décisions définitives M1
 sont livrés et testés — **100 % des endpoints spécifiés dans l'OpenAPI formel et des endpoints
 « à proposer »** sont implémentés. La surface exposée atteint **66 endpoints** : les ~52 de
 l'inventaire initial, plus 4 ajoutés en cours de route faute d'alternative dans le contrat, plus
-les 11 du jalon M15 (cf. API_IMPLEMENTATION_STATUS.md §Synthèse).
+les 11 du jalon M15 (cf. le Contrat d'API V1.1 (`Doc/`)).
 
 **Habilitation frontend (M15)** : jalon hors roadmap initiale. Le correctif **R-06** a extrait la
 création d'utilisateur de `CurrentUserService` vers un bean dédié `UtilisateurProvisioningService`
@@ -172,7 +172,7 @@ conformité des 56 endpoints : 54 strictement conformes, 2 écarts de documentat
 Campagne de performance : 50 requêtes simultanées par endpoint, toutes les cibles tenues (p95
 ≤ 1,51 s pour une cible de 2 s). Revue de sécurité : aucun défaut d'autorisation, un constat ouvert
 (R-08, documentation d'API accessible sans authentification). **La feuille de route est achevée** ;
-les points restants avant mise en production sont listés en §M14 de `DEVELOPMENT_ROADMAP.md`.
+les points restants avant mise en production sont listés au §13 du Guide de déploiement (dossier des testeurs).
 
 ### 2.2 Infrastructure réellement configurée
 
@@ -284,7 +284,7 @@ Chaque module : `web/` (controller + DTO) · `service/` · `domain/` (entités +
 **32 tables**, créées par `src/main/resources/db/migration/V1__schema_initial.sql` et vérifiées
 par Hibernate `ddl-auto=validate` contre PostgreSQL 17 réel : 24 tables issues de REF-06 +
 REF-05 §12.1, **plus 8 tables/colonnes ajoutées** lors de l'audit (§4.2). Voir
-`DEVELOPMENT_ROADMAP.md` M2 et `DECISIONS_AND_OPEN_QUESTIONS.md` pour le détail des arbitrages.
+`DECISIONS_AND_OPEN_QUESTIONS.md` pour le détail des arbitrages.
 
 ### 4.1 Tables spécifiées par la documentation
 

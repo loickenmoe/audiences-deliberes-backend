@@ -1,6 +1,6 @@
 package com.afriland.audiences.frais.domain;
 
-/** Statut du circuit de validation d'une demande de frais (RG-INT-03). */
+/** Status of the validation workflow of a fee request (RG-INT-03). */
 public enum StatutCircuitFrais {
     DEPOSEE,
     CONFORMITE,

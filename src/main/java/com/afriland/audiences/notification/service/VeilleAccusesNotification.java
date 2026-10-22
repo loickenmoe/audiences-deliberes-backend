@@ -16,20 +16,15 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * Surveille les notifications remises au moteur dont aucun accusé n'arrive (Q-120).
+ * Watches notifications delivered to the engine that never receive a receipt.
  * <p>
- * <b>Pourquoi cet état existe.</b> Un message dont le jeton est invalide est rejeté « sans aucun
- * retour » (Guide V1 §4 bis) : aucun accusé de succès, aucun accusé d'échec. Sans cette veille, ces
- * messages resteraient « publiés » pour toujours, et l'on croirait la notification partie. Passés
- * en SANS_RETOUR, ils deviennent visibles en supervision (écran 41) et se distinguent nettement
- * d'un envoi confirmé.
+ * A message with an invalid token is rejected without any feedback (Guide V1 §4 bis). Without this
+ * watcher such messages would stay "published" forever; marked SANS_RETOUR, they become visible in
+ * monitoring. The delay is not a business rule, just how long the engine is given before its silence
+ * counts as an answer.
  * <p>
- * Ce délai n'est pas une règle métier : c'est le temps que l'on accorde au moteur avant de
- * considérer son silence comme une réponse.
- * <p>
- * <b>Encore faut-il que le moteur parle.</b> En DEV, ses topics de suivi sont vides, tous services
- * confondus (Q-121) : le silence y est la règle, et non le signe d'un défaut. La veille ne fait donc
- * rien tant que {@code notification.engine.suivi-accuses} reste à faux.
+ * In DEV the tracking topics are empty for all services, so the watcher does nothing while
+ * {@code notification.engine.suivi-accuses} is false.
  */
 @Slf4j
 @Service
@@ -48,8 +43,8 @@ public class VeilleAccusesNotification {
     @Transactional
     public void marquerLesEnvoisSansRetour() {
         if (!proprietes.suiviAccuses()) {
-            // Le moteur ne publie pas d'accusés (Q-121) : leur absence ne prouve rien, et tout
-            // basculerait en SANS_RETOUR, y compris ce qui est bien arrivé.
+            // The engine publishes no receipts: their absence proves nothing, and everything would
+            // otherwise switch to SANS_RETOUR, including delivered messages.
             return;
         }
         LocalDateTime limite = LocalDateTime.now().minus(delaiAccuse);

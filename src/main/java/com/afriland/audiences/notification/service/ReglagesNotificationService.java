@@ -10,9 +10,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Lit les réglages des notifications (Q-118) en une seule requête. Aucune mise en cache : le DJ
- * attend qu'un réglage modifié s'applique au prochain événement, et une quinzaine de lignes se lisent
- * sans coût notable au regard de la transaction métier qui déclenche la notification.
+ * Reads the notification settings in a single query. No caching: a changed setting must apply to
+ * the very next event, and reading about fifteen rows is negligible next to the business transaction.
  */
 @Service
 @RequiredArgsConstructor

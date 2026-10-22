@@ -18,9 +18,9 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * Taxonomie des natures de procédure (RG-DOS-02, Annexe A des spécifications fonctionnelles),
- * gérée par le DJ (CONF02). Non FK-contrainte depuis {@code dossier.nature} : référentiel de
- * gestion, la validation stricte relève du service applicatif (module dossier, M4).
+ * Taxonomy of procedure types (RG-DOS-02, Annex A of the functional specifications), managed by
+ * the DJ (CONF02). Not a foreign key from {@code dossier.nature}: strict validation is done by the
+ * application service (dossier module).
  */
 @Getter
 @Setter

@@ -16,12 +16,10 @@ import java.time.LocalDateTime;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * La lettre de constitution sur le papier à en-tête de la banque (Q-115 B1).
+ * The retainer letter on the bank's letterhead.
  *
- * <p>On ne vérifie pas qu'elle est belle — un test ne sait pas cela. On vérifie ce qui se perd sans
- * qu'on s'en aperçoive : la marque, le numéro, le destinataire, l'objet, le signataire, et surtout
- * les <b>pointillés</b> là où rien n'est renseigné. Ce gabarit est fait pour être complété ; une
- * lettre qui rendrait du vide à la place retirerait une possibilité qui existe aujourd'hui.
+ * <p>Checks what gets lost unnoticed: branding, number, recipient, subject, signatory, and above all
+ * the <b>dotted lines</b> where nothing is filled in. The template is meant to be completed by hand.
  */
 class LettreConstitutionServiceTest {
 
@@ -57,45 +55,42 @@ class LettreConstitutionServiceTest {
     void generer_contientLesMentionsDeLaLettre() throws Exception {
         String texte = LecturePdf.texte(service.generer(lettre()));
 
-        assertThat(texte).contains("N° 4 /First Bank/DAJR/DR/CM/ABN/18");
-        assertThat(texte).contains("Me Fotso").contains("Huissier de Justice");
-        assertThat(texte).contains("DOSSIER DOS-2026-001");
-        assertThat(texte).contains("Lettre de constitution contenant transmission de pièces.");
-        assertThat(texte).contains("La Direction Juridique");
+        assertThat(texte).contains("N° 4 /First Bank/DAJR/DR/CM/ABN/18")
+                .contains("Me Fotso").contains("Huissier de Justice")
+                .contains("DOSSIER DOS-2026-001")
+                .contains("Lettre de constitution contenant transmission de pièces.")
+                .contains("La Direction Juridique");
     }
 
     /**
-     * Le papier à en-tête : logo et mentions légales. Ces mentions ne figurent que sur la
-     * correspondance — les porter sur un export de calendrier ferait passer un tableau de travail
-     * pour une communication officielle de la banque.
+     * Letterhead: logo and legal notices. These appear only on correspondence; putting them on a calendar
+     * export would make a working table look like an official bank communication.
      */
     @Test
     @DisplayName("la colonne latérale porte les mentions institutionnelles")
     void generer_porteLaColonneLaterale() throws Exception {
         String texte = LecturePdf.texte(service.generer(lettre()));
 
-        assertThat(texte).contains("RC N° : 87R041");
-        assertThat(texte).contains("00005/MINFI/DCE2");
-        assertThat(texte).contains("CCEI CMCX");
-        assertThat(texte).contains("www.afrilandfirstbank.com");
+        assertThat(texte).contains("RC N° : 87R041")
+                .contains("00005/MINFI/DCE2")
+                .contains("CCEI CMCX")
+                .contains("www.afrilandfirstbank.com");
     }
 
     /**
-     * Le tirage destiné au <b>papier préimprimé</b> de la banque (observation métier du 2026-09-25).
-     *
-     * <p>Ce que ces trois tests protègent : le décor disparaît, le <b>contenu</b> reste entier, et
-     * surtout la <b>géométrie ne bouge pas</b>. C'est ce dernier point qui compte à l'impression —
-     * un texte remonté de trois centimètres se poserait sur le logo de la feuille.
+     * The copy for the bank's <b>pre-printed paper</b>. Protects three things: the decoration disappears,
+     * the <b>content</b> stays complete, and the <b>geometry does not move</b> (shifted text would land on
+     * the sheet's logo).
      */
     @Test
     @DisplayName("le tirage pour papier préimprimé ne porte ni logo ni mentions légales")
     void preimprime_neDessinePasLeGabarit() throws Exception {
         String texte = LecturePdf.texte(service.generer(lettre(), true));
 
-        assertThat(texte).doesNotContain("RC N° : 87R041");
-        assertThat(texte).doesNotContain("00005/MINFI/DCE2");
-        assertThat(texte).doesNotContain("CCEI CMCX");
-        assertThat(texte).doesNotContain("www.afrilandfirstbank.com");
+        assertThat(texte).doesNotContain("RC N° : 87R041")
+                .doesNotContain("00005/MINFI/DCE2")
+                .doesNotContain("CCEI CMCX")
+                .doesNotContain("www.afrilandfirstbank.com");
     }
 
     @Test
@@ -103,18 +98,17 @@ class LettreConstitutionServiceTest {
     void preimprime_gardeLeContenu() throws Exception {
         String texte = LecturePdf.texte(service.generer(lettre(), true));
 
-        assertThat(texte).contains("N° 4 /First Bank/DAJR/DR/CM/ABN/18");
-        assertThat(texte).contains("Me Fotso").contains("Huissier de Justice");
-        assertThat(texte).contains("DOSSIER DOS-2026-001");
-        assertThat(texte).contains("Lettre de constitution contenant transmission de pièces.");
-        assertThat(texte).contains("La Direction Juridique");
-        assertThat(texte).contains("Dans le cadre de notre collaboration");
+        assertThat(texte).contains("N° 4 /First Bank/DAJR/DR/CM/ABN/18")
+                .contains("Me Fotso").contains("Huissier de Justice")
+                .contains("DOSSIER DOS-2026-001")
+                .contains("Lettre de constitution contenant transmission de pièces.")
+                .contains("La Direction Juridique")
+                .contains("Dans le cadre de notre collaboration");
     }
 
     /**
-     * La preuve que le contenu ne s'est pas déplacé : les mêmes mots, dans le même ordre, aux mêmes
-     * coordonnées. Comparer les positions plutôt que l'allure générale est le seul moyen de vérifier
-     * qu'une feuille préimprimée recevra le texte au bon endroit.
+     * Proof the content did not move: same words, same order, same coordinates. Comparing positions is
+     * the only way to check a pre-printed sheet receives the text in the right place.
      */
     @Test
     @DisplayName("le contenu occupe exactement la même place que sur le papier à en-tête")
@@ -122,15 +116,15 @@ class LettreConstitutionServiceTest {
         String avecGabarit = LecturePdf.positions(service.generer(lettre(), false));
         String sansGabarit = LecturePdf.positions(service.generer(lettre(), true));
 
-        // Les mentions de la colonne n'existent que sur le premier : on compare ce qui reste.
+        // The column notices only exist on the first one: compare what remains.
         for (String ligne : sansGabarit.lines().toList()) {
             assertThat(avecGabarit).contains(ligne);
         }
     }
 
     /**
-     * Non-régression : l'exemplaire archivé en GED — celui qui fait foi — n'a pas changé d'un octet
-     * de mise en page. Le tirage préimprimé s'ajoute, il ne remplace rien.
+     * Non-regression: the copy archived in the GED (the authoritative one) keeps exactly the same
+     * layout. The pre-printed copy is added, it replaces nothing.
      */
     @Test
     @DisplayName("l'exemplaire archivé reste celui du papier à en-tête")
@@ -139,24 +133,24 @@ class LettreConstitutionServiceTest {
                 .isEqualTo(LecturePdf.positions(service.generer(lettre(), false)));
     }
 
-    /** Le corps type du gabarit, ses pointillés conservés là où le rédacteur doit compléter. */
+    /** The template's default body, with dotted lines kept where the author must complete it. */
     @Test
     @DisplayName("le corps reprend le gabarit et garde ses pointillés")
     void generer_gardeLesPointilles() throws Exception {
         String texte = LecturePdf.texte(service.generer(lettre()));
 
         /*
-         * Fragments courts : le corps revient à la ligne tout seul, et une assertion qui enjamberait
-         * une coupure échouerait sur la mise en page au lieu de vérifier le contenu.
+         * Short fragments: the body wraps on its own, and an assertion spanning a line break would fail on
+         * layout instead of checking content.
          */
-        assertThat(texte).contains("Dans le cadre de notre collaboration");
-        assertThat(texte).contains("constituons par les").contains("Ladite saisie");
-        assertThat(texte).contains("..........");
+        assertThat(texte).contains("Dans le cadre de notre collaboration")
+                .contains("constituons par les").contains("Ladite saisie")
+                .contains("..........");
     }
 
     /**
-     * L'auteur du fichier est le <b>validateur</b>, pas le juriste : c'est la seconde signature qui
-     * engage la banque (RG-INT-08).
+     * The file author is the <b>validator</b>, not the legal officer: the second signature commits the
+     * bank (RG-INT-08).
      */
     @Test
     @DisplayName("le fichier porte son titre et le nom du validateur")
@@ -168,8 +162,8 @@ class LettreConstitutionServiceTest {
     }
 
     /**
-     * Un champ vidé par le rédacteur rend des pointillés, jamais « null » ni un blanc : la lettre
-     * reste complétable à la main, comme le papier qu'elle remplace.
+     * A field cleared by the author renders dotted lines, never "null" or a blank: the letter stays
+     * completable by hand, like the paper it replaces.
      */
     @Test
     @DisplayName("un champ vide rend des pointillés, jamais du vide")
@@ -180,7 +174,7 @@ class LettreConstitutionServiceTest {
 
         String texte = LecturePdf.texte(service.generer(sansDestinataire));
 
-        assertThat(texte).doesNotContain("null");
-        assertThat(texte).contains("Maître ..........");
+        assertThat(texte).doesNotContain("null")
+                .contains("Maître ..........");
     }
 }

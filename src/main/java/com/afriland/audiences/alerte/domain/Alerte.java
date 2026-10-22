@@ -23,14 +23,11 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * Notification déclenchée par un événement métier (RG-ALR-01/02/03). {@code dossierId} est une
- * référence libre (pas de {@code @ManyToOne}), sur le même principe que
- * {@link com.afriland.audiences.common.audit.HistoriqueAction#getDossierId()} : le module
- * {@code alerte} est un socle transversal (dépendance de 8 modules, cf. FUNCTIONAL_MAP.md §7) et
- * ne doit pas dépendre en retour du module {@code dossier} — de plus, certaines alertes (ex.
- * {@code CHARGE_MAX_AVOCAT}) ne sont rattachées à aucun dossier ({@code dossier_id} est
- * nullable en base).
- * Cf. dictionnaire des données §2.5.1 (table {@code alerte}).
+ * Alert raised by a business event (RG-ALR-01/02/03). {@code dossierId} is a plain reference, not a
+ * {@code @ManyToOne}: the {@code alerte} module is a cross-cutting foundation and must not depend
+ * on {@code dossier}. Some alerts (e.g. {@code CHARGE_MAX_AVOCAT}) have no case at all (
+ * {@code dossier_id} is nullable).
+ * See data dictionary §2.5.1 (table {@code alerte}).
  */
 @Getter
 @Setter
@@ -81,16 +78,15 @@ public class Alerte {
     private LocalDateTime dateTraitement;
 
     /**
-     * Issue de la diffusion temps réel (Q-109). <b>Nullable à dessein</b> : les alertes antérieures
-     * à la migration V16 n'ont pas été observées, et le taux de délivrance ne porte que sur ce qui
-     * a été réellement mesuré. Les compter d'office comme réussies ou échouées reviendrait à
-     * inventer le chiffre que l'on cherche à établir.
+     * Outcome of the real-time delivery. <b>Nullable on purpose</b>: alerts created before
+     * migration V16 were never observed, and the delivery rate only covers what was actually
+     * measured.
      */
     @Enumerated(EnumType.STRING)
     @Column(name = "statut_diffusion", length = 20)
     private StatutDiffusion statutDiffusion;
 
-    /** Instant où l'issue a été observée — succès comme échec. */
+    /** When the outcome was observed, success or failure. */
     @Column(name = "date_diffusion")
     private LocalDateTime dateDiffusion;
 }

@@ -1,20 +1,14 @@
 package com.afriland.audiences.dossier.domain;
 
 /**
- * Type d'étape de procédure (RG-DOS-04). Un dossier porte 1 à 4 étapes.
- *
- * <p><b>Les deux pourvois sont concurrents, pas successifs.</b> La Direction Juridique a confirmé
- * (2026-09-25) qu'un même dossier peut être porté devant la Cour Suprême <b>et</b> devant la CCJA
- * en même temps : ce sont deux ordres juridictionnels — national et supranational OHADA — saisis
- * par des pourvois distincts. {@link #RECOURS_2_CCJA} ne vient donc pas après {@link #RECOURS_2} ;
- * il est à côté, et tous deux sont terminaux.
- *
- * <p><b>L'ordre des valeurs n'est pas décoratif.</b> Les étapes d'un dossier sont triées
- * alphabétiquement sur la colonne {@code type} ({@code findByDossierIdOrderByTypeAsc}, avec
- * {@code @Enumerated(STRING)}), et c'est ce tri qui décide de l'ordre d'affichage comme du calcul
- * de l'étape courante. {@code 'RECOURS_2_CCJA'} suit {@code 'RECOURS_2'} : l'ordre procédural est
- * préservé. Une valeur nommée {@code CCJA} ou {@code CASSATION} se serait rangée <b>avant</b>
- * {@code INSTANCE}, sans que rien n'échoue.
+ * Procedure step type (RG-DOS-04). A case holds 1 to 4 steps.
+ * <p><b>The two cassation appeals are concurrent, not successive</b>: a case can be brought before
+ * the Supreme Court <b>and</b> the CCJA (OHADA) at the same time. {@link #RECOURS_2_CCJA} does not
+ * follow {@link #RECOURS_2}; both are terminal.
+ * <p><b>The order of values matters.</b> Steps are sorted alphabetically on the {@code type} column
+ * ({@code findByDossierIdOrderByTypeAsc}, {@code @Enumerated(STRING)}), which drives display order
+ * and the current step. {@code 'RECOURS_2_CCJA'} sorts after {@code 'RECOURS_2'}; a name like
+ * {@code CCJA} would silently sort before {@code INSTANCE}.
  */
 public enum TypeEtape {
     INSTANCE,
@@ -23,10 +17,8 @@ public enum TypeEtape {
     RECOURS_2_CCJA;
 
     /**
-     * Étape suivante ouverte automatiquement en cas d'exercice d'un recours (RG-DOS-04).
-     *
-     * <p>Le pourvoi CCJA n'y figure pas : il ne suit mécaniquement aucune étape, il se décide. Il
-     * s'ouvre par positionnement direct, comme toute étape que la procédure n'impose pas.
+     * Next step opened automatically when an appeal is lodged (RG-DOS-04). The CCJA appeal is not
+     * included: it is a decision, opened by direct positioning.
      */
     public TypeEtape suivante() {
         return switch (this) {
@@ -38,11 +30,8 @@ public enum TypeEtape {
     }
 
     /**
-     * Vrai lorsque aucune voie de recours ne suit cette étape dans l'application.
-     *
-     * <p>Exposé ici plutôt que testé chez l'appelant : un {@code == RECOURS_2} disséminé dans les
-     * services aurait fallu le jour où une seconde étape terminale est apparue — ce qui vient
-     * précisément d'arriver avec la CCJA.
+     * True when no appeal follows this step in the application. Exposed here rather than checked by
+     * callers, since there is more than one terminal step.
      */
     public boolean estTerminale() {
         return this == RECOURS_2 || this == RECOURS_2_CCJA;

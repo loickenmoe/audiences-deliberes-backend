@@ -71,8 +71,8 @@ class AlarmeServiceTest {
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
         when(etapeProcedureRepository.findById(10L)).thenReturn(Optional.of(etape));
 
-        assertThatThrownBy(() -> service.creerAlarme(1L,
-                new CreerAlarmeRequest(10L, "Relancer le client", LocalDateTime.now().minusDays(1))))
+        var requete = new CreerAlarmeRequest(10L, "Relancer le client", LocalDateTime.now().minusDays(1));
+        assertThatThrownBy(() -> service.creerAlarme(1L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("future");
     }
@@ -104,8 +104,8 @@ class AlarmeServiceTest {
                 .dateEcheance(LocalDateTime.now().minusDays(1)).statut(StatutAlarme.TRAITEE).createdBy(juriste).build();
         when(alarmeRepository.findById(3L)).thenReturn(Optional.of(traitee));
 
-        assertThatThrownBy(() -> service.reprogrammerAlarme(3L,
-                new ReprogrammerAlarmeRequest(null, LocalDateTime.now().plusDays(2))))
+        var requete = new ReprogrammerAlarmeRequest(null, LocalDateTime.now().plusDays(2));
+        assertThatThrownBy(() -> service.reprogrammerAlarme(3L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("déjà été reprogrammée");
     }
@@ -134,7 +134,7 @@ class AlarmeServiceTest {
         assertThat(result.alarmePrecedenteId()).isEqualTo(3L);
     }
 
-    /** Q-77 : clore une alarme traitée, sans la remplacer. */
+    /** Closes a handled alarm without replacing it. */
     @Test
     void traiterAlarme_passeTraiteeSansCreerDeNouvelleAlarme() {
         Alarme active = Alarme.builder().id(3L).dossier(dossier).etape(etape).objet("Relancer le greffe")
@@ -148,7 +148,7 @@ class AlarmeServiceTest {
         assertThat(result.id()).isEqualTo(3L);
         assertThat(result.statut()).isEqualTo(StatutAlarme.TRAITEE);
         assertThat(result.dateTraitement()).isNotNull();
-        // Un seul enregistrement : l'alarme elle-même, aucune remplaçante.
+        // A single save: the alarm itself, no replacement.
         verify(alarmeRepository, times(1)).save(any(Alarme.class));
         verify(historiqueActionService).enregistrerPour(eq(juriste), eq(1L), eq(TypeActionHistorique.ALARME_TRAITEE), any());
     }
@@ -165,7 +165,7 @@ class AlarmeServiceTest {
         verify(alarmeRepository, never()).save(any());
     }
 
-    /** M15 (Q-68) : onglet « alarmes » d'un dossier. */
+    /** Case file "alarms" tab. */
     @Test
     void listerParDossier_retourneLesAlarmesTrieesParEcheance() {
         when(dossierRepository.existsById(1L)).thenReturn(true);
@@ -184,7 +184,8 @@ class AlarmeServiceTest {
     void listerParDossier_dossierInconnu_retourne404() {
         when(dossierRepository.existsById(999L)).thenReturn(false);
 
-        assertThatThrownBy(() -> service.listerParDossier(999L, PageRequest.of(0, 10)))
+        var pageRequest = PageRequest.of(0, 10);
+        assertThatThrownBy(() -> service.listerParDossier(999L, pageRequest))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("Dossier introuvable");
     }

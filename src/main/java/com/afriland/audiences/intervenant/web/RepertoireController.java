@@ -10,9 +10,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 
-/** FR-INT-08/US 5.8 — absent de l'OpenAPI formel, implémenté selon les critères Gherkin de l'US. */
+/** Lawyer directory (FR-INT-08, US 5.8), implemented from the user story's acceptance criteria. */
 @RestController
 @RequiredArgsConstructor
 public class RepertoireController {
@@ -20,7 +19,7 @@ public class RepertoireController {
     private final RepertoireAvocatsService repertoireAvocatsService;
 
     @GetMapping("${api.prefix}/repertoire/avocats")
-    @PreAuthorize("hasAnyRole('JURISTE', 'ASSISTANTE')")
+    @PreAuthorize("hasAnyRole('JURISTE', 'ASSISTANTE', 'SH')")
     public PageResponse<AvocatRepertoireResponse> lister(@RequestParam(required = false) String nom,
                                                            @RequestParam(defaultValue = "0") int page,
                                                            @RequestParam(defaultValue = "10") int size) {

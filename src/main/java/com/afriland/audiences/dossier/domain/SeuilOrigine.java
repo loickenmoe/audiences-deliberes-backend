@@ -1,6 +1,6 @@
 package com.afriland.audiences.dossier.domain;
 
-/** Origine du seuil de validation des frais applicable à un dossier (Q-26). */
+/** Origin of the fee validation threshold applicable to a case. */
 public enum SeuilOrigine {
     GLOBAL,
     DEROGATION

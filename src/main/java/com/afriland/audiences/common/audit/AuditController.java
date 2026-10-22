@@ -18,22 +18,12 @@ import java.time.LocalDate;
 import java.util.Map;
 
 /**
- * Audit des actions historisées (Q-112) — <b>DJ et DJA</b>.
+ * Audit of recorded actions, restricted to <b>DJ and DJA</b>. Covers the whole history; the
+ * "outside any case" view is a perimeter filter value, not a separate endpoint.
  *
- * <p>Remplace {@code GET /historique/systeme} (Q-110), qui ne lisait que les actions sans dossier.
- * Celui-ci couvre tout l'historique, le périmètre devenant un critère parmi les autres ; la vue
- * « hors dossier » n'est plus un endpoint mais une valeur de filtre. Le journal livré en Q-110 était
- * un palliatif assumé, taillé étroit pour combler un trou sans préjuger de la suite : une fois la
- * vue générale ouverte, il n'en était plus qu'un sous-ensemble, et deux endroits où chercher la même
- * trace sont exactement la fragmentation qu'on voulait supprimer.
- *
- * <p><b>Pourquoi DJ et DJA, et pas {@code ROLE_CONSULTATION}</b> qui suffit pour l'historique d'un
- * dossier : sur une fiche, on regarde un dossier, et voir l'action d'un collègue relève de la
- * collaboration. Ici la lecture est agrégée et filtrable par auteur — même contenu, autre nature.
- *
- * <p><b>Ce n'est pas un audit complet, et l'écran le dit.</b> Seules les modifications sont
- * historisées ; aucune consultation ne l'est, hormis celle de cet écran. L'absence de ligne ne
- * prouve donc pas l'absence d'action.
+ * <p>Restricted beyond {@code ROLE_CONSULTATION} because the read is aggregated and filterable by
+ * author. Only modifications are recorded (plus consultations of this screen), so a missing line
+ * does not prove an action did not happen.
  */
 @RestController
 @RequestMapping("${api.prefix}/historique")
@@ -49,33 +39,24 @@ public class AuditController {
     public AuditResponse audit(
             @RequestParam(defaultValue = "TOUT") Perimetre perimetre,
             @RequestParam(required = false) Long dossierId,
-            /* L'auteur recherché, autorisé par NF-CONF-01 (2026-09-17). C'est le filtre qui donne
-             * sa valeur à l'écran, et celui qui rend nécessaire d'historiser la consultation. */
+            /* Author filter, allowed by NF-CONF-01; it is why consulting this screen is recorded. */
             @RequestParam(required = false) Long utilisateurId,
-            /* Code typé (Q-111) : une valeur inconnue est refusée en 400 par la conversion, là où
-             * une phrase libre renvoyait silencieusement zéro ligne. */
+            /* Typed code: an unknown value is rejected with a 400 instead of silently matching nothing. */
             @RequestParam(required = false) TypeActionHistorique code,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateDebut,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFin,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        return auditService.consulter(perimetre, dossierId, utilisateurId, code, dateDebut, dateFin, page, size);
+        return auditService.consulter(new FiltresAudit(perimetre, dossierId, utilisateurId, code, dateDebut, dateFin),
+                page, size);
     }
 
     /**
-     * Extraction de l'audit vers un fichier scellé (Q-113).
+     * Exports the audit to a sealed file, returned to the caller and archived.
      *
-     * <p><b>La période est obligatoire ici, alors qu'elle est facultative à l'écran.</b> Une archive
-     * sans période ne dit pas ce qu'elle contient : son empreinte ne prouverait que son intégrité,
-     * jamais son exhaustivité. Consulter tout l'historique a un sens ; en produire une pièce
-     * « sans période » n'en a pas.
-     *
-     * <p><b>Les raccourcis de période — jour, semaine, mois, trimestre, semestre, année — sont
-     * calculés par l'écran</b>, et n'apparaissent pas ici. Ce sont des commodités de saisie, pas des
-     * concepts d'API : les exposer aurait figé six calendriers côté serveur et interdit la période
-     * libre, celle que réclame la première inspection qui demande « du 12 mars au 4 juin ».
-     *
-     * <p>Le fichier est rendu <b>et</b> déposé : l'appelant repart avec sa pièce, l'archive reste.
+     * <p>The period is mandatory here (optional on screen): an archive without a period would prove
+     * its integrity but never its completeness. Period shortcuts (week, month...) are computed by
+     * the client, so any free period stays possible.
      */
     @GetMapping("/export")
     @PreAuthorize("hasAnyRole('DJ', 'DJA')")
@@ -94,13 +75,12 @@ public class AuditController {
                 .header(HttpHeaders.CONTENT_TYPE, format.typeMime())
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         "attachment; filename=\"" + extraction.nomFichier() + "\"")
-                // L'empreinte voyage avec le fichier : le destinataire peut la comparer sans avoir
-                // à interroger l'application.
+                // The hash travels with the file so the recipient can compare it without the application.
                 .header("X-Empreinte-SHA256", extraction.archive().getEmpreinte())
                 .body(extraction.contenu());
     }
 
-    /** Les archives produites, de la plus récente à la plus ancienne, avec leur empreinte. */
+    /** Produced archives, newest first, with their hash. */
     @GetMapping("/exports")
     @PreAuthorize("hasAnyRole('DJ', 'DJA')")
     public PageResponse<ExportAuditResponse> archives(
@@ -112,16 +92,8 @@ public class AuditController {
     }
 
     /**
-     * Vérifie qu'un fichier détenu par quelqu'un correspond à une archive connue (Q-114).
-     *
-     * <p><b>C'est ce qui rend l'empreinte utile.</b> Sans ce chemin, vérifier supposait d'ouvrir un
-     * terminal, de taper {@code sha256sum} et de comparer soixante-quatre caractères à l'œil —
-     * autant dire que personne ne le faisait, et qu'une empreinte que nul ne vérifie n'est qu'une
-     * décoration.
-     *
-     * <p><b>Le fichier ne circule pas.</b> L'empreinte est calculée par le navigateur ; seul son
-     * résultat arrive ici. Un document d'audit n'a aucune raison de traverser le réseau pour être
-     * comparé à lui-même.
+     * Checks whether a file matches a known archive. The SHA-256 is computed by the browser; only the
+     * hash is sent, the file never leaves the user's machine.
      */
     @GetMapping("/exports/verification")
     @PreAuthorize("hasAnyRole('DJ', 'DJA')")
@@ -129,10 +101,7 @@ public class AuditController {
         return auditExportService.verifier(empreinte);
     }
 
-    /**
-     * Récupération d'une archive déjà produite. Une URL pré-signée, valable quelques minutes, et
-     * <b>une trace</b> : sans elle, on pourrait puiser dans les archives sans que rien ne le dise.
-     */
+    /** Returns a short-lived presigned URL for an existing archive; each download is recorded. */
     @GetMapping("/exports/{id}/telechargement")
     @PreAuthorize("hasAnyRole('DJ', 'DJA')")
     public Map<String, String> telecharger(@PathVariable Long id) {

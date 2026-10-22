@@ -30,12 +30,10 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * Entrée de la base jurisprudentielle (US 8.3, RG-DEF-05) — archive indexée, indépendante de la
- * hiérarchie {@link DecisionDefinitive} (le dictionnaire de données la traite comme une table à
- * part entière, non un troisième sous-type). {@code dossier} est optionnel : une jurisprudence
- * peut documenter un précédent sans dossier interne associé (FR-DEF-03). {@code cheminStockage} :
- * colonne absente du schéma initial (Q-58), déposée via {@code MinioStorageService} sans ligne
- * `document` GED (même raisonnement que Q-56 pour {@code autre_publication}).
+ * Case-law base entry (US 8.3, RG-DEF-05): an indexed archive, a table of its own rather than a
+ * {@link DecisionDefinitive} subtype. {@code dossier} is optional, since a precedent may have no
+ * internal case file (FR-DEF-03). The file is stored via {@code MinioStorageService} without a
+ * {@code document} row, like {@code autre_publication}.
  */
 @Getter
 @Setter

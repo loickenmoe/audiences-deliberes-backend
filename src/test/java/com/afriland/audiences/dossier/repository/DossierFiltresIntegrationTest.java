@@ -8,6 +8,7 @@ import com.afriland.audiences.dossier.domain.EtapeProcedure;
 import com.afriland.audiences.dossier.domain.StatutCycleVie;
 import com.afriland.audiences.dossier.domain.TypeEtape;
 import com.afriland.audiences.dossier.service.DossierSpecifications;
+import com.afriland.audiences.dossier.service.FiltresDossiers;
 import com.afriland.audiences.referentiel.domain.CategorieDossier;
 import com.afriland.audiences.referentiel.domain.Client;
 import com.afriland.audiences.referentiel.repository.ClientRepository;
@@ -30,14 +31,10 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Les filtres par étape et par période d'audience de {@code GET /dossiers} (observation métier du
- * 2026-09-25), sur un PostgreSQL réel.
+ * Step and hearing-period filters of {@code GET /dossiers}, on a real PostgreSQL.
  *
- * <p><b>Pourquoi pas un test à mocks</b>, comme {@code DossierSpecificationsTest} ? Parce que ces
- * deux filtres sont des sous-requêtes {@code EXISTS}, et qu'un mock ne pourrait vérifier que l'appel
- * à {@code cb.exists(...)} — jamais qu'un dossier corrélé correctement en ressort, ni surtout que le
- * <b>total paginé</b> reste juste. Or c'est précisément là que la jointure naïve échoue : elle
- * compte un dossier autant de fois qu'il a d'étapes. Ce test-là ne se fait qu'en base.
+ * <p>Not mocked: both filters are {@code EXISTS} subqueries, and only a real database proves that the
+ * <b>paginated total</b> stays correct (a naive join counts a case once per step).
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -45,7 +42,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DossierFiltresIntegrationTest {
 
     @Container
-    static PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17")
+    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17")
             .withDatabaseName("audiences_filtres")
             .withUsername("test")
             .withPassword("test");
@@ -74,11 +71,9 @@ class DossierFiltresIntegrationTest {
                 Client.builder().reference("CLI-FILTRES").nom("Société de test").build());
     }
 
-    // ------------------------------------------------------------------ Le filtre par étape
-
     @Test
     void le_type_et_le_statut_portent_sur_une_meme_etape() {
-        // Le piège : ce dossier a bien un appel, et il a bien une étape en cours — mais pas la même.
+        // The trap: this case has an appeal and a step in progress, but not the same one.
         Dossier leurre = dossier("DOS-LEURRE");
         etape(leurre, TypeEtape.RECOURS_1, StatutCycleVie.CLOTURE);
         etape(leurre, TypeEtape.INSTANCE, StatutCycleVie.EN_COURS);
@@ -101,10 +96,8 @@ class DossierFiltresIntegrationTest {
     }
 
     /**
-     * Les deux cassations sont concurrentes : un dossier porté devant la Cour Suprême <b>et</b>
-     * devant la CCJA remonte dans les deux filtres. C'est exact — les deux procédures existent —
-     * et c'est ce qu'aurait caché un filtre portant sur « l'étape la plus avancée », puisqu'il
-     * aurait fallu élire l'une des deux.
+     * The two cassation appeals run concurrently: a case before both the Supreme Court and the CCJA
+     * appears in both filters, which a filter on "the most advanced step" would have hidden.
      */
     @Test
     void un_dossier_aux_deux_cassations_remonte_dans_les_deux_filtres() {
@@ -116,7 +109,7 @@ class DossierFiltresIntegrationTest {
         assertThat(references(TypeEtape.RECOURS_2_CCJA, null, null, null)).containsExactly("DOS-DEUX-CASSATIONS");
     }
 
-    /** Le total paginé est la raison d'être du {@code EXISTS} : une jointure compterait trois fois. */
+    /** The paginated total is why {@code EXISTS} is used: a join would count three times. */
     @Test
     void un_dossier_a_plusieurs_etapes_n_est_compte_qu_une_fois() {
         Dossier dossier = dossier("DOS-TROIS-ETAPES");
@@ -130,8 +123,6 @@ class DossierFiltresIntegrationTest {
         assertThat(page.getContent()).hasSize(1);
     }
 
-    // ------------------------------------------------------------------ Le filtre par période
-
     @Test
     void la_periode_retient_les_dossiers_ayant_une_audience_dans_la_fenetre() {
         Dossier dansLaFenetre = dossier("DOS-DANS");
@@ -143,7 +134,7 @@ class DossierFiltresIntegrationTest {
                 .containsExactly("DOS-DANS");
     }
 
-    /** Les deux bornes sont incluses : une audience tenue le premier jour est dans la période. */
+    /** Both bounds are inclusive: a hearing held on the first day is within the period. */
     @Test
     void les_bornes_de_la_periode_sont_incluses() {
         Dossier debut = dossier("DOS-DEBUT");
@@ -156,8 +147,7 @@ class DossierFiltresIntegrationTest {
     }
 
     /**
-     * Une audience annulée ne s'est pas tenue. La compter ferait remonter, dans « les dossiers qui
-     * ont eu une audience en mars », des dossiers restés muets tout le mois.
+     * A cancelled hearing did not take place. Counting it would list cases with no hearing in the period.
      */
     @Test
     void une_audience_annulee_ne_fait_pas_remonter_le_dossier() {
@@ -190,8 +180,6 @@ class DossierFiltresIntegrationTest {
         assertThat(page.getTotalElements()).isEqualTo(1);
     }
 
-    // ------------------------------------------------------------------ Les deux ensemble
-
     @Test
     void l_etape_et_la_periode_se_cumulent() {
         Dossier lesDeux = dossier("DOS-LES-DEUX");
@@ -218,16 +206,13 @@ class DossierFiltresIntegrationTest {
         assertThat(references(null, null, null, null)).containsExactlyInAnyOrder("DOS-NU-1", "DOS-NU-2");
     }
 
-    // ------------------------------------------------------------------ Fabriques
-
     private List<String> references(TypeEtape type, StatutCycleVie statut, LocalDate debut, LocalDate fin) {
         return page(type, statut, debut, fin).getContent().stream().map(Dossier::getReference).toList();
     }
 
     private Page<Dossier> page(TypeEtape type, StatutCycleVie statut, LocalDate debut, LocalDate fin) {
         return dossierRepository.findAll(
-                DossierSpecifications.withFilters(null, null, null, null, null, null, null, null,
-                        type, statut, debut, fin),
+                DossierSpecifications.withFilters(new FiltresDossiers(null, null, null, null, null, null, null, type, statut, debut, fin), null),
                 PageRequest.of(0, 20));
     }
 
@@ -238,8 +223,8 @@ class DossierFiltresIntegrationTest {
                 .categorie(CategorieDossier.EXPLOITATION_LITIGES)
                 .juridictionSaisie("Tribunal de Première Instance de Douala")
                 .client(client)
-                // `chk_categorie_coherence` (V1) : un dossier d'exploitation-litiges porte au moins
-                // l'un des deux champs conditionnels de sa catégorie.
+                // `chk_categorie_coherence` (V1): a litigation case carries at least one of the two
+                // conditional fields of its category.
                 .elementsJustificatifs("Pièce jointe de test")
                 .build());
     }
@@ -258,7 +243,7 @@ class DossierFiltresIntegrationTest {
                 .dossier(dossier)
                 .datePlanifiee(date)
                 .statut(statut)
-                // `chk_audience_annulation` (V1) : une annulation porte son motif et sa date.
+                // `chk_audience_annulation` (V1): a cancellation carries its reason and date.
                 .motifAnnulation(annulee ? "Renvoi demandé par la partie adverse" : null)
                 .dateAnnulation(annulee ? date.atStartOfDay() : null)
                 .build());

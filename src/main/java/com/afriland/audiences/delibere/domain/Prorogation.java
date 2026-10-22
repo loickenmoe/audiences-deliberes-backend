@@ -21,10 +21,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
- * Prorogation d'un délibéré (RG-DEL-06, FR-DEL-04) — nombre illimité, jamais écrasé.
- * {@code compteur} porte le rang cumulé de cette prorogation pour le délibéré concerné (1 pour
- * la première, 2 pour la deuxième, etc.), calculé côté service à partir du nombre de lignes déjà
- * enregistrées — cf. dictionnaire des données §2.3.4.
+ * Extension of a deliberation (RG-DEL-06, FR-DEL-04): unlimited in number, never overwritten.
+ * {@code compteur} is the cumulative rank of this extension for its deliberation (1 for the first,
+ * 2 for the second, and so on), computed by the service from the rows already stored.
  */
 @Getter
 @Setter

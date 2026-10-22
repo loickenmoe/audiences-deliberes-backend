@@ -18,8 +18,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Paramètres système modifiables par le DJ (CONF01-07, US §11.2). {@code GET /configurations},
- * {@code PUT /configurations/{cle}} — cf. API_IMPLEMENTATION_STATUS.md §9 (#47, #48).
+ * System parameters editable by the DJ (CONF01-07, US §11.2): {@code GET /configurations},
+ * {@code PUT /configurations/{cle}}.
  */
 @Service
 @RequiredArgsConstructor
@@ -37,40 +37,43 @@ public class ConfigurationService {
 
     @Transactional(readOnly = true)
     public ConfigurationSysteme getOrThrow(String cle) {
+        return chargerConfiguration(cle);
+    }
+
+    private ConfigurationSysteme chargerConfiguration(String cle) {
         return configurationSystemeRepository.findByCle(cle)
                 .orElseThrow(() -> ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE,
                         "Clé de configuration introuvable : " + cle));
     }
 
     /**
-     * Modifie un paramètre. La valeur est contrôlée puis normalisée selon la règle de la clé
-     * (Q-91) : sans ce garde-fou, une saisie erronée du DJ ne se manifestait qu'ailleurs, en
-     * erreur 500, au moment où un autre module reconvertit la valeur.
+     * Updates a parameter. The value is validated then normalised according to the key's rule:
+     * otherwise a wrong input would only surface elsewhere, as a 500 error when another module
+     * converts the value.
      */
     @Transactional
     public ConfigurationResponse modifier(String cle, String nouvelleValeur) {
-        ConfigurationSysteme configuration = getOrThrow(cle);
+        ConfigurationSysteme configuration = chargerConfiguration(cle);
         String valeurRetenue = RegleConfiguration.pour(cle)
                 .map(regle -> regle.valider(nouvelleValeur))
                 .orElseGet(() -> exigerNonVide(cle, nouvelleValeur));
         String ancienneValeur = configuration.getValeur();
         configuration.setValeur(valeurRetenue);
-        // Q-112 : l'écran des paramètres répond désormais sur place à « qui l'a mis là ? », question
-        // qui naît en regardant un réglage et n'a pas à faire changer d'écran.
+        // Lets the settings screen show who last changed the value, without switching screens.
         configuration.setDernierAuteurId(currentUserService.getCurrentUser().getId());
         configuration = configurationSystemeRepository.save(configuration);
 
-        // dossierId=null : action hors dossier (cf. Javadoc HistoriqueActionService#enregistrer).
+        // dossierId=null: action outside any case file (see HistoriqueActionService#enregistrer Javadoc).
         Utilisateur auteur = currentUserService.getCurrentUser();
-        // Q-111 : la clé descend dans `details`. Concaténée dans la phrase, elle produisait un
-        // libellé distinct par paramètre — sept natures d'action là où il n'y en a qu'une.
+        // The key goes into `details`: concatenated into the sentence, it would produce a distinct
+        // label per parameter, i.e. seven action types instead of one.
         historiqueActionService.enregistrerPour(auteur, null, TypeActionHistorique.CONFIGURATION_MODIFIEE,
                 Map.of("cle", cle, "ancienneValeur", ancienneValeur, "nouvelleValeur", valeurRetenue));
 
         return configurationMapper.toResponse(configuration);
     }
 
-    /** Clé sans règle déclarée : on garde l'exigence historique d'une valeur non vide. */
+    /** Key without a declared rule: a non-empty value is required. */
     private static String exigerNonVide(String cle, String valeur) {
         if (valeur == null || valeur.isBlank()) {
             throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,

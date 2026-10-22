@@ -18,11 +18,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 /**
- * Les deux conditions qu'une étape doit remplir pour partir en délibéré (métier, 2026-09-29).
- *
- * <p>Ce que ces tests protègent, ce sont deux refus qui n'existaient pas : jusqu'ici, une étape
- * partait en délibéré sans qu'aucune audience ne s'y soit tenue, et en laissant derrière elle des
- * audiences planifiées qui continuaient d'alimenter le calendrier et les rappels.
+ * The two conditions a step must meet before going to deliberation: a hearing has been held, and
+ * no scheduled hearing is left behind (it would keep feeding the calendar and reminders).
  */
 @ExtendWith(MockitoExtension.class)
 class ConditionsAudiencePourDelibereTest {
@@ -40,15 +37,15 @@ class ConditionsAudiencePourDelibereTest {
         etape = EtapeProcedure.builder().id(7L).build();
     }
 
-    // ------------------------------------------------------------------ Le champ d'application
+    // ------------------------------------------------------------------ Scope
 
     @Test
     void les_deux_conditions_ne_valent_que_pour_la_mise_en_delibere() {
         for (var condition : java.util.List.of(audienceTenue, aucuneEnAttente)) {
             assertThat(condition.concerne(StatutCycleVie.EN_COURS, StatutCycleVie.EN_DELIBERE)).isTrue();
 
-            // Toutes les autres transitions ne les regardent pas : une clôture ou un recours
-            // n'exigent pas d'audience, et les soumettre à cette règle bloquerait le cycle.
+            // Other transitions are not concerned: closure or appeal requires no hearing, and applying this
+            // rule to them would block the lifecycle.
             assertThat(condition.concerne(StatutCycleVie.OUVERTURE, StatutCycleVie.EN_COURS)).isFalse();
             assertThat(condition.concerne(StatutCycleVie.DELIBERE_VIDE, StatutCycleVie.CLOTURE)).isFalse();
             assertThat(condition.concerne(StatutCycleVie.DELIBERE_VIDE, StatutCycleVie.EN_COURS)).isFalse();
@@ -56,7 +53,7 @@ class ConditionsAudiencePourDelibereTest {
         }
     }
 
-    // ------------------------------------------------------------------ Une audience tenue
+    // ------------------------------------------------------------------ A hearing held
 
     @Test
     void sans_audience_tenue_la_mise_en_delibere_est_refusee() {
@@ -69,8 +66,8 @@ class ConditionsAudiencePourDelibereTest {
     }
 
     /**
-     * « Tenue » veut dire « rapportée » : le statut n'est posé qu'à la saisie du compte rendu. C'est
-     * l'arbitrage du métier, et c'est ce que cette condition vérifie — pas une date passée.
+     * "Held" means "reported": the status is only set when the report is entered. This condition
+     * checks that status, not a past date.
      */
     @Test
     void une_audience_tenue_suffit() {
@@ -85,13 +82,13 @@ class ConditionsAudiencePourDelibereTest {
 
         audienceTenue.empechement(etape);
 
-        // Une audience annulée ou simplement planifiée ne vaut pas audience tenue : la condition
-        // n'interroge que TENUE, jamais « une audience existe ».
+        // A cancelled or merely scheduled hearing does not count as held: the condition only checks
+        // TENUE, never "a hearing exists".
         org.mockito.Mockito.verify(audienceRepository).existsByEtapeIdAndStatut(7L, StatutAudience.TENUE);
         org.mockito.Mockito.verifyNoMoreInteractions(audienceRepository);
     }
 
-    // ------------------------------------------------------------------ Aucune audience en attente
+    // ------------------------------------------------------------------ No pending hearing
 
     @Test
     void une_audience_encore_planifiee_bloque_la_mise_en_delibere() {
@@ -103,7 +100,7 @@ class ConditionsAudiencePourDelibereTest {
                         .contains("tenez-la ou annulez-la"));
     }
 
-    /** Le nombre est dit : « des audiences » enverrait chercher combien, et lesquelles. */
+    /** The count is stated: "some hearings" would leave the user wondering how many and which. */
     @Test
     void plusieurs_audiences_en_attente_sont_comptees_et_accordees() {
         when(audienceRepository.countByEtapeIdAndStatut(7L, StatutAudience.PLANIFIEE)).thenReturn(3L);
@@ -122,8 +119,8 @@ class ConditionsAudiencePourDelibereTest {
     }
 
     /**
-     * Le cas que le métier visait : une audience s'est tenue, une autre reste au calendrier. La
-     * première condition est remplie, la seconde non — et c'est bien la seconde qui doit parler.
+     * The target case: one hearing was held, another is still scheduled. The first condition is met,
+     * the second is not, and it is the second one that must report.
      */
     @Test
     void une_audience_tenue_ne_rachete_pas_une_audience_encore_planifiee() {

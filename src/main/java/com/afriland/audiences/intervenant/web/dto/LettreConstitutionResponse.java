@@ -3,22 +3,18 @@ package com.afriland.audiences.intervenant.web.dto;
 import java.time.LocalDateTime;
 
 /**
- * La lettre telle qu'un écran la lit (Q-115 B2).
+ * Appointment letter as read by the UI.
  *
- * @param numero          nul tant que la lettre est un brouillon : il est attribué à la signature,
- *                        pour ne pas brûler un numéro sur une demande sans suite
- * @param numeroPropose   ce que la séquence servira si le rédacteur n'impose rien. Affiché en
- *                        <b>indication</b>, jamais réservé : deux rédacteurs peuvent voir le même,
- *                        et c'est l'unicité en base qui tranche à la signature
- * @param suffixeNumero   le reste de la ligne, découpé sur « / » par l'écran
- * @param modifiable      faux dès que la lettre est générée. Une pièce qu'on peut retoucher en
- *                        silence ne prouve rien : une correction donne une nouvelle lettre
- * @param dateGeneration  l'instant du gel ; nul tant que la lettre est un brouillon
- * @param redigeParNom    qui a écrit la dernière version. Le SH peut corriger avant de signer
- *                        (métier, 2026-10-06) : le juriste doit voir que sa lettre a bougé, et par
- *                        qui. Nul tant que personne n'a rédigé - le brouillon naît avec la demande
- * @param redigeParProfil le profil du rédacteur, pour que l'écran dise « corrigée par le SH » sans
- *                        avoir à deviner qui est qui
+ * @param numero          null while the letter is a draft; assigned at signature so that no number
+ *                        is wasted on an abandoned request
+ * @param numeroPropose   number the sequence would serve if none is imposed; an indication only,
+ *                        never reserved (database uniqueness decides at signature)
+ * @param suffixeNumero   rest of the number line, split on "/" by the UI
+ * @param modifiable      false once the letter is generated; a correction produces a new letter
+ * @param dateGeneration  freeze time; null while the letter is a draft
+ * @param redigeParNom    author of the latest version (the line manager may correct it before
+ *                        signing); null until someone has drafted it
+ * @param redigeParProfil author's profile, so the UI can show who corrected the letter
  */
 public record LettreConstitutionResponse(
         Long id,

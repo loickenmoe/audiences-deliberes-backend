@@ -18,14 +18,14 @@ public interface DemandeSuppressionRepository extends JpaRepository<DemandeSuppr
 
     boolean existsByDocumentIdAndStatut(Long documentId, StatutSuppression statut);
 
-    /** UC-GED-03 alt. 6-a : demandes encore en attente et jamais relancées, au-delà du délai. */
+    /** UC-GED-03 alt. 6-a: pending requests never reminded, older than the delay. */
     List<DemandeSuppression> findByStatutAndDateDerniereRelanceIsNullAndDateDemandeLessThanEqual(
             StatutSuppression statut, LocalDateTime seuil);
 
-    /** Demandes en attente déjà relancées une fois, mais dont la dernière relance dépasse le délai. */
+    /** Pending requests already reminded once, whose last reminder is older than the delay. */
     List<DemandeSuppression> findByStatutAndDateDerniereRelanceLessThanEqual(StatutSuppression statut, LocalDateTime seuil);
 
-    /** M15 (Q-68) : file de travail « demandes de suppression en attente » du DJ/DJA, plus ancienne d'abord. */
+    /** The DJ/DJA queue of pending deletion requests, oldest first. */
     Page<DemandeSuppression> findByStatutOrderByDateDemandeAsc(StatutSuppression statut, Pageable pageable);
 
     Page<DemandeSuppression> findByOrderByDateDemandeDesc(Pageable pageable);

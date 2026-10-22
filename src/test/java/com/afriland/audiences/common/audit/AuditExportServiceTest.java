@@ -32,11 +32,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Extraction de l'audit (Q-113).
+ * Audit extraction.
  *
- * <p>Ce que ces tests protègent n'est pas la mise en forme — un test ne sait pas si un PDF est
- * lisible — mais la chaîne qui rend l'archive opposable : l'empreinte porte sur les octets déposés,
- * la période est obligatoire, et une extraction trop vaste est refusée plutôt que tronquée.
+ * <p>These tests do not check formatting but the chain that makes the archive enforceable: the
+ * fingerprint covers the stored bytes, the period is mandatory, and an oversized extraction is
+ * refused rather than truncated.
  */
 @ExtendWith(MockitoExtension.class)
 class AuditExportServiceTest {
@@ -67,8 +67,8 @@ class AuditExportServiceTest {
     }
 
     /**
-     * L'empreinte porte sur les <b>octets déposés</b>, jamais sur la requête qui les a produits :
-     * c'est le fichier qu'on pourra vérifier des années plus tard.
+     * The fingerprint covers the <b>stored bytes</b>, never the query that produced them: the file is
+     * what will be verified years later.
      */
     @Test
     void exporter_scelleLesOctetsReellementDeposes() {
@@ -83,13 +83,13 @@ class AuditExportServiceTest {
         assertThat(extraction.archive().getEmpreinte()).hasSize(64);
         assertThat(extraction.archive().getTailleOctets()).isEqualTo(contenu.length);
 
-        // Les octets déposés sont ceux-là, et non une seconde génération qui pourrait différer.
+        // The stored bytes are these, not a second generation that could differ.
         ArgumentCaptor<byte[]> deposes = ArgumentCaptor.forClass(byte[].class);
         verify(minioStorageService).deposerArchiveAudit(anyString(), anyString(), deposes.capture());
         assertThat(deposes.getValue()).isEqualTo(contenu);
     }
 
-    /** L'extraction est historisée avec son empreinte : la trace et la pièce se recoupent. */
+    /** The extraction is logged with its fingerprint, so the log entry and the file can be matched. */
     @Test
     void exporter_historiseLExtractionAvecSonEmpreinte() {
         byte[] contenu = {1, 2, 3};
@@ -106,21 +106,22 @@ class AuditExportServiceTest {
                 .containsEntry("format", "PDF")
                 .containsEntry("auteurRecherche", 42L)
                 .containsEntry("lignes", 0);
-        // La référence figure dans la trace : c'est par elle qu'on relie l'acte à la pièce.
+        // The reference is in the log entry: it links the action to the file.
         assertThat(captor.getValue().get("reference")).asString().startsWith("AUD-");
     }
 
     /**
-     * Au-delà du plafond, on refuse au lieu de tronquer. Une archive tronquée mentirait sur ce
-     * qu'elle couvre, et son empreinte scellerait ce mensonge.
+     * Above the cap, the extraction is refused rather than truncated: a truncated archive would
+     * misstate its coverage, and its fingerprint would seal that error.
      */
     @Test
     void exporter_refuseUneExtractionTropVasteAuLieuDeLaTronquer() {
         when(historiqueActionRepository.count(specification()))
                 .thenReturn((long) AuditExportService.PLAFOND_LIGNES + 1);
 
-        assertThatThrownBy(() -> auditExportService.exporter(Perimetre.TOUT, null, null, null,
-                LocalDate.of(2020, 1, 1), LocalDate.of(2030, 1, 1), FormatExportAudit.EXCEL))
+        var date = LocalDate.of(2020, 1, 1);
+        var date2 = LocalDate.of(2030, 1, 1);
+        assertThatThrownBy(() -> auditExportService.exporter(Perimetre.TOUT, null, null, null, date, date2, FormatExportAudit.EXCEL))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("Restreignez la période");
 
@@ -129,31 +130,33 @@ class AuditExportServiceTest {
     }
 
     /**
-     * La période est obligatoire, alors qu'elle est facultative à l'écran : une archive sans période
-     * ne dit pas ce qu'elle contient, et son empreinte ne prouverait que son intégrité.
+     * The period is mandatory (unlike on screen): an archive without a period does not say what it
+     * contains, and its fingerprint would only prove its integrity.
      */
     @Test
     void exporter_exigeUnePeriode() {
-        assertThatThrownBy(() -> auditExportService.exporter(Perimetre.TOUT, null, null, null,
-                null, LocalDate.of(2026, 9, 30), FormatExportAudit.PDF))
+        var date = LocalDate.of(2026, 9, 30);
+        assertThatThrownBy(() -> auditExportService.exporter(Perimetre.TOUT, null, null, null, null, date, FormatExportAudit.PDF))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("exige une période");
     }
 
     @Test
     void exporter_refuseUneFenetreInverseeEtUnDossierManquant() {
-        assertThatThrownBy(() -> auditExportService.exporter(Perimetre.TOUT, null, null, null,
-                LocalDate.of(2026, 9, 30), LocalDate.of(2026, 9, 1), FormatExportAudit.PDF))
+        var date4 = LocalDate.of(2026, 9, 30);
+        var date5 = LocalDate.of(2026, 9, 1);
+        assertThatThrownBy(() -> auditExportService.exporter(Perimetre.TOUT, null, null, null, date4, date5, FormatExportAudit.PDF))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("date de début");
 
-        assertThatThrownBy(() -> auditExportService.exporter(Perimetre.UN_DOSSIER, null, null, null,
-                LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30), FormatExportAudit.PDF))
+        var date2 = LocalDate.of(2026, 9, 1);
+        var date3 = LocalDate.of(2026, 9, 30);
+        assertThatThrownBy(() -> auditExportService.exporter(Perimetre.UN_DOSSIER, null, null, null, date2, date3, FormatExportAudit.PDF))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("identifiant du dossier");
     }
 
-    /** Récupérer une archive laisse une trace : sinon on y puiserait sans que rien ne le dise. */
+    /** Downloading an archive leaves a trace; otherwise it could be accessed unnoticed. */
     @Test
     void telecharger_traceLaRecuperation() {
         ExportAudit archive = ExportAudit.builder().id(7L).empreinte("abc").cleStockage("audit/x.pdf").build();
@@ -163,8 +166,8 @@ class AuditExportServiceTest {
         String url = auditExportService.telecharger(7L);
 
         assertThat(url).isEqualTo("https://minio/x");
-        verify(historiqueActionService).enregistrer(eq(null), eq(TypeActionHistorique.ARCHIVE_TELECHARGEE),
-                eq(Map.of("exportId", 7L, "empreinte", "abc")));
+        verify(historiqueActionService).enregistrer(null, TypeActionHistorique.ARCHIVE_TELECHARGEE,
+                Map.of("exportId", 7L, "empreinte", "abc"));
     }
 
     @Test
@@ -179,8 +182,8 @@ class AuditExportServiceTest {
     }
 
     /**
-     * Une empreinte connue, pour que le calcul lui-même ne dérive pas silencieusement : c'est le
-     * SHA-256 de « abc », vérifiable hors de ce projet.
+     * A known fingerprint, so that the computation itself cannot drift silently: the SHA-256 of
+     * "abc", verifiable outside this project.
      */
     @Test
     void empreinte_estUnSha256Hexadecimal() {
@@ -189,8 +192,8 @@ class AuditExportServiceTest {
     }
 
     /**
-     * La référence est lue <b>avant</b> la production du fichier, et figure dans le titre remis au
-     * rendu : c'est la seule chose identifiant l'archive que le fichier puisse contenir.
+     * The reference is read <b>before</b> the file is produced and passed in the title to the
+     * renderer: it is the only archive identifier the file can contain.
      */
     @Test
     void exporter_poseLaReferenceDansLeFichierEtDansLArchive() {
@@ -209,8 +212,8 @@ class AuditExportServiceTest {
     }
 
     /**
-     * La vérification est ce qui rend l'empreinte utile : sans elle, il fallait ouvrir un terminal
-     * et comparer soixante-quatre caractères à l'œil.
+     * Verification is what makes the fingerprint useful: otherwise one would have to compare
+     * 64 characters by eye in a terminal.
      */
     @Test
     void verifier_reconnaitUnFichierQuiCorrespond() {
@@ -221,14 +224,14 @@ class AuditExportServiceTest {
 
         var resultat = auditExportService.verifier(empreinte.toUpperCase());
 
-        // Insensible à la casse : un contrôleur recopie une empreinte comme il la voit.
+        // Case-insensitive: an auditor copies a fingerprint as they see it.
         assertThat(resultat.reconnue()).isTrue();
         assertThat(resultat.archive().reference()).isEqualTo("AUD-2026-0007");
     }
 
     /**
-     * Un fichier inconnu n'est pas une erreur : c'est une réponse, et souvent celle qu'on redoutait.
-     * Un 404 l'aurait fait passer pour une panne de l'application.
+     * An unknown file is not an error but an answer; a 404 would make it look like an application
+     * failure.
      */
     @Test
     void verifier_repondSansErreurQuandRienNeCorrespond() {
@@ -241,7 +244,7 @@ class AuditExportServiceTest {
         assertThat(resultat.archive()).isNull();
     }
 
-    /** Ce qui n'est pas une empreinte est refusé : chercher « bonjour » en base n'a aucun sens. */
+    /** Anything that is not a fingerprint is refused: searching the database for arbitrary text makes no sense. */
     @Test
     void verifier_refuseCeQuiNEstPasUneEmpreinte() {
         for (String invalide : List.of("", "bonjour", "abc", "z".repeat(64), "a".repeat(63))) {

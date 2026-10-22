@@ -27,10 +27,8 @@ import java.time.LocalDateTime;
 import java.util.Map;
 
 /**
- * Trace de toute action réalisée sur un dossier (RG-DOS-06). {@code dossierId} est une référence
- * libre (pas de {@code @ManyToOne}) : le module {@code common} ne dépend pas du module
- * {@code dossier} (introduit en M4), pour éviter tout couplage inverse. Cf. dictionnaire des
- * données §2.4.4 (table {@code historique_action}).
+ * Record of an action performed on a case (RG-DOS-06). {@code dossierId} is a plain id, not a
+ * {@code @ManyToOne}, so the {@code common} module does not depend on the {@code dossier} module.
  */
 @Getter
 @Setter
@@ -53,19 +51,15 @@ public class HistoriqueAction {
     @JoinColumn(name = "utilisateur_id", nullable = false)
     private Utilisateur utilisateur;
 
-    /**
-     * Nature typée de l'action (Q-111), sur laquelle portent les filtres d'audit. C'est elle qui
-     * fait foi ; {@link #action} n'en est que la formulation lisible.
-     */
+    /** Typed action kind, used by audit filters; authoritative over {@link #action}. */
     @NotNull
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)
     private TypeActionHistorique code;
 
     /**
-     * Phrase française dérivée de {@link #code} au moment de l'écriture. Conservée en base pour que
-     * l'affichage existant ne change pas, et parce qu'une ligne d'audit doit rester lisible sans
-     * détenir l'énumération qui l'a produite. Non traduisible en l'état (QF-24).
+     * French label derived from {@link #code} at write time, stored so an audit line stays readable
+     * without the enum that produced it.
      */
     @NotBlank
     @Column(nullable = false)

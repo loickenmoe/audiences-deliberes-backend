@@ -76,7 +76,7 @@ class PublicationServiceTest {
     @Mock private HistoriqueActionService historiqueActionService;
     @Mock private AlerteService alerteService;
     @Mock private MinioStorageService minioStorageService;
-    // Q-98 : FORMATS_GED / TAILLE_MAX_GED pilotent aussi la pièce jointe d'un compte rendu.
+    // FORMATS_GED / TAILLE_MAX_GED also govern a report's attachment.
     @Mock private ConfigurationService configurationService;
     @Mock private DossierJuristeRepository dossierJuristeRepository;
 
@@ -111,7 +111,7 @@ class PublicationServiceTest {
         dj = Utilisateur.builder().id(40L).profil(Profil.builder().code("DJ").build()).build();
     }
 
-    // --- Dépôt compte rendu (US 5.1) ---
+    // Report upload (US 5.1)
 
     @Test
     void deposerCompteRendu_rejectsAudienceNotAttachedToDossier() {
@@ -120,7 +120,8 @@ class PublicationServiceTest {
         when(dossierRepository.findById(1L)).thenReturn(Optional.of(dossier));
         when(audienceRepository.findById(7L)).thenReturn(Optional.of(audience));
 
-        assertThatThrownBy(() -> service.deposerCompteRendu(new DeposerCompteRenduRequest(1L, 7L, "Contenu", null), null))
+        var requete = new DeposerCompteRenduRequest(1L, 7L, "Contenu", null);
+        assertThatThrownBy(() -> service.deposerCompteRendu(requete, null))
                 .isInstanceOf(ApiException.class);
     }
 
@@ -138,7 +139,7 @@ class PublicationServiceTest {
         });
         when(utilisateurRepository.findByProfilCodeAndActifTrue("ASSISTANTE")).thenReturn(List.of(assistante));
 
-        // Sans pièce jointe : le cas nominal d'US 5.1, inchangé par Q-98.
+        // Without attachment: the nominal case of US 5.1.
         PublicationResponse result =
                 service.deposerCompteRendu(new DeposerCompteRenduRequest(1L, 7L, "Contenu du CR", null), null);
 
@@ -150,8 +151,8 @@ class PublicationServiceTest {
     }
 
     /**
-     * Q-98 : la pièce jointe est facultative, mais quand elle est là elle passe par les mêmes
-     * contrôles que la GED et atterrit dans le même stockage — le récit reste obligatoire.
+     * The attachment is optional, but when present it goes through the same checks as the GED and lands
+     * in the same storage. The narrative stays mandatory.
      */
     @Test
     void deposerCompteRendu_avecPieceJointe_lEnregistreEtLaNomme() {
@@ -164,7 +165,7 @@ class PublicationServiceTest {
                 ConfigurationSysteme.builder().cle("FORMATS_GED").valeur("PDF,PNG,JPG,TXT,XLSX").build());
         when(configurationService.getOrThrow("TAILLE_MAX_GED")).thenReturn(
                 ConfigurationSysteme.builder().cle("TAILLE_MAX_GED").valeur("10485760").build());
-        // Clé réelle de MinioStorageService : {uuid}-{nom}, dont le mapper retire le préfixe.
+        // Real MinioStorageService key: {uuid}-{name}, whose prefix the mapper strips.
         when(minioStorageService.deposer(eq(1L), any()))
                 .thenReturn("dossiers/1/3f1c2b8e-9a4d-4c7e-8b1a-5d6e7f809a1b-plumitif.pdf");
         when(publicationRepository.save(any(Publication.class))).thenAnswer(inv -> {
@@ -182,7 +183,7 @@ class PublicationServiceTest {
         assertThat(result.nomFichier()).isEqualTo("plumitif.pdf");
     }
 
-    /** Un format hors FORMATS_GED est refusé : la pièce d'un compte rendu suit les règles de la GED. */
+    /** A format outside FORMATS_GED is refused: a report attachment follows GED rules. */
     @Test
     void deposerCompteRendu_refuseUnePieceDeFormatNonAutorise() {
         Audience audience = Audience.builder().id(7L).dossier(dossier).build();
@@ -191,14 +192,15 @@ class PublicationServiceTest {
         when(currentUserService.getCurrentUser()).thenReturn(utilisateurAvocat);
         when(avocatRepository.findByCompteKeycloak("kc-avocat")).thenReturn(Optional.of(avocat));
 
+        var requete = new DeposerCompteRenduRequest(1L, 7L, "Renvoi", null);
+        var fichier = new MockMultipartFile("file", "virus.exe", "application/octet-stream", new byte[] {1});
         assertThatThrownBy(() -> service.deposerCompteRendu(
-                new DeposerCompteRenduRequest(1L, 7L, "Renvoi", null),
-                new MockMultipartFile("file", "virus.exe", "application/octet-stream", new byte[] {1})))
+                requete, fichier))
                 .isInstanceOf(ApiException.class);
         verifyNoInteractions(minioStorageService);
     }
 
-    // --- Dépôt autre publication (US 5.3) ---
+    // Other publication upload (US 5.3)
 
     @Test
     void deposerAutre_rejectsEmptyFile() {
@@ -231,7 +233,7 @@ class PublicationServiceTest {
         verify(alerteService).declencher(eq(TypeAlerte.NOUVELLE_PUBLICATION), eq(1L), eq(assistante), any());
     }
 
-    // --- Validation (US 5.2, généralisée aux deux sous-types — Q-55) ---
+    // Validation (US 5.2, generalized to both subtypes)
 
     @Test
     void valider_rejectsAlreadyDecided() {
@@ -239,27 +241,29 @@ class PublicationServiceTest {
                 .statutValidation(StatutPublication.VALIDE).build();
         when(publicationRepository.findById(100L)).thenReturn(Optional.of(publication));
 
-        assertThatThrownBy(() -> service.valider(100L, new ValiderPublicationRequest(StatutPublication.VALIDE, null)))
+        var requete = new ValiderPublicationRequest(StatutPublication.VALIDE, null);
+        assertThatThrownBy(() -> service.valider(100L, requete))
                 .isInstanceOf(ApiException.class);
     }
 
     @Test
     void valider_rejectionRequiresMotif() {
-        // Le rejet n'existe plus pour un compte rendu : la règle du motif se vérifie là où le
-        // rejet demeure (RG-INT-06 amendée, 2026-10-05).
+        // Rejection no longer exists for a report: the reason rule is checked where rejection remains
+        // (RG-INT-06).
         Publication publication = AutrePublication.builder().id(100L).dossier(dossier).avocat(avocat)
                 .typeDocument(TypeAutrePublication.PIECE)
                 .statutValidation(StatutPublication.DEPOSE).build();
         when(publicationRepository.findById(100L)).thenReturn(Optional.of(publication));
 
-        assertThatThrownBy(() -> service.valider(100L, new ValiderPublicationRequest(StatutPublication.REJETE, null)))
+        var requete = new ValiderPublicationRequest(StatutPublication.REJETE, null);
+        assertThatThrownBy(() -> service.valider(100L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("motif");
     }
 
     @Test
     void valider_rejectionNotifiesAvocat() {
-        // Le rejet ne vaut plus pour un compte rendu : la notification s'éprouve là où il demeure.
+        // Rejection no longer applies to a report: the notification is tested where it remains.
         Publication publication = AutrePublication.builder().id(100L).dossier(dossier).avocat(avocat)
                 .typeDocument(TypeAutrePublication.PIECE)
                 .statutValidation(StatutPublication.DEPOSE).build();
@@ -286,11 +290,11 @@ class PublicationServiceTest {
         assertThat(result.type()).isEqualTo(com.afriland.audiences.publication.domain.TypePublication.AUTRE);
     }
 
-    // --- Consultation (US 5.4) ---
+    // Consultation (US 5.4)
 
     /**
-     * Une AUTRE publication déposée reste fermée : c'est elle, désormais, qui porte l'ancien
-     * régime. Le compte rendu, lui, s'ouvre à tous (voir plus bas).
+     * An uploaded OTHER publication stays closed: it carries the restricted regime. A report is open to
+     * all (see below).
      */
     @Test
     void obtenir_refuseUneAutrePublicationDeposee() {
@@ -318,7 +322,7 @@ class PublicationServiceTest {
     void obtenir_rejectsRestrictedAccessForOtherUser() {
         Utilisateur destinataire = Utilisateur.builder().id(60L).build();
         Utilisateur autre = Utilisateur.builder().id(61L).build();
-        // La réserve ne vaut plus sur un compte rendu : elle s'éprouve sur l'autre nature.
+        // The restriction no longer applies to a report: it is tested on the other kind.
         Publication publication = AutrePublication.builder().id(100L).dossier(dossier).avocat(avocat)
                 .typeDocument(TypeAutrePublication.PIECE)
                 .statutValidation(StatutPublication.VALIDE).restrictionAcces(destinataire).build();
@@ -406,11 +410,8 @@ class PublicationServiceTest {
     }
 
     /**
-     * Le destinataire désigné par l'avocat est seul prévenu, et l'affectation au dossier ne suffit
-     * pas à s'y substituer.
-     *
-     * <p>Cette règle vivait sur le compte rendu jusqu'au 2026-10-05 ; la réserve ne s'y applique
-     * plus. Elle s'éprouve donc sur l'autre nature de publication, où elle demeure entière.
+     * Only the recipient designated by the lawyer is notified; case assignment does not replace it. This
+     * restriction no longer applies to reports, so it is tested on the other kind of publication.
      */
     @Test
     void valider_neProvientQueLeDestinataireDesigne() {
@@ -427,7 +428,7 @@ class PublicationServiceTest {
         verify(dossierJuristeRepository, never()).findByDossierId(any());
     }
 
-    // --- Commentaire / correspondance (US 5.5) ---
+    // Comment / correspondence (US 5.5)
 
     @Test
     void commenter_notifiesDjAndDja() {
@@ -456,7 +457,8 @@ class PublicationServiceTest {
         when(publicationRepository.findById(100L)).thenReturn(Optional.of(publication));
         when(correspondanceAvocatRepository.existsByPublicationId(100L)).thenReturn(true);
 
-        assertThatThrownBy(() -> service.transmettreCorrespondance(100L, new CorrespondanceRequest("Réponse")))
+        var requete = new CorrespondanceRequest("Réponse");
+        assertThatThrownBy(() -> service.transmettreCorrespondance(100L, requete))
                 .isInstanceOf(ApiException.class);
     }
 
@@ -479,12 +481,10 @@ class PublicationServiceTest {
         verify(alerteService).declencher(eq(TypeAlerte.NOUVELLE_PUBLICATION), eq(1L), eq(utilisateurAvocat), any());
     }
 
-    // ------------------------------------------------------------------ lister (M15, Q-68)
-
-    /** Les quatre combinaisons de filtres aiguillent vers quatre requêtes distinctes. */
+    /** The four filter combinations route to four distinct queries. */
     @Test
     void lister_aiguilleSelonLesFiltres() {
-        // L'Assistante instruit : aucune restriction de visibilité ne s'applique à elle.
+        // The Assistant instructs: no visibility restriction applies to her.
         when(currentUserService.getCurrentUser()).thenReturn(assistante);
         var pageable = org.springframework.data.domain.PageRequest.of(0, 20);
         var page = new org.springframework.data.domain.PageImpl<Publication>(
@@ -505,9 +505,9 @@ class PublicationServiceTest {
         assertThat(service.lister(null, null, pageable).content()).hasSize(1);
     }
 
-    // --- RG-INT-06 amendée (métier du 2026-10-05) : le compte rendu ouvert à tous ---
+    // RG-INT-06: reports are open to all
 
-    /** Déposé, non encore reçu par l'Assistante : n'importe quel habilité le lit déjà. */
+    /** Uploaded, not yet acknowledged by the Assistant: any authorized user can already read it. */
     @Test
     void obtenir_ouvreUnCompteRenduDeposeATousLesHabilites() {
         Publication publication = CompteRenduAudience.builder().id(100L).dossier(dossier).avocat(avocat)
@@ -515,15 +515,14 @@ class PublicationServiceTest {
         when(publicationRepository.findById(100L)).thenReturn(Optional.of(publication));
 
         assertThat(service.obtenir(100L).statutValidation()).isEqualTo(StatutPublication.DEPOSE);
-        // Aucune identité n'est consultée : la règle ne dépend plus de qui regarde.
+        // No identity is checked: the rule no longer depends on who is looking.
         verify(dossierJuristeRepository, never()).existsByDossierIdAndUtilisateurId(anyLong(), anyLong());
     }
 
     /**
-     * Une réserve posée avant le 2026-10-05 ne referme plus un compte rendu.
-     *
-     * <p>Le dépôt la refuse désormais (voir {@code deposerCompteRendu_refuseUneReserve}), mais les
-     * comptes rendus déjà en base peuvent en porter une : elle ne doit plus écarter personne.
+     * A restriction set on a report no longer closes it. Upload now refuses it (see
+     * {@code deposerCompteRendu_refuseUneReserve}), but existing reports may carry one: it must exclude
+     * nobody.
      */
     @Test
     void obtenir_ignoreUneReserveAncienneSurUnCompteRendu() {
@@ -536,7 +535,7 @@ class PublicationServiceTest {
         assertThat(service.obtenir(100L).id()).isEqualTo(100L);
     }
 
-    /** La réserve, elle, continue d'écarter sur une autre publication. */
+    /** The restriction still excludes on another publication. */
     @Test
     void obtenir_laReserveEcarteEncoreSurUneAutrePublication() {
         Utilisateur designe = Utilisateur.builder().id(11L)
@@ -552,7 +551,7 @@ class PublicationServiceTest {
                 .hasMessageContaining("restreinte");
     }
 
-    /** Une réserve sur un compte rendu est refusée au dépôt, et non ignorée en silence. */
+    /** A restriction on a report is refused on upload, not silently ignored. */
     @Test
     void deposerCompteRendu_refuseUneReserve() {
         Audience audience = Audience.builder().id(7L).dossier(dossier).build();
@@ -561,14 +560,15 @@ class PublicationServiceTest {
         when(currentUserService.getCurrentUser()).thenReturn(utilisateurAvocat);
         when(avocatRepository.findByCompteKeycloak("kc-avocat")).thenReturn(Optional.of(avocat));
 
+        var requete = new DeposerCompteRenduRequest(1L, 7L, "Contenu", 60L);
         assertThatThrownBy(() -> service.deposerCompteRendu(
-                new DeposerCompteRenduRequest(1L, 7L, "Contenu", 60L), null))
+                requete, null))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("ne se réserve pas");
         verify(publicationRepository, never()).save(any(Publication.class));
     }
 
-    /** Le dépôt prévient les juristes du dossier : l'accès est ouvert à tous, l'alerte reste ciblée. */
+    /** Upload notifies the case's legal officers: access is open to all, the alert stays targeted. */
     @Test
     void deposerCompteRendu_alerteLesJuristesDuDossier() {
         Audience audience = Audience.builder().id(7L).dossier(dossier).build();
@@ -592,25 +592,24 @@ class PublicationServiceTest {
         assertThat(message.getValue()).contains("consultable dès maintenant");
     }
 
-    /** Un compte rendu ne se rejette pas : l'Assistante en accuse réception, ou rien. */
+    /** A report cannot be rejected: the Assistant acknowledges it, or nothing. */
     @Test
     void valider_refuseLeRejetDUnCompteRendu() {
         Publication publication = CompteRenduAudience.builder().id(100L).dossier(dossier).avocat(avocat)
                 .statutValidation(StatutPublication.DEPOSE).build();
         when(publicationRepository.findById(100L)).thenReturn(Optional.of(publication));
 
-        assertThatThrownBy(() -> service.valider(100L,
-                new ValiderPublicationRequest(StatutPublication.REJETE, "Récit incomplet")))
+        var requete = new ValiderPublicationRequest(StatutPublication.REJETE, "Récit incomplet");
+        assertThatThrownBy(() -> service.valider(100L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("ne se rejette pas");
         verify(publicationRepository, never()).save(any(Publication.class));
     }
 
     /**
-     * L'avocat est prévenu d'un accusé de réception, et par un événement qui le dit.
-     *
-     * <p>{@code PUBLICATION_ARBITREE} annonce une décision prise sur la pièce. Sur un compte rendu
-     * il n'y en a plus : l'envoyer ferait attendre à l'avocat un verdict qui ne viendra pas.
+     * The lawyer is notified of an acknowledgement by an event that says so. {@code PUBLICATION_ARBITREE}
+     * announces a decision on the document; there is none for a report, so sending it would make the
+     * lawyer wait for a verdict that never comes.
      */
     @Test
     void valider_previentLAvocatDeLAccuseDeReceptionSurUnCompteRendu() {
@@ -622,11 +621,11 @@ class PublicationServiceTest {
         service.valider(100L, new ValiderPublicationRequest(StatutPublication.VALIDE, null));
 
         verify(notificationPrestataireService).notifier(
-                eq(EvenementPrestataire.COMPTE_RENDU_RECU), eq(avocat), eq(1L),
-                eq("publication-100-reception"));
+                EvenementPrestataire.COMPTE_RENDU_RECU, avocat, 1L,
+                "publication-100-reception");
     }
 
-    /** Une autre publication, elle, est bien arbitrée : l'ancien événement demeure. */
+    /** Another publication is indeed arbitrated: the former event remains. */
     @Test
     void valider_previentLAvocatDUnArbitrageSurUneAutrePublication() {
         Publication publication = AutrePublication.builder().id(100L).dossier(dossier).avocat(avocat)
@@ -639,11 +638,11 @@ class PublicationServiceTest {
         service.valider(100L, new ValiderPublicationRequest(StatutPublication.VALIDE, null));
 
         verify(notificationPrestataireService).notifier(
-                eq(EvenementPrestataire.PUBLICATION_ARBITREE), eq(avocat), eq(1L),
-                eq("publication-100-arbitrage"));
+                EvenementPrestataire.PUBLICATION_ARBITREE, avocat, 1L,
+                "publication-100-arbitrage");
     }
 
-    /** Le rejet demeure sur une autre publication, dont la conformité se contrôle. */
+    /** Rejection remains on another publication, whose compliance is checked. */
     @Test
     void valider_accepteLeRejetDUneAutrePublication() {
         Publication publication = AutrePublication.builder().id(100L).dossier(dossier).avocat(avocat)
@@ -659,8 +658,8 @@ class PublicationServiceTest {
     }
 
     /**
-     * L'accusé de réception ne réalerte pas : les juristes du dossier ont été prévenus au dépôt, et
-     * tous les autres pouvaient lire depuis ce moment-là.
+     * The acknowledgement does not re-alert: the case's legal officers were notified on upload, and
+     * everyone else could read it from then on.
      */
     @Test
     void valider_neRealertePasSurUnCompteRendu() {
@@ -675,7 +674,7 @@ class PublicationServiceTest {
         verify(dossierJuristeRepository, never()).findByDossierId(anyLong());
     }
 
-    /** Une autre publication, elle, continue d'être signalée à sa validation. */
+    /** Another publication is still notified on validation. */
     @Test
     void valider_alerteEncoreLesJuristesSurUneAutrePublication() {
         Publication publication = AutrePublication.builder().id(100L).dossier(dossier).avocat(avocat)
@@ -691,7 +690,7 @@ class PublicationServiceTest {
         verify(alerteService).declencher(eq(TypeAlerte.NOUVELLE_PUBLICATION), eq(1L), eq(juriste), anyString());
     }
 
-    /** Pour un non-instructeur, la liste passe par la requête de visibilité. */
+    /** For a non-instructor, the list goes through the visibility query. */
     @Test
     void lister_appliqueLaVisibiliteAuxHabilites() {
         var pageable = org.springframework.data.domain.PageRequest.of(0, 20);
@@ -705,7 +704,7 @@ class PublicationServiceTest {
         verify(publicationRepository, never()).findByDossierId(anyLong(), any());
     }
 
-    /** Le DJ instruit : il voit la file comme l'Assistante. */
+    /** The DJ instructs: they see the queue like the Assistant. */
     @Test
     void lister_neRestreintPasLeDj() {
         var pageable = org.springframework.data.domain.PageRequest.of(0, 20);

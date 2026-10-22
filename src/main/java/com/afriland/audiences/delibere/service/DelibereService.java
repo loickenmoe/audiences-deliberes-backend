@@ -42,16 +42,18 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Épic 3 (RG-DEL-01/02/03/04/06/07) — cf. FUNCTIONAL_MAP.md §3, API_IMPLEMENTATION_STATUS.md §4.
+ * Epic 3 (RG-DEL-01/02/03/04/06/07).
  * <p>
- * <b>Cycle d'un délibéré (Q-78)</b>, conforme aux sources (US 3.2/3.4, UC-DEL-04/05, RG-DEL-06/07) :
- * mise en délibéré (sans résultat, étape {@code EN_DELIBERE}) → prorogations et rabattement
- * <b>pendant</b> cette attente → résultat, qui vide le délibéré (étape {@code DELIBERE_VIDE}).
- * Un délibéré déjà rendu peut encore s'enregistrer d'un seul geste, résultat compris (FR-DEL-01).
+ * Deliberation lifecycle (US 3.2/3.4, UC-DEL-04/05, RG-DEL-06/07): placed under deliberation (no
+ * result, step {@code EN_DELIBERE}), then extensions and reopening <b>while</b> pending, then the
+ * result, which delivers the deliberation (step {@code DELIBERE_VIDE}). An already-rendered
+ * deliberation can still be recorded in one go, result included (FR-DEL-01).
  */
 @Service
 @RequiredArgsConstructor
 public class DelibereService {
+
+    private static final String CLE_DELIBERE_ID = "delibereId";
 
     private final DelibereRepository delibereRepository;
     private final ProrogationRepository prorogationRepository;
@@ -64,8 +66,8 @@ public class DelibereService {
     private final ConfigurationService configurationService;
 
     /**
-     * Sans résultat : mise en délibéré, l'étape reste {@code EN_DELIBERE} (Q-78). Avec résultat :
-     * délibéré déjà rendu, enregistré et vidé d'un même geste — comportement historique (FR-DEL-01).
+     * Without a result: placed under deliberation, the step stays {@code EN_DELIBERE}. With a result:
+     * an already-rendered deliberation, recorded and delivered in one go (FR-DEL-01).
      */
     @Transactional
     public DelibereResponse enregistrerDelibere(Long dossierId, EnregistrerDelibereRequest request) {
@@ -83,7 +85,7 @@ public class DelibereService {
             throw ApiException.conflict(ErrorCodes.CONFLIT,
                     "Un délibéré est déjà en attente sur cette étape : prorogez-le, rabattez-le ou videz-le (Q-78)");
         }
-        // Tout se valide avant d'écrire : un délibéré n'est jamais créé puis refusé.
+        // Validate everything before writing: a deliberation is never created and then rejected.
         if (request.resultat() != null) {
             validerEcheanceRecours(request.resultat(), request.dateDeliberee(), request.dateEcheanceRecours());
         } else if (request.dateEcheanceRecours() != null) {
@@ -99,17 +101,17 @@ public class DelibereService {
 
         if (request.resultat() == null) {
             historiqueActionService.enregistrer(dossierId, TypeActionHistorique.DELIBERE_MISE_EN_DELIBERE,
-                    Map.of("delibereId", delibere.getId(), "dateDeliberee", request.dateDeliberee().toString()));
+                    Map.of(CLE_DELIBERE_ID, delibere.getId(), "dateDeliberee", request.dateDeliberee().toString()));
             return versReponse(delibere);
         }
 
         appliquerResultat(delibere, request.resultat(), request.dateEcheanceRecours());
         historiqueActionService.enregistrer(dossierId, TypeActionHistorique.DELIBERE_ENREGISTRE,
-                Map.of("delibereId", delibere.getId(), "resultat", request.resultat().name()));
+                Map.of(CLE_DELIBERE_ID, delibere.getId(), "resultat", request.resultat().name()));
         return versReponse(delibere);
     }
 
-    /** Q-78 : le tribunal a rendu sa décision — le délibéré en attente est vidé. */
+    /** The court has ruled: the pending deliberation is delivered. */
     @Transactional
     public DelibereResponse viderDelibere(Long delibereId, ViderDelibereRequest request) {
         Delibere delibere = getDelibereOrThrow(delibereId);
@@ -118,11 +120,11 @@ public class DelibereService {
 
         appliquerResultat(delibere, request.resultat(), request.dateEcheanceRecours());
         historiqueActionService.enregistrer(delibere.getDossier().getId(), TypeActionHistorique.DELIBERE_VIDE,
-                Map.of("delibereId", delibereId, "resultat", request.resultat().name()));
+                Map.of(CLE_DELIBERE_ID, delibereId, "resultat", request.resultat().name()));
         return versReponse(delibere);
     }
 
-    /** RG-DEL-01 : pose le résultat (déjà validé), ouvre l'expédition et fait passer l'étape « Délibéré vidé ». */
+    /** RG-DEL-01: sets the (already validated) result, opens the enforceable copy and moves the step to "deliberation delivered". */
     private void appliquerResultat(Delibere delibere, ResultatDelibere resultat, LocalDateTime dateEcheanceRecours) {
         delibere.setResultat(resultat);
         delibere.setDateEcheanceRecours(dateEcheanceRecours);
@@ -134,7 +136,7 @@ public class DelibereService {
         etapeProcedureRepository.save(etape);
     }
 
-    /** RG-DEL-01 : seuls DEFAVORABLE/MIXTE ouvrent une voie de recours (Q-42) — échéance requise et postérieure au délibéré, absente sinon. */
+    /** RG-DEL-01: only DEFAVORABLE/MIXTE open an appeal; a deadline later than the deliberation is then required, otherwise it must be absent. */
     private void validerEcheanceRecours(ResultatDelibere resultat, LocalDate dateDeliberee, LocalDateTime dateEcheanceRecours) {
         boolean voieDeRecours = resultat != ResultatDelibere.FAVORABLE;
         if (voieDeRecours && dateEcheanceRecours == null) {
@@ -152,9 +154,8 @@ public class DelibereService {
     }
 
     /**
-     * Q-78 : prorogation, rabattement et vidage ne portent que sur un délibéré <b>en attente</b>,
-     * étape {@code EN_DELIBERE} — c'est pendant la délibération que le tribunal proroge ou rabat
-     * (US 3.2/3.4, UC-DEL-04/05). Remplace la lecture de Q-44, qui les plaçait après la décision.
+     * Extension, reopening and delivery only apply to a <b>pending</b> deliberation on an
+     * {@code EN_DELIBERE} step: the court extends or reopens during deliberation (US 3.2/3.4, UC-DEL-04/05).
      */
     private void exigerEnAttente(Delibere delibere, String action) {
         if (delibere.getDateRabattement() != null) {
@@ -173,8 +174,8 @@ public class DelibereService {
     }
 
     /**
-     * RG-DEL-06 : « DÉLIBÉRÉ PROROGÉ AU [date] » — nombre illimité, jamais écrasé. La nouvelle date,
-     * future (US 3.2), devient la date annoncée du délibéré ; l'étape reste {@code EN_DELIBERE}.
+     * RG-DEL-06: unlimited in number, never overwritten. The new date, which must be in the future
+     * (US 3.2), becomes the announced deliberation date; the step stays {@code EN_DELIBERE}.
      */
     @Transactional
     public ProrogationResponse proroger(Long delibereId, CreerProrogationRequest request) {
@@ -197,7 +198,7 @@ public class DelibereService {
         delibereRepository.save(delibere);
 
         historiqueActionService.enregistrer(delibere.getDossier().getId(), TypeActionHistorique.DELIBERE_PROROGE,
-                Map.of("delibereId", delibereId, "compteur", compteur, "date", request.date().toString()));
+                Map.of(CLE_DELIBERE_ID, delibereId, "compteur", compteur, "date", request.date().toString()));
 
         boolean alerte = compteur > seuilProrogations();
         if (alerte) {
@@ -208,7 +209,7 @@ public class DelibereService {
                 compteur, alerte, prorogation.getCreatedAt());
     }
 
-    /** Q-78, FR-DEL-04 critère 2 : historique des prorogations, dans l'ordre où elles ont été prononcées. */
+    /** FR-DEL-04 criterion 2: extension history, in the order the extensions were pronounced. */
     @Transactional(readOnly = true)
     public List<ProrogationResponse> listerProrogations(Long delibereId) {
         getDelibereOrThrow(delibereId);
@@ -223,7 +224,7 @@ public class DelibereService {
         return Integer.parseInt(configurationService.getOrThrow("SEUIL_PROROGATIONS").getValeur());
     }
 
-    /** RG-DEL-06/RG-ALR-01 (Q-18) : franchissement du seuil signalé une seule fois, au DJ et au DJA. */
+    /** RG-DEL-06/RG-ALR-01: crossing the threshold is reported once only, to the DJ and the DJA. */
     private void signalerProrogation(Delibere delibere, int compteur) {
         String marqueur = "[delibereId:" + delibere.getId() + "] ";
         String declencheur = marqueur + "Seuil de prorogations dépassé (" + compteur + ") pour le dossier "
@@ -238,10 +239,9 @@ public class DelibereService {
     }
 
     /**
-     * RG-DEL-07/FR-DEL-05 : « DÉLIBÉRÉ RABATTU LE [date, motif] » — le juge rouvre les débats avant
-     * de statuer. Le délibéré en attente est marqué rabattu et l'étape revient {@code EN_COURS} :
-     * de nouvelles audiences sont planifiables, et l'étape pourra repasser en délibéré. Aucune étape
-     * suivante n'est ouverte — c'est ce qui le distingue de l'exercice d'un recours (Q-42).
+     * RG-DEL-07/FR-DEL-05: the judge reopens the proceedings before ruling. The pending deliberation
+     * is marked reopened and the step returns to {@code EN_COURS}, so new hearings can be scheduled.
+     * No next step is opened, which is what distinguishes it from lodging an appeal.
      */
     @Transactional
     public EtapeProcedureResponse rabattre(Long delibereId, RabattementRequest request) {
@@ -258,12 +258,12 @@ public class DelibereService {
         etape = etapeProcedureRepository.save(etape);
 
         historiqueActionService.enregistrer(delibere.getDossier().getId(), TypeActionHistorique.DELIBERE_RABATTU,
-                Map.of("delibereId", delibereId, "date", request.date().toString(), "motif", motif));
+                Map.of(CLE_DELIBERE_ID, delibereId, "date", request.date().toString(), "motif", motif));
 
         return etapeProcedureMapper.toResponse(etape);
     }
 
-    /** FR-DEL-02/Q-19 : consultation seule, aucune création d'alerte via ce GET. */
+    /** FR-DEL-02: read-only, this GET never creates an alert. */
     @Transactional(readOnly = true)
     public RecoursResponse consulterRecours(Long delibereId) {
         Delibere delibere = getDelibereOrThrow(delibereId);
@@ -278,9 +278,9 @@ public class DelibereService {
     }
 
     /**
-     * Un recours a été exercé sur cette étape si l'étape suivante (RECOURS_1/2) a été ouverte
-     * automatiquement (Q-42) — signal distinct d'un rabattement, qui rejoue la même étape sans
-     * jamais ouvrir la suivante (cf. {@code EtapeTransitionValidator#estExerciceDeRecours}).
+     * An appeal was lodged on this step if the next step (RECOURS_1/2) was opened automatically,
+     * unlike a reopening, which replays the same step without opening the next one
+     * (see {@code EtapeTransitionValidator#estExerciceDeRecours}).
      */
     private boolean recoursAEteExerce(Long dossierId, EtapeProcedure etape) {
         if (etape == null || etape.getType().estTerminale()) {
@@ -289,7 +289,7 @@ public class DelibereService {
         return etapeProcedureRepository.existsByDossierIdAndType(dossierId, etape.getType().suivante());
     }
 
-    /** RG-DEL-03 : la grosse ne se lève qu'une fois la décision rendue (Q-78). */
+    /** RG-DEL-03: the enforceable copy can only be collected once the decision is rendered. */
     @Transactional
     public DelibereResponse modifierExpedition(Long delibereId, ExpeditionRequest request) {
         Delibere delibere = getDelibereOrThrow(delibereId);
@@ -302,7 +302,7 @@ public class DelibereService {
         delibere = delibereRepository.save(delibere);
 
         historiqueActionService.enregistrer(delibere.getDossier().getId(), TypeActionHistorique.DELIBERE_EXPEDITION_MODIFIEE,
-                Map.of("delibereId", delibereId, "ancienStatut", ancien.name(), "nouveauStatut", request.statutExpedition().name()));
+                Map.of(CLE_DELIBERE_ID, delibereId, "ancienStatut", ancien.name(), "nouveauStatut", request.statutExpedition().name()));
 
         return versReponse(delibere);
     }
@@ -312,7 +312,7 @@ public class DelibereService {
                 .orElseThrow(() -> ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE, "Délibéré introuvable : " + id));
     }
 
-    /** M15 (Q-68) : onglet « Délibérés » de la fiche dossier — 404 si le dossier n'existe pas. */
+    /** Case file "Deliberations" tab; 404 if the case does not exist. */
     @Transactional(readOnly = true)
     public List<DelibereResponse> listerParDossier(Long dossierId) {
         getDossierOrThrow(dossierId);
@@ -321,11 +321,16 @@ public class DelibereService {
                 .toList();
     }
 
-    /** L'état est dérivé, jamais stocké : il ne peut pas diverger des données qui le fondent. */
+    /** The state is derived, never stored, so it cannot diverge from the data it is based on. */
+    private static EtatDelibere etatDe(Delibere delibere) {
+        if (delibere.getDateRabattement() != null) {
+            return EtatDelibere.RABATTU;
+        }
+        return delibere.getResultat() != null ? EtatDelibere.VIDE : EtatDelibere.EN_ATTENTE;
+    }
+
     private DelibereResponse versReponse(Delibere delibere) {
-        EtatDelibere etat = delibere.getDateRabattement() != null ? EtatDelibere.RABATTU
-                : delibere.getResultat() != null ? EtatDelibere.VIDE
-                : EtatDelibere.EN_ATTENTE;
+        EtatDelibere etat = etatDe(delibere);
         return new DelibereResponse(
                 delibere.getId(),
                 delibere.getDossier() != null ? delibere.getDossier().getId() : null,

@@ -15,59 +15,54 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * La signature enregistrée d'un utilisateur interne (métier, 2026-10-03, observation 10 ;
- * provenance arrêtée le 2026-10-06).
+ * The stored signature of an internal user.
  *
- * <p><b>Chacun dépose la sienne, et personne d'autre.</b> Le service ne prend jamais d'identifiant
- * en paramètre : il travaille sur l'utilisateur de la session. C'est la seule version où personne ne
- * peut apposer la signature d'un autre - et une signature qu'un tiers détient ne vaut déjà plus
- * rien.
+ * <p><b>Each user uploads their own, and nobody else's.</b> The service never takes a user id as a
+ * parameter: it works on the session user, so nobody can apply someone else's signature.
  *
- * <p><b>Ce que cette image est, et ce qu'elle n'est pas.</b> Un confort de présentation : la lettre
- * de constitution part avec l'image au lieu d'un nom à signer à la main. Elle n'apporte
- * <b>aucune valeur probante supplémentaire</b> - ce qui fait preuve, c'est la trace horodatée de qui
- * a signé, que l'application enregistre déjà. Il a paru honnête de le dire plutôt que de laisser
- * croire le contraire.
+ * <p><b>A presentation convenience</b>: the appointment letter carries the image instead of a name
+ * to sign by hand. It adds <b>no evidential value</b>: evidence is the timestamped record of who
+ * signed, which the application already keeps.
  */
 @Service
 @RequiredArgsConstructor
 public class SignatureService {
 
+    private static final String MESSAGE_UTILISATEUR_INTROUVABLE = "Utilisateur introuvable";
+
     /**
-     * Les deux seuls types que le PDF sait apposer.
+     * The only two types the PDF can embed.
      *
-     * <p>PDFBox lit le PNG et le JPEG ; un SVG ou un PDF déposé ici produirait une lettre sans
-     * signature, et le défaut ne se verrait qu'à l'impression. Le refus vaut mieux.
+     * <p>PDFBox reads PNG and JPEG; an SVG or PDF uploaded here would produce a letter without a
+     * signature, noticed only when printed. Rejecting it is better.
      */
     private static final List<String> TYPES_ADMIS = List.of("image/png", "image/jpeg");
 
     /**
-     * Deux cent mille octets : large pour une signature scannée, étroit pour tout le reste.
+     * 200,000 bytes: ample for a scanned signature, tight for anything else.
      *
-     * <p>La borne n'est pas dans {@code configuration_systeme} comme {@code TAILLE_MAX_GED} : ce
-     * n'est pas un réglage d'exploitation, c'est ce qui distingue une signature d'une photographie.
-     * Une image plus lourde est le signe qu'on s'est trompé de fichier.
+     * <p>Not in {@code configuration_systeme} like {@code TAILLE_MAX_GED}: it is not an operational
+     * setting but what distinguishes a signature from a photograph.
      */
     private static final long TAILLE_MAX = 200_000L;
 
     private final UtilisateurRepository utilisateurRepository;
     private final CurrentUserService currentUserService;
 
-    /** La signature de l'utilisateur de la session, si elle a été déposée. */
+    /** The session user's signature, if uploaded. */
     @Transactional(readOnly = true)
     public Optional<SignatureDeposee> mienne() {
         Utilisateur moi = utilisateurRepository.findById(currentUserService.getCurrentUser().getId())
                 .orElseThrow(() -> ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE,
-                        "Utilisateur introuvable"));
+                        MESSAGE_UTILISATEUR_INTROUVABLE));
         return lire(moi);
     }
 
     /**
-     * La signature d'un utilisateur donné, pour l'apposer sur un document qu'il a signé.
+     * A given user's signature, to apply it to a document they signed.
      *
-     * <p>Réservé aux appels internes - aucun endpoint ne l'expose. Un endpoint rendant la signature
-     * d'autrui permettrait de la récupérer pour l'apposer ailleurs, ce qui est exactement ce que le
-     * dépôt réservé au titulaire cherche à empêcher.
+     * <p>Internal use only, no endpoint exposes it: an endpoint returning someone else's signature
+     * would allow reusing it elsewhere, which is exactly what holder-only upload prevents.
      */
     @Transactional(readOnly = true)
     public Optional<SignatureDeposee> pour(Long utilisateurId) {
@@ -96,7 +91,7 @@ public class SignatureService {
 
         Utilisateur moi = utilisateurRepository.findById(currentUserService.getCurrentUser().getId())
                 .orElseThrow(() -> ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE,
-                        "Utilisateur introuvable"));
+                        MESSAGE_UTILISATEUR_INTROUVABLE));
         try {
             moi.setSignature(fichier.getBytes());
         } catch (java.io.IOException erreur) {
@@ -110,17 +105,16 @@ public class SignatureService {
     }
 
     /**
-     * Retire sa signature.
+     * Removes the user's signature.
      *
-     * <p>Les lettres déjà signées ne changent pas : leur PDF est produit et archivé en GED. Retirer
-     * l'image n'efface donc rien de ce qui est parti - et n'efface pas non plus la preuve, qui n'a
-     * jamais été l'image.
+     * <p>Already signed letters are unchanged: their PDF is generated and archived in the GED.
+     * Removing the image erases nothing already sent, nor the evidence, which was never the image.
      */
     @Transactional
     public void retirer() {
         Utilisateur moi = utilisateurRepository.findById(currentUserService.getCurrentUser().getId())
                 .orElseThrow(() -> ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE,
-                        "Utilisateur introuvable"));
+                        MESSAGE_UTILISATEUR_INTROUVABLE));
         moi.setSignature(null);
         moi.setSignatureType(null);
         moi.setSignatureDeposeeLe(null);
@@ -136,7 +130,25 @@ public class SignatureService {
                 utilisateur.getSignatureDeposeeLe()));
     }
 
-    /** Une signature déposée : son image, son type et la date de son dépôt. */
+    /** A stored signature: its image, type and upload date. */
     public record SignatureDeposee(byte[] image, String type, LocalDateTime deposeeLe) {
+
+        @Override
+        public boolean equals(Object autre) {
+            return autre instanceof SignatureDeposee(byte[] autreImage, String autreType, LocalDateTime autreDate)
+                    && java.util.Arrays.equals(image, autreImage) && java.util.Objects.equals(type, autreType)
+                    && java.util.Objects.equals(deposeeLe, autreDate);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * java.util.Arrays.hashCode(image) + java.util.Objects.hash(type, deposeeLe);
+        }
+
+        @Override
+        public String toString() {
+            return "SignatureDeposee[image=" + (image == null ? "null" : image.length + " octets")
+                    + ", type=" + type + ", deposeeLe=" + deposeeLe + "]";
+        }
     }
 }

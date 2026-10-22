@@ -31,11 +31,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Le référentiel des agences (métier, 2026-10-03, observation 2).
- *
- * <p>Ce qui se joue ici n'est pas du mapping : c'est l'échappement du motif de recherche, le refus
- * du changement de code, et la désactivation qui remplace la suppression. Chacun de ces trois
- * points a une raison métier, et chacun casserait en silence.
+ * Agency reference data. What matters here is search pattern escaping, refusal of code changes, and
+ * deactivation instead of deletion: each has a business reason and would break silently.
  */
 @ExtendWith(MockitoExtension.class)
 class AgenceServiceTest {
@@ -64,12 +61,9 @@ class AgenceServiceTest {
         return new AgenceRequest(code, nom, ville, "Une adresse", "233 00 00 00", actif);
     }
 
-    // ------------------------------------------------------------------ recherche
-
     /**
-     * Le métier l'a décrite ainsi : « si on commence par entrer le nom d'une agence, l'app nous
-     * renvoie progressivement les agences avec ces noms ». La recherche descend donc au dépôt
-     * encadrée de pourcents et en minuscules, pour être partielle et insensible à la casse.
+     * Typing part of an agency name progressively returns matching agencies. The search reaches the
+     * repository wrapped in percent signs and lowercased, so it is partial and case-insensitive.
      */
     @Test
     void lister_encadreLeMotifEtLeMetEnMinuscules() {
@@ -86,10 +80,8 @@ class AgenceServiceTest {
     }
 
     /**
-     * Sans échappement, un pourcent saisi par l'utilisateur ramènerait tout le référentiel et un
-     * souligné n'importe quel caractère : la liste déroulante proposerait les 82 agences à qui
-     * cherche « 100% ». Le caractère d'échappement est le point d'exclamation, déclaré dans la
-     * requête - il se double donc lui aussi.
+     * Without escaping, a user-typed percent would return all agencies and an underscore any character.
+     * The escape character is the exclamation mark, declared in the query, so it is doubled too.
      */
     @Test
     void lister_echappeLesJokersEtLeCaractereDEchappement() {
@@ -98,7 +90,7 @@ class AgenceServiceTest {
         assertThat(AgenceService.motif("Oh !")).isEqualTo("%oh !!%");
     }
 
-    /** Recherche vide : pas de motif du tout, et non un motif vide qui ne trouverait rien. */
+    /** Empty search: no pattern at all, not an empty pattern that would find nothing. */
     @Test
     void lister_sansRechercheNePasseAucunMotif() {
         when(agenceRepository.rechercher(isNull(), eq(true), any(Pageable.class)))
@@ -108,7 +100,7 @@ class AgenceServiceTest {
         assertThat(AgenceService.motif(null)).isNull();
     }
 
-    /** L'écran d'administration doit voir les agences fermées : le drapeau descend tel quel. */
+    /** The administration screen must see closed agencies: the flag is passed through as is. */
     @Test
     void lister_transmetActifSeulementTelQuel() {
         when(agenceRepository.rechercher(isNull(), eq(false), any(Pageable.class)))
@@ -119,8 +111,6 @@ class AgenceServiceTest {
         verify(agenceRepository).rechercher(isNull(), eq(false), any(Pageable.class));
     }
 
-    // ------------------------------------------------------------------ création
-
     @Test
     void creer_enregistreLAgenceEtLaRendActiveParDefaut() {
         when(agenceRepository.existsByCode("00117")).thenReturn(false);
@@ -130,7 +120,7 @@ class AgenceServiceTest {
 
         ArgumentCaptor<Agence> capture = ArgumentCaptor.forClass(Agence.class);
         verify(agenceRepository).save(capture.capture());
-        // Les espaces de saisie sont rognées : « 00117 » et « 00117  » ne doivent pas coexister.
+        // Input spaces are trimmed: "00117" and "00117  " must not coexist.
         assertThat(capture.getValue().getCode()).isEqualTo("00117");
         assertThat(capture.getValue().getNom()).isEqualTo("NOUVELLE");
         assertThat(capture.getValue().getVille()).isEqualTo("Douala");
@@ -139,41 +129,38 @@ class AgenceServiceTest {
     }
 
     /**
-     * Le code est unique : deux agences qui le partagent rendraient les rapports par agence faux,
-     * et le dossier ne saurait plus laquelle il désigne. Le conflit est un 409, pas un 500 venu de
-     * la contrainte SQL.
+     * The code is unique: two agencies sharing it would skew agency reports, and a case would not know
+     * which one it refers to. The conflict is a 409, not a 500 from the SQL constraint.
      */
     @Test
     void creer_refuseUnCodeDejaPorte() {
         when(agenceRepository.existsByCode("00002")).thenReturn(true);
 
-        assertThatThrownBy(() -> service.creer(requete("00002", "BONANJO BIS", "Douala", null)))
+        var requete = requete("00002", "BONANJO BIS", "Douala", null);
+        assertThatThrownBy(() -> service.creer(requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("porte déjà le code 00002");
 
         verify(agenceRepository, never()).save(any());
     }
 
-    // ------------------------------------------------------------------ modification
-
     /**
-     * Le code <b>ne se modifie pas</b>.
-     *
-     * <p>Les dossiers le portent en clair, sans clé étrangère : le changer les détacherait
-     * silencieusement de leur agence, et personne ne le verrait avant un rapport annuel.
+     * The code <b>cannot be changed</b>. Cases store it as plain text, without a foreign key: changing it
+     * would silently detach them from their agency.
      */
     @Test
     void modifier_refuseLeChangementDeCode() {
         when(agenceRepository.findById(1L)).thenReturn(Optional.of(bonanjo));
 
-        assertThatThrownBy(() -> service.modifier(1L, requete("00999", "BONANJO", "Douala", true)))
+        var requete = requete("00999", "BONANJO", "Douala", true);
+        assertThatThrownBy(() -> service.modifier(1L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("ne se modifie pas");
 
         verify(agenceRepository, never()).save(any());
     }
 
-    /** Une agence se renomme et se déplace : nom, ville, adresse et téléphone restent modifiables. */
+    /** An agency can be renamed and moved: name, city, address and phone stay editable. */
     @Test
     void modifier_metAJourLeResteSansToucherAuCode() {
         when(agenceRepository.findById(1L)).thenReturn(Optional.of(bonanjo));
@@ -184,11 +171,11 @@ class AgenceServiceTest {
 
         assertThat(reponse.code()).isEqualTo("00002");
         assertThat(reponse.nom()).isEqualTo("BONANJO CENTRE");
-        // Adresse et téléphone effacés valent « inconnus », non « chaîne vide ». La ville, elle, est
-        // obligatoire : la validation du DTO l'exige avant d'arriver ici.
+        // Cleared address and phone mean "unknown", not "empty string". The city is mandatory: DTO
+        // validation enforces it before reaching here.
         assertThat(reponse.adresse()).isNull();
         assertThat(reponse.telephone()).isNull();
-        // `actif` absent de la requête ne doit pas fermer l'agence par effet de bord.
+        // `actif` missing from the request must not close the agency as a side effect.
         assertThat(reponse.actif()).isTrue();
     }
 
@@ -196,16 +183,15 @@ class AgenceServiceTest {
     void modifier_signaleUneAgenceIntrouvable() {
         when(agenceRepository.findById(404L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.modifier(404L, requete("00002", "BONANJO", "Douala", true)))
+        var requete = requete("00002", "BONANJO", "Douala", true);
+        assertThatThrownBy(() -> service.modifier(404L, requete))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("Agence introuvable");
     }
 
-    // ------------------------------------------------------------------ désactivation
-
     /**
-     * On désactive, on ne supprime pas : un dossier ouvert sous une agence fermée reste un dossier
-     * valide, et son code doit continuer de désigner quelque chose des années après.
+     * Deactivate, never delete: a case opened under a closed agency stays valid, and its code must keep
+     * referring to something years later.
      */
     @Test
     void desactiver_fermeLAgenceSansLaSupprimer() {
@@ -229,11 +215,8 @@ class AgenceServiceTest {
     }
 
     /**
-     * La fermeture doit être réversible (métier, 2026-10-06).
-     *
-     * <p>Sans réouverture, une fermeture par erreur n'avait qu'une issue : recréer l'agence sous un
-     * autre code, c'est-à-dire inventer un code - ce que le référentiel existe pour empêcher. Le
-     * code, lui, ne bouge pas : c'est la même agence qui rouvre.
+     * Closing must be reversible. Otherwise a mistaken closure could only be fixed by recreating the
+     * agency under another code, i.e. inventing a code. The code does not change: the same agency reopens.
      */
     @Test
     void reactiver_rouvreLAgenceSansToucherAuCode() {
@@ -249,8 +232,8 @@ class AgenceServiceTest {
     }
 
     /**
-     * Réouvrir une agence déjà ouverte n'est pas une erreur : l'état demandé est atteint. Refuser
-     * obligerait l'appelant à lire avant d'écrire pour rien.
+     * Reopening an already open agency is not an error: the requested state is reached. Refusing would
+     * force the caller to read before writing for nothing.
      */
     @Test
     void reactiver_estSansEffetSurUneAgenceDejaOuverte() {
@@ -260,7 +243,7 @@ class AgenceServiceTest {
         assertThat(service.reactiver(1L).actif()).isTrue();
     }
 
-    /** Une agence rouverte redevient proposable à la création d'un dossier. */
+    /** A reopened agency can again be selected when creating a case. */
     @Test
     void reactiver_rendLAgenceDeNouveauProposable() {
         bonanjo.setActif(false);
@@ -269,7 +252,7 @@ class AgenceServiceTest {
 
         service.reactiver(1L);
 
-        // C'est bien `actif = true` qui est écrit : c'est ce drapeau que lit `existeEtEstActive`.
+        // `actif = true` is what gets written: it is the flag read by `existeEtEstActive`.
         ArgumentCaptor<Agence> capture = ArgumentCaptor.forClass(Agence.class);
         verify(agenceRepository).save(capture.capture());
         assertThat(capture.getValue().getActif()).isTrue();
@@ -284,11 +267,9 @@ class AgenceServiceTest {
                 .hasMessageContaining("Agence introuvable");
     }
 
-    // ----------------------------------------------- contrôle à la création d'un dossier
-
     /**
-     * À la création d'un dossier, on exige une agence <b>ouverte</b> : proposer une agence fermée
-     * n'aurait pas de sens à l'écran, et l'accepter par l'API ferait diverger les deux.
+     * Case creation requires an <b>open</b> agency: offering a closed one on screen makes no sense, and
+     * accepting it through the API would make both diverge.
      */
     @Test
     void existeEtEstActive_exigeUneAgenceOuverte() {
@@ -299,7 +280,7 @@ class AgenceServiceTest {
         assertThat(service.existeEtEstActive("00099")).isFalse();
     }
 
-    /** Code absent : faux, sans interroger la base. Le service appelant refusera le dossier. */
+    /** Missing code: false, without querying the database. The calling service will refuse the case. */
     @Test
     void existeEtEstActive_refuseUnCodeAbsent() {
         assertThat(service.existeEtEstActive(null)).isFalse();

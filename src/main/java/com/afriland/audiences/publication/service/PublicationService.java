@@ -53,14 +53,17 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Épic 5, volet publications (FR-INT-09, RG-INT-06/07/09/10) — cf. FUNCTIONAL_MAP.md §5,
- * API_IMPLEMENTATION_STATUS.md §6. Le volet constitutions/répertoire (M9) vit dans le module
- * {@code intervenant} ; celui-ci ne dépend pas de {@code intervenant} (mêmes raisons que Q-54 pour
- * {@code frais} : aucune notion de constitution formelle n'intervient dans ce workflow).
+ * Epic 5, publications (FR-INT-09, RG-INT-06/07/09/10). Appointments and the lawyer directory live
+ * in the {@code intervenant} module; this module does not depend on it, since no formal appointment
+ * is involved in this workflow.
  */
 @Service
 @RequiredArgsConstructor
 public class PublicationService {
+
+    private static final String CLE_PUBLICATION_ID = "publicationId";
+    private static final String PROFIL_ASSISTANTE = "ASSISTANTE";
+    private static final String MESSAGE_SUFFIXE_RG_INT_07 = " (RG-INT-07).";
 
     private final PublicationRepository publicationRepository;
     private final CommentairePublicationRepository commentairePublicationRepository;
@@ -74,19 +77,19 @@ public class PublicationService {
     private final HistoriqueActionService historiqueActionService;
     private final AlerteService alerteService;
     private final MinioStorageService minioStorageService;
-    // Q-98 : mêmes règles de format et de poids que la GED pour la pièce jointe d'un compte rendu.
+    // Same format and size rules as the GED for a hearing report attachment.
     private final ValidationFichierService validationFichierService;
     private final PublicationMapper publicationMapper;
     private final DossierJuristeRepository dossierJuristeRepository;
 
     /**
-     * Q-86 : profils qui instruisent une publication — l'Assistante la valide (RG-INT-10), le DJ et
-     * la DJA centralisent les échanges avec l'avocat (RG-INT-07). La restriction d'accès, qui désigne
-     * un juriste lecteur (RG-INT-06), ne s'oppose pas à eux.
+     * Profiles that handle a publication: the Assistant validates it (RG-INT-10), the DJ and DJA
+     * centralise exchanges with the lawyer (RG-INT-07). The access restriction, which designates a
+     * reader (RG-INT-06), does not apply to them.
      */
-    private static final Set<String> PROFILS_INSTRUCTEURS = Set.of("ASSISTANTE", "DJ", "DJA");
+    private static final Set<String> PROFILS_INSTRUCTEURS = Set.of(PROFIL_ASSISTANTE, "DJ", "DJA");
 
-    /** FR-INT-09/US 5.1 : l'audience doit être rattachée au dossier indiqué (404 sinon). */
+    /** FR-INT-09/US 5.1: the hearing must belong to the given case file (404 otherwise). */
     @Transactional
     public PublicationResponse deposerCompteRendu(DeposerCompteRenduRequest request, MultipartFile file) {
         Dossier dossier = getDossierOrThrow(request.dossierId());
@@ -97,10 +100,9 @@ public class PublicationService {
         Avocat avocat = getAvocatCourantOrThrow();
 
         /*
-         * RG-INT-06 amendée (métier du 2026-10-05) : une réserve ne s'applique plus à un compte
-         * rendu, que tous les habilités lisent dès son dépôt. On la refuse plutôt que de l'ignorer :
-         * un avocat qui la poserait croirait avoir restreint sa lecture, et ne saurait jamais que
-         * non. Elle reste disponible sur les autres publications.
+         * RG-INT-06 (amended): a restriction no longer applies to a hearing report, which every authorised
+         * user can read once filed. It is rejected rather than ignored: a lawyer setting it would believe
+         * they had restricted access. It remains available on other publications.
          */
         if (request.restrictionAcces() != null) {
             throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
@@ -109,9 +111,9 @@ public class PublicationService {
         }
 
         /*
-         * Pièce jointe **facultative** (Q-98) : le récit reste obligatoire, le document l'étaye. Les
-         * contrôles de format et de poids sont ceux de la GED — le fichier atterrit dans le même
-         * stockage, et le DJ pilote les deux par `FORMATS_GED` et `TAILLE_MAX_GED`.
+         * Optional attachment: the report text remains mandatory, the document supports it. Format and
+         * size checks are those of the GED, since the file lands in the same storage and the DJ controls
+         * both through `FORMATS_GED` and `TAILLE_MAX_GED`.
          */
         String cle = null;
         if (file != null && !file.isEmpty()) {
@@ -130,15 +132,14 @@ public class PublicationService {
         publication = publicationRepository.save(publication);
 
         historiqueActionService.enregistrer(dossier.getId(), TypeActionHistorique.PUBLICATION_CR_DEPOSE,
-                Map.of("publicationId", publication.getId(), "audienceId", audience.getId(),
+                Map.of(CLE_PUBLICATION_ID, publication.getId(), "audienceId", audience.getId(),
                         "pieceJointe", cle != null));
-        notifierProfil("ASSISTANTE", dossier.getId(), "Nouveau compte rendu d'audience déposé sur le dossier "
+        notifierProfil(PROFIL_ASSISTANTE, dossier.getId(), "Nouveau compte rendu d'audience déposé sur le dossier "
                 + dossier.getReference() + " (RG-INT-09), en attente de validation.");
 
-        // RG-INT-06 amendée (2026-10-05) : les juristes du dossier sont prévenus en même temps que
-        // l'Assistante, et peuvent lire le compte rendu sans attendre la validation. « Arriver
-        // simultanément » n'a de sens que s'ils l'apprennent : la visibilité sans l'alerte les
-        // laisserait découvrir la pièce par hasard.
+        // RG-INT-06 (amended): the case file's legal officers are notified at the same time as the
+        // Assistant and can read the report without waiting for validation; without the alert they
+        // would only find it by chance.
         notifierLecteurs(publication, "Nouveau compte rendu d'audience de l'avocat sur le dossier "
                 + dossier.getReference() + ", consultable dès maintenant ; il reste en attente de "
                 + "validation par l'Assistante (RG-INT-06).");
@@ -146,7 +147,7 @@ public class PublicationService {
         return publicationMapper.toResponse(publication);
     }
 
-    /** FR-INT-09/US 5.3 : aucune contrainte de format/poids spécifiée (contrairement à RG-GED-02) — dépôt tel quel. */
+    /** FR-INT-09/US 5.3: no format/size constraint specified (unlike RG-GED-02); stored as is. */
     @Transactional
     public PublicationResponse deposerAutre(Long dossierId, TypeAutrePublication typeDocument, MultipartFile file, Long restrictionAcces) {
         Dossier dossier = getDossierOrThrow(dossierId);
@@ -167,19 +168,18 @@ public class PublicationService {
         publication = publicationRepository.save(publication);
 
         historiqueActionService.enregistrer(dossier.getId(), TypeActionHistorique.PUBLICATION_AUTRE_DEPOSEE,
-                Map.of("publicationId", publication.getId(), "typeDocument", typeDocument.name()));
-        notifierProfil("ASSISTANTE", dossier.getId(), "Nouvelle publication (" + typeDocument
+                Map.of(CLE_PUBLICATION_ID, publication.getId(), "typeDocument", typeDocument.name()));
+        notifierProfil(PROFIL_ASSISTANTE, dossier.getId(), "Nouvelle publication (" + typeDocument
                 + ") déposée sur le dossier " + dossier.getReference() + " (RG-INT-06), en attente de validation.");
 
         return publicationMapper.toResponse(publication);
     }
 
     /**
-     * FR-INT-09/US 5.2 : le contrat ne numérote qu'un endpoint de validation
-     * ({@code PUT /publications/cr-audience/{id}/validation}) alors que US 5.3 dépose aussi des
-     * publications nécessitant une décision de l'Assistante ; RG-INT-06/10 s'appliquent uniformément
-     * à la {@code publication} de base — traité comme un point d'entrée unique, valable pour les deux
-     * sous-types, plutôt que d'inventer un second endpoint non prévu pour les « autres » publications.
+     * FR-INT-09/US 5.2: the contract defines a single validation endpoint
+     * ({@code PUT /publications/cr-audience/{id}/validation}), but US 5.3 publications also require the
+     * Assistant's decision and RG-INT-06/10 apply to every {@code publication}. Handled as a single
+     * entry point for both subtypes.
      */
     @Transactional
     public PublicationResponse valider(Long id, ValiderPublicationRequest request) {
@@ -190,24 +190,22 @@ public class PublicationService {
 
         if (request.statut() == StatutPublication.VALIDE) {
             publication.setStatutValidation(StatutPublication.VALIDE);
-            // Un compte rendu a déjà été signalé aux juristes du dossier à son dépôt (RG-INT-06
-            // amendée) : les rappeler sur la même pièce ne leur apprendrait rien et dévaluerait
-            // l'alerte. La validation l'ouvre aux AUTRES habilités, qui n'étaient pas davantage
-            // prévenus auparavant — ce point reste inchangé.
+            // A hearing report was already announced to the case file's legal officers when filed
+            // (RG-INT-06 amended): notifying them again would add nothing and devalue the alert.
+            // Validation opens it to the OTHER authorised users, who were not notified before.
             if (!(publication instanceof CompteRenduAudience)) {
                 notifierLecteurs(publication, "Nouvelle publication de l'avocat consultable sur le dossier "
                         + publication.getDossier().getReference() + " (RG-INT-06).");
             }
         } else if (request.statut() == StatutPublication.REJETE) {
             /*
-             * RG-INT-06 amendée (métier du 2026-10-05) : un compte rendu ne se rejette pas.
+             * RG-INT-06 (amended): a hearing report cannot be rejected.
              *
-             * Il est le récit d'un avocat sur ce qui s'est dit à l'audience, et il est lu de tous
-             * dès son dépôt. L'écarter n'effacerait rien et laisserait croire que l'audience n'a
-             * pas été relatée. Un désaccord sur son contenu se dit par une correspondance
-             * (RG-INT-07), seule voie officielle vers l'avocat.
+             * It is the lawyer's account of the hearing and is readable by all once filed. Rejecting it
+             * would erase nothing and suggest the hearing was not reported. Disagreement on its content goes
+             * through a correspondence (RG-INT-07), the only official channel to the lawyer.
              *
-             * Le rejet demeure pour les autres publications, dont la conformité se contrôle.
+             * Rejection remains for other publications, whose compliance is checked.
              */
             if (publication instanceof CompteRenduAudience) {
                 throw ApiException.badRequest(ErrorCodes.REQUETE_INVALIDE,
@@ -229,12 +227,11 @@ public class PublicationService {
         publicationRepository.save(publication);
 
         /*
-         * Canaux externes (Q-118) : l'avocat est prévenu, et le motif d'un rejet reste dans
-         * l'application (D18).
+         * External channels: the lawyer is notified, and the rejection reason stays in the application.
          *
-         * Deux événements, parce que deux choses différentes se sont produites. Sur un compte
-         * rendu, l'Assistante n'a rien arbitré : elle a accusé réception (RG-INT-06 amendée).
-         * Lui annoncer une publication « examinée » le ferait attendre un verdict.
+         * Two distinct events: on a hearing report the Assistant made no decision, she only acknowledged
+         * receipt (RG-INT-06 amended). Announcing a "reviewed" publication would make the lawyer wait for
+         * a verdict.
          */
         boolean compteRendu = publication instanceof CompteRenduAudience;
         notificationPrestataireService.notifier(
@@ -244,18 +241,18 @@ public class PublicationService {
                 "publication-" + id + (compteRendu ? "-reception" : "-arbitrage"));
 
         historiqueActionService.enregistrer(publication.getDossier().getId(), TypeActionHistorique.PUBLICATION_ARBITREE,
-                Map.of("publicationId", id, "statut", request.statut().name()));
+                Map.of(CLE_PUBLICATION_ID, id, "statut", request.statut().name()));
 
         return publicationMapper.toResponse(publication);
     }
 
     /**
-     * US 5.4 : seule une publication VALIDE est consultable ; restriction d'accès individuelle possible.
+     * US 5.4: only a VALIDE publication is readable, with an optional individual access restriction.
      * <p>
-     * Q-86 : l'Assistante lit aussi une publication DEPOSE ou REJETE — elle doit voir ce qu'elle valide
-     * (UC-INT-10 étape 3) ; la restriction d'accès ne s'oppose pas aux profils instructeurs. Le détail
-     * porte l'URL pré-signée du fichier d'une autre publication, les commentaires des juristes et la
-     * correspondance transmise.
+     * The Assistant can also read a DEPOSE or REJETE publication, since she must see what she validates
+     * (UC-INT-10 step 3); the access restriction does not apply to investigating profiles. The detail
+     * includes the presigned URL of an other publication's file, the legal officers' comments and the
+     * correspondence sent.
      */
     @Transactional(readOnly = true)
     public PublicationResponse obtenir(Long id) {
@@ -263,15 +260,12 @@ public class PublicationService {
         boolean valide = publication.getStatutValidation() == StatutPublication.VALIDE;
         Utilisateur restriction = publication.getRestrictionAcces();
         /*
-         * RG-INT-06 amendée (métier du 2026-10-05) : un COMPTE RENDU est ouvert à tous les
-         * habilités dès son dépôt. Ni son statut, ni une réserve ne le referment — la seule
-         * barrière qui subsiste est le rôle de consultation, posé par le contrôleur.
+         * RG-INT-06 (amended): a HEARING REPORT is open to all authorised users once filed. Neither its
+         * status nor a restriction closes it; the only remaining barrier is the consultation role,
+         * enforced by the controller. The Assistant's subsequent action is an acknowledgement, not an
+         * authorisation.
          *
-         * Ce que l'Assistante fait ensuite n'est plus une autorisation mais un accusé de
-         * réception : le métier a tranché que le récit d'un avocat sur ce qui s'est dit à
-         * l'audience n'a pas à attendre un contrôle pour être lu.
-         *
-         * Les « autres publications » gardent l'ancien régime, intact ci-dessous.
+         * Other publications keep the rules below.
          */
         if (publication instanceof CompteRenduAudience) {
             valide = true;
@@ -280,10 +274,10 @@ public class PublicationService {
         if (!valide || restriction != null) {
             Utilisateur utilisateur = currentUserService.getCurrentUser();
             String profil = utilisateur != null && utilisateur.getProfil() != null ? utilisateur.getProfil().getCode() : null;
-            if (!valide && !"ASSISTANTE".equals(profil)) {
+            if (!valide && !PROFIL_ASSISTANTE.equals(profil)) {
                 throw ApiException.notFound(ErrorCodes.RESSOURCE_INTROUVABLE, "Publication introuvable ou non consultable : " + id);
             }
-            // Set.of(...).contains(null) lève une exception : un profil inconnu n'instruit pas.
+            // Set.of(...).contains(null) throws: an unknown profile does not investigate.
             boolean instructeur = profil != null && PROFILS_INSTRUCTEURS.contains(profil);
             if (restriction != null && !instructeur
                     && (utilisateur == null || !restriction.getId().equals(utilisateur.getId()))) {
@@ -292,8 +286,8 @@ public class PublicationService {
             }
         }
 
-        // Q-98 : les deux sous-types peuvent désormais porter un fichier — le compte rendu
-        // facultativement, l'autre publication par nature. L'Assistante doit l'ouvrir pour valider.
+        // Both subtypes can carry a file (optional for a report, inherent for an other publication).
+        // The Assistant must open it to validate.
         String cheminStockage = switch (publication) {
             case AutrePublication autre -> autre.getCheminStockage();
             case CompteRenduAudience cr -> cr.getCheminStockage();
@@ -310,7 +304,7 @@ public class PublicationService {
         return publicationMapper.toResponse(publication, url, commentaires, correspondance);
     }
 
-    /** US 5.5/RG-INT-07 : le juriste ne commente jamais directement l'avocat — le commentaire est transmis au DJ/DJA. */
+    /** US 5.5/RG-INT-07: the legal officer never comments directly to the lawyer; the comment goes to the DJ/DJA. */
     @Transactional
     public CommentaireResponse commenter(Long id, CommentaireRequest request) {
         Publication publication = getPublicationOrThrow(id);
@@ -323,16 +317,16 @@ public class PublicationService {
                 .build());
 
         historiqueActionService.enregistrer(publication.getDossier().getId(), TypeActionHistorique.PUBLICATION_COMMENTEE,
-                Map.of("publicationId", id, "commentaireId", commentaire.getId()));
+                Map.of(CLE_PUBLICATION_ID, id, "commentaireId", commentaire.getId()));
         notifierProfil("DJ", publication.getDossier().getId(), "Nouveau commentaire du juriste sur la publication "
-                + id + " du dossier " + publication.getDossier().getReference() + " (RG-INT-07).");
+                + id + " du dossier " + publication.getDossier().getReference() + MESSAGE_SUFFIXE_RG_INT_07);
         notifierProfil("DJA", publication.getDossier().getId(), "Nouveau commentaire du juriste sur la publication "
-                + id + " du dossier " + publication.getDossier().getReference() + " (RG-INT-07).");
+                + id + " du dossier " + publication.getDossier().getReference() + MESSAGE_SUFFIXE_RG_INT_07);
 
         return versReponse(id, commentaire);
     }
 
-    /** US 5.5/RG-INT-07 : correspondance unique par publication (409 si déjà transmise). */
+    /** US 5.5/RG-INT-07: single correspondence per publication (409 if already sent). */
     @Transactional
     public CorrespondanceResponse transmettreCorrespondance(Long id, CorrespondanceRequest request) {
         Publication publication = getPublicationOrThrow(id);
@@ -348,10 +342,10 @@ public class PublicationService {
                 .build());
 
         historiqueActionService.enregistrer(publication.getDossier().getId(), TypeActionHistorique.PUBLICATION_CORRESPONDANCE_TRANSMISE,
-                Map.of("publicationId", id, "correspondanceId", correspondance.getId()));
+                Map.of(CLE_PUBLICATION_ID, id, "correspondanceId", correspondance.getId()));
         compteAvocatService.utilisateurDe(publication.getAvocat())
                 .ifPresent(u -> alerteService.declencher(TypeAlerte.NOUVELLE_PUBLICATION, publication.getDossier().getId(), u,
-                        "Une correspondance a été transmise concernant votre publication " + id + " (RG-INT-07)."));
+                        "Une correspondance a été transmise concernant votre publication " + id + MESSAGE_SUFFIXE_RG_INT_07));
         notificationPrestataireService.notifier(EvenementPrestataire.CORRESPONDANCE_TRANSMISE, publication.getAvocat(),
                 publication.getDossier().getId(), "correspondance-" + correspondance.getId());
 
@@ -359,12 +353,12 @@ public class PublicationService {
     }
 
     /**
-     * M15 (Q-68) : file de travail des publications — écran « File des publications à valider » de
-     * l'Assistante (filtre {@code statut=DEPOSE}) et onglet publications d'un dossier.
+     * Publications queue: the Assistant's "publications to validate" screen ({@code statut=DEPOSE})
+     * and the publications tab of a case file.
      * <p>
-     * Contrairement à {@link #obtenir(Long)}, cette liste **n'applique pas** la restriction d'accès
-     * individuelle (Q-57) : elle sert des profils internes chargés d'instruire les publications, et
-     * n'expose que les métadonnées — le contenu détaillé reste soumis au contrôle unitaire.
+     * Unlike {@link #obtenir(Long)}, this list does <b>not</b> apply the individual access restriction:
+     * it serves internal profiles who handle publications and only exposes metadata; detailed content
+     * remains subject to the per-item check.
      */
     @Transactional(readOnly = true)
     public PageResponse<PublicationResponse> lister(Long dossierId, StatutPublication statut, Pageable pageable) {
@@ -373,13 +367,9 @@ public class PublicationService {
                 ? utilisateur.getProfil().getCode() : null;
 
         /*
-         * RG-INT-06 amendée (2026-10-05) : la liste décide elle-même de ce qu'elle montre.
-         *
-         * Jusqu'ici elle rendait tout, et c'est l'écran qui demandait `statut=VALIDE` pour un
-         * juriste. Une restriction tenue par l'appelant n'en est pas une : il suffisait d'appeler
-         * l'API sans ce filtre. Maintenant que les deux natures de dépôt ne suivent plus le même
-         * sort — le compte rendu ouvert dès le dépôt, l'autre publication fermée jusqu'à sa
-         * validation — la distinction est une règle métier, et elle descend ici.
+         * RG-INT-06 (amended): the list decides what it shows. A restriction left to the caller is no
+         * restriction, and the two filing types no longer share the same visibility (report open once
+         * filed, other publication hidden until validated), so the rule is enforced here.
          */
         if (profil != null && PROFILS_INSTRUCTEURS.contains(profil)) {
             return PageResponse.of(listerSansRestriction(dossierId, statut, pageable),
@@ -390,7 +380,7 @@ public class PublicationService {
                 publicationMapper::toResponse);
     }
 
-    /** La file de l'Assistante et le regard du DJ/DJA : aucun filtre de visibilité. */
+    /** The Assistant's queue and the DJ/DJA view: no visibility filter. */
     private Page<Publication> listerSansRestriction(Long dossierId, StatutPublication statut, Pageable pageable) {
         if (dossierId != null && statut != null) {
             return publicationRepository.findByDossierIdAndStatutValidation(dossierId, statut, pageable);
@@ -406,8 +396,8 @@ public class PublicationService {
 
 
     /**
-     * Q-86 (UC-INT-08 étape 1, alt. 3-a) : une publication validée est signalée aux juristes du
-     * dossier — au seul destinataire désigné si l'avocat en a restreint l'accès.
+     * UC-INT-08 step 1, alt. 3-a: a validated publication is announced to the case file's legal
+     * officers, or only to the designated recipient if the lawyer restricted access.
      */
     private void notifierLecteurs(Publication publication, String declencheur) {
         Dossier dossier = publication.getDossier();

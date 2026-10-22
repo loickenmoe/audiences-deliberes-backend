@@ -19,9 +19,9 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * Paramètre de configuration globale modifiable par le DJ (ex : SEUIL_MONTANT_DEFAUT,
- * SEUIL_PROROGATIONS — cf. user stories §11.2, CONF01 à CONF07).
- * Cf. dictionnaire des données §2.4.3 (table {@code configuration_systeme}).
+ * Global configuration parameter editable by the DJ (e.g. SEUIL_MONTANT_DEFAUT,
+ * SEUIL_PROROGATIONS; see user stories §11.2, CONF01 to CONF07).
+ * See data dictionary §2.4.3 (table {@code configuration_systeme}).
  */
 @Getter
 @Setter
@@ -42,8 +42,8 @@ public class ConfigurationSysteme {
     private String cle;
 
     /**
-     * Peut être vide pour les listes qui l'autorisent (réglages de notification) ; 1000 caractères
-     * depuis V28, pour contenir une grille complète de types d'alerte.
+     * May be empty for lists that allow it (notification settings); up to 1000 characters, to hold a
+     * full grid of alert types.
      */
     @NotNull
     @Size(max = 1000)
@@ -62,12 +62,11 @@ public class ConfigurationSysteme {
     private LocalDateTime dateModification;
 
     /**
-     * Auteur de la dernière modification (Q-112).
+     * Author of the last change.
      *
-     * <p>Une référence libre plutôt qu'un {@code @ManyToOne} : ce champ sert un rappel d'affichage,
-     * pas une relation métier, et {@code historique_action} conserve de toute façon la trace
-     * complète du changement. Nul tant que le paramètre n'a jamais été modifié, ou si le compte
-     * de l'auteur a été supprimé depuis.
+     * <p>A plain reference rather than a {@code @ManyToOne}: this field is a display hint, not a
+     * business relation, and {@code historique_action} keeps the full trace of the change anyway.
+     * Null if the parameter has never been changed, or if the author's account has since been deleted.
      */
     @Column(name = "dernier_auteur_id")
     private Long dernierAuteurId;

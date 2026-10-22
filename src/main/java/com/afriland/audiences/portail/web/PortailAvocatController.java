@@ -29,17 +29,11 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 
 /**
- * Portail Avocat — lectures cadrées sur le prestataire connecté (Q-96, QF-01 du frontend).
- *
- * <p><b>Une surface distincte, et non l'élargissement des endpoints internes.</b> Ouvrir
- * {@code GET /dossiers} ou {@code GET /publications} à {@code ROLE_AVOCAT} aurait fait dépendre la
- * confidentialité d'un filtre à l'intérieur d'un service partagé — un oubli, et le portefeuille de la
- * banque passait à un tiers. Ces quatre lectures forment au contraire un périmètre explicite,
- * impossible à confondre avec celui du personnel interne, et leurs réponses ne portent que ce que
- * l'usage exige.
- *
- * <p>Tout est {@code hasRole('AVOCAT')} : ces endpoints n'ont aucun sens pour un profil interne, qui
- * dispose des siens.
+ * Lawyer portal: reads scoped to the logged-in provider.
+ * <p>
+ * A separate surface rather than opening internal endpoints to {@code ROLE_AVOCAT}: confidentiality
+ * must not depend on a filter inside a shared service, where one omission would expose the bank's
+ * portfolio. Responses only carry what the lawyer needs. Everything is {@code hasRole('AVOCAT')}.
  */
 @RestController
 @RequestMapping("${api.prefix}/avocat")
@@ -49,9 +43,8 @@ public class PortailAvocatController {
     private final PortailAvocatService portailAvocatService;
 
     /**
-     * Plus récent d'abord, comme les autres listes paginées (Q-92/Q-93). L'ordre est porté par la
-     * requête du dépôt — la racine étant {@code DossierAvocat}, un {@code Sort} sur {@code createdAt}
-     * s'appliquerait à l'affectation et non au dossier.
+     * Newest first, like other paged lists. Ordering is in the repository query: the root being
+     * {@code DossierAvocat}, a {@code Sort} on {@code createdAt} would apply to the assignment.
      */
     @GetMapping("/mes-dossiers")
     @PreAuthorize("hasRole('AVOCAT')")
@@ -68,14 +61,14 @@ public class PortailAvocatController {
         return portailAvocatService.audiencesDeMonDossier(dossierId);
     }
 
-    /** QF-64 : les pièces partagées de son dossier, s'il y est affecté et constitué. */
+    /** Shared documents of the lawyer's case file, if assigned and engaged. */
     @GetMapping("/mes-dossiers/{dossierId}/pieces")
     @PreAuthorize("hasRole('AVOCAT')")
     public PiecesDossierAvocatResponse piecesDeMonDossier(@PathVariable Long dossierId) {
         return portailAvocatService.piecesDeMonDossier(dossierId);
     }
 
-    /** QF-64 : l'URL pré-signée d'une pièce partagée, et la trace de sa lecture. */
+    /** Pre-signed URL of a shared document; the access is recorded. */
     @GetMapping("/mes-dossiers/{dossierId}/pieces/{documentId}")
     @PreAuthorize("hasRole('AVOCAT')")
     public PieceTelechargementResponse pieceDeMonDossier(@PathVariable Long dossierId,
@@ -84,8 +77,8 @@ public class PortailAvocatController {
     }
 
     /**
-     * UC-INT-01 étape 4 (Q-97) : dépose une pièce justificative et renvoie sa clé de stockage, à
-     * reporter dans {@code piecesJustificatives} de {@code POST /frais/demandes}.
+     * UC-INT-01 step 4: uploads a supporting document and returns its storage key, to be passed in
+     * {@code piecesJustificatives} of {@code POST /frais/demandes}.
      */
     @PostMapping("/pieces-justificatives")
     @PreAuthorize("hasRole('AVOCAT')")

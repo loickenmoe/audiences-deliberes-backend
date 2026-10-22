@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.Optional;
 
-/** Fournit au module notification la référence d'un dossier, sans charger le dossier entier. */
+/** Provides the notification module with a case reference without loading the whole case. */
 @Component
 @RequiredArgsConstructor
 public class ReferencesDossierJpa implements ReferencesDossier {

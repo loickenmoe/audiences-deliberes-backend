@@ -44,7 +44,7 @@ class GlobalExceptionHandlerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(response.getBody()).isNotNull();
-        // Sans ce champ, un client recevant ERR-CONFLICT devrait deviner la cible depuis l'endpoint.
+        // Without this field, a client receiving ERR-CONFLICT would have to guess the target from the endpoint.
         assertThat(response.getBody().champ()).isEqualTo("reference");
     }
 
@@ -55,7 +55,7 @@ class GlobalExceptionHandlerTest {
         ResponseEntity<ErrorResponse> response = handler.handleApiException(ex);
 
         assertThat(response.getBody()).isNotNull();
-        // Un conflit d'état ne vise aucun champ : mieux vaut ne rien dire que de désigner au hasard.
+        // A state conflict targets no field: better to say nothing than to point at one at random.
         assertThat(response.getBody().champ()).isNull();
     }
 
@@ -103,7 +103,7 @@ class GlobalExceptionHandlerTest {
 
     @Test
     void handleDataIntegrityViolation_turnsAUniqueViolationInto409() {
-        // Deux créations concurrentes du même avocat : la contrainte de la base tranche la seconde (Q-85).
+        // Two concurrent creations of the same lawyer: the database constraint rejects the second one.
         DataIntegrityViolationException ex = new DataIntegrityViolationException("insert into avocat",
                 new SQLException("duplicate key value violates unique constraint", "23505"));
 

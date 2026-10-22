@@ -5,8 +5,8 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 /**
- * La décision du DJ ou de la DJA sur un partage proposé (QF-64). Le motif est exigé par le service
- * sur un rejet : le juriste qui a proposé doit savoir pourquoi la pièce ne part pas.
+ * DJ or DJA decision on a proposed share. The service requires a reason on rejection: the legal
+ * officer who proposed must know why the document is not shared.
  */
 public record ArbitragePartageRequest(@NotNull DecisionPartage decision, @Size(max = 1000) String motif) {
 }

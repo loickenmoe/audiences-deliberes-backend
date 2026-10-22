@@ -30,9 +30,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.LocalDate;
 
 /**
- * Module Alertes (FR-ALR-01/02, RG-ALR-01/02/03) — cf. FUNCTIONAL_MAP.md §7,
- * API_IMPLEMENTATION_STATUS.md §9. {@code PUT /alertes/seuils} ne pilote que le seuil
- * {@code CHARGE_MAX_AVOCAT} en M5 (cf. {@link ModifierSeuilRequest}).
+ * Alerts module (FR-ALR-01/02, RG-ALR-01/02/03). {@code PUT /alertes/seuils} only drives the
+ * {@code CHARGE_MAX_AVOCAT} threshold (see {@link ModifierSeuilRequest}).
  */
 @RestController
 @RequestMapping("${api.prefix}/alertes")
@@ -45,25 +44,10 @@ public class AlerteController {
     private final ConfigurationService configurationService;
 
     /**
-     * Seuil {@code CHARGE_MAX_AVOCAT} — <strong>DJ et DJA</strong> (Q-108), pour la même raison de
-     * continuité de service que {@code PUT /configurations/{cle}}.
-     *
-     * <p>Réserver cette clé au seul DJ aurait été intenable : elle vit dans
-     * {@code configuration_systeme} comme les autres et s'affiche sur le <strong>même écran</strong>.
-     * La DJA aurait pu enregistrer un champ et pas ses voisins, ce qui aurait exigé une permission
-     * par clé pour rester compréhensible.
-     */
-    /**
-     * Supervision du canal applicatif (Q-109, NF-ALR-02) — DJ et DJA, comme le reste de
-     * l'administration.
-     *
-     * <p>NF-ALR-02 exige une délivrance supérieure à 99 % sur le canal applicatif. C'était la seule
-     * exigence non fonctionnelle dont la rupture était <b>silencieuse pour tout le monde</b> : un
-     * échec de diffusion ne produisait qu'une ligne de journal, et le juriste découvrait après coup
-     * l'audience qu'on ne lui avait pas rappelée. Cet endpoint rend le taux observable.
-     *
-     * <p>La fenêtre est obligatoire : un taux sans période n'a pas de sens, et un taux cumulé depuis
-     * la mise en service masquerait une panne récente sous des mois de bon fonctionnement.
+     * In-app channel monitoring (NF-ALR-02), DJ and DJA. NF-ALR-02 requires delivery above 99 %;
+     * this endpoint makes that rate observable.
+     * <p>The window is mandatory: a cumulative rate would hide a recent outage behind months of
+     * normal operation.
      */
     @GetMapping("/statistiques-diffusion")
     @PreAuthorize("hasAnyRole('DJ', 'DJA')")
@@ -73,6 +57,10 @@ public class AlerteController {
         return alerteService.statistiquesDiffusion(dateDebut, dateFin);
     }
 
+    /**
+     * {@code CHARGE_MAX_AVOCAT} threshold, open to <strong>DJ and DJA</strong> like
+     * {@code PUT /configurations/{cle}}: the key is shown on the same screen as the other settings.
+     */
     @PutMapping("/seuils")
     @PreAuthorize("hasAnyRole('DJ', 'DJA')")
     public ConfigurationResponse modifierSeuil(@Valid @RequestBody ModifierSeuilRequest request) {
@@ -84,15 +72,9 @@ public class AlerteController {
     }
 
     /**
-     * Plus récente d'abord (Q-92). Sans tri explicite, la requête paginée n'avait <b>aucun</b>
-     * {@code ORDER BY} : l'ordre des lignes était laissé à PostgreSQL, une notification pouvait
-     * donc atterrir sur n'importe quelle page — et une même alerte apparaître deux fois, ou
-     * disparaître, en changeant de page. {@code id} départage les alertes déclenchées dans la même
-     * transaction, qui portent l'horodatage à la milliseconde près.
-     * <p>
-     * {@code type} et {@code dossierId} sont arrivés en M22 (Q-102) : avec dix-sept types d'alerte
-     * et des rappels d'audience à J-7, J-3 et J-1, la liste se remplit vite, et rien ne permettait
-     * d'y chercher. Le destinataire, lui, reste résolu sur le jeton — il n'est pas un paramètre.
+     * Most recent first. {@code id} breaks ties between alerts raised in the same transaction, so
+     * pagination stays stable.
+     * <p>The recipient is always resolved from the token, never from a parameter.
      */
     @GetMapping("/mes-notifications")
     @PreAuthorize("isAuthenticated()")

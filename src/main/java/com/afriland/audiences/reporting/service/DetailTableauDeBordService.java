@@ -1,9 +1,13 @@
 package com.afriland.audiences.reporting.service;
 
+import com.afriland.audiences.alerte.domain.Alerte;
 import com.afriland.audiences.alerte.domain.StatutAlerte;
 import com.afriland.audiences.alerte.domain.TypeAlerte;
 import com.afriland.audiences.alerte.repository.AlerteRepository;
+import com.afriland.audiences.audience.domain.Audience;
 import com.afriland.audiences.audience.domain.StatutAudience;
+import com.afriland.audiences.decision.domain.Adjudication;
+import com.afriland.audiences.frais.domain.DemandeFrais;
 import com.afriland.audiences.audience.repository.AudienceRepository;
 import com.afriland.audiences.decision.repository.DecisionDefinitiveRepository;
 import com.afriland.audiences.delibere.domain.ResultatDelibere;
@@ -27,32 +31,20 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Le détail d'un bloc du tableau de bord (Q-137).
+ * Detail behind a dashboard block. Each indicator has its own source (steps, hearings, fee
+ * requests, deliberations, alerts, adjudications).
  *
- * <p><b>Ce que le métier a demandé</b> le 2026-10-13 : qu'un clic sur un bloc du tableau de bord
- * ouvre le détail de ce qu'il compte. C'est le même geste que sur la fiche d'activité (Q-133), mais
- * la mécanique n'a rien de commun : là, tout venait de {@code historique_action} ; ici, chaque
- * indicateur a sa propre source - des étapes, des audiences, des demandes de frais, des délibérés,
- * des alertes, des adjudications.
- *
- * <p><b>La seule propriété qui compte vraiment : le détail rend exactement ce que le compteur
- * compte.</b> Chaque liste reprend le prédicat de son compteur, mot pour mot, et un test
- * d'intégration confronte les deux sur la base réelle. Afficher « 12 » puis lister neuf lignes
- * ferait douter des deux chiffres, et c'est le genre de doute qu'on ne rattrape pas.
- *
- * <p><b>Les habilitations sont celles du tableau de bord</b>, {@code hasAnyRole('DJ','DJA')}, et
- * c'est le contrôleur qui les porte : ce service ne sert qu'à ouvrir ce que l'écran affiche déjà.
+ * <p>Invariant: the detail returns exactly what the counter counts. Each list reuses its counter's
+ * predicate and an integration test compares both. Authorization is the dashboard's
+ * ({@code hasAnyRole('DJ','DJA')}), enforced by the controller.
  */
 @Service
 @RequiredArgsConstructor
 public class DetailTableauDeBordService {
 
     /**
-     * Les mêmes constantes que {@link ReportingService}, et non une copie d'intention.
-     *
-     * <p>Elles y sont privées ; les redéclarer est le prix à payer pour ne pas élargir leur
-     * visibilité, mais c'est aussi un risque de dérive. Un test les confronte terme à terme, parce
-     * qu'une divergence silencieuse ferait rendre au détail autre chose que ce qui est compté.
+     * Same constants as {@link ReportingService}, redeclared to avoid widening their visibility.
+     * A test checks they stay identical.
      */
     static final List<StatutCycleVie> ETAPES_FERMEES = List.of(StatutCycleVie.CLOTURE, StatutCycleVie.ARCHIVE);
 
@@ -71,11 +63,7 @@ public class DetailTableauDeBordService {
     public Page<DetailIndicateurResponse> detailler(IndicateurTableauDeBord indicateur,
                                                     CategorieDossier categorie,
                                                     Pageable pageable) {
-        /*
-         * Le même périmètre que le compteur, et c'est non négociable : un détail scopé autrement que
-         * le nombre d'où l'on vient ferait douter des deux. `ReportingService.perimetre` est la
-         * seule source de cette traduction - « rien demandé » devient les deux catégories.
-         */
+        // Must use exactly the counter's scope; ReportingService.perimetre is the single source.
         List<CategorieDossier> categories = ReportingService.perimetre(categorie);
         return switch (indicateur) {
             case DOSSIERS_ACTIFS -> etapeProcedureRepository
@@ -86,38 +74,50 @@ public class DetailTableauDeBordService {
                     .map(DetailTableauDeBordService::versLigneDossier);
             case AUDIENCES_PLANIFIEES -> audienceRepository
                     .listerParStatut(StatutAudience.PLANIFIEE, categories, pageable)
-                    .map(audience -> new DetailIndicateurResponse(
-                            audience.getId(),
-                            audience.getDossier() == null ? null : audience.getDossier().getId(),
-                            audience.getDossier() == null ? null : audience.getDossier().getReference(),
-                            audience.getJuridiction(),
-                            nomDuClient(audience.getDossier()),
-                            audience.getDatePlanifiee(),
-                            null));
+                    .map(DetailTableauDeBordService::versLigneAudience);
             case FRAIS_EN_ATTENTE -> demandeFraisRepository
                     .listerNonSoldees(FRAIS_SOLDES, categories, pageable)
-                    .map(demande -> new DetailIndicateurResponse(
-                            demande.getId(),
-                            demande.getDossier() == null ? null : demande.getDossier().getId(),
-                            demande.getDossier() == null ? null : demande.getDossier().getReference(),
-                            demande.getReferenceFacture(),
-                            demande.getAvocat() == null ? null : demande.getAvocat().getNom(),
-                            demande.getCreatedAt() == null ? null : demande.getCreatedAt().toLocalDate(),
-                            demande.getMontant()));
+                    .map(DetailTableauDeBordService::versLigneFrais);
             case PROROGATIONS_ALERTE -> versLignesAlertes(categories, pageable);
             case LITIGES_GAGNES -> versLignesDeliberes(ResultatDelibere.FAVORABLE, categories, pageable);
             case LITIGES_PERDUS -> versLignesDeliberes(ResultatDelibere.DEFAVORABLE, categories, pageable);
             case DECISIONS_MIXTES -> versLignesDeliberes(ResultatDelibere.MIXTE, categories, pageable);
             case PROVISIONS_REPRISES -> decisionDefinitiveRepository.listerProvisionsReprises(categories, pageable)
-                    .map(adjudication -> new DetailIndicateurResponse(
-                            adjudication.getId(),
-                            adjudication.getDossier() == null ? null : adjudication.getDossier().getId(),
-                            adjudication.getDossier() == null ? null : adjudication.getDossier().getReference(),
-                            adjudication.getBeneficiaire(),
-                            nomDuClient(adjudication.getDossier()),
-                            adjudication.getDateDecision(),
-                            adjudication.getReliquat()));
+                    .map(DetailTableauDeBordService::versLigneAdjudication);
         };
+    }
+
+    private static DetailIndicateurResponse versLigneAudience(Audience audience) {
+        return new DetailIndicateurResponse(
+                audience.getId(),
+                audience.getDossier() == null ? null : audience.getDossier().getId(),
+                audience.getDossier() == null ? null : audience.getDossier().getReference(),
+                audience.getJuridiction(),
+                nomDuClient(audience.getDossier()),
+                audience.getDatePlanifiee(),
+                null);
+    }
+
+    private static DetailIndicateurResponse versLigneFrais(DemandeFrais demande) {
+        return new DetailIndicateurResponse(
+                demande.getId(),
+                demande.getDossier() == null ? null : demande.getDossier().getId(),
+                demande.getDossier() == null ? null : demande.getDossier().getReference(),
+                demande.getReferenceFacture(),
+                demande.getAvocat() == null ? null : demande.getAvocat().getNom(),
+                demande.getCreatedAt() == null ? null : demande.getCreatedAt().toLocalDate(),
+                demande.getMontant());
+    }
+
+    private static DetailIndicateurResponse versLigneAdjudication(Adjudication adjudication) {
+        return new DetailIndicateurResponse(
+                adjudication.getId(),
+                adjudication.getDossier() == null ? null : adjudication.getDossier().getId(),
+                adjudication.getDossier() == null ? null : adjudication.getDossier().getReference(),
+                adjudication.getBeneficiaire(),
+                nomDuClient(adjudication.getDossier()),
+                adjudication.getDateDecision(),
+                adjudication.getReliquat());
     }
 
     private Page<DetailIndicateurResponse> versLignesDeliberes(ResultatDelibere resultat,
@@ -135,18 +135,15 @@ public class DetailTableauDeBordService {
     }
 
     /**
-     * Les alertes de prorogation en cours.
-     *
-     * <p>Une alerte porte un {@code dossierId} libre, sans relation : la référence du dossier se lit
-     * donc en une seconde requête, groupée pour la page entière. Une lecture par ligne ferait dix
-     * requêtes pour une page qui pointe souvent vers le même dossier.
+     * Pending extension alerts. An alert holds a plain {@code dossierId} with no relation, so case
+     * references are loaded in one batched query for the whole page.
      */
     private Page<DetailIndicateurResponse> versLignesAlertes(List<CategorieDossier> categories,
                                                              Pageable pageable) {
         var alertes = alerteRepository.listerParTypeEtStatut(
                 TypeAlerte.PROROGATION, StatutAlerte.DECLENCHEE, categories, pageable);
         List<Long> dossiers = alertes.getContent().stream()
-                .map(alerte -> alerte.getDossierId())
+                .map(Alerte::getDossierId)
                 .filter(java.util.Objects::nonNull)
                 .distinct()
                 .toList();
@@ -175,7 +172,7 @@ public class DetailTableauDeBordService {
                 dossier.getRisqueEncouru());
     }
 
-    /** Le client nomme le dossier mieux que sa référence : c'est de lui qu'on se souvient. */
+    /** The client's name identifies a case better than its reference. */
     private static String nomDuClient(Dossier dossier) {
         return dossier == null || dossier.getClient() == null ? null : dossier.getClient().getNom();
     }

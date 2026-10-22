@@ -1,4 +1,4 @@
-# Étape de build
+# Build stage
 FROM eclipse-temurin:21-jdk-jammy AS builder
 WORKDIR /app
 
@@ -10,7 +10,7 @@ RUN ./mvnw dependency:resolve
 COPY src ./src
 RUN ./mvnw clean package -DskipTests
 
-# Étape de production
+# Production stage
 FROM eclipse-temurin:21-jre-jammy
 WORKDIR /app
 

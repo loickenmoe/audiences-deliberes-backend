@@ -9,20 +9,19 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * Représentation aplatie de {@link com.afriland.audiences.publication.domain.Publication} — les
- * champs propres à un sous-type ({@code audienceId}/{@code audienceDate}/{@code contenu} pour un
- * compte rendu, {@code typeDocument}/{@code nomFichier} pour une autre publication) sont {@code null}
- * pour l'autre sous-type.
+ * Flattened view of {@link com.afriland.audiences.publication.domain.Publication}: subtype-specific
+ * fields ({@code audienceId}/{@code audienceDate}/{@code contenu} for a hearing report,
+ * {@code typeDocument}/{@code nomFichier} for an other publication) are {@code null} for the other
+ * subtype.
  * <p>
- * Depuis Q-86 : dossier, avocat et destinataire désigné sont nommés. {@code urlTelechargement}
- * (pré-signée, 10 minutes) et {@code commentaires} ne sont renseignés que sur le détail
- * {@code GET /publications/&#123;id&#125;} — {@code null} sur la liste, comme l'URL d'un document GED (#43).
+ * Case file, lawyer and designated recipient are named. {@code urlTelechargement} (presigned,
+ * 10 minutes) and {@code commentaires} are only set on the detail {@code GET /publications/&#123;id&#125;},
+ * and are {@code null} in lists, like a GED document URL.
  * <p>
- * {@code correspondance} fait exception depuis QF-58 : la liste {@code GET /portail/mes-publications}
- * la porte, parce que c'est le seul écran où l'avocat peut lire ce que le DJ/DJA lui a transmis — il
- * en recevait la notification sans qu'aucune page ne l'affiche. {@code commentaires}, lui, reste
- * {@code null} pour l'avocat <b>en toute circonstance</b> : la délibération entre le juriste et le
- * DJ/DJA ne lui est jamais adressée (US 5.5, RG-INT-07).
+ * Exception: {@code correspondance} is included in the {@code GET /portail/mes-publications} list,
+ * the only screen where the lawyer can read what the DJ/DJA sent. {@code commentaires} is always
+ * {@code null} for the lawyer: the deliberation between legal officer and DJ/DJA is never addressed
+ * to them (US 5.5, RG-INT-07).
  */
 public record PublicationResponse(
         Long id,

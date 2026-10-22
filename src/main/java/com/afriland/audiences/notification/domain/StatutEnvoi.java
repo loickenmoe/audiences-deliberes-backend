@@ -1,26 +1,26 @@
 package com.afriland.audiences.notification.domain;
 
-/** Cycle de vie d'une ligne de {@code notification_envoi} (voir la migration V27). */
+/** Lifecycle of a {@code notification_envoi} row (migration V27). */
 public enum StatutEnvoi {
-    /** À remettre au transport dès que {@code prochaineTentative} est atteinte. */
+    /** To hand to the transport once {@code prochaineTentative} is reached. */
     EN_ATTENTE,
     /**
-     * Une pièce jointe doit être déposée avant l'envoi (D5) : la clé de stockage a été demandée au
-     * moteur, et la ligne attend sa réponse. Elle repart en EN_ATTENTE dès que la clé est connue.
+     * An attachment must be uploaded before sending: the storage key was requested from the engine and
+     * the row awaits the response. It returns to EN_ATTENTE once the key is known.
      */
     ATTENTE_PIECE_JOINTE,
-    /** Remise au transport ; l'accusé de l'Engine n'est pas encore arrivé. */
+    /** Handed to the transport; the Engine receipt has not arrived yet. */
     PUBLIEE,
-    /** Accusé positif reçu sur {@code notification-sent}. */
+    /** Positive receipt received on {@code notification-sent}. */
     ENVOYEE,
-    /** Tentatives épuisées, ou échec définitif signalé par l'Engine (D13). */
+    /** Attempts exhausted, or permanent failure reported by the Engine. */
     ECHEC,
-    /** Canal routé, mais aucune coordonnée pour ce destinataire : rien n'est envoyé (D14). */
+    /** Channel routed but no contact detail for this recipient: nothing is sent. */
     NON_JOIGNABLE,
 
     /**
-     * Remise faite, mais aucun accusé du moteur dans le délai attendu (Q-120) : ni confirmé, ni en
-     * échec. C'est l'état d'un message rejeté en silence.
+     * Delivered to the transport but no engine receipt within the expected delay: neither confirmed nor
+     * failed. This is the state of a silently rejected message.
      */
     SANS_RETOUR
 }

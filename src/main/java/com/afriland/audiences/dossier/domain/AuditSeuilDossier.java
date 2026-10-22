@@ -25,8 +25,8 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * Trace d'une demande de dérogation du seuil de montant (validation des frais) d'un dossier
- * sensible (RG-DOS-09, Q-26). Cf. dictionnaire des données §2.3.3.
+ * Record of a request to override the amount threshold (fee validation) of a sensitive case
+ * (RG-DOS-09). See data dictionary §2.3.3.
  */
 @Getter
 @Setter

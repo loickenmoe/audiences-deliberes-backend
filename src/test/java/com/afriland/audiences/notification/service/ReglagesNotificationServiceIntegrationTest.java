@@ -18,7 +18,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Étape 4 : les réglages lus dans une base migrée donnent exactement le comportement annoncé par V28. */
+/** Step 4: settings read from a migrated database give exactly the behavior defined by V28. */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Testcontainers
@@ -26,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ReglagesNotificationServiceIntegrationTest {
 
     @Container
-    static PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17")
+    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17")
             .withDatabaseName("audiences_reglages")
             .withUsername("test")
             .withPassword("test");

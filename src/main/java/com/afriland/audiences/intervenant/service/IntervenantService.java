@@ -28,9 +28,8 @@ import java.util.Objects;
 
 
 /**
- * M15 — administration du référentiel des intervenants (Q-68). Aucun endpoint de création
- * n'existait : les avocats devaient être insérés en SQL, alors qu'ils conditionnent l'affectation
- * d'un dossier, les demandes de frais, les publications et les constitutions.
+ * Administration of the participant reference data. Lawyers are required for case assignment, fee
+ * requests, publications and appointments.
  */
 @Service
 @RequiredArgsConstructor
@@ -41,12 +40,9 @@ public class IntervenantService {
     private final HistoriqueActionService historiqueActionService;
 
     /**
-     * RG-INT-01/02 : un {@code AVOCAT} porte obligatoirement un compte Keycloak (unique) ; un
-     * {@code AUTRE_PRESTATAIRE} n'en a jamais.
-     * <p>
-     * Les deux portent désormais un indicateur de notification (Q-119) : il vaut l'accord du
-     * prestataire pour être joint hors de l'application (SMS, WhatsApp, courriel personnel). Il est
-     * coché par défaut pour un avocat, décoché pour un autre prestataire (RG-INT-02, inchangé).
+     * RG-INT-01/02: an {@code AVOCAT} must have a unique Keycloak account; an
+     * {@code AUTRE_PRESTATAIRE} never has one. Both carry a notification flag (consent to be
+     * contacted outside the application), on by default for a lawyer and off for other providers.
      */
     @Transactional
     public IntervenantResponse creer(CreerIntervenantRequest request) {
@@ -71,7 +67,7 @@ public class IntervenantService {
                 .email(courrielValide(request.email()))
                 .telephone(telephoneValide(request.telephone()))
                 .compteKeycloak(request.compteKeycloak())
-                // Coché par défaut (Q-119) : l'avocat est en relation suivie avec la banque.
+                // On by default: the lawyer has an ongoing relationship with the bank.
                 .notification(request.notification() == null || request.notification())
                 .build());
         return toResponse(avocat);
@@ -93,11 +89,8 @@ public class IntervenantService {
     }
 
     /**
-     * Modifie un intervenant (Q-117). Le type et l'identifiant Keycloak d'un avocat sont figés ;
-     * seules les informations descriptives se corrigent — cf. {@link ModifierIntervenantRequest}.
-     *
-     * <p>Comme pour un client (Q-116), seuls les champs <b>réellement changés</b> sont historisés, avec
-     * leur valeur d'avant et d'après, et une requête qui ne change rien n'écrit rien.
+     * Updates a participant's descriptive fields (see {@link ModifierIntervenantRequest}). Only
+     * actually changed fields are logged, with before/after values; a no-op request writes nothing.
      */
     @Transactional
     public IntervenantResponse modifier(Long id, ModifierIntervenantRequest request) {
@@ -115,7 +108,7 @@ public class IntervenantService {
         noterSiChange(details, "ancienTelephone", "nouveauTelephone", intervenant.getTelephone(), telephone);
 
         if (intervenant instanceof Avocat avocat) {
-            // Son compte Keycloak ne bouge pas : il n'est pas dans la requête. Son consentement, si.
+            // The Keycloak account is immutable; only the consent flag can change.
             boolean notification = request.notification() == null || request.notification();
             noterSiChange(details, "ancienneNotification", "nouvelleNotification", avocat.getNotification(), notification);
             avocat.setNotification(notification);
@@ -125,7 +118,7 @@ public class IntervenantService {
             autre.setNotification(notification);
         }
 
-        // prestataireId et intervenant identifient la ligne ; au-delà, c'est qu'un champ a changé.
+        // The first two entries identify the row; any extra entry means a field changed.
         if (details.size() > 2) {
             intervenant.setNom(nom);
             intervenant.setEmail(email);
@@ -144,18 +137,10 @@ public class IntervenantService {
         }
     }
 
-    /** Un champ facultatif vidé à l'écran arrive en chaîne vide : il est enregistré comme absent. */
     /**
-     * Contrôle et met en forme les coordonnées (étape 11 du plan Notification Engine).
-     * <p>
-     * <b>Pourquoi à la saisie.</b> Un numéro mal écrit ne se voyait qu'au moment d'envoyer, sous la
-     * forme d'une ligne « non joignable » en supervision (D14) — c'est-à-dire trop tard, et loin de
-     * la personne qui pouvait le corriger. Le refus est désormais immédiat, sur le champ concerné.
-     * <p>
-     * <b>Et pourquoi mettre en forme.</b> Le moteur n'accepte que trois écritures (Guide V1) ; un
-     * numéro saisi « 654 47 67 96 » est enregistré « 237654476796 », si bien que la fiche porte une
-     * valeur utilisable telle quelle. Rien n'est deviné pour autant : ce qui ne relève d'aucune des
-     * trois formes est refusé, pas corrigé.
+     * Validates and normalizes the phone number at entry, so errors surface on the field rather than
+     * at send time. An empty value is stored as absent. A number entered as "654 47 67 96" is stored
+     * as "237654476796"; anything matching none of the three accepted forms is rejected, not guessed.
      */
     private static String telephoneValide(String saisie) {
         String telephone = videEnNull(saisie);
@@ -168,7 +153,7 @@ public class IntervenantService {
                 "telephone"));
     }
 
-    /** Même principe pour le courriel : un domaine sans point passerait le contrôle de saisie standard. */
+    /** Same for email: a domain without a dot would pass standard input validation. */
     private static String courrielValide(String saisie) {
         String courriel = videEnNull(saisie);
         if (courriel == null) {
@@ -183,14 +168,8 @@ public class IntervenantService {
     }
 
     /**
-     * Liste du référentiel, paginée depuis Q-100.
-     *
-     * <p>⚠ Cet endpoint sert **deux usages** : l'écran 42, qui est un tableau et veut dix lignes, et
-     * trois **sélecteurs** (affectation d'un dossier, constitution d'un prestataire) qui ont besoin
-     * de l'annuaire entier. Ces derniers demandent donc explicitement une grande page, comme
-     * {@code /avocat/mes-dossiers} le fait déjà. La réponse durable pour un annuaire qui grandirait
-     * n'est pas une page plus grande mais une **recherche au fil de la frappe** ; c'est consigné,
-     * pas implémenté.
+     * Paginated reference-data list, optionally filtered by type and by name (case-insensitive
+     * substring). Serves both the admin table and the search-as-you-type selectors.
      */
     @Transactional(readOnly = true)
     public PageResponse<IntervenantResponse> lister(TypeIntervenant type, String nom, Pageable pageable) {
